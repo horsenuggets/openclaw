@@ -173,6 +173,9 @@ export async function runAgentTurnWithFallback(params: {
             });
             const cliSessionId = getCliSessionId(params.getActiveSessionEntry(), provider);
             return (async () => {
+              // CLI providers don't emit streaming events, so start typing immediately.
+              // The TTL extension logic will keep it alive until the run completes.
+              await params.typingSignals.signalMessageStart();
               let lifecycleTerminalEmitted = false;
               try {
                 const result = await runCliAgent({

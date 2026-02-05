@@ -423,6 +423,57 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     }).onReplyStart,
   });
 
+  // Send quick acknowledgment if configured (before processing starts).
+  // This gives immediate feedback while the model is thinking.
+  const quickAck = discordConfig?.quickAck;
+  if (quickAck) {
+    const ackText = typeof quickAck === "string" ? quickAck : "*Processing your request...*";
+    await deliverDiscordReply({
+      replies: [{ text: ackText }],
+      target: deliverTarget,
+      token,
+      accountId,
+      rest: client.rest,
+      runtime,
+      textLimit,
+      maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
+      tableMode,
+      chunkMode: resolveChunkMode(cfg, "discord", accountId),
+    }).catch((err) => {
+      logVerbose(`discord: quick ack failed: ${String(err)}`);
+    });
+  }
+
+  // Set up periodic progress updates for long-running requests.
+  const progressUpdates = discordConfig?.progressUpdates;
+  let progressInterval: ReturnType<typeof setInterval> | undefined;
+  let progressCount = 0;
+  const progressStartTime = Date.now();
+  if (progressUpdates) {
+    const intervalSec = typeof progressUpdates === "number" ? Math.max(15, progressUpdates) : 60;
+    progressInterval = setInterval(() => {
+      progressCount++;
+      const elapsedSec = Math.round((Date.now() - progressStartTime) / 1000);
+      const minutes = Math.floor(elapsedSec / 60);
+      const seconds = elapsedSec % 60;
+      const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${elapsedSec}s`;
+      deliverDiscordReply({
+        replies: [{ text: `*Still working... (${timeStr})*` }],
+        target: deliverTarget,
+        token,
+        accountId,
+        rest: client.rest,
+        runtime,
+        textLimit,
+        maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
+        tableMode,
+        chunkMode: resolveChunkMode(cfg, "discord", accountId),
+      }).catch((err) => {
+        logVerbose(`discord: progress update failed: ${String(err)}`);
+      });
+    }, intervalSec * 1000);
+  }
+
   const { queuedFinal, counts } = await dispatchInboundMessage({
     ctx: ctxPayload,
     cfg,
@@ -443,6 +494,11 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   if (earlyTypingInterval) {
     clearInterval(earlyTypingInterval);
     earlyTypingInterval = undefined;
+  }
+  // Clean up progress interval.
+  if (progressInterval) {
+    clearInterval(progressInterval);
+    progressInterval = undefined;
   }
   if (!queuedFinal) {
     if (isGuildMessage) {

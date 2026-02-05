@@ -128,6 +128,19 @@ export type DiscordAccountConfig = {
   blockStreaming?: boolean;
   /** Show tool execution feedback messages in channel (e.g. "Searching the web..."). */
   toolFeedback?: boolean;
+  /**
+   * Send a quick acknowledgment when processing starts.
+   * - true: Send "Processing your request..." immediately
+   * - string: Custom acknowledgment message
+   * - "thinking": Show "thinking..." status message (auto-deletes when reply arrives)
+   */
+  quickAck?: boolean | string;
+  /**
+   * Send periodic progress updates during long-running requests.
+   * - true: Send updates every 60 seconds
+   * - number: Custom interval in seconds (minimum 15)
+   */
+  progressUpdates?: boolean | number;
   /** Merge streamed block replies before sending. */
   blockStreamingCoalesce?: BlockStreamingCoalesceConfig;
   /**
