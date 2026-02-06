@@ -157,7 +157,7 @@ function acquireWatchdogLock(port, repoRoot, log) {
   return release;
 }
 
-export { acquireWatchdogLock };
+export { acquireWatchdogLock, cleanupGatewayLockFiles };
 
 export class ProcessMonitor {
   constructor(repoRoot, options = {}) {
