@@ -153,6 +153,7 @@ export class ProcessMonitor {
         OPENCLAW_BUILD_HASH: this.currentCommitHash ?? "",
       },
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     });
 
     this.startedAt = Date.now();
@@ -211,15 +212,23 @@ export class ProcessMonitor {
     this.stopHealthCheck();
 
     if (!this.process) {
+      // Even without a tracked process, clean up anything on the port
+      await this.killStalePortProcess();
       return;
     }
 
+    const pid = this.process.pid;
     this.onProgress("Stopping OpenClaw...");
 
-    return new Promise((resolve) => {
+    await new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        this.onProgress("Graceful shutdown timed out, sending SIGKILL...");
-        this.process?.kill("SIGKILL");
+        this.onProgress("Graceful shutdown timed out, killing process tree...");
+        // Kill the entire process group (negative PID)
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          this.process?.kill("SIGKILL");
+        }
       }, timeoutMs);
 
       this.process.once("exit", () => {
@@ -232,6 +241,9 @@ export class ProcessMonitor {
       // Send SIGTERM for graceful shutdown
       this.process.kill("SIGTERM");
     });
+
+    // Clean up any orphaned children still holding the port
+    await this.killStalePortProcess();
   }
 
   /**
