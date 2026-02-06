@@ -94,11 +94,9 @@ export type DiscordSmartAckConfig = {
    * Only sends if main response hasn't arrived. Default: 30000 (30 seconds).
    */
   delayMs?: number;
-  /** Model provider for acknowledgment generation. Default: anthropic. */
-  provider?: string;
-  /** Model ID for acknowledgment generation. Default: claude-3-5-haiku-latest. */
+  /** Model for acknowledgment generation via Claude CLI. Default: haiku. */
   model?: string;
-  /** Timeout for acknowledgment generation in ms. Default: 5000. */
+  /** Timeout for acknowledgment generation in ms. Default: 8000. */
   timeoutMs?: number;
 };
 

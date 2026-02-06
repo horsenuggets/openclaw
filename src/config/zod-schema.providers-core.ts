@@ -280,7 +280,6 @@ export const DiscordAccountSchema = z
         z.object({
           enabled: z.boolean().optional(),
           delayMs: z.number().int().min(1000).optional(),
-          provider: z.string().optional(),
           model: z.string().optional(),
           timeoutMs: z.number().int().min(1000).optional(),
         }),

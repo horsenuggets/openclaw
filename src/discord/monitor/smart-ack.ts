@@ -1,14 +1,11 @@
-import { completeSimple, type TextContent } from "@mariozechner/pi-ai";
 import type { OpenClawConfig } from "../../config/config.js";
-import { getApiKeyForModel, requireApiKey } from "../../agents/model-auth.js";
-import { resolveModel } from "../../agents/pi-embedded-runner/model.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { runCommandWithTimeout } from "../../process/exec.js";
 
-// Default to Haiku for fast, low-cost acknowledgments
-const DEFAULT_ACK_MODEL_PROVIDER = "anthropic";
-const DEFAULT_ACK_MODEL_ID = "claude-3-5-haiku-latest";
-const DEFAULT_ACK_TIMEOUT_MS = 5000;
+// Default to Haiku via CLI for fast acknowledgments using Max subscription
+const DEFAULT_ACK_MODEL = "haiku";
+const DEFAULT_ACK_TIMEOUT_MS = 8000;
 const DEFAULT_ACK_DELAY_MS = 30000;
 
 export type SmartAckConfig = {
@@ -19,19 +16,39 @@ export type SmartAckConfig = {
    * Only sends if main response hasn't arrived. Default: 30000 (30 seconds).
    */
   delayMs?: number;
-  /** Model provider for acknowledgment generation. Default: anthropic. */
-  provider?: string;
-  /** Model ID for acknowledgment generation. Default: claude-3-5-haiku-latest. */
+  /** Model for acknowledgment generation via Claude CLI. Default: haiku. */
   model?: string;
-  /** Timeout for acknowledgment generation in ms. Default: 5000. */
+  /** Timeout for acknowledgment generation in ms. Default: 8000. */
   timeoutMs?: number;
 };
 
-const isTextContentBlock = (block: unknown): block is TextContent =>
-  typeof block === "object" && block !== null && (block as TextContent).type === "text";
+type ClaudeCliResponse = {
+  result?: string;
+  is_error?: boolean;
+  session_id?: string;
+};
+
+function parseCliResponse(stdout: string): string | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as ClaudeCliResponse;
+    if (parsed.is_error) {
+      return null;
+    }
+    return parsed.result?.trim() || null;
+  } catch {
+    // If not JSON, treat as plain text response
+    return trimmed || null;
+  }
+}
 
 /**
- * Generate a contextual acknowledgment message using a fast model (Haiku).
+ * Generate a contextual acknowledgment message using Claude CLI with Haiku.
+ * Uses the Max subscription instead of per-token API charges.
  * Returns null if generation fails or times out.
  */
 export async function generateSmartAck(params: {
@@ -41,88 +58,63 @@ export async function generateSmartAck(params: {
   config?: SmartAckConfig;
   signal?: AbortSignal;
 }): Promise<string | null> {
-  const { message, senderName, cfg, config, signal } = params;
+  const { message, senderName, config, signal } = params;
 
   if (signal?.aborted) {
     return null;
   }
 
-  const provider = config?.provider ?? DEFAULT_ACK_MODEL_PROVIDER;
-  const modelId = config?.model ?? DEFAULT_ACK_MODEL_ID;
+  const model = config?.model ?? DEFAULT_ACK_MODEL;
   const timeoutMs = config?.timeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
 
-  const resolved = resolveModel(provider, modelId, undefined, cfg);
-  if (!resolved.model) {
-    logVerbose(`smart-ack: failed to resolve model ${provider}/${modelId}: ${resolved.error}`);
-    return null;
-  }
+  const nameContext = senderName ? `The user's name is ${senderName}. ` : "";
 
-  let apiKey: string;
-  try {
-    apiKey = requireApiKey(await getApiKeyForModel({ model: resolved.model, cfg }), provider);
-  } catch (err) {
-    logVerbose(`smart-ack: failed to get API key for ${provider}: ${formatErrorMessage(err)}`);
-    return null;
-  }
+  const prompt =
+    `You are a helpful AI assistant. Generate a brief, friendly acknowledgment (1-2 sentences) ` +
+    `that shows you understand what the user is asking for. ${nameContext}` +
+    `The acknowledgment should be specific to their request, not generic. ` +
+    `Start with something like "I see you want to..." or "Working on..." or "Let me help you with...". ` +
+    `Keep it warm but concise. Do NOT actually answer the request, just acknowledge it.\n\n` +
+    `User's message:\n${message}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  // Link to parent signal
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
+  // Build CLI args for claude command
+  const args = ["--model", model, "-p", prompt, "--output-format", "json", "--max-turns", "1"];
 
   try {
-    const nameContext = senderName ? `The user's name is ${senderName}. ` : "";
+    logVerbose(`smart-ack: running claude --model ${model}`);
 
-    const res = await completeSimple(
-      resolved.model,
-      {
-        messages: [
-          {
-            role: "user",
-            content:
-              `You are a helpful AI assistant. Generate a brief, friendly acknowledgment (1-2 sentences) ` +
-              `that shows you understand what the user is asking for. ${nameContext}` +
-              `The acknowledgment should be specific to their request, not generic. ` +
-              `Start with something like "I see you want to..." or "Working on..." or "Let me help you with...". ` +
-              `Keep it warm but concise. Do NOT actually answer the request, just acknowledge it.\n\n` +
-              `User's message:\n${message}`,
-            timestamp: Date.now(),
-          },
-        ],
-      },
-      {
-        apiKey,
-        maxTokens: 100,
-        temperature: 0.7,
-        signal: controller.signal,
-      },
-    );
+    const result = await runCommandWithTimeout(["claude", ...args], {
+      timeoutMs,
+    });
 
-    const ack = res.content
-      .filter(isTextContentBlock)
-      .map((block) => block.text.trim())
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-    if (!ack) {
+    if (signal?.aborted) {
+      logVerbose("smart-ack: aborted after CLI returned");
       return null;
     }
+
+    if (result.code !== 0) {
+      const err = result.stderr || result.stdout || "CLI failed";
+      logVerbose(`smart-ack: CLI exited with code ${result.code}: ${err}`);
+      return null;
+    }
+
+    const ack = parseCliResponse(result.stdout);
+    if (!ack) {
+      logVerbose("smart-ack: empty response from CLI");
+      return null;
+    }
+
+    logVerbose(`smart-ack: generated acknowledgment (${ack.length} chars)`);
 
     // Format as italics for Discord
     return `*${ack}*`;
   } catch (err) {
-    if (controller.signal.aborted) {
+    if (signal?.aborted) {
       logVerbose("smart-ack: generation aborted (main response arrived first or timeout)");
     } else {
       logVerbose(`smart-ack: generation failed: ${formatErrorMessage(err)}`);
     }
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
