@@ -448,12 +448,10 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   // Set up periodic progress updates for long-running requests.
   const progressUpdates = discordConfig?.progressUpdates;
   let progressInterval: ReturnType<typeof setInterval> | undefined;
-  let progressCount = 0;
   const progressStartTime = Date.now();
   if (progressUpdates) {
     const intervalSec = typeof progressUpdates === "number" ? Math.max(15, progressUpdates) : 60;
     progressInterval = setInterval(() => {
-      progressCount++;
       const elapsedSec = Math.round((Date.now() - progressStartTime) / 1000);
       const minutes = Math.floor(elapsedSec / 60);
       const seconds = elapsedSec % 60;
@@ -492,7 +490,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
   // Set up listener to send smart ack when delay passes (if not cancelled).
   if (smartAckController) {
-    smartAckController.result.then((ackText) => {
+    void smartAckController.result.then((ackText) => {
       if (ackText) {
         deliverDiscordReply({
           replies: [{ text: ackText }],

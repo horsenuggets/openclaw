@@ -1,5 +1,6 @@
 import type { RequestClient } from "@buape/carbon";
-import type { APIChannel, APIMessage, ChannelType } from "discord-api-types/v10";
+import type { APIChannel, APIMessage } from "discord-api-types/v10";
+import { ChannelType } from "discord-api-types/v10";
 import { Routes } from "discord-api-types/v10";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { DiscordAccountConfig } from "../../config/types.discord.js";
@@ -9,7 +10,6 @@ import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 
 const DEFAULT_RECOVERY_WINDOW_MINUTES = 10;
-const DM_CHANNEL_TYPES = new Set<ChannelType>([1, 3]); // DM = 1, GROUP_DM = 3
 
 type StartupRecoveryParams = {
   rest: RequestClient;
@@ -28,7 +28,7 @@ type StartupRecoveryParams = {
  * This handles the case where the bot crashed and missed messages.
  */
 export async function runStartupRecovery(params: StartupRecoveryParams): Promise<void> {
-  const { rest, discordConfig, botUserId, runtime, allowFrom } = params;
+  const { rest, discordConfig, runtime, allowFrom } = params;
   const recoveryConfig = discordConfig.startupRecovery;
 
   if (!recoveryConfig) {
@@ -54,10 +54,14 @@ export async function runStartupRecovery(params: StartupRecoveryParams): Promise
     // Filter to actual DM channels (not group DMs unless enabled)
     const groupDmEnabled = discordConfig.dm?.groupEnabled ?? false;
     const relevantChannels = dmChannels.filter((channel) => {
-      const isDm = channel.type === 1;
-      const isGroupDm = channel.type === 3;
-      if (isDm) return true;
-      if (isGroupDm && groupDmEnabled) return true;
+      const isDm = channel.type === ChannelType.DM;
+      const isGroupDm = channel.type === ChannelType.GroupDM;
+      if (isDm) {
+        return true;
+      }
+      if (isGroupDm && groupDmEnabled) {
+        return true;
+      }
       return false;
     });
 
