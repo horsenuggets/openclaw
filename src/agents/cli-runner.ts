@@ -165,11 +165,15 @@ export async function runCliAgent(params: {
   });
 
   // When streaming is enabled, replace --output-format json with stream-json
+  // and add --verbose (required by claude CLI for stream-json with -p)
   const useStreaming = Boolean(params.onToolStatus);
   const streamArgs = useStreaming
-    ? args.map((arg, i) =>
-        args[i - 1] === "--output-format" && arg === "json" ? "stream-json" : arg,
-      )
+    ? [
+        ...args.map((arg, i) =>
+          args[i - 1] === "--output-format" && arg === "json" ? "stream-json" : arg,
+        ),
+        "--verbose",
+      ]
     : args;
 
   const serialize = backend.serialize ?? true;
@@ -252,9 +256,12 @@ export async function runCliAgent(params: {
         });
 
         if (streamResult.exitCode !== 0 && !streamResult.text) {
-          const reason = classifyFailoverReason("CLI streaming failed") ?? "unknown";
+          const errMsg = streamResult.stderr
+            ? `CLI streaming failed: ${streamResult.stderr.slice(0, 200)}`
+            : "CLI streaming failed";
+          const reason = classifyFailoverReason(errMsg) ?? "unknown";
           const status = resolveFailoverStatus(reason);
-          throw new FailoverError("CLI streaming failed", {
+          throw new FailoverError(errMsg, {
             reason,
             provider: params.provider,
             model: modelId,

@@ -89,6 +89,7 @@ export async function runStreamingCli(options: StreamingCliOptions): Promise<{
   sessionId?: string;
   usage?: CliUsage;
   exitCode: number | null;
+  stderr?: string;
 }> {
   const { command, args, cwd, env, timeoutMs, onEvent } = options;
 
@@ -174,6 +175,7 @@ export async function runStreamingCli(options: StreamingCliOptions): Promise<{
         sessionId,
         usage,
         exitCode: code,
+        stderr: stderr || undefined,
       });
     });
 
