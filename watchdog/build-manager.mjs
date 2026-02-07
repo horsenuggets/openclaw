@@ -322,6 +322,11 @@ export function activateBuild(repoRoot, commitHash) {
   fs.symlinkSync(commitHash, tmpLink);
   fs.renameSync(tmpLink, currentLink);
 
+  // Write active version to .watchdog/active-version for runtime detection
+  const watchdogDir = path.join(repoRoot, ".watchdog");
+  fs.mkdirSync(watchdogDir, { recursive: true });
+  fs.writeFileSync(path.join(watchdogDir, "active-version"), commitHash + "\n", "utf8");
+
   return previousHash;
 }
 

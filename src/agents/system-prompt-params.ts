@@ -50,6 +50,7 @@ export function buildSystemPromptParams(params: {
       agentId: params.agentId,
       ...params.runtime,
       repoRoot,
+      buildHash: process.env.OPENCLAW_BUILD_HASH || undefined,
     },
     userTimezone,
     userTime,
