@@ -198,6 +198,7 @@ export async function runAgentTurnWithFallback(params: {
                   images: params.opts?.images,
                   // Enable streaming mode when toolFeedback is configured
                   onToolStatus: params.opts?.onToolStatus,
+                  onStreamEvent: params.opts?.onStreamEvent,
                 });
 
                 // CLI backends don't emit streaming assistant events, so we need to
@@ -359,6 +360,18 @@ export async function runAgentTurnWithFallback(params: {
                       ? (evt.data.args as Record<string, unknown>)
                       : undefined;
                   void params.opts.onToolStatus({ toolName, toolCallId, input });
+                }
+                // Forward tool lifecycle events to stream event callback.
+                if (params.opts?.onStreamEvent) {
+                  const toolName = typeof evt.data.name === "string" ? evt.data.name : "";
+                  const toolCallId =
+                    typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : "";
+                  if (phase === "start") {
+                    params.opts.onStreamEvent({ type: "tool_start", toolName, toolCallId });
+                  } else if (phase === "end") {
+                    const isError = Boolean(evt.data.isError);
+                    params.opts.onStreamEvent({ type: "tool_result", toolCallId, isError });
+                  }
                 }
               }
               // Track auto-compaction completion

@@ -52,8 +52,8 @@ import {
   type SmartAckConfig,
   type SmartAckResult,
 } from "./smart-ack.js";
+import { createSmartStatus } from "./smart-status.js";
 import { resolveDiscordAutoThreadReplyPlan, resolveDiscordThreadStarter } from "./threading.js";
-import { createToolFeedbackFilter } from "./tool-feedback-filter.js";
 import { sendTyping } from "./typing.js";
 
 export async function processDiscordMessage(ctx: DiscordMessagePreflightContext) {
@@ -511,55 +511,17 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     }
   };
 
-  // Set up periodic progress updates for long-running requests.
-  // Edits the single status message instead of sending new messages.
-  const progressUpdates = discordConfig?.progressUpdates;
-  let progressInterval: ReturnType<typeof setInterval> | undefined;
-  const progressStartTime = Date.now();
-  if (progressUpdates) {
-    const intervalSec = typeof progressUpdates === "number" ? Math.max(15, progressUpdates) : 60;
-
-    progressInterval = setInterval(async () => {
-      const elapsedSec = Math.round((Date.now() - progressStartTime) / 1000);
-      const minutes = Math.floor(elapsedSec / 60);
-      const seconds = elapsedSec % 60;
-      const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${elapsedSec}s`;
-      await updateStatusMessage(`*Still working... (${timeStr})*`);
-    }, intervalSec * 1000);
-  }
-
-  // Tool feedback: buffer tool calls and use Haiku to decide which are meaningful
-  // enough to show to the user, instead of spamming every single tool use.
+  // Smart status: accumulate streaming context and periodically generate
+  // context-aware Haiku status updates. Replaces tool-feedback-filter + progress timer.
   const toolFeedbackEnabled = discordConfig?.toolFeedback !== false;
-  const toolFeedbackFilter = toolFeedbackEnabled
-    ? createToolFeedbackFilter({
+  const smartStatusFilter = toolFeedbackEnabled
+    ? createSmartStatus({
         userMessage: text,
         onUpdate: (statusText) => {
-          // Reset the progress timer since we have fresh tool feedback.
-          if (progressInterval) {
-            clearInterval(progressInterval);
-          }
           void updateStatusMessage(statusText);
-          // Restart the progress timer so elapsed time updates resume after tool feedback.
-          if (progressUpdates) {
-            const intervalSec =
-              typeof progressUpdates === "number" ? Math.max(15, progressUpdates) : 60;
-            progressInterval = setInterval(async () => {
-              const elapsedSec = Math.round((Date.now() - progressStartTime) / 1000);
-              const minutes = Math.floor(elapsedSec / 60);
-              const seconds = elapsedSec % 60;
-              const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${elapsedSec}s`;
-              await updateStatusMessage(`*Still working... (${timeStr})*`);
-            }, intervalSec * 1000);
-          }
         },
       })
     : null;
-  const onToolStatusDirect = toolFeedbackFilter
-    ? (info: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => {
-        toolFeedbackFilter.push(info);
-      }
-    : undefined;
 
   // Smart ack: classify the message with Haiku BEFORE main dispatch.
   // FULL responses (jokes, greetings, casual chat) are sent directly, skipping Opus.
@@ -595,9 +557,8 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       clearInterval(earlyTypingInterval);
       earlyTypingInterval = undefined;
     }
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = undefined;
+    if (smartStatusFilter) {
+      smartStatusFilter.dispose();
     }
     deleteStatusMessage();
     const replyToId = replyReference.use();
@@ -656,11 +617,8 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         return;
       }
       try {
-        // Suppress progress messages since the ack replaces them.
-        if (progressInterval) {
-          clearInterval(progressInterval);
-          progressInterval = undefined;
-        }
+        // Suppress smart-status updates briefly so the ack isn't immediately overwritten.
+        smartStatusFilter?.suppress(10000);
         deleteStatusMessage();
         const result = await sendMessageDiscord(deliverTarget, ackText, {
           token,
@@ -688,10 +646,14 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       // (paragraph-by-paragraph) instead of waiting for the full response.
       disableBlockStreaming:
         typeof discordConfig?.blockStreaming === "boolean" ? !discordConfig.blockStreaming : false,
-      // Use the direct onToolStatus callback to edit the status message instead of
-      // sending tool feedback as separate block replies.
+      // Disable tool feedback as separate block replies; smart-status handles updates.
       toolFeedback: false,
-      onToolStatus: onToolStatusDirect,
+      // Forward streaming events to smart-status for context-aware periodic updates.
+      onStreamEvent: smartStatusFilter
+        ? (event: import("../../auto-reply/types.js").AgentStreamEvent) => {
+            smartStatusFilter.push(event);
+          }
+        : undefined,
       onModelSelected,
     },
   });
@@ -701,13 +663,9 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     clearInterval(earlyTypingInterval);
     earlyTypingInterval = undefined;
   }
-  // Clean up progress interval, tool filter, and delete the status message.
-  if (progressInterval) {
-    clearInterval(progressInterval);
-    progressInterval = undefined;
-  }
-  if (toolFeedbackFilter) {
-    toolFeedbackFilter.dispose();
+  // Clean up smart-status filter and delete the status message.
+  if (smartStatusFilter) {
+    smartStatusFilter.dispose();
   }
   deleteStatusMessage();
   // Cancel smart ack delay and delete its message (main response arrived).

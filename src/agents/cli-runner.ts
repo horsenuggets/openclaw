@@ -1,5 +1,6 @@
 import type { ImageContent } from "@mariozechner/pi-ai";
 import type { ThinkLevel } from "../auto-reply/thinking.js";
+import type { AgentStreamEvent } from "../auto-reply/types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { EmbeddedPiRunResult } from "./pi-embedded-runner.js";
 import { resolveHeartbeatPrompt } from "../auto-reply/heartbeat.js";
@@ -54,6 +55,8 @@ export async function runCliAgent(params: {
   images?: ImageContent[];
   /** Callback for tool execution status (enables streaming mode). */
   onToolStatus?: CliToolStatusCallback;
+  /** Called with non-terminal streaming events for status tracking. */
+  onStreamEvent?: (event: AgentStreamEvent) => void;
 }): Promise<EmbeddedPiRunResult> {
   const started = Date.now();
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
@@ -166,7 +169,7 @@ export async function runCliAgent(params: {
 
   // When streaming is enabled, replace --output-format json with stream-json
   // and add --verbose (required by claude CLI for stream-json with -p)
-  const useStreaming = Boolean(params.onToolStatus);
+  const useStreaming = Boolean(params.onToolStatus || params.onStreamEvent);
   const streamArgs = useStreaming
     ? [
         ...args.map((arg, i) =>
@@ -235,8 +238,8 @@ export async function runCliAgent(params: {
         await cleanupResumeProcesses(backend, cliSessionIdToSend);
       }
 
-      // Use streaming execution when onToolStatus is provided
-      if (useStreaming && params.onToolStatus) {
+      // Use streaming execution when tool status or stream event callbacks are provided
+      if (useStreaming) {
         log.info("cli streaming mode enabled");
         const streamResult = await runStreamingCli({
           command: backend.command,
@@ -251,6 +254,10 @@ export async function runCliAgent(params: {
                 toolName: event.toolName,
                 toolCallId: event.toolCallId,
               });
+            }
+            // Forward non-terminal events to stream event callback for status tracking.
+            if (params.onStreamEvent && event.type !== "result" && event.type !== "error") {
+              params.onStreamEvent(event);
             }
           },
         });
@@ -384,6 +391,8 @@ export async function runClaudeCliAgent(params: {
   images?: ImageContent[];
   /** Callback for tool execution status (enables streaming mode). */
   onToolStatus?: CliToolStatusCallback;
+  /** Called with non-terminal streaming events for status tracking. */
+  onStreamEvent?: (event: AgentStreamEvent) => void;
 }): Promise<EmbeddedPiRunResult> {
   return runCliAgent({
     sessionId: params.sessionId,
@@ -402,6 +411,7 @@ export async function runClaudeCliAgent(params: {
     cliSessionId: params.claudeSessionId,
     images: params.images,
     onToolStatus: params.onToolStatus,
+    onStreamEvent: params.onStreamEvent,
   });
 }
 

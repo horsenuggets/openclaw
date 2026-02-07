@@ -9,7 +9,7 @@ const log = createSubsystemLogger("discord/smart-ack");
 // Default to Haiku via CLI for fast acknowledgments using Max subscription
 const DEFAULT_ACK_MODEL = "haiku";
 const DEFAULT_ACK_TIMEOUT_MS = 8000;
-const DEFAULT_ACK_DELAY_MS = 30000;
+const DEFAULT_ACK_DELAY_MS = 3000;
 
 export type SmartAckConfig = {
   /** Enable smart contextual acknowledgments. */

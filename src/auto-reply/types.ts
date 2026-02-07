@@ -13,6 +13,13 @@ export type ModelSelectedContext = {
   thinkLevel: string | undefined;
 };
 
+/** Streaming event from an agent run (non-terminal subset of CliStreamEvent). */
+export type AgentStreamEvent =
+  | { type: "tool_start"; toolName: string; toolCallId: string }
+  | { type: "tool_result"; toolCallId: string; isError: boolean }
+  | { type: "text"; text: string }
+  | { type: "thinking"; text: string };
+
 export type GetReplyOptions = {
   /** Override run id for agent events (defaults to random UUID). */
   runId?: string;
@@ -47,6 +54,8 @@ export type GetReplyOptions = {
   blockReplyTimeoutMs?: number;
   /** If provided, only load these skills for this session (empty = no skills). */
   skillFilter?: string[];
+  /** Called with agent streaming events for interim status tracking. */
+  onStreamEvent?: (event: AgentStreamEvent) => void;
   /** Mutable ref to track if a reply was sent (for Slack "first" threading mode). */
   hasRepliedRef?: { value: boolean };
 };
