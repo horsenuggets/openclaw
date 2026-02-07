@@ -52,6 +52,7 @@ export const SnapshotSchema = Type.Object(
     configPath: Type.Optional(NonEmptyString),
     stateDir: Type.Optional(NonEmptyString),
     sessionDefaults: Type.Optional(SessionDefaultsSchema),
+    buildHash: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );

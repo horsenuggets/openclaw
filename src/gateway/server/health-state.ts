@@ -6,6 +6,8 @@ import { resolveMainSessionKey } from "../../config/sessions.js";
 import { listSystemPresence } from "../../infra/system-presence.js";
 import { normalizeMainKey } from "../../routing/session-key.js";
 
+const WATCHDOG_BUILD_HASH = process.env.OPENCLAW_BUILD_HASH || undefined;
+
 let presenceVersion = 1;
 let healthVersion = 1;
 let healthCache: HealthSummary | null = null;
@@ -36,6 +38,7 @@ export function buildGatewaySnapshot(): Snapshot {
       mainSessionKey,
       scope,
     },
+    buildHash: WATCHDOG_BUILD_HASH,
   };
 }
 
