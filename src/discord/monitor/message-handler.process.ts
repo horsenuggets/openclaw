@@ -457,13 +457,61 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
+  // Unified status message: a single Discord message that gets edited in-place for all
+  // interim feedback (tool status, progress timer, smart ack). Prevents message spam.
+  let statusMessageId: string | undefined;
+  let statusChannelId: string | undefined;
+  let statusLastText: string | undefined;
+  let statusSending = false;
+
+  const updateStatusMessage = async (text: string) => {
+    if (statusSending) {
+      return;
+    }
+    if (text === statusLastText) {
+      return;
+    }
+    statusLastText = text;
+    statusSending = true;
+    try {
+      if (statusMessageId && statusChannelId) {
+        await editMessageDiscord(
+          statusChannelId,
+          statusMessageId,
+          { content: text },
+          { rest: client.rest },
+        );
+      } else {
+        const result = await sendMessageDiscord(deliverTarget, text, {
+          token,
+          accountId,
+          rest: client.rest,
+        });
+        statusMessageId = result.messageId !== "unknown" ? result.messageId : undefined;
+        statusChannelId = result.channelId;
+      }
+    } catch (err) {
+      logVerbose(`discord: status message update failed: ${String(err)}`);
+    } finally {
+      statusSending = false;
+    }
+  };
+
+  const deleteStatusMessage = () => {
+    if (statusMessageId && statusChannelId) {
+      deleteMessageDiscord(statusChannelId, statusMessageId, { rest: client.rest }).catch((err) => {
+        logVerbose(`discord: failed to delete status message: ${String(err)}`);
+      });
+      statusMessageId = undefined;
+      statusChannelId = undefined;
+    }
+  };
+
   // Set up periodic progress updates for long-running requests.
-  // Instead of spamming new messages, we edit a single progress message.
+  // Edits the single status message instead of sending new messages.
   const progressUpdates = discordConfig?.progressUpdates;
   let progressInterval: ReturnType<typeof setInterval> | undefined;
   const progressStartTime = Date.now();
-  let progressMessageId: string | undefined;
-  let progressChannelId: string | undefined;
   if (progressUpdates) {
     const intervalSec = typeof progressUpdates === "number" ? Math.max(15, progressUpdates) : 60;
 
@@ -472,30 +520,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       const minutes = Math.floor(elapsedSec / 60);
       const seconds = elapsedSec % 60;
       const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${elapsedSec}s`;
-      const progressText = `*Still working... (${timeStr})*`;
-
-      try {
-        if (progressMessageId && progressChannelId) {
-          // Edit the existing progress message
-          await editMessageDiscord(
-            progressChannelId,
-            progressMessageId,
-            { content: progressText },
-            { rest: client.rest },
-          );
-        } else {
-          // Send the first progress message and capture its ID for subsequent edits
-          const result = await sendMessageDiscord(deliverTarget, progressText, {
-            token,
-            accountId,
-            rest: client.rest,
-          });
-          progressMessageId = result.messageId !== "unknown" ? result.messageId : undefined;
-          progressChannelId = result.channelId;
-        }
-      } catch (err) {
-        logVerbose(`discord: progress update failed: ${String(err)}`);
-      }
+      await updateStatusMessage(`*Still working... (${timeStr})*`);
     }, intervalSec * 1000);
   }
 
@@ -568,13 +593,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       clearInterval(progressInterval);
       progressInterval = undefined;
     }
-    if (progressMessageId && progressChannelId) {
-      deleteMessageDiscord(progressChannelId, progressMessageId, { rest: client.rest }).catch(
-        (err) => {
-          logVerbose(`discord: failed to delete progress message: ${String(err)}`);
-        },
-      );
-    }
+    deleteStatusMessage();
     const replyToId = replyReference.use();
     await deliverDiscordReply({
       replies: [{ text: smartAckResult.text }],
@@ -636,17 +655,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
           clearInterval(progressInterval);
           progressInterval = undefined;
         }
-        if (progressMessageId && progressChannelId) {
-          deleteMessageDiscord(progressChannelId, progressMessageId, { rest: client.rest }).catch(
-            (err) => {
-              logVerbose(
-                `discord: failed to delete progress message after smart ack: ${String(err)}`,
-              );
-            },
-          );
-          progressMessageId = undefined;
-          progressChannelId = undefined;
-        }
+        deleteStatusMessage();
         const result = await sendMessageDiscord(deliverTarget, ackText, {
           token,
           accountId,
@@ -695,14 +704,6 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     toolFeedbackFilter.dispose();
   }
   deleteStatusMessage();
-  // Delete the progress message since the real response arrived.
-  if (progressMessageId && progressChannelId) {
-    deleteMessageDiscord(progressChannelId, progressMessageId, { rest: client.rest }).catch(
-      (err) => {
-        logVerbose(`discord: failed to delete progress message: ${String(err)}`);
-      },
-    );
-  }
   // Cancel smart ack delay and delete its message (main response arrived).
   smartAckCancelled = true;
   if (smartAckDelayTimer) {
