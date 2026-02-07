@@ -30,6 +30,7 @@ import { buildAgentSessionKey } from "../../routing/resolve-route.js";
 import { resolveThreadSessionKeys } from "../../routing/session-key.js";
 import { buildUntrustedChannelMetadata } from "../../security/channel-metadata.js";
 import { truncateUtf16Safe } from "../../utils.js";
+import { getActiveJobForUser, createJob, updateJob, appendJobEvent } from "../jobs/store.js";
 import {
   deleteMessageDiscord,
   editMessageDiscord,
@@ -39,6 +40,7 @@ import {
 } from "../send.js";
 import { normalizeDiscordSlug, resolveDiscordOwnerAllowFrom } from "./allow-list.js";
 import { resolveTimestampMs } from "./format.js";
+import { startJobClassification, type JobClassificationController } from "./job-classifier.js";
 import {
   buildDiscordMediaPayload,
   resolveDiscordMessageText,
@@ -121,6 +123,26 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     logVerbose(`discord: drop message ${message.id} (empty content)`);
     return;
   }
+
+  // Start job classification in parallel for DMs (uses Haiku for fast topic routing).
+  // Runs before smart-ack and dispatch so the result is available when needed.
+  const jobsConfig = discordConfig?.jobs;
+  const jobsEnabled =
+    isDirectMessage &&
+    (jobsConfig === true || (typeof jobsConfig === "object" && jobsConfig?.enabled !== false));
+  let jobClassificationController: JobClassificationController | null = null;
+  if (jobsEnabled) {
+    const classifierConfig = typeof jobsConfig === "object" ? jobsConfig?.classifier : undefined;
+    const activeJob = await getActiveJobForUser(route.agentId, author.id).catch(() => null);
+    jobClassificationController = startJobClassification({
+      message: text,
+      senderName: sender.name,
+      previousJobSummary: activeJob?.summary,
+      cfg,
+      config: classifierConfig,
+    });
+  }
+
   const ackReaction = resolveAckReaction(cfg, route.agentId);
   const removeAckAfterReply = cfg.messages?.removeAckAfterReply ?? false;
   const shouldAckReaction = () =>
@@ -596,6 +618,35 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
+  // Await job classification and create/update job entry.
+  let currentJobId: string | undefined;
+  if (jobClassificationController) {
+    const classification = await jobClassificationController.result;
+    const activeJob = await getActiveJobForUser(route.agentId, author.id).catch(() => null);
+    if (classification.decision === "NEW" || !activeJob) {
+      const job = await createJob({
+        agentId: route.agentId,
+        userId: author.id,
+        sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+        prompt: text,
+      }).catch((err) => {
+        logVerbose(`discord: failed to create job: ${String(err)}`);
+        return null;
+      });
+      currentJobId = job?.jobId;
+    } else {
+      currentJobId = activeJob.jobId;
+      await appendJobEvent(route.agentId, activeJob.jobId, {
+        ts: Date.now(),
+        jobId: activeJob.jobId,
+        event: "message",
+        data: { prompt: text },
+      }).catch((err) => {
+        logVerbose(`discord: failed to append job event: ${String(err)}`);
+      });
+    }
+  }
+
   const { queuedFinal, counts } = await dispatchInboundMessage({
     ctx: ctxPayload,
     cfg,
@@ -629,6 +680,16 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   // Cancel smart ack (main response arrived).
   if (smartAckController) {
     smartAckController.cancel();
+  }
+  // Mark job as completed after dispatch finishes.
+  if (currentJobId) {
+    await updateJob({
+      agentId: route.agentId,
+      jobId: currentJobId,
+      status: "completed",
+    }).catch((err) => {
+      logVerbose(`discord: failed to complete job: ${String(err)}`);
+    });
   }
   if (!queuedFinal) {
     if (isGuildMessage) {

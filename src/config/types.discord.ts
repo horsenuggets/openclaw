@@ -1,3 +1,4 @@
+import type { JobsConfig } from "../discord/jobs/types.js";
 import type { DiscordPluralKitConfig } from "../discord/pluralkit.js";
 import type {
   BlockStreamingCoalesceConfig,
@@ -201,6 +202,13 @@ export type DiscordAccountConfig = {
    * - object: Configure delay, model, and timeout
    */
   smartAck?: boolean | DiscordSmartAckConfig;
+  /**
+   * Job tracking with smart topic routing for DMs.
+   * Classifies messages as new topics vs continuations using Haiku.
+   * - true: Enable with default settings
+   * - object: Configure classifier, archive, and prune settings
+   */
+  jobs?: boolean | JobsConfig;
 };
 
 export type DiscordConfig = {
