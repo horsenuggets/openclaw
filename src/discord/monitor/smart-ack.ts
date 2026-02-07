@@ -1,7 +1,10 @@
 import type { OpenClawConfig } from "../../config/config.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { runCommandWithTimeout } from "../../process/exec.js";
+
+const log = createSubsystemLogger("discord/smart-ack");
 
 // Default to Haiku via CLI for fast acknowledgments using Max subscription
 const DEFAULT_ACK_MODEL = "haiku";
@@ -81,15 +84,15 @@ export async function generateSmartAck(params: {
 
   const prompt =
     `You are a helpful AI assistant responding in a Discord server. ${nameContext}` +
-    `Decide if this message is SIMPLE or COMPLEX.\n\n` +
-    `SIMPLE messages are: greetings, thanks, casual chat, short questions with obvious answers, ` +
-    `acknowledgments, or anything a fast model can fully answer in 1-2 sentences.\n` +
-    `COMPLEX messages are: technical questions, code requests, multi-step tasks, research, ` +
-    `or anything needing deep thought or tools.\n\n` +
-    `If SIMPLE: prefix your response with "FULL: " and give a complete, friendly reply (1-2 sentences).\n` +
-    `If COMPLEX: prefix your response with "ACK: " and give a brief acknowledgment showing you ` +
-    `understand the request (e.g. "Working on..." or "Let me look into..."). ` +
-    `Do NOT answer complex requests, just acknowledge them.\n\n` +
+    `Decide if you can fully answer this message in 1-2 sentences, or if it needs deeper work.\n\n` +
+    `If you can fully answer: prefix your response with "FULL: " and give a complete, friendly reply ` +
+    `(1-2 sentences). This applies to greetings, thanks, casual chat, short factual questions, ` +
+    `and acknowledgments.\n` +
+    `If it needs deeper work: prefix your response with "ACK: " and give a brief acknowledgment ` +
+    `showing you understand the request (e.g. "Working on..." or "Let me look into..."). ` +
+    `This applies to technical questions, code requests, multi-step tasks, or research. ` +
+    `Do NOT answer these, just acknowledge them.\n\n` +
+    `You MUST start your response with either "FULL: " or "ACK: " and nothing else.\n\n` +
     `Writing style: never use em-dashes or hyphens as grammatical punctuation. Use commas, periods, or semicolons instead.\n\n` +
     `User's message:\n${message}`;
 
@@ -121,11 +124,16 @@ export async function generateSmartAck(params: {
       return null;
     }
 
-    // Parse FULL/ACK prefix to determine response type
-    const isFull = ack.startsWith("FULL: ") || ack.startsWith("FULL:");
+    // Parse FULL/ACK prefix to determine response type.
+    // Also handle "SIMPLE:" as a fallback for FULL (model sometimes echoes category labels).
+    const isFull =
+      ack.startsWith("FULL: ") ||
+      ack.startsWith("FULL:") ||
+      ack.startsWith("SIMPLE: ") ||
+      ack.startsWith("SIMPLE:");
     const isAck = ack.startsWith("ACK: ") || ack.startsWith("ACK:");
     const cleanText = isFull
-      ? ack.replace(/^FULL:\s*/, "")
+      ? ack.replace(/^(?:FULL|SIMPLE):\s*/, "")
       : isAck
         ? ack.replace(/^ACK:\s*/, "")
         : ack;
@@ -135,9 +143,9 @@ export async function generateSmartAck(params: {
       return null;
     }
 
-    logVerbose(
-      `smart-ack: generated ${isFull ? "full response" : "acknowledgment"} (${cleanText.length} chars)`,
-    );
+    const kind = isFull ? "full" : "interim";
+    logVerbose(`smart-ack: generated ${kind} response (${cleanText.length} chars)`);
+    log.info(`smart ack (${kind}): ${cleanText}`);
 
     return { text: cleanText, isFull };
   } catch (err) {

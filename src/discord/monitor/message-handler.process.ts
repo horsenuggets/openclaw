@@ -625,7 +625,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   let smartAckCancelled = false;
   let smartAckDelayTimer: ReturnType<typeof setTimeout> | undefined;
   if (smartAckResult && !smartAckResult.isFull) {
-    const ackText = `*${smartAckResult.text}*`;
+    const ackText = smartAckResult.text;
     smartAckDelayTimer = setTimeout(async () => {
       if (smartAckCancelled) {
         return;
