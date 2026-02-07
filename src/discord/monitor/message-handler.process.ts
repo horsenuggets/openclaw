@@ -590,7 +590,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
           clearInterval(progressInterval);
           progressInterval = undefined;
         }
-        const displayText = ackResult.isFull ? ackResult.text : `*${ackResult.text}*`;
+        const displayText = ackResult.text;
         void updateStatusMessage(displayText);
       }
     });
