@@ -554,10 +554,10 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
-  // Simple messages: send the Haiku response directly and skip the main model entirely.
-  // Typing was already sent before generateSmartAck(), and Discord auto-clears it on
-  // message delivery, so no additional typing call is needed here.
+  // Simple messages: send the Sonnet response directly and skip the main model entirely.
   if (smartAckResult?.isFull) {
+    // Reinforce typing so the indicator doesn't drop between classification and delivery.
+    void sendTyping({ rest: client.rest, channelId: typingChannelId }).catch(() => {});
     if (earlyTypingInterval) {
       clearInterval(earlyTypingInterval);
       earlyTypingInterval = undefined;
