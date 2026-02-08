@@ -592,6 +592,9 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   if (smartAckController) {
     const triageResult = await smartAckController.result;
     if (triageResult?.isFull) {
+      // Reinforce typing so the indicator doesn't drop between classification and delivery.
+      void sendTyping({ rest: client.rest, channelId: typingChannelId }).catch(() => {});
+
       // Short-circuit: Sonnet answered fully. Deliver and clean up.
       logVerbose(`smart-ack: short-circuit with full response (${triageResult.text.length} chars)`);
 
