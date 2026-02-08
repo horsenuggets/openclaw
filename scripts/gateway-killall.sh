@@ -14,8 +14,9 @@ echo "Searching for OpenClaw gateway processes..."
 # Kill watchdog-spawned gateways and direct gateway runs.
 # Matches: node <path>/openclaw.mjs gateway
 #          node <path>/dist/index.js gateway
+#          openclaw-gateway (compiled binary)
 #          node watchdog/cli.mjs run
-pids=$(pgrep -f "(openclaw\.mjs|dist/index\.js|dist/index\.mjs|dist/entry\.js) gateway" 2>/dev/null || true)
+pids=$(pgrep -f "(openclaw\.mjs|dist/index\.js|dist/index\.mjs|dist/entry\.js) gateway|openclaw-gateway" 2>/dev/null || true)
 if [ -n "$pids" ]; then
   for pid in $pids; do
     cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
@@ -42,7 +43,7 @@ if [ "$killed" -gt 0 ]; then
   sleep 3
 
   # Check if any are still running and force-kill.
-  remaining=$(pgrep -f "(openclaw\.mjs|dist/index\.js|dist/index\.mjs|dist/entry\.js) gateway" 2>/dev/null || true)
+  remaining=$(pgrep -f "(openclaw\.mjs|dist/index\.js|dist/index\.mjs|dist/entry\.js) gateway|openclaw-gateway" 2>/dev/null || true)
   remaining2=$(pgrep -f "watchdog/cli\.mjs (run|start)" 2>/dev/null || true)
   remaining="$remaining $remaining2"
   remaining=$(echo "$remaining" | xargs)
