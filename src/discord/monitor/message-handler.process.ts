@@ -127,6 +127,15 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     logVerbose(`discord: drop message ${message.id} (empty content)`);
     return;
   }
+
+  // Start typing immediately so the user sees feedback within seconds.
+  // Audio messages already have an early typing loop above; avoid double-firing.
+  if (!hasAudio) {
+    void sendTyping({ rest: client.rest, channelId: message.channelId }).catch((err) => {
+      logVerbose(`discord: early typing failed: ${String(err)}`);
+    });
+  }
+
   const ackReaction = resolveAckReaction(cfg, route.agentId);
   const removeAckAfterReply = cfg.messages?.removeAckAfterReply ?? false;
   const shouldAckReaction = () =>
@@ -537,10 +546,6 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
   let smartAckResult: SmartAckResult | null = null;
   if (smartAckEnabled) {
-    // Show typing while Haiku classifies the message (can take a few seconds).
-    sendTyping({ client, channelId: typingChannelId }).catch((err) => {
-      logVerbose(`discord: typing before smart ack failed: ${String(err)}`);
-    });
     smartAckResult = await generateSmartAck({
       message: text,
       senderName: sender.name,

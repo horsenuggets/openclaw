@@ -6,8 +6,8 @@ import { runCommandWithTimeout } from "../../process/exec.js";
 
 const log = createSubsystemLogger("discord/smart-ack");
 
-// Default to Haiku via CLI for fast acknowledgments using Max subscription
-const DEFAULT_ACK_MODEL = "haiku";
+// Default to Sonnet via CLI for fast, reliable classification using Max subscription
+const DEFAULT_ACK_MODEL = "sonnet";
 const DEFAULT_ACK_TIMEOUT_MS = 8000;
 const DEFAULT_ACK_DELAY_MS = 3000;
 
