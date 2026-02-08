@@ -57,6 +57,7 @@ import { deliverDiscordReply } from "./reply-delivery.js";
 import { startSmartAck, type SmartAckConfig, type SmartAckContext } from "./smart-ack.js";
 import { createSmartStatus } from "./smart-status.js";
 import { resolveDiscordAutoThreadReplyPlan, resolveDiscordThreadStarter } from "./threading.js";
+import { createTypingGuard } from "./typing-guard.js";
 import { sendTyping } from "./typing.js";
 
 export async function processDiscordMessage(ctx: DiscordMessagePreflightContext) {
@@ -104,39 +105,29 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
   const mediaList = await resolveMediaList(message, mediaMaxBytes);
 
-  // Start typing loop immediately if audio is detected (before transcription).
-  // Discord clears typing after 10s, and transcription can take 10-30s, so we need a loop.
-  // This same loop continues through the main reply flow via the onReplyStart callback.
+  // Ref-counted typing guard: keeps the indicator alive while any job is running.
   const hasAudio = mediaList.some((m) => m.contentType?.startsWith("audio/"));
-  let earlyTypingInterval: ReturnType<typeof setInterval> | undefined;
+  const typingGuard = createTypingGuard({
+    rest: client.rest,
+    channelId: message.channelId,
+    onError: (err) => logVerbose(`discord: typing failed: ${String(err)}`),
+  });
+
+  // Start typing immediately for audio (transcription can take 10-30s).
   if (hasAudio) {
-    // Start typing immediately (fire-and-forget to avoid blocking)
-    void sendTyping({ rest: client.rest, channelId: message.channelId }).catch((err) => {
-      logVerbose(`discord: early audio typing failed: ${String(err)}`);
-    });
-    // Start a loop that sends typing every 6 seconds (Discord clears after 10s)
-    earlyTypingInterval = setInterval(() => {
-      void sendTyping({ rest: client.rest, channelId: message.channelId }).catch((err) => {
-        logVerbose(`discord: early audio typing loop failed: ${String(err)}`);
-      });
-    }, 6000);
+    typingGuard.acquire();
   }
 
   const text = messageText;
   if (!text) {
-    if (earlyTypingInterval) {
-      clearInterval(earlyTypingInterval);
-    }
+    typingGuard.dispose();
     logVerbose(`discord: drop message ${message.id} (empty content)`);
     return;
   }
 
-  // Start typing immediately so the user sees feedback within seconds.
-  // Audio messages already have an early typing loop above; avoid double-firing.
+  // Start typing for all messages so the user sees feedback within seconds.
   if (!hasAudio) {
-    void sendTyping({ rest: client.rest, channelId: message.channelId }).catch((err) => {
-      logVerbose(`discord: early typing failed: ${String(err)}`);
-    });
+    typingGuard.acquire();
   }
 
   // Start job classification in parallel for DMs (uses Haiku for fast topic routing).
@@ -341,9 +332,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     : (autoThreadContext?.From ?? `discord:channel:${message.channelId}`);
   const effectiveTo = autoThreadContext?.To ?? replyTarget;
   if (!effectiveTo) {
-    if (earlyTypingInterval) {
-      clearInterval(earlyTypingInterval);
-    }
+    typingGuard.dispose();
     runtime.error?.(danger("discord: missing reply target"));
     return;
   }
@@ -448,14 +437,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       runtime.error?.(danger(`discord ${info.kind} reply failed: ${String(err)}`));
     },
     onReplyStart: createTypingCallbacks({
-      start: () => {
-        // Clear the early typing interval when main typing loop takes over.
-        if (earlyTypingInterval) {
-          clearInterval(earlyTypingInterval);
-          earlyTypingInterval = undefined;
-        }
-        return sendTyping({ rest: client.rest, channelId: typingChannelId });
-      },
+      start: () => sendTyping({ rest: client.rest, channelId: typingChannelId }),
       onStartError: (err) => {
         logTypingFailure({
           log: logVerbose,
@@ -523,8 +505,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       }
       // Reinforce typing after status message updates. Sending a new message
       // clears Discord's typing indicator, and edits can cause brief drops.
-      // Fire-and-forget to avoid blocking the status update flow.
-      void sendTyping({ rest: client.rest, channelId: typingChannelId }).catch(() => {});
+      typingGuard.reinforce();
     } catch (err) {
       logVerbose(`discord: status message update failed: ${String(err)}`);
     } finally {
@@ -614,10 +595,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       });
 
       // Clean up all resources.
-      if (earlyTypingInterval) {
-        clearInterval(earlyTypingInterval);
-        earlyTypingInterval = undefined;
-      }
+      typingGuard.dispose();
       if (smartStatusFilter) {
         smartStatusFilter.dispose();
       }
@@ -719,11 +697,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     },
   });
   markDispatchIdle();
-  // Clean up early typing interval if it wasn't cleared by main typing loop.
-  if (earlyTypingInterval) {
-    clearInterval(earlyTypingInterval);
-    earlyTypingInterval = undefined;
-  }
+  typingGuard.dispose();
   // Clean up smart-status filter and delete the status message.
   if (smartStatusFilter) {
     smartStatusFilter.dispose();
