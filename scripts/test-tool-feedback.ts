@@ -47,7 +47,9 @@ child.stdout.on("data", (chunk: Buffer) => {
   buffer = lines.pop() ?? "";
 
   for (const line of lines) {
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      continue;
+    }
     try {
       const event = JSON.parse(line);
       if (event.type === "assistant" && event.message?.content) {
@@ -80,7 +82,7 @@ child.stdout.on("data", (chunk: Buffer) => {
   }
 });
 
-child.stderr.on("data", (chunk: Buffer) => {
+child.stderr.on("data", () => {
   // ignore stderr (hook output, etc.)
 });
 
