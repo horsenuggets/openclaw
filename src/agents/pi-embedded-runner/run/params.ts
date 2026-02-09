@@ -90,6 +90,7 @@ export type RunEmbeddedPiAgentParams = {
     replyToCurrent?: boolean;
   }) => void | Promise<void>;
   onBlockReplyFlush?: () => void | Promise<void>;
+  onBlockReplyDiscard?: () => void | Promise<void>;
   blockReplyBreak?: "text_end" | "message_end";
   blockReplyChunking?: BlockReplyChunking;
   onReasoningStream?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;

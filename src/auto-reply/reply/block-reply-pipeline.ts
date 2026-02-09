@@ -11,6 +11,8 @@ export type BlockReplyPipeline = {
   didStream: () => boolean;
   isAborted: () => boolean;
   hasSentPayload: (payload: ReplyPayload) => boolean;
+  /** Discard all buffered/coalesced payloads without sending (suppresses pre-tool hedging text). */
+  discard: () => void;
 };
 
 export type BlockReplyBuffer = {
@@ -227,6 +229,13 @@ export function createBlockReplyPipeline(params: {
     coalescer?.stop();
   };
 
+  const discard = () => {
+    coalescer?.discard();
+    bufferedPayloads.length = 0;
+    bufferedPayloadKeys.clear();
+    bufferedKeys.clear();
+  };
+
   return {
     enqueue,
     flush,
@@ -238,5 +247,6 @@ export function createBlockReplyPipeline(params: {
       const payloadKey = createBlockReplyPayloadKey(payload);
       return sentKeys.has(payloadKey);
     },
+    discard,
   };
 }

@@ -40,10 +40,22 @@ export async function handleToolExecutionStart(
   ctx: EmbeddedPiSubscribeContext,
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ) {
-  // Flush pending block replies to preserve message boundaries before tool execution.
-  ctx.flushBlockReplyBuffer();
-  if (ctx.params.onBlockReplyFlush) {
-    void ctx.params.onBlockReplyFlush();
+  if (ctx.params.onBlockReplyDiscard) {
+    // Discard pre-tool text to suppress hedging (e.g., "I don't have access..."
+    // right before a successful exec). The block reply pipeline coalescer buffers
+    // text with an idle timeout, so text emitted at text_end hasn't reached the
+    // channel yet and can be safely discarded.
+    if (ctx.blockChunker?.hasBuffered()) {
+      ctx.blockChunker.reset();
+    }
+    ctx.state.blockBuffer = "";
+    void ctx.params.onBlockReplyDiscard();
+  } else {
+    // Flush pending block replies to preserve message boundaries before tool execution.
+    ctx.flushBlockReplyBuffer();
+    if (ctx.params.onBlockReplyFlush) {
+      void ctx.params.onBlockReplyFlush();
+    }
   }
 
   const rawToolName = String(evt.toolName);

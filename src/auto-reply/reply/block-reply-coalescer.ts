@@ -6,6 +6,8 @@ export type BlockReplyCoalescer = {
   flush: (options?: { force?: boolean }) => Promise<void>;
   hasBuffered: () => boolean;
   stop: () => void;
+  /** Discard all buffered text without flushing (used to suppress pre-tool hedging). */
+  discard: () => void;
 };
 
 export function createBlockReplyCoalescer(params: {
@@ -138,10 +140,16 @@ export function createBlockReplyCoalescer(params: {
     scheduleIdleFlush();
   };
 
+  const discard = () => {
+    clearIdleTimer();
+    resetBuffer();
+  };
+
   return {
     enqueue,
     flush,
     hasBuffered: () => Boolean(bufferText),
     stop: () => clearIdleTimer(),
+    discard,
   };
 }

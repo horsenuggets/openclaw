@@ -24,6 +24,8 @@ export type SubscribeEmbeddedPiSessionParams = {
   }) => void | Promise<void>;
   /** Flush pending block replies (e.g., before tool execution to preserve message boundaries). */
   onBlockReplyFlush?: () => void | Promise<void>;
+  /** Discard pending block replies without sending (suppresses pre-tool hedging text). */
+  onBlockReplyDiscard?: () => void | Promise<void>;
   blockReplyBreak?: "text_end" | "message_end";
   blockReplyChunking?: BlockReplyChunking;
   onPartialReply?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
