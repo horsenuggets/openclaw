@@ -25,6 +25,11 @@
     ]
   },
   "tools": {
+    "claude_code": {
+      "emoji": "🤖",
+      "title": "Claude Code",
+      "detailKeys": ["prompt"]
+    },
     "exec": {
       "emoji": "🛠️",
       "title": "Exec",

@@ -54,7 +54,15 @@ const DETAIL_LABEL_OVERRIDES: Record<string, string> = {
 const MAX_DETAIL_ENTRIES = 8;
 
 function normalizeToolName(name?: string): string {
-  return (name ?? "tool").trim();
+  let n = (name ?? "tool").trim();
+  // Strip MCP prefix: mcp__server-name__tool_name → tool_name
+  if (n.startsWith("mcp__")) {
+    const secondSep = n.indexOf("__", 5);
+    if (secondSep !== -1) {
+      n = n.slice(secondSep + 2);
+    }
+  }
+  return n;
 }
 
 function defaultTitle(name: string): string {
