@@ -75,9 +75,12 @@ export async function runCliAgent(params: {
   const normalizedModel = normalizeCliModel(modelId, backend);
   const modelDisplay = `${params.provider}/${modelId}`;
 
+  // Streaming mode enables native CLI tools for tool feedback display;
+  // non-streaming mode disables tools (handled by the embedded runner instead).
+  const useStreaming = Boolean(params.onToolStatus || params.onStreamEvent);
   const extraSystemPrompt = [
     params.extraSystemPrompt?.trim(),
-    "Tools are disabled in this session. Do not call tools.",
+    useStreaming ? undefined : "Tools are disabled in this session. Do not call tools.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -171,17 +174,38 @@ export async function runCliAgent(params: {
     useResume,
   });
 
-  // When streaming is enabled, replace --output-format json with stream-json
-  // and add --verbose (required by claude CLI for stream-json with -p)
-  const useStreaming = Boolean(params.onToolStatus || params.onStreamEvent);
-  const streamArgs = useStreaming
-    ? [
-        ...args.map((arg, i) =>
-          args[i - 1] === "--output-format" && arg === "json" ? "stream-json" : arg,
-        ),
-        "--verbose",
-      ]
-    : args;
+  // When streaming is enabled:
+  // 1. Replace --output-format json → stream-json
+  // 2. Add --verbose (required by claude CLI for stream-json with -p)
+  // 3. Remove --tools "" so native CLI tools (Read, Bash, Glob) are available
+  //    — this produces clean tool feedback like "📖 Read: /path" instead of
+  //    the verbose MCP wrapper prompt from claude_code.
+  const streamArgs = (() => {
+    if (!useStreaming) {
+      return args;
+    }
+    const out: string[] = [];
+    let skip = false;
+    for (let i = 0; i < args.length; i++) {
+      if (skip) {
+        skip = false;
+        continue;
+      }
+      // Strip --tools "" pair to enable native tools in streaming mode
+      if (args[i] === "--tools") {
+        skip = true;
+        continue;
+      }
+      // Replace json → stream-json for streaming output
+      if (args[i] === "json" && i > 0 && args[i - 1] === "--output-format") {
+        out.push("stream-json");
+        continue;
+      }
+      out.push(args[i]);
+    }
+    out.push("--verbose");
+    return out;
+  })();
 
   const serialize = backend.serialize ?? true;
   const queueKey = serialize ? backendResolved.id : `${backendResolved.id}:${params.runId}`;
