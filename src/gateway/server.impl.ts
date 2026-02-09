@@ -44,6 +44,7 @@ import { createSubsystemLogger, runtimeForLogger } from "../logging/subsystem.js
 import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
 import { ExecApprovalManager } from "./exec-approval-manager.js";
+import { createJobTracker } from "./job-tracker.js";
 import { NodeRegistry } from "./node-registry.js";
 import { createChannelManager } from "./server-channels.js";
 import { createAgentEventHandler } from "./server-chat.js";
@@ -440,18 +441,23 @@ export async function startGatewayServer(
     nodeSendToSession,
   });
 
-  const agentUnsub = onAgentEvent(
-    createAgentEventHandler({
-      broadcast,
-      broadcastToConnIds,
-      nodeSendToSession,
-      agentRunSeq,
-      chatRunState,
-      resolveSessionKeyForRun,
-      clearAgentRunContext,
-      toolEventRecipients,
-    }),
-  );
+  const jobTracker = createJobTracker({ broadcast });
+
+  const agentEventHandler = createAgentEventHandler({
+    broadcast,
+    broadcastToConnIds,
+    nodeSendToSession,
+    agentRunSeq,
+    chatRunState,
+    resolveSessionKeyForRun,
+    clearAgentRunContext,
+    toolEventRecipients,
+  });
+
+  const agentUnsub = onAgentEvent((evt) => {
+    agentEventHandler(evt);
+    jobTracker.handleEvent(evt);
+  });
 
   const heartbeatUnsub = onHeartbeatEvent((evt) => {
     broadcast("heartbeat", evt, { dropIfSlow: true });
@@ -525,6 +531,7 @@ export async function startGatewayServer(
       markChannelLoggedOut,
       wizardRunner,
       broadcastVoiceWakeChanged,
+      jobTracker,
     },
   });
   logGatewayStartup({

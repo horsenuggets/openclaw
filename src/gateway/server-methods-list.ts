@@ -85,6 +85,9 @@ const BASE_METHODS = [
   "chat.history",
   "chat.abort",
   "chat.send",
+  // Job tracking
+  "jobs.list",
+  "jobs.get",
 ];
 
 export function listGatewayMethods(): string[] {
@@ -111,4 +114,5 @@ export const GATEWAY_EVENTS = [
   "voicewake.changed",
   "exec.approval.requested",
   "exec.approval.resolved",
+  "jobs",
 ];
