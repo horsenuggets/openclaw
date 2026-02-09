@@ -574,11 +574,12 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   if (smartAckController) {
     triageResult = await smartAckController.result;
     if (triageResult?.isFull) {
-      // Reinforce typing so the indicator doesn't drop between classification and delivery.
-      void sendTyping({ rest: client.rest, channelId: typingChannelId }).catch(() => {});
-
       // Short-circuit: Sonnet answered fully. Deliver and clean up.
       logVerbose(`smart-ack: short-circuit with full response (${triageResult.text.length} chars)`);
+
+      // Dispose the typing guard before delivery so no stale typing signals
+      // can arrive at Discord after the message (which would re-show "typing").
+      typingGuard.dispose();
 
       const replyToId = replyReference.use();
       await deliverDiscordReply({
@@ -595,8 +596,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
       });
 
-      // Clean up all resources.
-      typingGuard.dispose();
+      // Clean up remaining resources.
       if (smartStatusFilter) {
         smartStatusFilter.dispose();
       }
@@ -673,38 +673,6 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         logVerbose(`discord: failed to append job event: ${String(err)}`);
       });
     }
-    return;
-  }
-
-  // ACK case: set up delayed sending for interim feedback if the main model takes too long.
-  const ackDelayMs = DEFAULT_ACK_DELAY_MS;
-  let _smartAckMessageId: string | undefined;
-  let _smartAckChannelId: string | undefined;
-  let smartAckCancelled = false;
-  let _smartAckDelayTimer: ReturnType<typeof setTimeout> | undefined;
-  if (triageResult && !triageResult.isFull) {
-    const ackText = triageResult.text;
-    _smartAckDelayTimer = setTimeout(async () => {
-      if (smartAckCancelled) {
-        return;
-      }
-      try {
-        // Suppress smart-status updates briefly so the ack isn't immediately overwritten.
-        smartStatusFilter?.suppress(10000);
-        deleteStatusMessage();
-        const result = await sendMessageDiscord(deliverTarget, ackText, {
-          token,
-          accountId,
-          rest: client.rest,
-        });
-        if (!smartAckCancelled) {
-          _smartAckMessageId = result.messageId !== "unknown" ? result.messageId : undefined;
-          _smartAckChannelId = result.channelId;
-        }
-      } catch (err) {
-        logVerbose(`discord: smart ack delivery failed: ${String(err)}`);
-      }
-    }, ackDelayMs);
   }
 
   const { queuedFinal, counts } = await dispatchInboundMessage({
