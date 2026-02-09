@@ -11,6 +11,7 @@ type ToolDisplaySpec = {
   emoji?: string;
   title?: string;
   label?: string;
+  suppress?: boolean;
   detailKeys?: string[];
   actions?: Record<string, ToolDisplayActionSpec>;
 };
@@ -26,6 +27,7 @@ export type ToolDisplay = {
   emoji: string;
   title: string;
   label: string;
+  suppress: boolean;
   verb?: string;
   detail?: string;
 };
@@ -272,6 +274,7 @@ export function resolveToolDisplay(params: {
     emoji,
     title,
     label,
+    suppress: spec?.suppress ?? false,
     verb,
     detail,
   };

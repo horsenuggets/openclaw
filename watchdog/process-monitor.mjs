@@ -294,14 +294,28 @@ export class ProcessMonitor {
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
     const timestamp = () => new Date().toISOString();
 
+    // Only show gateway log lines (ISO timestamps) in terminal; everything goes to log file
+    const LOG_LINE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/;
+    let stdoutBuf = "";
+
     this.process.stdout.on("data", (chunk) => {
-      logStream.write(`[${timestamp()}] [stdout] ${chunk}`);
-      process.stdout.write(chunk);
+      const text = chunk.toString();
+      logStream.write(`[${timestamp()}] [stdout] ${text}`);
+
+      stdoutBuf += text;
+      const lines = stdoutBuf.split("\n");
+      stdoutBuf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (LOG_LINE_RE.test(line)) {
+          process.stdout.write(line + "\n");
+        }
+      }
     });
 
     this.process.stderr.on("data", (chunk) => {
-      logStream.write(`[${timestamp()}] [stderr] ${chunk}`);
-      process.stderr.write(chunk);
+      const text = chunk.toString();
+      logStream.write(`[${timestamp()}] [stderr] ${text}`);
+      process.stderr.write(text);
     });
 
     this.process.on("exit", (code, signal) => {

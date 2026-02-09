@@ -32,6 +32,18 @@ describe("MCP tool name normalization", () => {
   });
 });
 
+describe("tool display suppress", () => {
+  it("marks claude_code as suppressed", () => {
+    const display = resolveToolDisplay({ name: "mcp__claude-code-mcp__claude_code" });
+    expect(display.suppress).toBe(true);
+  });
+
+  it("does not suppress regular tools", () => {
+    const display = resolveToolDisplay({ name: "read" });
+    expect(display.suppress).toBe(false);
+  });
+});
+
 describe("tool display details", () => {
   it("skips zero/false values for optional detail fields", () => {
     const detail = formatToolDetail(

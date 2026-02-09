@@ -28,6 +28,7 @@
     "claude_code": {
       "emoji": "🤖",
       "title": "Claude Code",
+      "suppress": true,
       "detailKeys": ["prompt"]
     },
     "exec": {
