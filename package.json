@@ -167,6 +167,7 @@
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260205.1",
     "@vitest/coverage-v8": "^4.0.18",
+    "discord.js": "^14.25.1",
     "lit": "^3.3.2",
     "ollama": "^0.6.3",
     "oxfmt": "0.28.0",
