@@ -474,13 +474,15 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
-  // Status messages: each update sends a new message that persists in
-  // the channel. Messages are never edited or deleted so tool usage
-  // history remains visible.
+  // Status messages: a single message is sent on the first update.
+  // Subsequent updates are silently dropped. Messages are never edited
+  // or deleted so the user never sees content disappear or flicker.
+  let statusMessageSent = false;
   let statusSending = false;
 
   const sendStatusMessage = async (text: string) => {
-    if (statusSending) {
+    // Only send the first status message. Never edit or delete.
+    if (statusMessageSent || statusSending) {
       return;
     }
     statusSending = true;
@@ -490,6 +492,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         accountId,
         rest: client.rest,
       });
+      statusMessageSent = true;
       // Reinforce typing after sending. Sending clears Discord's
       // typing indicator.
       typingGuard.reinforce();
