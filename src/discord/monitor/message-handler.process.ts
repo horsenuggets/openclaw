@@ -480,11 +480,41 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   // flooding the channel. Messages are never edited or deleted.
   // Tool result blocks (rich output previews) bypass the cooldown
   // because they contain substantive content the user needs to see.
+  // When a send is in flight, result blocks are queued and flushed
+  // after the current send completes.
   const STATUS_COOLDOWN_MS = 10_000;
   let lastStatusSendTime = 0;
   let sendingStatus = false;
+  const pendingResultBlocks: string[] = [];
+
+  const doSendStatus = async (text: string) => {
+    await sendMessageDiscord(deliverTarget, text, {
+      token,
+      accountId,
+      rest: client.rest,
+    });
+    lastStatusSendTime = Date.now();
+    typingGuard.reinforce();
+  };
+
+  const flushPendingResults = async () => {
+    while (pendingResultBlocks.length > 0) {
+      const next = pendingResultBlocks.shift()!;
+      try {
+        await doSendStatus(next);
+      } catch (err) {
+        logVerbose(`discord: queued result block send failed: ${String(err)}`);
+      }
+    }
+  };
 
   const sendStatusMessage = async (text: string, opts?: { bypassCooldown?: boolean }) => {
+    // Tool result blocks: queue if a send is in flight instead
+    // of dropping, since they contain substantive content.
+    if (opts?.bypassCooldown && sendingStatus) {
+      pendingResultBlocks.push(text);
+      return;
+    }
     if (sendingStatus) {
       return;
     }
@@ -500,18 +530,12 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     }
     sendingStatus = true;
     try {
-      await sendMessageDiscord(deliverTarget, text, {
-        token,
-        accountId,
-        rest: client.rest,
-      });
-      lastStatusSendTime = Date.now();
-      // Reinforce typing after sending. Sending clears Discord's
-      // typing indicator.
-      typingGuard.reinforce();
+      await doSendStatus(text);
     } catch (err) {
       logVerbose(`discord: status message send failed: ${String(err)}`);
     } finally {
+      // Flush any queued result blocks before releasing the lock.
+      await flushPendingResults();
       sendingStatus = false;
     }
   };
