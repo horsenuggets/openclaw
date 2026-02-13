@@ -217,6 +217,15 @@ export function handleToolExecutionEnd(
       result: sanitizedResult,
     },
   });
+  // Extract a brief output preview for downstream status display.
+  const outputText = extractToolResultText(sanitizedResult);
+  const lineCount = outputText ? outputText.split("\n").length : 0;
+  const MAX_PREVIEW_LINES = 10;
+  const outputPreview =
+    outputText && lineCount > 0
+      ? outputText.split("\n").slice(0, MAX_PREVIEW_LINES).join("\n")
+      : undefined;
+
   void ctx.params.onAgentEvent?.({
     stream: "tool",
     data: {
@@ -225,6 +234,8 @@ export function handleToolExecutionEnd(
       toolCallId,
       meta,
       isError: isToolError,
+      outputPreview,
+      lineCount,
     },
   });
 

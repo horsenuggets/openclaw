@@ -273,6 +273,7 @@ export async function runCliAgent(params: {
       // Use streaming execution when tool status or stream event callbacks are provided
       if (useStreaming) {
         log.info("cli streaming mode enabled");
+        const toolNameById = new Map<string, string>();
         const streamResult = await runStreamingCli({
           command: backend.command,
           args: streamArgs,
@@ -280,17 +281,26 @@ export async function runCliAgent(params: {
           env,
           timeoutMs: params.timeoutMs,
           onEvent: (event) => {
-            if (event.type === "tool_start" && params.onToolStatus) {
-              log.debug(`cli tool start: ${event.toolName}`);
-              params.onToolStatus({
-                toolName: event.toolName,
-                toolCallId: event.toolCallId,
-                input: event.input,
-              });
+            if (event.type === "tool_start") {
+              toolNameById.set(event.toolCallId, event.toolName);
+              if (params.onToolStatus) {
+                log.debug(`cli tool start: ${event.toolName}`);
+                params.onToolStatus({
+                  toolName: event.toolName,
+                  toolCallId: event.toolCallId,
+                  input: event.input,
+                });
+              }
             }
             // Forward non-terminal events to stream event callback for status tracking.
             if (params.onStreamEvent && event.type !== "result" && event.type !== "error") {
-              params.onStreamEvent(event);
+              if (event.type === "tool_result") {
+                const toolName = toolNameById.get(event.toolCallId) ?? "";
+                toolNameById.delete(event.toolCallId);
+                params.onStreamEvent({ ...event, toolName });
+              } else {
+                params.onStreamEvent(event);
+              }
             }
           },
         });
