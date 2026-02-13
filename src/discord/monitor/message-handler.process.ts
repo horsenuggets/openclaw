@@ -8,6 +8,7 @@ import {
   resolveAgentIdentity,
   resolveHumanDelayConfig,
 } from "../../agents/identity.js";
+import { formatToolResultBlockDiscord, resolveToolDisplay } from "../../agents/tool-display.js";
 import { resolveChunkMode } from "../../auto-reply/chunk.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import {
@@ -474,15 +475,22 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
-  // Status messages: a single message is sent on the first update.
-  // Subsequent updates are silently dropped. Messages are never edited
-  // or deleted so the user never sees content disappear or flicker.
-  let statusMessageSent = false;
+  // Status messages: periodic tool feedback and thinking updates sent
+  // throughout a long task. Rate-limited with a cooldown to avoid
+  // flooding the channel. Messages are never edited or deleted.
+  const STATUS_COOLDOWN_MS = 10_000;
   let statusSending = false;
+  let lastStatusSendTime = 0;
 
   const sendStatusMessage = async (text: string) => {
-    // Only send the first status message. Never edit or delete.
-    if (statusMessageSent || statusSending) {
+    if (statusSending) {
+      return;
+    }
+    // Cooldown: avoid flooding the channel with rapid status updates.
+    // Upstream filters (unifiedToolFeedback 15s, smartStatus 3s) already
+    // rate-limit, but this is a safety net.
+    const elapsed = Date.now() - lastStatusSendTime;
+    if (lastStatusSendTime > 0 && elapsed < STATUS_COOLDOWN_MS) {
       return;
     }
     statusSending = true;
@@ -492,7 +500,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         accountId,
         rest: client.rest,
       });
-      statusMessageSent = true;
+      lastStatusSendTime = Date.now();
       // Reinforce typing after sending. Sending clears Discord's
       // typing indicator.
       typingGuard.reinforce();
@@ -525,6 +533,10 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         },
       })
     : null;
+
+  // Track tool start inputs so we can correlate them with results for
+  // rich formatting (tool name + args + output preview).
+  const toolStartInputs = toolFeedbackEnabled ? new Map<string, Record<string, unknown>>() : null;
 
   // Sonnet triage: classify as simple (FULL) or complex (ACK).
   // For simple messages, Sonnet's response is delivered directly and Opus is skipped.
@@ -739,13 +751,31 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       toolFeedback: true,
       onToolStatus: unifiedToolFeedback
         ? (info: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => {
+            // Store input for later correlation with tool results.
+            toolStartInputs?.set(info.toolCallId, info.input ?? {});
             unifiedToolFeedback.push(info);
           }
         : undefined,
-      // Forward streaming events to smart-status for periodic updates.
-      onStreamEvent: smartStatusFilter
+      // Forward streaming events to smart-status for periodic updates
+      // and send rich tool result blocks when output is available.
+      onStreamEvent: toolFeedbackEnabled
         ? (event: import("../../auto-reply/types.js").AgentStreamEvent) => {
-            smartStatusFilter.push(event);
+            smartStatusFilter?.push(event);
+            // When a tool finishes with output, send a rich result block.
+            if (event.type === "tool_result" && event.outputPreview && toolStartInputs) {
+              const display = resolveToolDisplay({
+                name: event.toolName,
+                args: toolStartInputs.get(event.toolCallId),
+              });
+              const block = formatToolResultBlockDiscord(display, {
+                outputPreview: event.outputPreview,
+                lineCount: event.lineCount,
+                isError: event.isError,
+              });
+              void sendStatusMessage(block);
+              // Clean up tracked input.
+              toolStartInputs.delete(event.toolCallId);
+            }
           }
         : undefined,
       onModelSelected,
