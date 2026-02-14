@@ -228,7 +228,7 @@ describe("formatToolFeedbackDiscord", () => {
 });
 
 describe("formatToolResultBlockDiscord", () => {
-  it("formats Read with ts code fence for .ts files", () => {
+  it("formats Read with plaintext code fence for .ts files", () => {
     const display = resolveToolDisplay({
       name: "Read",
       args: { file_path: "/src/config.ts" },
@@ -239,13 +239,13 @@ describe("formatToolResultBlockDiscord", () => {
       isError: false,
     });
     expect(result).toContain("*Read* (`/src/config.ts`)");
-    expect(result).toContain("```ts\n");
+    expect(result).toContain("```\n");
     expect(result).toContain("export const port = 3000;");
     // No remaining indicator for small output
     expect(result).not.toContain("remaining");
   });
 
-  it("formats Read with json code fence for .json files", () => {
+  it("formats Read with plaintext code fence for .json files", () => {
     const display = resolveToolDisplay({
       name: "Read",
       args: { file_path: "/app/package.json" },
@@ -255,11 +255,11 @@ describe("formatToolResultBlockDiscord", () => {
       lineCount: 1,
       isError: false,
     });
-    expect(result).toContain("```json\n");
+    expect(result).toContain("```\n");
     expect(result).not.toContain("remaining");
   });
 
-  it("formats Bash with command header and bash code fence", () => {
+  it("formats Bash with command header and plaintext code fence", () => {
     const display = resolveToolDisplay({
       name: "Bash",
       args: { command: "git status" },
@@ -270,11 +270,11 @@ describe("formatToolResultBlockDiscord", () => {
       isError: false,
     });
     expect(result).toContain("*Bash* (`git status`)");
-    expect(result).toContain("```bash\n");
+    expect(result).toContain("```\n");
     expect(result).toContain("On branch main");
   });
 
-  it("formats Edit with diff code fence", () => {
+  it("formats Edit with plaintext code fence", () => {
     const display = resolveToolDisplay({
       name: "Edit",
       args: { path: "/src/types.ts" },
@@ -285,7 +285,7 @@ describe("formatToolResultBlockDiscord", () => {
       isError: false,
     });
     expect(result).toContain("*Edit* (`/src/types.ts`)");
-    expect(result).toContain("```diff\n");
+    expect(result).toContain("```\n");
   });
 
   it("formats Grep with detail", () => {

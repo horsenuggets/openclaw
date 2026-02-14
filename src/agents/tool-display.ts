@@ -405,41 +405,11 @@ export type ToolResultInfo = {
 
 /**
  * Infer a code fence language hint from the tool name and detail.
- * Returns empty string when no hint is appropriate.
+ * Always returns empty string for plaintext code blocks (no
+ * syntax highlighting) so tool output renders cleanly without
+ * false-positive keyword coloring.
  */
-function inferCodeLang(key: string, detail?: string): string {
-  if (key === "bash" || key === "exec") {
-    return "bash";
-  }
-  if (key === "edit") {
-    return "diff";
-  }
-  if (key === "read" && detail) {
-    if (detail.endsWith(".ts") || detail.endsWith(".tsx")) {
-      return "ts";
-    }
-    if (detail.endsWith(".json")) {
-      return "json";
-    }
-    if (detail.endsWith(".py")) {
-      return "py";
-    }
-    if (detail.endsWith(".lua") || detail.endsWith(".luau")) {
-      return "lua";
-    }
-    if (detail.endsWith(".sh") || detail.endsWith(".bash")) {
-      return "bash";
-    }
-    if (detail.endsWith(".css") || detail.endsWith(".scss")) {
-      return "css";
-    }
-    if (detail.endsWith(".js") || detail.endsWith(".jsx") || detail.endsWith(".mjs")) {
-      return "js";
-    }
-    if (detail.endsWith(".md") || detail.endsWith(".mdx")) {
-      return "md";
-    }
-  }
+function inferCodeLang(_key: string, _detail?: string): string {
   return "";
 }
 
