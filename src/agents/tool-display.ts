@@ -456,7 +456,8 @@ function buildToolHeader(display: ToolDisplay): string {
       cmd = cmd.replace(/^(?:export\s+\S+=\S+\s*&&\s*)+/g, "").trim();
       cmd = cmd.replace(/^echo\s+"[^"]*"\s*&&\s*/g, "").trim();
       cmd = cmd.replace(/\s*[12]?>\s*\/dev\/null/g, "").trim();
-      cmd = cmd.replace(/\s*\|\s*(?:head|tail)\s+.*$/g, "").trim();
+      // Keep pipe chains (head/tail) in the result header so the
+      // output line count makes sense to the reader.
       const truncated =
         cmd.length > MAX_DISCORD_CMD_LENGTH
           ? `${cmd.slice(0, MAX_DISCORD_CMD_LENGTH - 3)}...`

@@ -346,6 +346,20 @@ describe("formatToolResultBlockDiscord", () => {
     expect(result).toContain("*(error)*");
   });
 
+  it("preserves pipe chains in Bash result header", () => {
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "ls /tmp | head -5" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "a\nb\nc\nd\ne",
+      lineCount: 5,
+      isError: false,
+    });
+    expect(result).toContain("*Bash* (`ls /tmp | head -5`)");
+    expect(result).not.toContain("remaining");
+  });
+
   it("formats MCP tools with title and detail", () => {
     const display = resolveToolDisplay({
       name: "mcp__todoist__get_tasks",
