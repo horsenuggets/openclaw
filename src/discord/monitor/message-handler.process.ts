@@ -486,6 +486,8 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   let lastStatusSendTime = 0;
   let sendingStatus = false;
   const pendingResultBlocks: string[] = [];
+  // Track block flush operations so tool feedback can wait for them.
+  let blockFlushPromise: Promise<void> | null = null;
 
   const doSendStatus = async (text: string) => {
     await sendMessageDiscord(deliverTarget, text, {
@@ -528,9 +530,12 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         return;
       }
     }
-    // Wait for any pending block replies from the dispatcher queue
-    // to finish sending before sending status/tool feedback.
-    // This ensures text content appears before tool digests.
+    // Wait for any in-progress block flush to complete first.
+    // This ensures acknowledgment text is sent before tool feedback.
+    if (blockFlushPromise) {
+      await blockFlushPromise;
+    }
+    // Also wait for dispatcher queue to be idle.
     await dispatcher.waitForIdle();
     sendingStatus = true;
     try {
@@ -782,6 +787,17 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       // Discord feedback. Providing onToolStatus bypasses the default
       // italic block-reply formatting in dispatch-from-config.ts.
       toolFeedback: true,
+      // Track block flush operations so tool feedback can wait for them to complete.
+      // This ensures acknowledgment text appears before tool digests.
+      onBlockReplyFlush: () => {
+        const flushPromise = dispatcher.waitForIdle();
+        blockFlushPromise = flushPromise;
+        void flushPromise.finally(() => {
+          if (blockFlushPromise === flushPromise) {
+            blockFlushPromise = null;
+          }
+        });
+      },
       onToolStatus: unifiedToolFeedback
         ? (info: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => {
             // Store input for later correlation with tool results.
