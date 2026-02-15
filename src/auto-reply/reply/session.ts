@@ -347,16 +347,24 @@ export async function initSessionState(params: {
   }
 
   // Track the user message timestamp and text for restart recovery.
-  const userMessageText = (
-    ctx.BodyForCommands ??
-    ctx.CommandBody ??
-    ctx.RawBody ??
-    ctx.Body ??
-    ""
-  ).trim();
-  sessionEntry.lastUserMessageAt = Date.now();
-  if (userMessageText) {
-    sessionEntry.lastUserMessageText = userMessageText;
+  // Recovery messages (Surface="recovery") are re-injected by startup
+  // recovery and must not overwrite the original user message timestamp.
+  // Keeping the original timestamp lets lastAgentResponseAt (set during
+  // the recovery response) correctly mark the session as answered,
+  // preventing a restart loop where each recovery dispatch refreshes
+  // the timestamp and keeps the session looking "unanswered".
+  if (ctx.Surface !== "recovery") {
+    const userMessageText = (
+      ctx.BodyForCommands ??
+      ctx.CommandBody ??
+      ctx.RawBody ??
+      ctx.Body ??
+      ""
+    ).trim();
+    sessionEntry.lastUserMessageAt = Date.now();
+    if (userMessageText) {
+      sessionEntry.lastUserMessageText = userMessageText;
+    }
   }
 
   // Preserve per-session overrides while resetting compaction state on /new.

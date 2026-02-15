@@ -247,6 +247,32 @@ describe("runStartupRecovery", () => {
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("failed to recover session"));
   });
 
+  it("does not re-recover after lastAgentResponseAt is set by the first recovery", async () => {
+    // Simulates the restart loop scenario: after recovery fires once and
+    // the agent responds (setting lastAgentResponseAt), subsequent
+    // startups must NOT re-dispatch the same message. The guard in
+    // session.ts (ctx.Surface !== "recovery") keeps the original
+    // lastUserMessageAt intact, so lastAgentResponseAt > lastUserMessageAt
+    // after the first recovery completes.
+    const now = Date.now();
+    const userMsgAt = now - 5000;
+    vi.mocked(loadSessionStore).mockReturnValue({
+      alice: makeEntry({
+        lastUserMessageAt: userMsgAt,
+        // Agent responded during the first recovery attempt.
+        lastAgentResponseAt: userMsgAt + 1000,
+        lastUserMessageText: "switch to CLI subscription",
+        deliveryContext: { channel: "discord", to: "456" },
+      }),
+    });
+    const log = makeLog();
+
+    await runStartupRecovery({ cfg: baseCfg, log });
+
+    // Should NOT dispatch again — the session is already answered.
+    expect(dispatchInboundMessageWithDispatcher).not.toHaveBeenCalled();
+  });
+
   it("skips sessions where lastUserMessageAt equals lastAgentResponseAt", async () => {
     const now = Date.now();
     const ts = now - 5000;
