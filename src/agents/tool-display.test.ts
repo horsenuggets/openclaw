@@ -360,6 +360,25 @@ describe("formatToolResultBlockDiscord", () => {
     expect(result).toContain("Error: old_string not found");
   });
 
+  it("formats Edit diff with oldText/newText naming (pi-coding-agent)", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Successfully replaced text in /src/config.ts.",
+        lineCount: 1,
+        isError: false,
+      },
+      { oldText: "const port = 3000;", newText: "const port = 8080;" },
+    );
+    expect(result).toContain("```diff\n");
+    expect(result).toContain("- const port = 3000;");
+    expect(result).toContain("+ const port = 8080;");
+  });
+
   it("truncates long Edit diffs to 10 visible lines", () => {
     const oldLines = Array.from({ length: 8 }, (_, i) => `old line ${i + 1}`);
     const newLines = Array.from({ length: 8 }, (_, i) => `new line ${i + 1}`);

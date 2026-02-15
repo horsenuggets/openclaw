@@ -627,8 +627,14 @@ function truncateColumn(line: string): string {
  * or identical.
  */
 function buildEditDiffBlock(args: Record<string, unknown>): string | undefined {
-  const oldString = typeof args.old_string === "string" ? args.old_string : undefined;
-  const newString = typeof args.new_string === "string" ? args.new_string : undefined;
+  // Support both naming conventions: Claude Code uses old_string/new_string,
+  // OpenClaw's pi-coding-agent uses oldText/newText.
+  const oldString =
+    (typeof args.old_string === "string" ? args.old_string : undefined) ??
+    (typeof args.oldText === "string" ? args.oldText : undefined);
+  const newString =
+    (typeof args.new_string === "string" ? args.new_string : undefined) ??
+    (typeof args.newText === "string" ? args.newText : undefined);
   if (oldString === undefined || newString === undefined) return undefined;
 
   const diff = formatTextDiff(oldString, newString);
