@@ -22,6 +22,7 @@ import {
   scheduleRestartSentinelWake,
   shouldWakeFromRestartSentinel,
 } from "./server-restart-sentinel.js";
+import { runStartupRecovery } from "./startup-recovery.js";
 
 export async function startGatewaySidecars(params: {
   cfg: ReturnType<typeof loadConfig>;
@@ -126,6 +127,24 @@ export async function startGatewaySidecars(params: {
     params.logChannels.info(
       "skipping channel start (OPENCLAW_SKIP_CHANNELS=1 or OPENCLAW_SKIP_PROVIDERS=1)",
     );
+  }
+
+  // Run channel-agnostic session recovery after channels are up.
+  // Fire asynchronously so it doesn't block the rest of gateway startup.
+  if (!skipChannels) {
+    const recoveryLog = {
+      info: params.logChannels.info,
+      warn: params.log.warn,
+      error: params.logChannels.error,
+    };
+    setTimeout(() => {
+      void runStartupRecovery({
+        cfg: params.cfg,
+        log: recoveryLog,
+      }).catch((err) => {
+        params.logChannels.error(`startup-recovery failed: ${String(err)}`);
+      });
+    }, 500);
   }
 
   if (params.cfg.hooks?.internal?.enabled) {
