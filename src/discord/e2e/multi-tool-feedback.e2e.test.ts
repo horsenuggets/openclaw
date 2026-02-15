@@ -148,6 +148,7 @@ const TEST_SUITES = [
   "fmt-blanks",
   "fmt-long",
   "fmt-short",
+  "fmt-tabs",
 ] as const;
 type SuiteName = (typeof TEST_SUITES)[number];
 
@@ -623,6 +624,43 @@ describeLive("Discord multi-tool feedback display", () => {
     // With only 1 output line, no remaining indicator should appear.
     const hasRemaining = creates.some((e) => (e.content ?? "").includes("remaining)"));
     expect(hasRemaining).toBe(false);
+
+    assertNoExcessiveDuplication(creates);
+  }, 120_000);
+
+  // ---------------------------------------------------------------
+  // Test 10: Tab-containing output (tab expansion + truncation)
+  // ---------------------------------------------------------------
+  it("fmt-tabs: expands tabs to spaces for consistent truncation", async () => {
+    const { channelId, events } = getSuiteState("fmt-tabs");
+    events.length = 0;
+
+    const channel = await fetchTextChannel(channelId);
+
+    // Produce tab-separated output with lines of varying tab
+    // positions so we can verify consistent visual truncation.
+    await channel.send(
+      `<@${CLAW_BOT_ID}> Run this exact bash command and show me the output: ` +
+        `printf 'ID\\tNAME\\tSTATUS\\tDESCRIPTION\\n' && ` +
+        `printf '1\\tAlpha\\tactive\\tThis is a description that goes on for a while\\n' && ` +
+        `printf '200\\tBravo-Long-Name\\tpending\\tAnother long description field here\\n' && ` +
+        `printf '3\\tC\\tok\\tShort\\n'`,
+    );
+
+    await waitForBotResponse(events, 90_000, 15_000);
+
+    const creates = events.filter((e) => e.type === "create");
+    logEvents("fmt-tabs", events);
+    expect(creates.length).toBeGreaterThan(0);
+    assertHasToolFeedback(creates);
+
+    // Verify tabs were expanded to spaces (no raw tabs in the
+    // code block output).
+    const codeBlockContent = creates.map((e) => e.content ?? "").join("\n");
+    const codeBlockMatch = codeBlockContent.match(/```[\s\S]*?```/);
+    if (codeBlockMatch) {
+      expect(codeBlockMatch[0]).not.toContain("\t");
+    }
 
     assertNoExcessiveDuplication(creates);
   }, 120_000);

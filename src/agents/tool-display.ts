@@ -587,13 +587,37 @@ function buildToolHeader(display: ToolDisplay): string {
 }
 
 /**
- * Truncate a line to MAX_COL_WIDTH, appending "..." if needed.
+ * Expand tab characters to spaces using fixed-width tab stops.
+ * Each tab advances the column to the next multiple of `tabWidth`,
+ * so a tab after 1 character fills 3 spaces (with tabWidth=4),
+ * after 2 fills 2, etc.
+ */
+function expandTabs(line: string, tabWidth = 4): string {
+  let result = "";
+  let col = 0;
+  for (const ch of line) {
+    if (ch === "\t") {
+      const spaces = tabWidth - (col % tabWidth);
+      result += " ".repeat(spaces);
+      col += spaces;
+    } else {
+      result += ch;
+      col++;
+    }
+  }
+  return result;
+}
+
+/**
+ * Expand tabs and truncate a line to MAX_COL_WIDTH, appending
+ * "..." if needed.
  */
 function truncateColumn(line: string): string {
-  if (line.length <= MAX_COL_WIDTH) {
-    return line;
+  const expanded = expandTabs(line);
+  if (expanded.length <= MAX_COL_WIDTH) {
+    return expanded;
   }
-  return `${line.slice(0, MAX_COL_WIDTH - 3)}...`;
+  return `${expanded.slice(0, MAX_COL_WIDTH - 3)}...`;
 }
 
 /**

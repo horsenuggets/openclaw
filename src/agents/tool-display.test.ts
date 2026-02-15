@@ -681,6 +681,72 @@ describe("formatToolResultBlockDiscord column truncation", () => {
     expect(result).toContain("short");
     expect(result).toContain("w".repeat(77) + "...");
   });
+
+  it("expands tabs to 4-space tab stops before truncating", () => {
+    // "\tvalue" -> 4 spaces + "value" = 9 chars (no truncation)
+    const tabLine = "\tvalue";
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "cat tabbed.txt" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: tabLine,
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("    value");
+    expect(result).not.toContain("\t");
+  });
+
+  it("aligns tabs to tab stops based on column position", () => {
+    // "x\ty" -> "x" (col 1) + tab fills 3 spaces (to col 4) + "y"
+    // = "x   y" (5 chars)
+    const line = "x\ty";
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "cat aligned.txt" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: line,
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("x   y");
+  });
+
+  it("truncates tab-expanded lines that exceed 80 columns", () => {
+    // 20 tabs at 4 spaces each = 80 cols + "extra" = 85 cols
+    const line = "\t".repeat(20) + "extra";
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "cat wide-tabs.txt" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: line,
+      lineCount: 1,
+      isError: false,
+    });
+    // Should be 77 spaces + "..."
+    expect(result).toContain(" ".repeat(77) + "...");
+    expect(result).not.toContain("extra");
+    expect(result).not.toContain("\t");
+  });
+
+  it("handles mixed tabs and regular text with correct tab stops", () => {
+    // "ab\tcd\tef" -> "ab" (col 2) + 2 spaces (col 4) + "cd" (col 6)
+    // + 2 spaces (col 8) + "ef" = "ab  cd  ef" (10 chars)
+    const line = "ab\tcd\tef";
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "cat mixed.txt" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: line,
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("ab  cd  ef");
+  });
 });
 
 describe("formatToolResultBlockDiscord boundary cases", () => {
