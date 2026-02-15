@@ -1,6 +1,7 @@
 import hljs from "highlight.js";
 import { redactToolDetail } from "../logging/redact.js";
 import { shortenHomeInString } from "../utils.js";
+import { formatTextDiff } from "./tool-diff.js";
 import TOOL_DISPLAY_JSON from "./tool-display.json" with { type: "json" };
 
 type ToolDisplayActionSpec = {
@@ -621,6 +622,39 @@ function truncateColumn(line: string): string {
 }
 
 /**
+ * Build a diff code block from Edit tool input args.
+ * Returns `undefined` when old_string/new_string are missing
+ * or identical.
+ */
+function buildEditDiffBlock(args: Record<string, unknown>): string | undefined {
+  const oldString = typeof args.old_string === "string" ? args.old_string : undefined;
+  const newString = typeof args.new_string === "string" ? args.new_string : undefined;
+  if (oldString === undefined || newString === undefined) return undefined;
+
+  const diff = formatTextDiff(oldString, newString);
+  if (!diff) return undefined;
+
+  const allLines = diff.split("\n");
+  const visibleLines: string[] = [];
+
+  for (const line of allLines) {
+    if (visibleLines.length >= MAX_PREVIEW_LINES) break;
+    visibleLines.push(truncateColumn(line));
+  }
+
+  if (visibleLines.length === 0) return undefined;
+
+  const remaining = allLines.length - visibleLines.length;
+  const codeLines = [...visibleLines];
+  if (remaining > 0) {
+    const noun = remaining === 1 ? "line" : "lines";
+    codeLines.push(`...(${remaining} ${noun} remaining)`);
+  }
+
+  return `\`\`\`diff\n${codeLines.join("\n")}\n\`\`\``;
+}
+
+/**
  * Format a completed tool call for Discord with a rich output preview.
  * Shows tool name, args, and a truncated code block of the output.
  *
@@ -629,6 +663,9 @@ function truncateColumn(line: string): string {
  * MAX_PREVIEW_LINES visible lines, an 11th line shows
  * `...(N lines remaining)` inside the code fence. The remaining
  * count includes blank lines from the undisplayed portion.
+ *
+ * For Edit tool calls, when `args` includes `old_string` and
+ * `new_string`, a diff block is shown instead of the raw output.
  *
  * Example output:
  *   *Read* (`~/src/config.ts`)
@@ -639,9 +676,21 @@ function truncateColumn(line: string): string {
  *   ...(47 lines remaining)
  *   ```
  */
-export function formatToolResultBlockDiscord(display: ToolDisplay, result: ToolResultInfo): string {
+export function formatToolResultBlockDiscord(
+  display: ToolDisplay,
+  result: ToolResultInfo,
+  args?: Record<string, unknown>,
+): string {
   const key = display.name.toLowerCase();
   const header = buildToolHeader(display);
+
+  // Edit tool: show diff of old_string vs new_string when available.
+  if (key === "edit" && args && !result.isError) {
+    const diffBlock = buildEditDiffBlock(args);
+    if (diffBlock) {
+      return `${header}\n${diffBlock}`;
+    }
+  }
 
   if (!result.outputPreview) {
     if (result.isError) {

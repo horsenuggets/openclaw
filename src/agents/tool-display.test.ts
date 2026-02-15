@@ -289,7 +289,7 @@ describe("formatToolResultBlockDiscord", () => {
     expect(result).toContain("On branch main");
   });
 
-  it("formats Edit with plaintext code fence", () => {
+  it("formats Edit with plaintext code fence when no args provided", () => {
     const display = resolveToolDisplay({
       name: "Edit",
       args: { path: "/src/types.ts" },
@@ -301,6 +301,84 @@ describe("formatToolResultBlockDiscord", () => {
     });
     expect(result).toContain("*Edit* (`/src/types.ts`)");
     expect(result).toContain("```\n");
+  });
+
+  it("formats Edit with diff block when old_string and new_string are provided", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Successfully replaced text in /src/config.ts.",
+        lineCount: 1,
+        isError: false,
+      },
+      { old_string: "const port = 3000;", new_string: "const port = 8080;" },
+    );
+    expect(result).toContain("*Edit* (`/src/config.ts`)");
+    expect(result).toContain("```diff\n");
+    expect(result).toContain("- const port = 3000;");
+    expect(result).toContain("+ const port = 8080;");
+  });
+
+  it("falls back to raw output when Edit args are missing old_string", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Successfully replaced text in /src/config.ts.",
+        lineCount: 1,
+        isError: false,
+      },
+      { new_string: "const port = 8080;" },
+    );
+    expect(result).toContain("```\n");
+    expect(result).not.toContain("```diff");
+    expect(result).toContain("Successfully replaced");
+  });
+
+  it("shows raw output for Edit errors even when args have old/new strings", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Error: old_string not found in file.",
+        lineCount: 1,
+        isError: true,
+      },
+      { old_string: "foo", new_string: "bar" },
+    );
+    expect(result).not.toContain("```diff");
+    expect(result).toContain("Error: old_string not found");
+  });
+
+  it("truncates long Edit diffs to 10 visible lines", () => {
+    const oldLines = Array.from({ length: 8 }, (_, i) => `old line ${i + 1}`);
+    const newLines = Array.from({ length: 8 }, (_, i) => `new line ${i + 1}`);
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/big.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Successfully replaced text.",
+        lineCount: 1,
+        isError: false,
+      },
+      { old_string: oldLines.join("\n"), new_string: newLines.join("\n") },
+    );
+    expect(result).toContain("```diff\n");
+    // 8 old + 8 new = 16 diff lines, only 10 should show
+    expect(result).toContain("...(6 lines remaining)");
   });
 
   it("formats Grep with detail", () => {

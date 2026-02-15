@@ -819,11 +819,15 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
                 name: event.toolName,
                 args: toolStartInputs.get(event.toolCallId),
               });
-              const block = formatToolResultBlockDiscord(display, {
-                outputPreview: event.outputPreview,
-                lineCount: event.lineCount,
-                isError: event.isError,
-              });
+              const block = formatToolResultBlockDiscord(
+                display,
+                {
+                  outputPreview: event.outputPreview,
+                  lineCount: event.lineCount,
+                  isError: event.isError,
+                },
+                toolStartInputs.get(event.toolCallId),
+              );
               void sendStatusMessage(block, { bypassCooldown: true });
               // Clean up tracked input.
               toolStartInputs.delete(event.toolCallId);
