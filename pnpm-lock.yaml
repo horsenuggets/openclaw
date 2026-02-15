@@ -111,6 +111,9 @@ importers:
       grammy:
         specifier: ^1.39.3
         version: 1.39.3
+      highlight.js:
+        specifier: ^10.7.3
+        version: 10.7.3
       hono:
         specifier: 4.11.7
         version: 4.11.7
