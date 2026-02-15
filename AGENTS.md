@@ -93,6 +93,20 @@
 - **Gateway process management:**
   - `pnpm gateway:ps` — list all running OpenClaw gateway/watchdog processes across the OS.
   - `pnpm gateway:killall` — kill all running gateway/watchdog processes (SIGTERM then SIGKILL).
+- **Discord E2E tests** (`src/discord/e2e/*.e2e.test.ts`) hit real
+  Discord. They require two bots: a test bot (driven by the test
+  code) and the Claw bot (running as a gateway). Steps:
+  1. Start the gateway with Discord channels enabled (do NOT use
+     `gateway:dev` which sets `OPENCLAW_SKIP_CHANNELS=1`):
+     `node dist/entry.js gateway --force` (build first with
+     `pnpm build`). The Discord bot token is read from
+     `~/.openclaw/openclaw.json`.
+  2. The test bot token is read from `~/.keys/discord-e2e-bot-token`
+     or the `DISCORD_E2E_BOT_TOKEN` env var.
+  3. Run tests:
+     `LIVE=1 npx vitest run --config vitest.e2e.config.ts src/discord/e2e/<file>`.
+     Use `-t "test name"` to run a single test.
+  4. After testing, always run `pnpm gateway:killall`.
 
 ## Commit & Pull Request Guidelines
 
