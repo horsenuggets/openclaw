@@ -17,6 +17,7 @@ import {
 } from "../../auto-reply/reply/history.js";
 import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.js";
 import { createReplyDispatcherWithTyping } from "../../auto-reply/reply/reply-dispatcher.js";
+import { createSmartStatus } from "../../auto-reply/smart-status.js";
 import { resolveControlCommandGate } from "../../channels/command-gating.js";
 import { logInboundDrop, logTypingFailure } from "../../channels/logging.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
@@ -220,6 +221,21 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       onReplyStart: typingCallbacks.onReplyStart,
     });
 
+    // Smart status: re-send typing on stream events to keep the indicator
+    // alive during long tool calls.
+    const smartStatus = createSmartStatus({
+      userMessage: ctxPayload.Body ?? "",
+      onUpdate: () => {
+        if (ctxPayload.To) {
+          void sendTypingSignal(ctxPayload.To, {
+            baseUrl: deps.baseUrl,
+            account: deps.account,
+            accountId: deps.accountId,
+          }).catch(() => {});
+        }
+      },
+    });
+
     const { queuedFinal } = await dispatchInboundMessage({
       ctx: ctxPayload,
       cfg: deps.cfg,
@@ -227,12 +243,16 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       replyOptions: {
         ...replyOptions,
         toolFeedback: true,
+        onStreamEvent: (event) => {
+          smartStatus.push(event);
+        },
         disableBlockStreaming:
           typeof deps.blockStreaming === "boolean" ? !deps.blockStreaming : undefined,
         onModelSelected,
       },
     });
     markDispatchIdle();
+    smartStatus.dispose();
     if (!queuedFinal) {
       if (entry.isGroup && historyKey) {
         clearHistoryEntriesIfEnabled({

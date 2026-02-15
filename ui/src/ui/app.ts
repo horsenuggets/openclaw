@@ -394,7 +394,7 @@ export class OpenClawApp extends LitElement {
       return;
     }
     this.jobsSelectedRunId = runId;
-    import("./controllers/jobs.ts").then(({ loadJobDetail }) =>
+    void import("./controllers/jobs.ts").then(({ loadJobDetail }) =>
       loadJobDetail(this as unknown as import("./controllers/jobs.ts").JobsHost, runId),
     );
   }

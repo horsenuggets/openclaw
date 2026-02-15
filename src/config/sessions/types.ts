@@ -37,6 +37,12 @@ export type SessionEntry = {
   spawnedBy?: string;
   systemSent?: boolean;
   abortedLastRun?: boolean;
+  /** Timestamp (ms) when the last user message was received for this session. */
+  lastUserMessageAt?: number;
+  /** Plain-text body of the last user message (used for recovery on restart). */
+  lastUserMessageText?: string;
+  /** Timestamp (ms) when the agent last finished responding. */
+  lastAgentResponseAt?: number;
   chatType?: SessionChatType;
   thinkingLevel?: string;
   verboseLevel?: string;

@@ -17,6 +17,7 @@ import {
 } from "../../../auto-reply/reply/history.js";
 import { finalizeInboundContext } from "../../../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../../../auto-reply/reply/provider-dispatcher.js";
+import { createSmartStatus } from "../../../auto-reply/smart-status.js";
 import { toLocationContext } from "../../../channels/location.js";
 import { createReplyPrefixOptions } from "../../../channels/reply-prefix.js";
 import { resolveMarkdownTableMode } from "../../../config/markdown-tables.js";
@@ -336,6 +337,15 @@ export async function processMessage(params: {
   });
   trackBackgroundTask(params.backgroundTasks, metaTask);
 
+  // Smart status: re-send composing indicator on stream events to keep the
+  // typing status alive during long tool calls.
+  const smartStatus = createSmartStatus({
+    userMessage: ctxPayload.Body ?? "",
+    onUpdate: () => {
+      void Promise.resolve(params.msg.sendComposing?.()).catch(() => {});
+    },
+  });
+
   const { queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
     cfg: params.cfg,
@@ -399,6 +409,9 @@ export async function processMessage(params: {
     },
     replyOptions: {
       toolFeedback: true,
+      onStreamEvent: (event) => {
+        smartStatus.push(event);
+      },
       disableBlockStreaming:
         typeof params.cfg.channels?.whatsapp?.blockStreaming === "boolean"
           ? !params.cfg.channels.whatsapp.blockStreaming
@@ -406,6 +419,7 @@ export async function processMessage(params: {
       onModelSelected,
     },
   });
+  smartStatus.dispose();
 
   if (!queuedFinal) {
     if (shouldClearGroupHistory) {

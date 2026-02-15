@@ -42,14 +42,16 @@ export async function updateSessionStoreAfterAgentRun(params: {
   const contextTokens =
     params.contextTokensOverride ?? lookupContextTokens(modelUsed) ?? DEFAULT_CONTEXT_TOKENS;
 
+  const now = Date.now();
   const entry = sessionStore[sessionKey] ?? {
     sessionId,
-    updatedAt: Date.now(),
+    updatedAt: now,
   };
   const next: SessionEntry = {
     ...entry,
     sessionId,
-    updatedAt: Date.now(),
+    updatedAt: now,
+    lastAgentResponseAt: now,
     modelProvider: providerUsed,
     model: modelUsed,
     contextTokens,

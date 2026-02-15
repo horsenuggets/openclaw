@@ -3,6 +3,8 @@ import { resolveHumanDelayConfig } from "../../../agents/identity.js";
 import { dispatchInboundMessage } from "../../../auto-reply/dispatch.js";
 import { clearHistoryEntriesIfEnabled } from "../../../auto-reply/reply/history.js";
 import { createReplyDispatcherWithTyping } from "../../../auto-reply/reply/reply-dispatcher.js";
+import { createSmartStatus } from "../../../auto-reply/smart-status.js";
+import { createUnifiedToolFeedback } from "../../../auto-reply/tool-feedback-filter.js";
 import { removeAckReactionAfterReply } from "../../../channels/ack-reactions.js";
 import { logAckFailure, logTypingFailure } from "../../../channels/logging.js";
 import { createReplyPrefixOptions } from "../../../channels/reply-prefix.js";
@@ -126,6 +128,29 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
     onIdle: typingCallbacks.onIdle,
   });
 
+  // Smart status: stream-based progress updates via Slack thread status.
+  const smartStatus = createSmartStatus({
+    userMessage: prepared.ctxPayload.Body ?? "",
+    onUpdate: (statusText) => {
+      void ctx.setSlackThreadStatus({
+        channelId: message.channel,
+        threadTs: statusThreadTs,
+        status: statusText,
+      });
+    },
+  });
+
+  // Unified tool feedback: grouped, formatted tool call summaries.
+  const unifiedToolFeedback = createUnifiedToolFeedback({
+    onUpdate: (feedbackText) => {
+      void ctx.setSlackThreadStatus({
+        channelId: message.channel,
+        threadTs: statusThreadTs,
+        status: feedbackText,
+      });
+    },
+  });
+
   const { queuedFinal, counts } = await dispatchInboundMessage({
     ctx: prepared.ctxPayload,
     cfg,
@@ -134,6 +159,12 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
       ...replyOptions,
       skillFilter: prepared.channelConfig?.skills,
       toolFeedback: true,
+      onToolStatus: (info) => {
+        unifiedToolFeedback.push(info);
+      },
+      onStreamEvent: (event) => {
+        smartStatus.push(event);
+      },
       hasRepliedRef,
       disableBlockStreaming:
         typeof account.config.blockStreaming === "boolean"
@@ -143,6 +174,8 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
     },
   });
   markDispatchIdle();
+  smartStatus.dispose();
+  unifiedToolFeedback.dispose();
 
   const anyReplyDelivered = queuedFinal || (counts.block ?? 0) > 0 || (counts.final ?? 0) > 0;
 

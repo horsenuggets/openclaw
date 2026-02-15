@@ -177,9 +177,11 @@ export async function runAgentTurnWithFallback(params: {
             });
             const cliSessionId = getCliSessionId(params.getActiveSessionEntry(), provider);
             return (async () => {
-              // CLI providers don't emit streaming events, so start typing immediately.
-              // Use signalToolStart() instead of signalMessageStart() because the latter
-              // requires hasRenderableText (set by text deltas) which never arrives for CLI.
+              // Start typing immediately as a fallback. When streaming
+              // callbacks (onStreamEvent/onToolStatus) are provided, the
+              // CLI runner switches to stream-json mode and will emit
+              // real-time events; but we still need the typing loop for
+              // the initial period before the first event arrives.
               // signalToolStart() unconditionally starts the typing loop.
               await params.typingSignals.signalToolStart();
               let lifecycleTerminalEmitted = false;
@@ -337,13 +339,19 @@ export async function runAgentTurnWithFallback(params: {
               await params.typingSignals.signalMessageStart();
             },
             onReasoningStream:
-              params.typingSignals.shouldStartOnReasoning || params.opts?.onReasoningStream
+              params.typingSignals.shouldStartOnReasoning ||
+              params.opts?.onReasoningStream ||
+              params.opts?.onStreamEvent
                 ? async (payload) => {
                     await params.typingSignals.signalReasoningDelta();
                     await params.opts?.onReasoningStream?.({
                       text: payload.text,
                       mediaUrls: payload.mediaUrls,
                     });
+                    // Forward thinking content to stream event callback.
+                    if (payload.text && params.opts?.onStreamEvent) {
+                      params.opts.onStreamEvent({ type: "thinking", text: payload.text });
+                    }
                   }
                 : undefined,
             onAgentEvent: async (evt) => {
@@ -371,11 +379,36 @@ export async function runAgentTurnWithFallback(params: {
                   const toolCallId =
                     typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : "";
                   if (phase === "start") {
-                    params.opts.onStreamEvent({ type: "tool_start", toolName, toolCallId });
-                  } else if (phase === "end") {
+                    const input =
+                      evt.data.args != null && typeof evt.data.args === "object"
+                        ? (evt.data.args as Record<string, unknown>)
+                        : undefined;
+                    params.opts.onStreamEvent({ type: "tool_start", toolName, toolCallId, input });
+                  } else if (phase === "result") {
                     const isError = Boolean(evt.data.isError);
-                    params.opts.onStreamEvent({ type: "tool_result", toolCallId, isError });
+                    const resultToolName = typeof evt.data.name === "string" ? evt.data.name : "";
+                    const outputPreview =
+                      typeof evt.data.outputPreview === "string"
+                        ? evt.data.outputPreview
+                        : undefined;
+                    const lineCount =
+                      typeof evt.data.lineCount === "number" ? evt.data.lineCount : undefined;
+                    params.opts.onStreamEvent({
+                      type: "tool_result",
+                      toolCallId,
+                      toolName: resultToolName,
+                      isError,
+                      outputPreview,
+                      lineCount,
+                    });
                   }
+                }
+              }
+              // Forward assistant text deltas to stream event callback.
+              if (evt.stream === "assistant" && params.opts?.onStreamEvent) {
+                const delta = typeof evt.data.delta === "string" ? evt.data.delta : "";
+                if (delta) {
+                  params.opts.onStreamEvent({ type: "text", text: delta });
                 }
               }
               // Track auto-compaction completion

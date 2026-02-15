@@ -1,8 +1,8 @@
-import { formatToolFeedbackDiscord, resolveToolDisplay } from "../../agents/tool-display.js";
-import { logVerbose } from "../../globals.js";
-import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { formatToolFeedbackDiscord, resolveToolDisplay } from "../agents/tool-display.js";
+import { logVerbose } from "../globals.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 
-const log = createSubsystemLogger("discord/tool-feedback");
+const log = createSubsystemLogger("auto-reply/tool-feedback");
 
 const DEFAULT_BUFFER_MS = 4000;
 const DEFAULT_MAX_WAIT_MS = 10000;
@@ -11,6 +11,7 @@ const MAX_FEEDBACK_LINES = 5;
 
 type BufferedTool = {
   toolName: string;
+  toolCallId: string;
   input?: Record<string, unknown>;
   timestamp: number;
 };
@@ -141,17 +142,18 @@ function formatGroupedFeedback(groups: GroupedTool[]): string {
         const cmd = group.firstInput?.command;
         if (typeof cmd === "string") {
           const base = extractBaseCommand(cmd);
-          lines.push(`${display.emoji} Running \`${base}\` (x${group.count})`);
+          lines.push(`*Running \`${base}\` (x${group.count})...*`);
           continue;
         }
       }
       // Other homogeneous groups: use standard format + count
       const formatted = formatToolFeedbackDiscord(display);
-      lines.push(`${formatted} (x${group.count})`);
+      // Insert count before the trailing ...*
+      lines.push(formatted.replace(/\.\.\.\*$/, ` (x${group.count})...*`));
     } else if (group.count > 1) {
       // Heterogeneous group: just show tool name + count
       const formatted = formatToolFeedbackDiscord(display);
-      lines.push(`${formatted} (x${group.count})`);
+      lines.push(formatted.replace(/\.\.\.\*$/, ` (x${group.count})...*`));
     } else {
       // Single tool: full format
       lines.push(formatToolFeedbackDiscord(display));
@@ -169,18 +171,17 @@ function formatGroupedFeedback(groups: GroupedTool[]): string {
 }
 
 /**
- * Create a unified tool feedback system for Discord that buffers
- * tool calls, groups similar commands, rate-limits output, and
- * formats using code blocks for a clean user experience.
- *
- * Replaces the old LLM-based tool-feedback-filter with
- * deterministic formatting and grouping.
+ * Create a unified tool feedback system that buffers tool calls,
+ * groups similar commands, rate-limits output, and formats using
+ * code blocks for a clean user experience.
  */
 export function createUnifiedToolFeedback(params: {
   onUpdate: (text: string) => void;
   config?: UnifiedToolFeedbackConfig;
 }): {
   push: (tool: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => void;
+  /** Remove a buffered tool call so it won't be flushed. */
+  removeToolCall: (toolCallId: string) => void;
   dispose: () => void;
   /** Suppress updates for the given duration (e.g. after smart-ack). */
   suppress: (durationMs: number) => void;
@@ -253,6 +254,7 @@ export function createUnifiedToolFeedback(params: {
     }
     buffer.push({
       toolName: tool.toolName,
+      toolCallId: tool.toolCallId,
       input: tool.input,
       timestamp: Date.now(),
     });
@@ -269,6 +271,18 @@ export function createUnifiedToolFeedback(params: {
     }
   }
 
+  function removeToolCall(toolCallId: string) {
+    const idx = buffer.findIndex((b) => b.toolCallId === toolCallId);
+    if (idx !== -1) {
+      buffer.splice(idx, 1);
+    }
+    // If the buffer is now empty, cancel pending timers so we
+    // don't flush an empty batch.
+    if (buffer.length === 0) {
+      clearTimers();
+    }
+  }
+
   function suppress(durationMs: number) {
     suppressedUntil = Date.now() + durationMs;
   }
@@ -278,7 +292,7 @@ export function createUnifiedToolFeedback(params: {
     clearTimers();
   }
 
-  return { push, dispose, suppress };
+  return { push, removeToolCall, dispose, suppress };
 }
 
 // Keep old exports for backward compatibility with other channels

@@ -161,24 +161,25 @@ export async function runReplyAgent(params: {
         })
       : null;
 
-  if (shouldSteer && isStreaming) {
-    const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
-    if (steered && !shouldFollowup) {
-      if (activeSessionEntry && activeSessionStore && sessionKey) {
-        const updatedAt = Date.now();
-        activeSessionEntry.updatedAt = updatedAt;
-        activeSessionStore[sessionKey] = activeSessionEntry;
-        if (storePath) {
-          await updateSessionStoreEntry({
-            storePath,
-            sessionKey,
-            update: async () => ({ updatedAt }),
-          });
-        }
+  if (shouldSteer && isStreaming && !shouldFollowup) {
+    // Inject the message into the running session via followUp().
+    // The main agent will see it after current tool calls complete
+    // and respond naturally, avoiding duplicate replies.
+    queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
+    if (activeSessionEntry && activeSessionStore && sessionKey) {
+      const updatedAt = Date.now();
+      activeSessionEntry.updatedAt = updatedAt;
+      activeSessionStore[sessionKey] = activeSessionEntry;
+      if (storePath) {
+        await updateSessionStoreEntry({
+          storePath,
+          sessionKey,
+          update: async () => ({ updatedAt }),
+        });
       }
-      typing.cleanup();
-      return undefined;
     }
+    typing.cleanup();
+    return undefined;
   }
 
   if (isActive && (shouldFollowup || resolvedQueue.mode === "steer")) {

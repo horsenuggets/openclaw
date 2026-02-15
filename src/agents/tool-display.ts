@@ -1,3 +1,4 @@
+import hljs from "highlight.js";
 import { redactToolDetail } from "../logging/redact.js";
 import { shortenHomeInString } from "../utils.js";
 import TOOL_DISPLAY_JSON from "./tool-display.json" with { type: "json" };
@@ -63,6 +64,11 @@ function normalizeToolName(name?: string): string {
     if (secondSep !== -1) {
       n = n.slice(secondSep + 2);
     }
+  }
+  // Convert PascalCase to snake_case so "WebSearch" matches
+  // config key "web_search" after toLowerCase().
+  if (/^[A-Z][a-zA-Z]+$/.test(n) && !n.includes("_")) {
+    n = n.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
   }
   return n;
 }
@@ -309,8 +315,8 @@ export function formatToolSummary(display: ToolDisplay): string {
 const MAX_DISCORD_CMD_LENGTH = 120;
 
 /**
- * Format a tool call for Discord using code blocks and
- * human-friendly verbs instead of raw tool names with colons.
+ * Format a tool call for Discord as an italic status line.
+ * No emojis, no colons. Uses ellipses and inline code.
  */
 export function formatToolFeedbackDiscord(display: ToolDisplay): string {
   const key = display.name.toLowerCase();
@@ -325,66 +331,335 @@ export function formatToolFeedbackDiscord(display: ToolDisplay): string {
       cmd = cmd.replace(/^echo\s+"[^"]*"\s*&&\s*/g, "").trim();
       // Strip stderr/stdout redirections (2>/dev/null, >/dev/null)
       cmd = cmd.replace(/\s*[12]?>\s*\/dev\/null/g, "").trim();
-      // Strip trailing pipe chains that are just filtering (| head, | tail)
+      // Strip trailing pipe chains that are just filtering
       cmd = cmd.replace(/\s*\|\s*(?:head|tail)\s+.*$/g, "").trim();
       const truncated =
         cmd.length > MAX_DISCORD_CMD_LENGTH
           ? `${cmd.slice(0, MAX_DISCORD_CMD_LENGTH - 3)}...`
           : cmd;
-      return `${display.emoji} Running \`${truncated}\``;
+      return `*Running \`${truncated}\`...*`;
     }
-    return `${display.emoji} Running a command`;
+    return "*Running a command...*";
   }
 
   // Read: show file path in inline code
   if (key === "read") {
     if (display.detail) {
-      return `${display.emoji} Reading \`${display.detail}\``;
+      return `*Reading \`${display.detail}\`...*`;
     }
-    return `${display.emoji} Reading a file`;
+    return "*Reading a file...*";
   }
 
   // Write/Edit: show file path in inline code
   if (key === "write" || key === "edit") {
     const verb = key === "write" ? "Writing" : "Editing";
     if (display.detail) {
-      return `${display.emoji} ${verb} \`${display.detail}\``;
+      return `*${verb} \`${display.detail}\`...*`;
     }
-    return `${display.emoji} ${verb} a file`;
+    return `*${verb} a file...*`;
   }
 
   // Search tools: show query/pattern in inline code
   if (key === "web_search" || key === "grep" || key === "glob") {
     if (display.detail) {
-      return `${display.emoji} Searching \`${display.detail}\``;
+      return `*Searching \`${display.detail}\`...*`;
     }
-    return `${display.emoji} Searching`;
+    return "*Searching...*";
   }
 
   // Web fetch: show URL in inline code
   if (key === "web_fetch") {
     if (display.detail) {
-      return `${display.emoji} Fetching \`${display.detail}\``;
+      return `*Fetching \`${display.detail}\`...*`;
     }
-    return `${display.emoji} Fetching a page`;
+    return "*Fetching a page...*";
   }
 
   // Sub-agent / Task: show description
   if (key === "task" || key === "sessions_spawn") {
     if (display.detail) {
-      return `${display.emoji} ${display.detail}`;
+      return `*${display.detail}...*`;
     }
-    return `${display.emoji} Running a sub-agent`;
+    return "*Running a sub-agent...*";
   }
 
   // detailOnly tools (claude_code wrapper)
   if (display.detailOnly && display.detail) {
-    return `${display.emoji} ${display.detail}`;
+    return `*${display.detail}...*`;
   }
 
-  // Default: emoji + label + optional detail in inline code
+  // Default: label + optional detail in inline code
   if (display.detail) {
-    return `${display.emoji} ${display.label} \`${display.detail}\``;
+    return `*${display.label} \`${display.detail}\`...*`;
   }
-  return `${display.emoji} ${display.label}`;
+  return `*${display.label}...*`;
+}
+
+const MAX_PREVIEW_LINES = 10;
+const MAX_COL_WIDTH = 80;
+
+export type ToolResultInfo = {
+  outputPreview?: string;
+  lineCount?: number;
+  isError: boolean;
+};
+
+/**
+ * Map file extensions to Discord code fence language hints.
+ * Only includes extensions where the hint differs from the
+ * extension itself or needs an explicit entry.
+ */
+const EXT_TO_LANG: Record<string, string> = {
+  cjs: "js",
+  cts: "ts",
+  hpp: "cpp",
+  luau: "lua",
+  mjs: "js",
+  mts: "ts",
+  yml: "yaml",
+};
+
+/**
+ * Tools whose output is always JSON (they exclusively use
+ * jsonResult()). These get a "json" code fence hint without
+ * content sniffing.
+ */
+const JSON_TOOLS = new Set([
+  "agents_list",
+  "canvas",
+  "cron",
+  "gateway",
+  "memory_get",
+  "memory_search",
+  "sessions_history",
+  "sessions_list",
+  "sessions_send",
+  "sessions_spawn",
+  "web_fetch",
+  "web_search",
+]);
+
+/**
+ * Language subset for highlight.js auto-detection, restricted
+ * to languages Discord supports via its highlight.js integration.
+ */
+const DISCORD_LANGS = [
+  "bash",
+  "c",
+  "cpp",
+  "css",
+  "diff",
+  "go",
+  "html",
+  "java",
+  "javascript",
+  "json",
+  "markdown",
+  "python",
+  "ruby",
+  "rust",
+  "sql",
+  "typescript",
+  "xml",
+  "yaml",
+];
+const AUTO_DETECT_RELEVANCE_THRESHOLD = 5;
+
+/**
+ * Infer a code fence language hint using three tiers:
+ * 1. File extension for Read tool output (most specific)
+ * 2. Static "json" for tools known to always return JSON
+ * 3. Content-based detection via highlight.js highlightAuto
+ *    with a Discord-compatible language subset and relevance
+ *    threshold to avoid false positives on plain text
+ */
+function inferCodeLang(key: string, detail?: string, outputPreview?: string): string {
+  // Tier 1: file extension for Read tool
+  if (key === "read" && detail) {
+    const path = detail.replace(/:\d+[-–]\d+$/, "");
+    const dot = path.lastIndexOf(".");
+    if (dot !== -1 && dot !== path.length - 1) {
+      const ext = path.slice(dot + 1).toLowerCase();
+      return EXT_TO_LANG[ext] ?? ext;
+    }
+  }
+
+  // Tier 2: tools that always return JSON
+  if (JSON_TOOLS.has(key)) return "json";
+
+  // Tier 3: content-based detection via highlight.js
+  if (outputPreview) {
+    const result = hljs.highlightAuto(outputPreview, DISCORD_LANGS);
+    if (result.language && result.relevance >= AUTO_DETECT_RELEVANCE_THRESHOLD) {
+      return result.language;
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Build the header line for a tool result block.
+ * Format: `*ToolTitle* (\`detail\`)`
+ */
+function buildToolHeader(display: ToolDisplay): string {
+  const key = display.name.toLowerCase();
+
+  if (key === "bash" || key === "exec") {
+    if (display.detail) {
+      let cmd = display.detail.split(/\r?\n/)[0]?.trim() ?? display.detail;
+      cmd = cmd.replace(/^(?:export\s+\S+=\S+\s*&&\s*)+/g, "").trim();
+      cmd = cmd.replace(/^echo\s+"[^"]*"\s*&&\s*/g, "").trim();
+      cmd = cmd.replace(/\s*[12]?>\s*\/dev\/null/g, "").trim();
+      // Keep pipe chains (head/tail) in the result header so the
+      // output line count makes sense to the reader.
+      const truncated =
+        cmd.length > MAX_DISCORD_CMD_LENGTH
+          ? `${cmd.slice(0, MAX_DISCORD_CMD_LENGTH - 3)}...`
+          : cmd;
+      return `*Bash* (\`${truncated}\`)`;
+    }
+    return "*Bash*";
+  }
+
+  if (key === "read") {
+    if (display.detail) {
+      return `*Read* (\`${display.detail}\`)`;
+    }
+    return "*Read*";
+  }
+
+  if (key === "write") {
+    if (display.detail) {
+      return `*Write* (\`${display.detail}\`)`;
+    }
+    return "*Write*";
+  }
+
+  if (key === "edit") {
+    if (display.detail) {
+      return `*Edit* (\`${display.detail}\`)`;
+    }
+    return "*Edit*";
+  }
+
+  if (key === "grep") {
+    if (display.detail) {
+      return `*Grep* (\`${display.detail}\`)`;
+    }
+    return "*Grep*";
+  }
+
+  if (key === "glob") {
+    if (display.detail) {
+      return `*Glob* (\`${display.detail}\`)`;
+    }
+    return "*Glob*";
+  }
+
+  if (key === "web_search") {
+    if (display.detail) {
+      return `*Web Search* (\`${display.detail}\`)`;
+    }
+    return "*Web Search*";
+  }
+
+  if (key === "web_fetch") {
+    if (display.detail) {
+      return `*Web Fetch* (\`${display.detail}\`)`;
+    }
+    return "*Web Fetch*";
+  }
+
+  // Sub-agent / Task
+  if (key === "task" || key === "sessions_spawn") {
+    if (display.detail) {
+      return `*Sub-agent* (${display.detail})`;
+    }
+    return "*Sub-agent*";
+  }
+
+  // MCP/other tools: use the display title
+  if (display.detail) {
+    return `*${display.title}* (\`${display.detail}\`)`;
+  }
+  return `*${display.title}*`;
+}
+
+/**
+ * Truncate a line to MAX_COL_WIDTH, appending "..." if needed.
+ */
+function truncateColumn(line: string): string {
+  if (line.length <= MAX_COL_WIDTH) {
+    return line;
+  }
+  return `${line.slice(0, MAX_COL_WIDTH - 3)}...`;
+}
+
+/**
+ * Format a completed tool call for Discord with a rich output preview.
+ * Shows tool name, args, and a truncated code block of the output.
+ *
+ * Blank lines are stripped from the preview. Non-blank lines are
+ * truncated at MAX_COL_WIDTH columns. If there are more than
+ * MAX_PREVIEW_LINES visible lines, an 11th line shows
+ * `...(N lines remaining)` inside the code fence. The remaining
+ * count includes blank lines from the undisplayed portion.
+ *
+ * Example output:
+ *   *Read* (`~/src/config.ts`)
+ *   ```ts
+ *   export const config = {
+ *     port: 3000,
+ *   };
+ *   ...(47 lines remaining)
+ *   ```
+ */
+export function formatToolResultBlockDiscord(display: ToolDisplay, result: ToolResultInfo): string {
+  const key = display.name.toLowerCase();
+  const header = buildToolHeader(display);
+
+  if (!result.outputPreview) {
+    if (result.isError) {
+      return `${header} *(error)*`;
+    }
+    return header;
+  }
+
+  const allLines = result.outputPreview.split("\n");
+  const totalLines = result.lineCount ?? allLines.length;
+
+  // Walk through preview lines: skip blanks, truncate wide lines,
+  // collect up to MAX_PREVIEW_LINES non-blank lines.
+  const visibleLines: string[] = [];
+  let linesConsumed = 0;
+
+  for (const line of allLines) {
+    if (line.trim() === "") {
+      linesConsumed++;
+      continue;
+    }
+    if (visibleLines.length >= MAX_PREVIEW_LINES) {
+      break;
+    }
+    linesConsumed++;
+    visibleLines.push(truncateColumn(line));
+  }
+
+  // Nothing visible (all blank or empty)
+  if (visibleLines.length === 0) {
+    return header;
+  }
+
+  const remaining = totalLines - linesConsumed;
+  const codeLines = [...visibleLines];
+  if (remaining > 0) {
+    const noun = remaining === 1 ? "line" : "lines";
+    codeLines.push(`...(${remaining} ${noun} remaining)`);
+  }
+
+  const lang = inferCodeLang(key, display.detail, result.outputPreview);
+  const codeBlock = `\`\`\`${lang}\n${codeLines.join("\n")}\n\`\`\``;
+
+  return `${header}\n${codeBlock}`;
 }

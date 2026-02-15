@@ -1,4 +1,7 @@
 import type { ImageContent } from "@mariozechner/pi-ai";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { ThinkLevel } from "../auto-reply/thinking.js";
 import type { AgentStreamEvent } from "../auto-reply/types.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -39,6 +42,62 @@ export type CliToolStatusCallback = (info: {
 }) => void;
 
 const log = createSubsystemLogger("agent/claude-cli");
+
+const AGENT_RUNS_DIR = path.join(os.homedir(), ".openclaw", "agent-runs");
+const AGENT_RUNS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Create an ephemeral run directory to isolate CLI backends from
+ * workspace-specific project memory. Returns the directory path
+ * and a cleanup function.
+ */
+async function createEphemeralRunDir(sessionId: string): Promise<{
+  dir: string;
+  cleanup: () => Promise<void>;
+}> {
+  await fs.mkdir(AGENT_RUNS_DIR, { recursive: true });
+  const dirName = `${sessionId}-${Date.now()}`;
+  const dir = path.join(AGENT_RUNS_DIR, dirName);
+  await fs.mkdir(dir, { recursive: true });
+  return {
+    dir,
+    cleanup: async () => {
+      try {
+        await fs.rm(dir, { recursive: true, force: true });
+      } catch {
+        // Best-effort cleanup
+      }
+    },
+  };
+}
+
+/**
+ * Remove ephemeral run directories older than AGENT_RUNS_MAX_AGE_MS.
+ * Called on a best-effort basis; failures are silently ignored.
+ */
+async function cleanupOldRunDirs(): Promise<void> {
+  try {
+    const entries = await fs.readdir(AGENT_RUNS_DIR, { withFileTypes: true });
+    const now = Date.now();
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          const entryPath = path.join(AGENT_RUNS_DIR, entry.name);
+          try {
+            const stat = await fs.stat(entryPath);
+            if (now - stat.mtimeMs > AGENT_RUNS_MAX_AGE_MS) {
+              await fs.rm(entryPath, { recursive: true, force: true });
+            }
+          } catch {
+            // Ignore individual cleanup failures
+          }
+        }),
+    );
+  } catch {
+    // Ignore if directory doesn't exist yet
+  }
+}
 
 export async function runCliAgent(params: {
   sessionId: string;
@@ -214,6 +273,22 @@ export async function runCliAgent(params: {
   const serialize = backend.serialize ?? true;
   const queueKey = serialize ? backendResolved.id : `${backendResolved.id}:${params.runId}`;
 
+  // In non-streaming mode (tools disabled), use an ephemeral CWD to
+  // prevent the CLI backend from loading project-level auto-memory
+  // based on the workspace directory. Streaming mode keeps the
+  // workspace CWD since native tools need it for file operations.
+  let ephemeralRun: { dir: string; cleanup: () => Promise<void> } | undefined;
+  if (!useStreaming) {
+    try {
+      ephemeralRun = await createEphemeralRunDir(params.sessionId);
+    } catch {
+      log.warn("failed to create ephemeral run directory, using workspace CWD");
+    }
+  }
+
+  // Schedule old run directory cleanup (best-effort, non-blocking)
+  void cleanupOldRunDirs();
+
   try {
     const output = await enqueueCliRun(queueKey, async () => {
       log.info(
@@ -273,6 +348,7 @@ export async function runCliAgent(params: {
       // Use streaming execution when tool status or stream event callbacks are provided
       if (useStreaming) {
         log.info("cli streaming mode enabled");
+        const toolNameById = new Map<string, string>();
         const streamResult = await runStreamingCli({
           command: backend.command,
           args: streamArgs,
@@ -280,17 +356,26 @@ export async function runCliAgent(params: {
           env,
           timeoutMs: params.timeoutMs,
           onEvent: (event) => {
-            if (event.type === "tool_start" && params.onToolStatus) {
-              log.debug(`cli tool start: ${event.toolName}`);
-              params.onToolStatus({
-                toolName: event.toolName,
-                toolCallId: event.toolCallId,
-                input: event.input,
-              });
+            if (event.type === "tool_start") {
+              toolNameById.set(event.toolCallId, event.toolName);
+              if (params.onToolStatus) {
+                log.debug(`cli tool start: ${event.toolName}`);
+                params.onToolStatus({
+                  toolName: event.toolName,
+                  toolCallId: event.toolCallId,
+                  input: event.input,
+                });
+              }
             }
             // Forward non-terminal events to stream event callback for status tracking.
             if (params.onStreamEvent && event.type !== "result" && event.type !== "error") {
-              params.onStreamEvent(event);
+              if (event.type === "tool_result") {
+                const toolName = toolNameById.get(event.toolCallId) ?? "";
+                toolNameById.delete(event.toolCallId);
+                params.onStreamEvent({ ...event, toolName });
+              } else {
+                params.onStreamEvent(event);
+              }
             }
           },
         });
@@ -318,7 +403,7 @@ export async function runCliAgent(params: {
 
       const result = await runCommandWithTimeout([backend.command, ...args], {
         timeoutMs: params.timeoutMs,
-        cwd: workspaceDir,
+        cwd: ephemeralRun?.dir ?? workspaceDir,
         env,
         input: stdinPayload,
       });
@@ -402,6 +487,9 @@ export async function runCliAgent(params: {
   } finally {
     if (cleanupImages) {
       await cleanupImages();
+    }
+    if (ephemeralRun) {
+      await ephemeralRun.cleanup();
     }
   }
 }

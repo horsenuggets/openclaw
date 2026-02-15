@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../globals.js", () => ({
+vi.mock("../globals.js", () => ({
   logVerbose: vi.fn(),
   shouldLogVerbose: vi.fn(() => false),
 }));
@@ -44,9 +44,8 @@ describe("createUnifiedToolFeedback", () => {
 
     expect(onUpdate).toHaveBeenCalledTimes(1);
     const text = onUpdate.mock.calls[0][0] as string;
-    // Should use code block formatting with no colon
-    expect(text).toContain("📖");
-    expect(text).toContain("Reading");
+    // Should use italic formatting with no colon
+    expect(text).toContain("*Reading");
     expect(text).toContain("`");
     expect(text).not.toContain(":");
     filter.dispose();

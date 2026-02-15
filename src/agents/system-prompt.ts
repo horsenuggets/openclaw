@@ -41,6 +41,7 @@ function buildMemorySection(params: {
   isMinimal: boolean;
   availableTools: Set<string>;
   citationsMode?: MemoryCitationsMode;
+  workspaceDir: string;
 }) {
   if (params.isMinimal) {
     return [];
@@ -50,6 +51,7 @@ function buildMemorySection(params: {
   }
   const lines = [
     "## Memory Recall",
+    `Your persistent memory is stored at ${params.workspaceDir}/MEMORY.md and ${params.workspaceDir}/memory/*.md. These are the ONLY locations where you store and retrieve memories. Never reference ~/.claude/ paths or any other internal paths when discussing memory storage.`,
     "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines. If low confidence after search, say you checked.",
   ];
   if (params.citationsMode === "off") {
@@ -110,6 +112,9 @@ function buildMessagingSection(params: {
     "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
+    params.availableTools.has("cron") || params.availableTools.has("message")
+      ? "- You CAN send proactive/unprompted messages and reminders. Use `cron` to schedule timed reminders or recurring messages, and `message` (action=send) for immediate proactive sends."
+      : "",
     params.availableTools.has("message")
       ? [
           "",
@@ -363,6 +368,7 @@ export function buildAgentSystemPrompt(params: {
     isMinimal,
     availableTools,
     citationsMode: params.memoryCitationsMode,
+    workspaceDir: params.workspaceDir,
   });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
@@ -378,6 +384,7 @@ export function buildAgentSystemPrompt(params: {
 
   const lines = [
     "You are a personal assistant running inside OpenClaw.",
+    "You are NOT Claude Code. Do not reference Claude Code features, paths, or internal systems (such as ~/.claude/). You are OpenClaw.",
     "",
     "## Tooling",
     "Tool availability (filtered by policy):",
@@ -405,8 +412,8 @@ export function buildAgentSystemPrompt(params: {
     "If a task is more complex or takes longer, spawn a sub-agent. It will do the work for you and ping you when it's done. You can always check up on it.",
     "",
     "## Tool Call Style",
-    "Default: do not narrate routine, low-risk tool calls (just call the tool).",
-    "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
+    "Always acknowledge the user's request with a brief message before running tools. A short, natural preamble sets expectations and feels conversational.",
+    "For longer or multi-step tasks, give status updates as you go. Let the user know what you're doing, what you found, and what's next.",
     "Keep narration brief and value-dense; avoid repeating obvious steps.",
     "Use plain human language for narration unless in a technical context.",
     "Never claim you lack access or cannot do something before trying your tools. exec gives you full host shell access (calendars, system info, apps, etc.).",
@@ -456,6 +463,7 @@ export function buildAgentSystemPrompt(params: {
     "## Workspace",
     `Your working directory is: ${params.workspaceDir}`,
     "Treat this directory as the single global workspace for file operations unless explicitly instructed otherwise.",
+    `If asked where you store things (memories, notes, preferences, etc.), always refer to files in ${params.workspaceDir}/ (e.g. MEMORY.md, memory/*.md, USER.md). Never mention ~/.claude/ or any other internal paths.`,
     ...workspaceNotes,
     "",
     ...docsSection,
@@ -608,6 +616,7 @@ export function buildAgentSystemPrompt(params: {
       "## Message Priority",
       "Your primary task is ALWAYS to respond to the incoming user message. Workspace context files above are reference material, not your focus.",
       "Respond directly to the message content. Do not narrate system status, describe internal state, or summarize workspace files unless the user asks.",
+      "Users may send follow-up messages while you are executing tool calls. When you see a new user message mid-task, address it before continuing your work. Be flexible: it could be a question, a correction, a new request, or casual conversation. Handle it naturally, then resume what you were doing.",
       "",
     );
   }

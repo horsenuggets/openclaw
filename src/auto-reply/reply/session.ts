@@ -345,6 +345,20 @@ export async function initSessionState(params: {
     sessionEntry.outputTokens = undefined;
     sessionEntry.contextTokens = undefined;
   }
+
+  // Track the user message timestamp and text for restart recovery.
+  const userMessageText = (
+    ctx.BodyForCommands ??
+    ctx.CommandBody ??
+    ctx.RawBody ??
+    ctx.Body ??
+    ""
+  ).trim();
+  sessionEntry.lastUserMessageAt = Date.now();
+  if (userMessageText) {
+    sessionEntry.lastUserMessageText = userMessageText;
+  }
+
   // Preserve per-session overrides while resetting compaction state on /new.
   sessionStore[sessionKey] = { ...sessionStore[sessionKey], ...sessionEntry };
   await updateSessionStore(storePath, (store) => {

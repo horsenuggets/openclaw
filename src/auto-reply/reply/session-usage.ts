@@ -34,6 +34,7 @@ export async function persistSessionUsageUpdate(params: {
           const output = params.usage?.output ?? 0;
           const promptTokens =
             input + (params.usage?.cacheRead ?? 0) + (params.usage?.cacheWrite ?? 0);
+          const now = Date.now();
           const patch: Partial<SessionEntry> = {
             inputTokens: input,
             outputTokens: output,
@@ -42,7 +43,8 @@ export async function persistSessionUsageUpdate(params: {
             model: params.modelUsed ?? entry.model,
             contextTokens: params.contextTokensUsed ?? entry.contextTokens,
             systemPromptReport: params.systemPromptReport ?? entry.systemPromptReport,
-            updatedAt: Date.now(),
+            updatedAt: now,
+            lastAgentResponseAt: now,
           };
           const cliProvider = params.providerUsed ?? entry.modelProvider;
           if (params.cliSessionId && cliProvider) {
@@ -69,12 +71,14 @@ export async function persistSessionUsageUpdate(params: {
         storePath,
         sessionKey,
         update: async (entry) => {
+          const now = Date.now();
           const patch: Partial<SessionEntry> = {
             modelProvider: params.providerUsed ?? entry.modelProvider,
             model: params.modelUsed ?? entry.model,
             contextTokens: params.contextTokensUsed ?? entry.contextTokens,
             systemPromptReport: params.systemPromptReport ?? entry.systemPromptReport,
-            updatedAt: Date.now(),
+            updatedAt: now,
+            lastAgentResponseAt: now,
           };
           const cliProvider = params.providerUsed ?? entry.modelProvider;
           if (params.cliSessionId && cliProvider) {

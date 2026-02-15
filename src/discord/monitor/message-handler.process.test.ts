@@ -5,10 +5,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const reactMessageDiscord = vi.fn(async () => {});
 const removeReactionDiscord = vi.fn(async () => {});
+const sendMessageDiscord = vi.fn(async () => ({
+  messageId: "status-1",
+  channelId: "c1",
+}));
+const deleteMessageDiscord = vi.fn(async () => ({ ok: true }));
+const editMessageDiscord = vi.fn(async () => ({}));
 
 vi.mock("../send.js", () => ({
   reactMessageDiscord: (...args: unknown[]) => reactMessageDiscord(...args),
   removeReactionDiscord: (...args: unknown[]) => removeReactionDiscord(...args),
+  sendMessageDiscord: (...args: unknown[]) => sendMessageDiscord(...args),
+  deleteMessageDiscord: (...args: unknown[]) => deleteMessageDiscord(...args),
+  editMessageDiscord: (...args: unknown[]) => editMessageDiscord(...args),
 }));
 
 vi.mock("../../auto-reply/reply/dispatch-from-config.js", () => ({
@@ -95,6 +104,9 @@ async function createBaseContext(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   reactMessageDiscord.mockClear();
   removeReactionDiscord.mockClear();
+  sendMessageDiscord.mockClear();
+  deleteMessageDiscord.mockClear();
+  editMessageDiscord.mockClear();
 });
 
 describe("processDiscordMessage ack reactions", () => {
@@ -122,5 +134,44 @@ describe("processDiscordMessage ack reactions", () => {
     await processDiscordMessage(ctx as any);
 
     expect(reactMessageDiscord).toHaveBeenCalledWith("c1", "m1", "👀", { rest: {} });
+  });
+});
+
+describe("processDiscordMessage never edits or deletes messages", () => {
+  it("never calls deleteMessageDiscord during normal processing", async () => {
+    const ctx = await createBaseContext({
+      sender: { label: "user" },
+      discordConfig: { toolFeedback: true },
+    });
+
+    // oxlint-disable-next-line typescript/no-explicit-any
+    await processDiscordMessage(ctx as any);
+
+    expect(deleteMessageDiscord).not.toHaveBeenCalled();
+  });
+
+  it("never calls editMessageDiscord during normal processing", async () => {
+    const ctx = await createBaseContext({
+      sender: { label: "user" },
+      discordConfig: { toolFeedback: true },
+    });
+
+    // oxlint-disable-next-line typescript/no-explicit-any
+    await processDiscordMessage(ctx as any);
+
+    expect(editMessageDiscord).not.toHaveBeenCalled();
+  });
+
+  it("never calls deleteMessageDiscord with quickAck enabled", async () => {
+    const ctx = await createBaseContext({
+      sender: { label: "user" },
+      discordConfig: { quickAck: "Thinking..." },
+    });
+
+    // oxlint-disable-next-line typescript/no-explicit-any
+    await processDiscordMessage(ctx as any);
+
+    expect(deleteMessageDiscord).not.toHaveBeenCalled();
+    expect(editMessageDiscord).not.toHaveBeenCalled();
   });
 });

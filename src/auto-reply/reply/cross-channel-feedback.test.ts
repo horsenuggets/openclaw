@@ -241,7 +241,12 @@ describe("cross-channel tool feedback", () => {
       replyResolver: async (_ctx, opts) => {
         opts?.onStreamEvent?.({ type: "tool_start", toolName: "Bash", toolCallId: "c1" });
         opts?.onStreamEvent?.({ type: "text", text: "thinking..." });
-        opts?.onStreamEvent?.({ type: "tool_result", toolCallId: "c1", isError: false });
+        opts?.onStreamEvent?.({
+          type: "tool_result",
+          toolCallId: "c1",
+          toolName: "Bash",
+          isError: false,
+        });
         return { text: "done" };
       },
     });
@@ -256,6 +261,7 @@ describe("cross-channel tool feedback", () => {
     expect(result.streamEvents[2]).toEqual({
       type: "tool_result",
       toolCallId: "c1",
+      toolName: "Bash",
       isError: false,
     });
   });

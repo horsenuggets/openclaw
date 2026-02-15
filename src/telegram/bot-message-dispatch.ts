@@ -15,6 +15,7 @@ import { EmbeddedBlockChunker } from "../agents/pi-embedded-block-chunker.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import { clearHistoryEntriesIfEnabled } from "../auto-reply/reply/history.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
+import { createSmartStatus } from "../auto-reply/smart-status.js";
 import { removeAckReactionAfterReply } from "../channels/ack-reactions.js";
 import { logAckFailure, logTypingFailure } from "../channels/logging.js";
 import { createReplyPrefixOptions } from "../channels/reply-prefix.js";
@@ -251,6 +252,15 @@ export const dispatchTelegramMessage = async ({
     skippedNonSilent: 0,
   };
 
+  // Smart status: re-send typing on stream events to keep the indicator
+  // alive during long tool calls.
+  const smartStatus = createSmartStatus({
+    userMessage: ctxPayload.Body ?? "",
+    onUpdate: () => {
+      void sendTyping().catch(() => {});
+    },
+  });
+
   const { queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
     cfg,
@@ -305,9 +315,15 @@ export const dispatchTelegramMessage = async ({
       disableBlockStreaming,
       toolFeedback: true,
       onPartialReply: draftStream ? (payload) => updateDraftFromPartial(payload.text) : undefined,
+      // Re-send typing indicator on stream events so it stays active
+      // during long tool calls (Telegram's indicator expires after ~5s).
+      onStreamEvent: (event) => {
+        smartStatus.push(event);
+      },
       onModelSelected,
     },
   });
+  smartStatus.dispose();
   draftStream?.stop();
   let sentFallback = false;
   if (!deliveryState.delivered && deliveryState.skippedNonSilent > 0) {

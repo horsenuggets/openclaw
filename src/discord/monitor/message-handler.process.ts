@@ -8,6 +8,7 @@ import {
   resolveAgentIdentity,
   resolveHumanDelayConfig,
 } from "../../agents/identity.js";
+import { formatToolResultBlockDiscord, resolveToolDisplay } from "../../agents/tool-display.js";
 import { resolveChunkMode } from "../../auto-reply/chunk.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import {
@@ -21,6 +22,8 @@ import {
 } from "../../auto-reply/reply/history.js";
 import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.js";
 import { createReplyDispatcherWithTyping } from "../../auto-reply/reply/reply-dispatcher.js";
+import { createSmartStatus } from "../../auto-reply/smart-status.js";
+import { createUnifiedToolFeedback } from "../../auto-reply/tool-feedback-filter.js";
 import {
   removeAckReactionAfterReply,
   shouldAckReaction as shouldAckReactionGate,
@@ -38,13 +41,7 @@ import { resolveThreadSessionKeys } from "../../routing/session-key.js";
 import { buildUntrustedChannelMetadata } from "../../security/channel-metadata.js";
 import { truncateUtf16Safe } from "../../utils.js";
 import { getActiveJobForUser, createJob, updateJob, appendJobEvent } from "../jobs/store.js";
-import {
-  deleteMessageDiscord,
-  editMessageDiscord,
-  reactMessageDiscord,
-  removeReactionDiscord,
-  sendMessageDiscord,
-} from "../send.js";
+import { reactMessageDiscord, removeReactionDiscord, sendMessageDiscord } from "../send.js";
 import { normalizeDiscordSlug, resolveDiscordOwnerAllowFrom } from "./allow-list.js";
 import { resolveTimestampMs } from "./format.js";
 import { startJobClassification, type JobClassificationController } from "./job-classifier.js";
@@ -61,9 +58,7 @@ import {
   type SmartAckContext,
   type SmartAckResult,
 } from "./smart-ack.js";
-import { createSmartStatus } from "./smart-status.js";
 import { resolveDiscordAutoThreadReplyPlan, resolveDiscordThreadStarter } from "./threading.js";
-import { createUnifiedToolFeedback } from "./tool-feedback-filter.js";
 import { createTypingGuard } from "./typing-guard.js";
 import { sendTyping } from "./typing.js";
 
@@ -480,71 +475,77 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     });
   }
 
-  // Status messages: a single message is created on the first update and then
-  // edited in-place for subsequent updates. This avoids spamming the channel
-  // with dozens of short-lived progress messages. The message is deleted when
-  // the final reply arrives.
-  let lastStatusMessageId: string | undefined;
-  let lastStatusChannelId: string | undefined;
-  let statusLastText: string | undefined;
-  let statusSending = false;
+  // Status messages: periodic tool feedback and thinking updates sent
+  // throughout a long task. Rate-limited with a cooldown to avoid
+  // flooding the channel. Messages are never edited or deleted.
+  // Tool result blocks (rich output previews) bypass the cooldown
+  // because they contain substantive content the user needs to see.
+  // When a send is in flight, result blocks are queued and flushed
+  // after the current send completes.
+  const STATUS_COOLDOWN_MS = 10_000;
+  let lastStatusSendTime = 0;
+  let sendingStatus = false;
+  const pendingResultBlocks: string[] = [];
+  // Track block flush operations so tool feedback can wait for them.
+  let blockFlushPromise: Promise<void> | null = null;
 
-  const updateStatusMessage = async (text: string) => {
-    if (statusSending) {
-      return;
-    }
-    if (text === statusLastText) {
-      return;
-    }
-    statusLastText = text;
-    statusSending = true;
-    try {
-      // If we already have a status message, edit it in-place.
-      if (lastStatusMessageId && lastStatusChannelId) {
-        try {
-          await editMessageDiscord(
-            lastStatusChannelId,
-            lastStatusMessageId,
-            { content: text },
-            {
-              rest: client.rest,
-            },
-          );
-          return;
-        } catch {
-          // Edit failed (message may have been deleted). Fall through
-          // to send a new one.
-          lastStatusMessageId = undefined;
-          lastStatusChannelId = undefined;
-        }
+  const doSendStatus = async (text: string) => {
+    await sendMessageDiscord(deliverTarget, text, {
+      token,
+      accountId,
+      rest: client.rest,
+    });
+    lastStatusSendTime = Date.now();
+    typingGuard.reinforce();
+  };
+
+  const flushPendingResults = async () => {
+    while (pendingResultBlocks.length > 0) {
+      const next = pendingResultBlocks.shift()!;
+      try {
+        await doSendStatus(next);
+      } catch (err) {
+        logVerbose(`discord: queued result block send failed: ${String(err)}`);
       }
-      // First update (or fallback after edit failure): send a new message.
-      const result = await sendMessageDiscord(deliverTarget, text, {
-        token,
-        accountId,
-        rest: client.rest,
-      });
-      lastStatusMessageId = result.messageId !== "unknown" ? result.messageId : undefined;
-      lastStatusChannelId = result.channelId;
-      // Reinforce typing after sending a new message. Sending clears
-      // Discord's typing indicator.
-      typingGuard.reinforce();
-    } catch (err) {
-      logVerbose(`discord: status message update failed: ${String(err)}`);
-    } finally {
-      statusSending = false;
     }
   };
 
-  const deleteStatusMessage = () => {
-    if (lastStatusMessageId && lastStatusChannelId) {
-      deleteMessageDiscord(lastStatusChannelId, lastStatusMessageId, { rest: client.rest }).catch(
-        (err) => {
-          logVerbose(`discord: failed to delete status message: ${String(err)}`);
-        },
-      );
-      lastStatusMessageId = undefined;
-      lastStatusChannelId = undefined;
+  const sendStatusMessage = async (text: string, opts?: { bypassCooldown?: boolean }) => {
+    // Tool result blocks: queue if a send is in flight instead
+    // of dropping, since they contain substantive content.
+    if (opts?.bypassCooldown && sendingStatus) {
+      pendingResultBlocks.push(text);
+      return;
+    }
+    if (sendingStatus) {
+      return;
+    }
+    if (!opts?.bypassCooldown) {
+      // Cooldown: avoid flooding the channel with rapid status
+      // updates. Upstream filters (unifiedToolFeedback 15s,
+      // smartStatus 3s) already rate-limit, but this is a
+      // safety net.
+      const elapsed = Date.now() - lastStatusSendTime;
+      if (lastStatusSendTime > 0 && elapsed < STATUS_COOLDOWN_MS) {
+        return;
+      }
+    }
+    // Wait for any in-progress block flush to complete first.
+    // This ensures acknowledgment text is sent before tool feedback.
+    if (blockFlushPromise) {
+      await blockFlushPromise;
+    }
+    // Also wait for dispatcher queue to be idle.
+    await dispatcher.waitForIdle();
+    sendingStatus = true;
+    try {
+      await doSendStatus(text);
+    } catch (err) {
+      logVerbose(`discord: status message send failed: ${String(err)}`);
+    } finally {
+      // Flush any queued result blocks before releasing the lock.
+      await flushPendingResults();
+      sendingStatus = false;
     }
   };
 
@@ -554,23 +555,26 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const unifiedToolFeedback = toolFeedbackEnabled
     ? createUnifiedToolFeedback({
         onUpdate: (feedbackText) => {
-          void updateStatusMessage(feedbackText);
+          void sendStatusMessage(feedbackText);
         },
       })
     : null;
 
-  // Smart status: periodic Sonnet-generated context-aware updates for
-  // long-running tasks. Runs at a longer interval as a fallback alongside
-  // the per-batch unified tool feedback.
+  // Smart status: deterministic stream-based status updates for
+  // long-running tasks. Uses tool-display formatting and thinking excerpts
+  // as a fallback alongside the per-batch unified tool feedback.
   const smartStatusFilter = toolFeedbackEnabled
     ? createSmartStatus({
         userMessage: text,
         onUpdate: (statusText) => {
-          void updateStatusMessage(statusText);
+          void sendStatusMessage(statusText);
         },
-        config: { intervalMs: 30000 },
       })
     : null;
+
+  // Track tool start inputs so we can correlate them with results for
+  // rich formatting (tool name + args + output preview).
+  const toolStartInputs = toolFeedbackEnabled ? new Map<string, Record<string, unknown>>() : null;
 
   // Sonnet triage: classify as simple (FULL) or complex (ACK).
   // For simple messages, Sonnet's response is delivered directly and Opus is skipped.
@@ -578,7 +582,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const smartAckConfig = discordConfig?.smartAck;
   const smartAckEnabled =
     smartAckConfig === true ||
-    (typeof smartAckConfig === "object" && smartAckConfig?.enabled !== false);
+    (typeof smartAckConfig === "object" && smartAckConfig?.enabled === true);
 
   // Build rich context for the triage model.
   let triageContext: SmartAckContext | undefined;
@@ -607,7 +611,6 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     : null;
 
   // Await triage result. If FULL, deliver directly and skip Opus dispatch.
-  // Hoisted so the ack text is available for delayed delivery after the block.
   let triageResult: SmartAckResult | null | undefined;
   if (smartAckController) {
     triageResult = await smartAckController.result;
@@ -656,7 +659,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       if (smartStatusFilter) {
         smartStatusFilter.dispose();
       }
-      deleteStatusMessage();
+
       markDispatchIdle();
 
       // Cancel job classification if still running.
@@ -706,13 +709,6 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
       return; // Skip Opus dispatch entirely.
     }
-
-    // Complex path: show the ack as a status message immediately while Opus works.
-    if (triageResult?.text) {
-      unifiedToolFeedback?.suppress(10000);
-      smartStatusFilter?.suppress(10000);
-      void updateStatusMessage(triageResult.text);
-    }
   }
 
   // Await job classification and create/update job entry.
@@ -760,7 +756,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         // Suppress updates briefly so the ack isn't immediately overwritten.
         unifiedToolFeedback?.suppress(10000);
         smartStatusFilter?.suppress(10000);
-        deleteStatusMessage();
+
         const result = await sendMessageDiscord(deliverTarget, ackText, {
           token,
           accountId,
@@ -791,15 +787,47 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       // Discord feedback. Providing onToolStatus bypasses the default
       // italic block-reply formatting in dispatch-from-config.ts.
       toolFeedback: true,
+      // Track block flush operations so tool feedback can wait for them to complete.
+      // This ensures acknowledgment text appears before tool digests.
+      onBlockReplyFlush: () => {
+        const flushPromise = dispatcher.waitForIdle();
+        blockFlushPromise = flushPromise;
+        void flushPromise.finally(() => {
+          if (blockFlushPromise === flushPromise) {
+            blockFlushPromise = null;
+          }
+        });
+      },
       onToolStatus: unifiedToolFeedback
         ? (info: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => {
+            // Store input for later correlation with tool results.
+            toolStartInputs?.set(info.toolCallId, info.input ?? {});
             unifiedToolFeedback.push(info);
           }
         : undefined,
-      // Forward streaming events to smart-status for periodic updates.
-      onStreamEvent: smartStatusFilter
+      // Forward streaming events to smart-status for periodic updates
+      // and send rich tool result blocks when output is available.
+      onStreamEvent: toolFeedbackEnabled
         ? (event: import("../../auto-reply/types.js").AgentStreamEvent) => {
-            smartStatusFilter.push(event);
+            smartStatusFilter?.push(event);
+            // When a tool finishes with output, send a rich result block.
+            // Remove any buffered tool-start message for this call first
+            // so the user doesn't see both "Reading..." and the result.
+            if (event.type === "tool_result" && event.outputPreview && toolStartInputs) {
+              unifiedToolFeedback?.removeToolCall(event.toolCallId);
+              const display = resolveToolDisplay({
+                name: event.toolName,
+                args: toolStartInputs.get(event.toolCallId),
+              });
+              const block = formatToolResultBlockDiscord(display, {
+                outputPreview: event.outputPreview,
+                lineCount: event.lineCount,
+                isError: event.isError,
+              });
+              void sendStatusMessage(block, { bypassCooldown: true });
+              // Clean up tracked input.
+              toolStartInputs.delete(event.toolCallId);
+            }
           }
         : undefined,
       onModelSelected,
@@ -807,14 +835,13 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   });
   markDispatchIdle();
   typingGuard.dispose();
-  // Clean up tool feedback and smart-status, then delete the status message.
+  // Clean up tool feedback and smart-status filters.
   if (unifiedToolFeedback) {
     unifiedToolFeedback.dispose();
   }
   if (smartStatusFilter) {
     smartStatusFilter.dispose();
   }
-  deleteStatusMessage();
   // Mark job as completed after dispatch finishes.
   if (currentJobId) {
     await updateJob({

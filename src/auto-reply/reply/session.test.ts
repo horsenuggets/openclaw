@@ -435,6 +435,91 @@ describe("initSessionState reset policy", () => {
   });
 });
 
+describe("initSessionState recovery timestamps", () => {
+  it("sets lastUserMessageAt and lastUserMessageText on the session entry", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-recovery-ts-"));
+    const storePath = path.join(root, "sessions.json");
+    const cfg = { session: { store: storePath } } as OpenClawConfig;
+
+    const before = Date.now();
+    const result = await initSessionState({
+      ctx: {
+        Body: "What is the weather?",
+        RawBody: "What is the weather?",
+        SessionKey: "agent:main:telegram:dm:u1",
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+    const after = Date.now();
+
+    expect(result.sessionEntry.lastUserMessageAt).toBeGreaterThanOrEqual(before);
+    expect(result.sessionEntry.lastUserMessageAt).toBeLessThanOrEqual(after);
+    expect(result.sessionEntry.lastUserMessageText).toBe("What is the weather?");
+  });
+
+  it("prefers BodyForCommands for lastUserMessageText", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-recovery-bfc-"));
+    const storePath = path.join(root, "sessions.json");
+    const cfg = { session: { store: storePath } } as OpenClawConfig;
+
+    const result = await initSessionState({
+      ctx: {
+        Body: "[context]\nUser: hello world\n[from: User]",
+        BodyForCommands: "hello world",
+        SessionKey: "agent:main:telegram:dm:u2",
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(result.sessionEntry.lastUserMessageText).toBe("hello world");
+  });
+
+  it("does not set lastUserMessageText when body is empty", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-recovery-empty-"));
+    const storePath = path.join(root, "sessions.json");
+    const cfg = { session: { store: storePath } } as OpenClawConfig;
+
+    const result = await initSessionState({
+      ctx: {
+        Body: "   ",
+        SessionKey: "agent:main:telegram:dm:u3",
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(result.sessionEntry.lastUserMessageAt).toBeDefined();
+    // Empty/whitespace body should not set lastUserMessageText.
+    expect(result.sessionEntry.lastUserMessageText).toBeUndefined();
+  });
+
+  it("persists lastUserMessageAt to the session store on disk", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-recovery-persist-"));
+    const storePath = path.join(root, "sessions.json");
+    const cfg = { session: { store: storePath } } as OpenClawConfig;
+    const sessionKey = "agent:main:telegram:dm:u4";
+
+    await initSessionState({
+      ctx: {
+        Body: "ping",
+        SessionKey: sessionKey,
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    // Re-read the store from disk (bypassing cache).
+    const { loadSessionStore: load } = await import("../../config/sessions.js");
+    const store = load(storePath, { skipCache: true });
+    const entry = store[sessionKey];
+    expect(entry).toBeDefined();
+    expect(entry?.lastUserMessageAt).toBeGreaterThan(0);
+    expect(entry?.lastUserMessageText).toBe("ping");
+  });
+});
+
 describe("initSessionState channel reset overrides", () => {
   it("uses channel-specific reset policy when configured", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-channel-idle-"));

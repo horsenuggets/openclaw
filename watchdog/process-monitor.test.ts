@@ -2,7 +2,7 @@ import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 // Use high ephemeral ports to avoid conflicts with real services.
 const TEST_PORT_A = 49151;
@@ -10,6 +10,21 @@ const TEST_PORT_B = 49152;
 
 const CLI_PATH = path.resolve(import.meta.dirname, "cli.mjs");
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const BUILDS_DIR = path.join(REPO_ROOT, ".builds");
+const STUB_HASH = "__test-stub__";
+const STUB_BUILD_DIR = path.join(BUILDS_DIR, STUB_HASH);
+const CURRENT_LINK = path.join(BUILDS_DIR, "current");
+
+// Minimal gateway stub that listens on the port and stays alive.
+const STUB_ENTRY = `
+import { createServer } from "node:http";
+const port = parseInt(process.env.OPENCLAW_GATEWAY_PORT || "18789");
+const server = createServer((_, res) => res.end("ok"));
+server.listen(port, "127.0.0.1", () => {
+  console.log(new Date().toISOString() + " [gateway] stub listening on port " + port);
+});
+process.on("SIGTERM", () => { server.close(); process.exit(0); });
+`;
 
 function watchdogLockPath(port: number): string {
   return path.join(os.homedir(), ".openclaw", "watchdog", `port-${port}.lock`);
@@ -44,7 +59,62 @@ function killPort(port: number): void {
   }
 }
 
+// Ensure a stub build exists so cmdStart doesn't exit immediately.
+// The tests verify lock file behavior, not actual gateway startup.
+let savedCurrentTarget: string | null = null;
+
+function ensureStubBuild(): void {
+  fs.mkdirSync(STUB_BUILD_DIR, { recursive: true });
+  fs.writeFileSync(path.join(STUB_BUILD_DIR, "openclaw.mjs"), STUB_ENTRY);
+
+  // Preserve existing "current" symlink if present
+  try {
+    savedCurrentTarget = fs.readlinkSync(CURRENT_LINK);
+  } catch {
+    savedCurrentTarget = null;
+  }
+
+  // Point current → stub build
+  try {
+    fs.unlinkSync(CURRENT_LINK);
+  } catch {
+    // ignore
+  }
+  fs.symlinkSync(STUB_BUILD_DIR, CURRENT_LINK);
+}
+
+function cleanupStubBuild(): void {
+  // Restore previous "current" symlink
+  try {
+    fs.unlinkSync(CURRENT_LINK);
+  } catch {
+    // ignore
+  }
+  if (savedCurrentTarget) {
+    try {
+      fs.symlinkSync(savedCurrentTarget, CURRENT_LINK);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Remove stub build directory
+  try {
+    fs.rmSync(STUB_BUILD_DIR, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+}
+
 describe("watchdog port lock", () => {
+  beforeAll(() => {
+    ensureStubBuild();
+  });
+
+  afterAll(() => {
+    cleanupStubBuild();
+  });
+
   beforeEach(() => {
     cleanupLock(TEST_PORT_A);
     cleanupLock(TEST_PORT_B);
