@@ -420,7 +420,13 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping({
     ...prefixOptions,
     humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
-    deliver: async (payload: ReplyPayload) => {
+    deliver: async (payload: ReplyPayload, info) => {
+      // Dispose the typing guard before final delivery so no stale
+      // typing signals arrive at Discord after the message (which
+      // would briefly re-show "typing").
+      if (info.kind === "final") {
+        typingGuard.dispose();
+      }
       const replyToId = replyReference.use();
       await deliverDiscordReply({
         replies: [payload],
