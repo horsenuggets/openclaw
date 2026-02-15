@@ -1,3 +1,4 @@
+import hljs from "highlight.js";
 import { redactToolDetail } from "../logging/redact.js";
 import { shortenHomeInString } from "../utils.js";
 import TOOL_DISPLAY_JSON from "./tool-display.json" with { type: "json" };
@@ -419,25 +420,82 @@ const EXT_TO_LANG: Record<string, string> = {
 };
 
 /**
- * Infer a code fence language hint from the tool name and detail.
- * Only Read output contains actual file content that benefits from
- * syntax highlighting. Write/Edit return status messages like
- * "Successfully replaced text in ..." which get false-positive
- * keyword coloring when wrapped in a language-hinted code fence.
+ * Tools whose output is always JSON (they exclusively use
+ * jsonResult()). These get a "json" code fence hint without
+ * content sniffing.
  */
-function inferCodeLang(key: string, detail?: string): string {
-  if (!detail) return "";
-  // Only Read returns actual file content worth highlighting
-  if (key !== "read") return "";
+const JSON_TOOLS = new Set([
+  "agents_list",
+  "canvas",
+  "cron",
+  "gateway",
+  "memory_get",
+  "memory_search",
+  "sessions_history",
+  "sessions_list",
+  "sessions_send",
+  "sessions_spawn",
+  "web_fetch",
+  "web_search",
+]);
 
-  // Strip trailing line range (e.g., ":530-580") added by Read
-  const path = detail.replace(/:\d+[-–]\d+$/, "");
+/**
+ * Language subset for highlight.js auto-detection, restricted
+ * to languages Discord supports via its highlight.js integration.
+ */
+const DISCORD_LANGS = [
+  "bash",
+  "c",
+  "cpp",
+  "css",
+  "diff",
+  "go",
+  "html",
+  "java",
+  "javascript",
+  "json",
+  "markdown",
+  "python",
+  "ruby",
+  "rust",
+  "sql",
+  "typescript",
+  "xml",
+  "yaml",
+];
+const AUTO_DETECT_RELEVANCE_THRESHOLD = 5;
 
-  const dot = path.lastIndexOf(".");
-  if (dot === -1 || dot === path.length - 1) return "";
-  const ext = path.slice(dot + 1).toLowerCase();
+/**
+ * Infer a code fence language hint using three tiers:
+ * 1. File extension for Read tool output (most specific)
+ * 2. Static "json" for tools known to always return JSON
+ * 3. Content-based detection via highlight.js highlightAuto
+ *    with a Discord-compatible language subset and relevance
+ *    threshold to avoid false positives on plain text
+ */
+function inferCodeLang(key: string, detail?: string, outputPreview?: string): string {
+  // Tier 1: file extension for Read tool
+  if (key === "read" && detail) {
+    const path = detail.replace(/:\d+[-–]\d+$/, "");
+    const dot = path.lastIndexOf(".");
+    if (dot !== -1 && dot !== path.length - 1) {
+      const ext = path.slice(dot + 1).toLowerCase();
+      return EXT_TO_LANG[ext] ?? ext;
+    }
+  }
 
-  return EXT_TO_LANG[ext] ?? ext;
+  // Tier 2: tools that always return JSON
+  if (JSON_TOOLS.has(key)) return "json";
+
+  // Tier 3: content-based detection via highlight.js
+  if (outputPreview) {
+    const result = hljs.highlightAuto(outputPreview, DISCORD_LANGS);
+    if (result.language && result.relevance >= AUTO_DETECT_RELEVANCE_THRESHOLD) {
+      return result.language;
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -600,7 +658,7 @@ export function formatToolResultBlockDiscord(display: ToolDisplay, result: ToolR
     codeLines.push(`...(${remaining} ${noun} remaining)`);
   }
 
-  const lang = inferCodeLang(key, display.detail);
+  const lang = inferCodeLang(key, display.detail, result.outputPreview);
   const codeBlock = `\`\`\`${lang}\n${codeLines.join("\n")}\n\`\`\``;
 
   return `${header}\n${codeBlock}`;

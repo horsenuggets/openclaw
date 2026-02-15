@@ -418,6 +418,143 @@ describe("formatToolResultBlockDiscord", () => {
   });
 });
 
+describe("formatToolResultBlockDiscord language detection", () => {
+  it("formats Gateway tool result with json code fence", () => {
+    const display = resolveToolDisplay({
+      name: "gateway",
+      args: { action: "config.get" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '{\n  "ok": true,\n  "config": {}\n}',
+      lineCount: 4,
+      isError: false,
+    });
+    expect(result).toContain("```json\n");
+  });
+
+  it("formats Cron tool result with json code fence", () => {
+    const display = resolveToolDisplay({
+      name: "cron",
+      args: { action: "list" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '[\n  { "id": "abc", "schedule": "0 * * * *" }\n]',
+      lineCount: 3,
+      isError: false,
+    });
+    expect(result).toContain("```json\n");
+  });
+
+  it("detects json from content for unknown MCP tool", () => {
+    const display = resolveToolDisplay({
+      name: "mcp__custom__list_items",
+      args: {},
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '{\n  "items": [\n    { "id": 1 },\n    { "id": 2 }\n  ]\n}',
+      lineCount: 6,
+      isError: false,
+    });
+    expect(result).toContain("```json\n");
+  });
+
+  it("detects json array from content for unknown tool", () => {
+    const display = resolveToolDisplay({
+      name: "mcp__custom__query",
+      args: {},
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '[{"id": 1, "name": "test"}, {"id": 2}]',
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("```json\n");
+  });
+
+  it("detects diff output", () => {
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "git diff" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "--- a/file.ts\n+++ b/file.ts\n@@ -1,3 +1,3 @@\n-old line\n+new line",
+      lineCount: 5,
+      isError: false,
+    });
+    expect(result).toContain("```diff\n");
+  });
+
+  it("detects bash from shebang", () => {
+    const display = resolveToolDisplay({
+      name: "Read",
+      args: { file_path: "/tmp/script" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '#!/bin/bash\nset -euo pipefail\necho "hello"',
+      lineCount: 3,
+      isError: false,
+    });
+    // No file extension, so tier 1 skips. Tier 3 detects bash.
+    expect(result).toContain("```bash\n");
+  });
+
+  it("does not add language hint for plain Bash text output", () => {
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "git status" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "On branch main\nnothing to commit",
+      lineCount: 2,
+      isError: false,
+    });
+    expect(result).toContain("```\n");
+    expect(result).not.toContain("```json");
+    expect(result).not.toContain("```bash");
+  });
+
+  it("does not add language hint for Edit status message", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/types.ts" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "Successfully replaced text in /src/types.ts.",
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("```\n");
+  });
+
+  it("does not add language hint for short plain text", () => {
+    const display = resolveToolDisplay({
+      name: "mcp__todoist__get_tasks",
+      args: {},
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "3 tasks found",
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("```\n");
+    expect(result).not.toContain("```json");
+  });
+
+  it("Read tool uses file extension over content detection", () => {
+    const display = resolveToolDisplay({
+      name: "Read",
+      args: { file_path: "/src/config.yaml" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "name: openclaw\nversion: 1.0.0",
+      lineCount: 2,
+      isError: false,
+    });
+    // Tier 1 (file extension) takes precedence
+    expect(result).toContain("```yaml\n");
+  });
+});
+
 describe("formatToolResultBlockDiscord blank line handling", () => {
   it("strips blank lines from the preview", () => {
     const display = resolveToolDisplay({
