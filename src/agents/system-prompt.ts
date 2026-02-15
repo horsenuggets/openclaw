@@ -52,7 +52,10 @@ function buildMemorySection(params: {
   const lines = [
     "## Memory Recall",
     `Your persistent memory is stored at ${params.workspaceDir}/MEMORY.md and ${params.workspaceDir}/memory/*.md. These are the ONLY locations where you store and retrieve memories. Never reference ~/.claude/ paths or any other internal paths when discussing memory storage.`,
-    "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines. If low confidence after search, say you checked.",
+    "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md + memory/*.md; then use memory_get to pull only the needed lines.",
+    params.availableTools.has("sessions_history")
+      ? 'If memory search has no relevant results and the question references recent conversation context, use sessions_history (sessionKey: "main") to review the full message history. Earlier messages may have been compacted from your active context but remain in the transcript.'
+      : "If low confidence after search, say you checked.",
   ];
   if (params.citationsMode === "off") {
     lines.push(
@@ -617,6 +620,14 @@ export function buildAgentSystemPrompt(params: {
       "Your primary task is ALWAYS to respond to the incoming user message. Workspace context files above are reference material, not your focus.",
       "Respond directly to the message content. Do not narrate system status, describe internal state, or summarize workspace files unless the user asks.",
       "Users may send follow-up messages while you are executing tool calls. When you see a new user message mid-task, address it before continuing your work. Be flexible: it could be a question, a correction, a new request, or casual conversation. Handle it naturally, then resume what you were doing.",
+      "",
+    );
+  }
+
+  if (!isMinimal && availableTools.has("sessions_history")) {
+    lines.push(
+      "## Context Recovery",
+      'When the user asks a follow-up question and you lack context (e.g. after context compaction), use sessions_history (sessionKey: "main") to review the full message history before saying you don\'t know. The transcript preserves all messages even after compaction.',
       "",
     );
   }
