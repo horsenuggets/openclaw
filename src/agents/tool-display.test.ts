@@ -245,6 +245,21 @@ describe("formatToolResultBlockDiscord", () => {
     expect(result).not.toContain("remaining");
   });
 
+  it("formats Read with language hint when detail includes line range", () => {
+    const display = resolveToolDisplay({
+      name: "Read",
+      args: { file_path: "/src/handler.ts", offset: 530, limit: 50 },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "sendingStatus = true;\ntry {",
+      lineCount: 2,
+      isError: false,
+    });
+    expect(result).toContain("```ts\n");
+    // Code fence should be ```ts, not ```ts:530-580
+    expect(result).not.toContain("```ts:");
+  });
+
   it("formats Read with language-hinted code fence for .json files", () => {
     const display = resolveToolDisplay({
       name: "Read",

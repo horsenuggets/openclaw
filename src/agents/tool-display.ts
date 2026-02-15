@@ -429,9 +429,12 @@ function inferCodeLang(key: string, detail?: string): string {
   // Only infer language for file-backed tools
   if (key !== "read" && key !== "write" && key !== "edit") return "";
 
-  const dot = detail.lastIndexOf(".");
-  if (dot === -1 || dot === detail.length - 1) return "";
-  const ext = detail.slice(dot + 1).toLowerCase();
+  // Strip trailing line range (e.g., ":530-580") added by Read
+  const path = detail.replace(/:\d+[-–]\d+$/, "");
+
+  const dot = path.lastIndexOf(".");
+  if (dot === -1 || dot === path.length - 1) return "";
+  const ext = path.slice(dot + 1).toLowerCase();
 
   return EXT_TO_LANG[ext] ?? ext;
 }
