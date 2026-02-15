@@ -1,4 +1,5 @@
 import { chunkMarkdownTextWithMode, type ChunkMode } from "../auto-reply/chunk.js";
+import { parseFenceSpans } from "../markdown/fences.js";
 
 export type ChunkDiscordTextOpts = {
   /** Max characters per Discord message. Default: 2000. */
@@ -205,7 +206,8 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
     }
   }
 
-  return rebalanceReasoningItalics(text, chunks);
+  const withItalics = rebalanceReasoningItalics(text, chunks);
+  return rebalanceInlineFormatting(withItalics);
 }
 
 export function chunkDiscordTextWithMode(
@@ -230,7 +232,8 @@ export function chunkDiscordTextWithMode(
     }
     chunks.push(...nested);
   }
-  return chunks;
+  // Rebalance inline formatting across paragraph-level splits.
+  return rebalanceInlineFormatting(chunks);
 }
 
 // Keep italics intact for reasoning payloads that are wrapped once with `_…_`.
@@ -271,6 +274,90 @@ function rebalanceReasoningItalics(source: string, chunks: string[]): string[] {
     if (!nextBody.startsWith("_")) {
       adjusted[i + 1] = `${leadingWhitespace}_${nextBody}`;
     }
+  }
+
+  return adjusted;
+}
+
+// 2-char inline markers that Discord renders as formatting toggles.
+const INLINE_MARKERS = ["**", "__", "~~", "||"] as const;
+type InlineMarker = (typeof INLINE_MARKERS)[number];
+
+/**
+ * Scan text and return which 2-char inline formatting markers are left
+ * unclosed (odd parity). Skips fenced code blocks and inline code spans
+ * so markers inside code are not counted.
+ */
+function findUnclosedMarkers(text: string): InlineMarker[] {
+  const parity: Record<string, number> = {};
+  for (const m of INLINE_MARKERS) {
+    parity[m] = 0;
+  }
+
+  const fenceSpans = parseFenceSpans(text);
+  let inInlineCode = false;
+  let i = 0;
+
+  while (i < text.length) {
+    // Skip fenced code block regions.
+    if (!inInlineCode) {
+      const fence = fenceSpans.find((s) => i >= s.start && i < s.end);
+      if (fence) {
+        i = fence.end;
+        continue;
+      }
+    }
+
+    const ch = text[i];
+
+    // Toggle inline code.
+    if (ch === "`") {
+      inInlineCode = !inInlineCode;
+      i++;
+      continue;
+    }
+    if (inInlineCode) {
+      i++;
+      continue;
+    }
+
+    // Check 2-char markers (greedy so ** is not counted as two *).
+    if (i + 1 < text.length) {
+      const pair = `${text[i]}${text[i + 1]}`;
+      if ((INLINE_MARKERS as readonly string[]).includes(pair)) {
+        parity[pair]++;
+        i += 2;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  return INLINE_MARKERS.filter((m) => parity[m] % 2 !== 0);
+}
+
+// Close and reopen unclosed inline formatting markers at chunk
+// boundaries so Discord renders each chunk independently.
+function rebalanceInlineFormatting(chunks: string[]): string[] {
+  if (chunks.length <= 1) {
+    return chunks;
+  }
+
+  const adjusted = [...chunks];
+
+  for (let i = 0; i < adjusted.length - 1; i++) {
+    const unclosed = findUnclosedMarkers(adjusted[i]);
+    if (unclosed.length === 0) {
+      continue;
+    }
+
+    // Close unclosed markers at end of chunk (reverse order for
+    // correct nesting — inner markers close first).
+    adjusted[i] += [...unclosed].reverse().join("");
+
+    // Reopen at start of next chunk (original order).
+    adjusted[i + 1] = unclosed.join("") + adjusted[i + 1];
   }
 
   return adjusted;

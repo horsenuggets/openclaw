@@ -128,6 +128,154 @@ describe("chunkDiscordText", () => {
     }
   });
 
+  it("closes and reopens bold across chunk boundaries", () => {
+    const lines = [
+      "Here is some text.",
+      "",
+      "**You're not broken. This is just how",
+      "OCD works.**",
+      "",
+      "More text follows here.",
+      "And another line.",
+      "Keep going.",
+      "Still more.",
+      "Almost there.",
+      "Final line.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 5, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+  });
+
+  it("closes and reopens strikethrough across chunk boundaries", () => {
+    const lines = [
+      "Before text.",
+      "~~This strikethrough spans",
+      "multiple lines and should",
+      "be balanced.~~",
+      "After text.",
+      "Line 6.",
+      "Line 7.",
+      "Line 8.",
+      "Line 9.",
+      "Line 10.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 4, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const strikeCount = (chunk.match(/~~/g) || []).length;
+      expect(strikeCount % 2).toBe(0);
+    }
+  });
+
+  it("closes and reopens spoiler markers across chunk boundaries", () => {
+    const lines = [
+      "Normal text.",
+      "||This is a spoiler that spans",
+      "across multiple lines and should",
+      "stay hidden.||",
+      "Visible again.",
+      "Extra line 1.",
+      "Extra line 2.",
+      "Extra line 3.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 4, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const spoilerCount = (chunk.match(/\|\|/g) || []).length;
+      expect(spoilerCount % 2).toBe(0);
+    }
+  });
+
+  it("handles multiple unclosed markers across a single boundary", () => {
+    const lines = [
+      "**Bold and ~~strikethrough",
+      "spanning multiple",
+      "lines together.~~**",
+      "Normal text.",
+      "Line 5.",
+      "Line 6.",
+      "Line 7.",
+      "Line 8.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 3, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      const strikeCount = (chunk.match(/~~/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+      expect(strikeCount % 2).toBe(0);
+    }
+  });
+
+  it("does not touch markers inside code fences", () => {
+    const lines = [
+      "```js",
+      "const x = '**not bold**';",
+      "const y = '~~not strike~~';",
+      "```",
+      "Normal text.",
+      "More text.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 2000, maxLines: 50 });
+    // Should fit in one chunk, so no rebalancing needed.
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toBe(text);
+  });
+
+  it("does not touch markers inside inline code", () => {
+    const lines = Array.from(
+      { length: 25 },
+      (_, i) => `Line ${i + 1}: text \`**not bold**\` more text`,
+    );
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 10, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // The ** inside backticks should not cause rebalancing artifacts.
+    for (const chunk of chunks) {
+      // Count ** outside of inline code.
+      const withoutCode = chunk.replace(/`[^`]*`/g, "");
+      const boldCount = (withoutCode.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+  });
+
+  it("propagates bold across three chunks", () => {
+    const lines = Array.from({ length: 30 }, (_, i) => {
+      if (i === 2) return "**Bold starts here.";
+      if (i === 28) return "Bold ends here.**";
+      return `Line ${i + 1} of content.`;
+    });
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxLines: 10, maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThanOrEqual(3);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+  });
+
   it("reopens italics while preserving leading whitespace on following chunk", () => {
     const body = [
       "1. line",
