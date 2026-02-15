@@ -168,8 +168,24 @@ async function checkAndProcessChannel(
       `discord startup-recovery: processing unanswered message ${userMessage.id} from ${userMessage.author?.username ?? "unknown"}`,
     );
 
+    // APIMessage uses snake_case (channel_id, mention_everyone, etc.)
+    // but Carbon's Message type uses camelCase (channelId,
+    // mentionedEveryone, etc.). Bridge the critical properties so
+    // the downstream handler can resolve the channel and metadata.
+    const message = Object.assign(Object.create(null), userMessage, {
+      channelId: userMessage.channel_id,
+      mentionedEveryone: userMessage.mention_everyone ?? false,
+      mentionedUsers: userMessage.mentions ?? [],
+      mentionedRoles: userMessage.mention_roles ?? [],
+      referencedMessage: userMessage.referenced_message
+        ? Object.assign(Object.create(null), userMessage.referenced_message, {
+            channelId: userMessage.referenced_message.channel_id,
+          })
+        : null,
+    }) as DiscordMessageEvent["message"];
+
     const event: DiscordMessageEvent = {
-      message: userMessage as DiscordMessageEvent["message"],
+      message,
       author: userMessage.author as DiscordMessageEvent["author"],
       guild: undefined,
       member: undefined,
