@@ -1,11 +1,26 @@
 import { logVerbose } from "../globals.js";
 
 /**
+ * Placeholder for escaped colons (\:). Uses a Unicode Private Use
+ * Area character that won't appear in normal chat text. Swapped in
+ * before timestamp conversion and restored afterward so the escaped
+ * colon renders as a plain `:` in the final output.
+ */
+const ESCAPED_COLON = "\uE000";
+
+/**
  * Regex for 12-hour times: "6:30pm", "6:30 PM", "12:00 am", "6pm"
  * Captures: (hour)(:(minutes))?(am/pm)
  * Negative lookbehind avoids matching inside Discord timestamps or code.
  */
 const TIME_12H_PATTERN = /(?<!<t:|`)\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM|a\.m\.|p\.m\.)\b/g;
+
+/**
+ * Regex for 24-hour times: "18:30", "08:00", "0:15", "23:59".
+ * Requires two-digit minutes to avoid matching scores like "3:2".
+ * Negative lookahead avoids partial matches on HH:MM:SS patterns.
+ */
+const TIME_24H_PATTERN = /(?<!<t:|`)\b([01]?\d|2[0-3]):([0-5]\d)\b(?!:\d)/g;
 
 /**
  * Regex for full date-time: "February 9, 2026 at 6:30 PM" or
@@ -83,17 +98,24 @@ function isInsideCode(text: string, index: number): boolean {
 }
 
 /**
- * Convert 12-hour time references in text to Discord timestamp format.
- * Matches patterns like "6:30pm", "6:30 PM", "6pm". Assumes the
- * current date when only a time is given. Skips times inside code
- * blocks or inline code.
+ * Convert time references in text to Discord timestamp format.
+ * Matches 12-hour times ("6:30pm"), 24-hour times ("18:30"), and
+ * full date-times ("February 9 at 18:30"). Assumes the current
+ * date when only a time is given. Skips times inside code blocks
+ * or inline code.
  *
- * Discord format: `<t:UNIX_SECONDS:t>` renders as a localized time
- * in each user's timezone.
+ * Escape with backslash-colon (`\:`) to keep a time as plain
+ * text: `18\:30` renders as `18:30` without conversion.
+ *
+ * Discord format: `<t:UNIX_SECONDS:t>` renders as a localized
+ * time in each user's timezone.
  */
 export function convertTimesToDiscordTimestamps(text: string): string {
-  // First pass: replace full date-time patterns (more specific)
-  let result = text.replace(
+  // Protect escaped colons (\:) from timestamp conversion
+  let result = text.replaceAll("\\:", ESCAPED_COLON);
+
+  // First pass: replace full date-time patterns (most specific)
+  result = result.replace(
     DATE_TIME_PATTERN,
     (
       match,
@@ -140,7 +162,7 @@ export function convertTimesToDiscordTimestamps(text: string): string {
     },
   );
 
-  // Second pass: replace standalone time patterns
+  // Second pass: replace 12-hour standalone time patterns
   result = result.replace(
     TIME_12H_PATTERN,
     (match, hourStr: string, minStr: string | undefined, ampm: string, offset: number) => {
@@ -161,7 +183,6 @@ export function convertTimesToDiscordTimestamps(text: string): string {
         return match;
       }
 
-      // Build a Date for today at the given time.
       const now = new Date();
       const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour24, minutes, 0);
       if (Number.isNaN(date.getTime())) {
@@ -173,6 +194,41 @@ export function convertTimesToDiscordTimestamps(text: string): string {
       return `<t:${unix}:t>`;
     },
   );
+
+  // Third pass: replace 24-hour standalone time patterns
+  result = result.replace(
+    TIME_24H_PATTERN,
+    (match, hourStr: string, minStr: string, offset: number) => {
+      if (isInsideCode(result, offset)) {
+        return match;
+      }
+
+      // Skip if this is already inside a Discord timestamp
+      const before = result.slice(Math.max(0, offset - 3), offset);
+      if (before.includes("<t:")) {
+        return match;
+      }
+
+      const hour = Number.parseInt(hourStr, 10);
+      const minutes = Number.parseInt(minStr, 10);
+      if (hour < 0 || hour > 23 || minutes < 0 || minutes > 59) {
+        return match;
+      }
+
+      const now = new Date();
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minutes, 0);
+      if (Number.isNaN(date.getTime())) {
+        return match;
+      }
+
+      const unix = Math.floor(date.getTime() / 1000);
+      logVerbose(`discord-timestamps: "${match}" → <t:${unix}:t>`);
+      return `<t:${unix}:t>`;
+    },
+  );
+
+  // Restore escaped colons as plain colons
+  result = result.replaceAll(ESCAPED_COLON, ":");
 
   return result;
 }
