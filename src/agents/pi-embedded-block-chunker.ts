@@ -1,6 +1,6 @@
 import type { FenceSpan } from "../markdown/fences.js";
 import { findFenceSpanAt, isSafeFenceBreak, parseFenceSpans } from "../markdown/fences.js";
-import { STRUCTURAL_RE } from "../markdown/structural.js";
+import { isFenceOpener, isTableRow, STRUCTURAL_RE } from "../markdown/structural.js";
 
 export type BlockReplyChunking = {
   minChars: number;
@@ -82,7 +82,7 @@ export class EmbeddedBlockChunker {
       const breakResult =
         force && this.#buffer.length <= maxChars
           ? this.#pickSoftBreakIndex(this.#buffer, 1)
-          : this.#pickBreakIndex(this.#buffer, force ? 1 : undefined);
+          : this.#pickBreakIndex(this.#buffer, force ? 1 : undefined, !force);
       if (breakResult.index <= 0) {
         if (force) {
           emit(this.#buffer);
@@ -187,6 +187,36 @@ export class EmbeddedBlockChunker {
     return STRUCTURAL_RE.test(nextLine);
   }
 
+  /** True when the lines on both sides of the newline are table
+   * rows (start with `|`). Splitting here would break the table
+   * in two, causing the second half to lose its header. */
+  #isInsideTableRun(buffer: string, newlineIdx: number): boolean {
+    const beforeStart = buffer.lastIndexOf("\n", newlineIdx - 1);
+    const lineBefore = buffer.slice(beforeStart === -1 ? 0 : beforeStart + 1, newlineIdx);
+    const afterStart = newlineIdx + 1;
+    if (afterStart >= buffer.length) return false;
+    const afterEnd = buffer.indexOf("\n", afterStart);
+    const lineAfter =
+      afterEnd === -1 ? buffer.slice(afterStart) : buffer.slice(afterStart, afterEnd);
+    return isTableRow(lineBefore) && isTableRow(lineAfter);
+  }
+
+  /** True when the next line is a "continuation" — it does not
+   * start a new logical element (not blank, not structural, not a
+   * fence opener, not a table row) and should stay attached to the
+   * preceding text. */
+  #isContinuationNewlineBreak(buffer: string, newlineIdx: number): boolean {
+    const afterStart = newlineIdx + 1;
+    if (afterStart >= buffer.length) return false;
+    const nextEnd = buffer.indexOf("\n", afterStart);
+    const nextLine = nextEnd === -1 ? buffer.slice(afterStart) : buffer.slice(afterStart, nextEnd);
+    if (nextLine.trim() === "") return false;
+    if (STRUCTURAL_RE.test(nextLine)) return false;
+    if (isFenceOpener(nextLine)) return false;
+    if (isTableRow(nextLine)) return false;
+    return true;
+  }
+
   #pickSoftBreakIndex(buffer: string, minCharsOverride?: number): BreakResult {
     const minChars = Math.max(1, Math.floor(minCharsOverride ?? this.#chunking.minChars));
     if (buffer.length < minChars) {
@@ -215,13 +245,14 @@ export class EmbeddedBlockChunker {
     }
 
     if (preference === "paragraph" || preference === "newline") {
-      // Pass 1: prefer newlines before structural elements (headings,
-      // list items) so we never orphan continuation text.
+      // Pass 1: prefer newlines before structural elements
+      // (headings, list items), but skip table-internal newlines.
       let newlineIdx = buffer.indexOf("\n");
       while (newlineIdx !== -1) {
         if (
           newlineIdx >= minChars &&
           isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx) &&
           this.#isStructuralNewlineBreak(buffer, newlineIdx)
         ) {
           return { index: newlineIdx };
@@ -229,16 +260,25 @@ export class EmbeddedBlockChunker {
         newlineIdx = buffer.indexOf("\n", newlineIdx + 1);
       }
 
-      // Pass 2: fall back to any newline.
+      // Pass 2: non-continuation newlines (skip wrapped text and
+      // table-internal breaks).
       newlineIdx = buffer.indexOf("\n");
       while (newlineIdx !== -1) {
-        if (newlineIdx >= minChars && isSafeFenceBreak(fenceSpans, newlineIdx)) {
+        if (
+          newlineIdx >= minChars &&
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx) &&
+          !this.#isContinuationNewlineBreak(buffer, newlineIdx)
+        ) {
           return { index: newlineIdx };
         }
         newlineIdx = buffer.indexOf("\n", newlineIdx + 1);
       }
     }
 
+    // Sentence breaks — tried before the absolute-fallback newline
+    // pass so we prefer clean sentence boundaries over splitting
+    // mid-sentence at arbitrary newlines.
     if (preference !== "newline") {
       const matches = buffer.matchAll(/[.!?](?=\s|$)/g);
       let sentenceIdx = -1;
@@ -257,16 +297,53 @@ export class EmbeddedBlockChunker {
       }
     }
 
+    // Pass 3: any newline at all (last resort before word/hard
+    // breaks). Still avoids table-internal newlines when possible.
+    if (preference === "paragraph" || preference === "newline") {
+      let newlineIdx = buffer.indexOf("\n");
+      while (newlineIdx !== -1) {
+        if (
+          newlineIdx >= minChars &&
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx)
+        ) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = buffer.indexOf("\n", newlineIdx + 1);
+      }
+
+      // Absolute fallback: even table-internal newlines.
+      newlineIdx = buffer.indexOf("\n");
+      while (newlineIdx !== -1) {
+        if (newlineIdx >= minChars && isSafeFenceBreak(fenceSpans, newlineIdx)) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = buffer.indexOf("\n", newlineIdx + 1);
+      }
+    }
+
     return { index: -1 };
   }
 
-  #pickBreakIndex(buffer: string, minCharsOverride?: number): BreakResult {
+  #pickBreakIndex(buffer: string, minCharsOverride?: number, allowOverflow = false): BreakResult {
     const minChars = Math.max(1, Math.floor(minCharsOverride ?? this.#chunking.minChars));
     const maxChars = Math.max(minChars, Math.floor(this.#chunking.maxChars));
+    // Allow the buffer to grow up to 2x maxChars to avoid
+    // splitting at continuation newlines (mid-sentence). A
+    // slightly longer delay between emissions is a much better
+    // trade-off than garbled mid-sentence splits.
+    const hardMax = maxChars * 2;
     if (buffer.length < minChars) {
       return { index: -1 };
     }
-    const window = buffer.slice(0, Math.min(maxChars, buffer.length));
+    // Widen the search window when overflow is allowed and the
+    // buffer has exceeded maxChars — a clean break further out
+    // is better than a mid-sentence split at maxChars.
+    const windowEnd = Math.min(
+      allowOverflow && buffer.length > maxChars ? hardMax : maxChars,
+      buffer.length,
+    );
+    const window = buffer.slice(0, windowEnd);
     const fenceSpans = parseFenceSpans(buffer);
 
     const preference = this.#chunking.breakPreference ?? "paragraph";
@@ -290,12 +367,13 @@ export class EmbeddedBlockChunker {
     }
 
     if (preference === "paragraph" || preference === "newline") {
-      // Pass 1: prefer newlines before structural elements (headings,
-      // list items) so we never orphan continuation text.
+      // Pass 1: prefer newlines before structural elements
+      // (headings, list items), skip table-internal newlines.
       let newlineIdx = window.lastIndexOf("\n");
       while (newlineIdx >= minChars) {
         if (
           isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx) &&
           this.#isStructuralNewlineBreak(buffer, newlineIdx)
         ) {
           return { index: newlineIdx };
@@ -303,16 +381,24 @@ export class EmbeddedBlockChunker {
         newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
       }
 
-      // Pass 2: fall back to any newline.
+      // Pass 2: non-continuation newlines (skip wrapped text and
+      // table-internal breaks).
       newlineIdx = window.lastIndexOf("\n");
       while (newlineIdx >= minChars) {
-        if (isSafeFenceBreak(fenceSpans, newlineIdx)) {
+        if (
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx) &&
+          !this.#isContinuationNewlineBreak(buffer, newlineIdx)
+        ) {
           return { index: newlineIdx };
         }
         newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
       }
     }
 
+    // Sentence breaks — tried before the absolute-fallback newline
+    // pass so we prefer clean sentence boundaries over splitting
+    // mid-sentence at arbitrary newlines.
     if (preference !== "newline") {
       const matches = window.matchAll(/[.!?](?=\s|$)/g);
       let sentenceIdx = -1;
@@ -328,6 +414,39 @@ export class EmbeddedBlockChunker {
       }
       if (sentenceIdx >= minChars) {
         return { index: sentenceIdx };
+      }
+    }
+
+    // When overflow is allowed and the buffer hasn't reached the
+    // hard limit, skip the fallback passes entirely. This lets the
+    // buffer keep growing until a clean break (paragraph, structural
+    // boundary, sentence ending) naturally appears instead of
+    // splitting mid-sentence at a continuation newline.
+    if (allowOverflow && buffer.length < hardMax) {
+      return { index: -1 };
+    }
+
+    // Pass 3: any newline (last resort before word/hard breaks).
+    // Still avoids table-internal newlines when possible.
+    if (preference === "paragraph" || preference === "newline") {
+      let newlineIdx = window.lastIndexOf("\n");
+      while (newlineIdx >= minChars) {
+        if (
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          !this.#isInsideTableRun(buffer, newlineIdx)
+        ) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
+      }
+
+      // Absolute fallback: even table-internal newlines.
+      newlineIdx = window.lastIndexOf("\n");
+      while (newlineIdx >= minChars) {
+        if (isSafeFenceBreak(fenceSpans, newlineIdx)) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
       }
     }
 
