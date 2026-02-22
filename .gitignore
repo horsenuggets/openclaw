@@ -72,8 +72,12 @@ USER.md
 # local tooling
 .serena/
 
-# E2E test screenshots
+# E2E test artifacts (screenshots, debug dumps, raw output captures)
 src/discord/e2e/screenshots/
+src/discord/e2e/debug-dump/
+src/discord/e2e/chunks/
+src/discord/e2e/raw-output.txt
+src/discord/e2e/dump-chunks.ts
 
 # Agent credentials and memory (NEVER COMMIT)
 memory/
