@@ -72,6 +72,9 @@ USER.md
 # local tooling
 .serena/
 
+# E2E test screenshots
+src/discord/e2e/screenshots/
+
 # Agent credentials and memory (NEVER COMMIT)
 memory/
 .agent/*.json
