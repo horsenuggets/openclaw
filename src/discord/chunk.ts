@@ -1,5 +1,6 @@
 import { chunkMarkdownTextWithMode, type ChunkMode } from "../auto-reply/chunk.js";
 import { parseFenceSpans } from "../markdown/fences.js";
+import { isStructuralBoundary } from "../markdown/structural.js";
 
 export type ChunkDiscordTextOpts = {
   /** Max characters per Discord message. Default: 2000. */
@@ -20,14 +21,6 @@ type OpenFence = {
 
 const DEFAULT_MAX_CHARS = 2000;
 const FENCE_RE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
-
-// Lines that represent structural boundaries — splitting before
-// these is preferred over splitting mid-paragraph.
-const STRUCTURAL_RE = /^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)/;
-
-function isStructuralBoundary(line: string): boolean {
-  return STRUCTURAL_RE.test(line);
-}
 
 function countLines(text: string) {
   if (!text) {
@@ -219,10 +212,16 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
     const charLimit = effectiveMaxChars > 0 ? effectiveMaxChars : maxChars;
     const lineLimit = effectiveMaxLines > 0 ? effectiveMaxLines : maxLines;
     const prefixLen = current.length > 0 ? current.length + 1 : 0;
-    const segmentLimit = Math.max(1, charLimit - prefixLen);
-    const segments = splitLongLine(originalLine, segmentLimit, {
-      preserveWhitespace: wasInsideFence,
-    });
+    // Inside fenced code blocks, split based on remaining space to
+    // account for closing fence reserve. Outside fences, keep lines
+    // whole to prevent mid-sentence breaks; only split lines that
+    // genuinely exceed the full chunk limit.
+    const segments =
+      wasInsideFence || originalLine.length > charLimit
+        ? splitLongLine(originalLine, Math.max(1, charLimit - prefixLen), {
+            preserveWhitespace: wasInsideFence,
+          })
+        : [originalLine];
 
     for (let segIndex = 0; segIndex < segments.length; segIndex++) {
       const segment = segments[segIndex];
@@ -359,7 +358,7 @@ type InlineMarker = (typeof INLINE_MARKERS)[number];
  * unclosed (odd parity). Skips fenced code blocks and inline code spans
  * so markers inside code are not counted.
  */
-function findUnclosedMarkers(text: string): InlineMarker[] {
+export function findUnclosedMarkers(text: string): InlineMarker[] {
   const parity: Record<string, number> = {};
   for (const m of INLINE_MARKERS) {
     parity[m] = 0;
@@ -421,7 +420,7 @@ function rebalanceInlineFormatting(chunks: string[]): string[] {
 
   const adjusted = [...chunks];
 
-  for (let i = 0; i < adjusted.length - 1; i++) {
+  for (let i = 0; i < adjusted.length; i++) {
     const unclosed = findUnclosedMarkers(adjusted[i]);
     if (unclosed.length === 0) {
       continue;
@@ -440,17 +439,16 @@ function rebalanceInlineFormatting(chunks: string[]): string[] {
 
     // Strip orphaned closing markers from subsequent chunks. The
     // orphaned closer may be in the immediately next chunk or further
-    // ahead (when a span crosses 3+ chunks). Scan forward until we
-    // find a chunk with odd parity for the same marker, then strip
-    // the first occurrence of that marker.
+    // ahead (when a span crosses 3+ chunks). Don't gate on parity —
+    // a chunk can have BOTH an orphaned closer and its own unclosed
+    // opener, which cancel to even parity and would be missed.
     for (const marker of unclosed) {
       for (let j = i + 1; j < adjusted.length; j++) {
-        const laterUnclosed = findUnclosedMarkers(adjusted[j]);
-        if (!laterUnclosed.includes(marker)) {
-          continue;
+        const stripped = stripOrphanedMarkerOutsideCode(adjusted[j], marker);
+        if (stripped !== adjusted[j]) {
+          adjusted[j] = stripped;
+          break;
         }
-        adjusted[j] = stripOrphanedMarkerOutsideCode(adjusted[j], marker);
-        break;
       }
     }
   }
@@ -500,31 +498,29 @@ function findAllMarkerPositionsOutsideCode(text: string, marker: string): number
 }
 
 // Strip the orphaned occurrence of a 2-char marker from a chunk.
-// Unlike stripping the first occurrence blindly, this uses greedy
-// pairing to identify self-contained spans (e.g. **term**: desc)
-// and strips the marker that is left unpaired. This prevents
-// accidentally breaking independent bold pairs when the orphaned
-// closer appears after them in the chunk.
-function stripOrphanedMarkerOutsideCode(text: string, marker: string): string {
+// Identifies self-contained bold pairs (**term**) by checking that
+// the opener is followed by a non-whitespace character and the
+// closer is preceded by one. The first marker not part of such a
+// pair is the orphan and gets stripped. Returns the text unchanged
+// if no orphan can be identified.
+export function stripOrphanedMarkerOutsideCode(text: string, marker: string): string {
   const positions = findAllMarkerPositionsOutsideCode(text, marker);
-  if (positions.length === 0 || positions.length % 2 === 0) {
+  if (positions.length === 0) {
     return text;
   }
 
-  // Greedily pair consecutive markers. Two adjacent markers form a
-  // "self-contained pair" if the text between them is on a single
-  // line and reasonably short (typical **term**: description pattern).
+  // Identify self-contained pairs: consecutive markers on the same
+  // line with short span where the opener is followed by a word
+  // character and the closer is preceded by one (e.g. **Bold Term**).
   const paired = new Set<number>();
   for (let idx = 0; idx < positions.length; idx++) {
     if (paired.has(idx)) continue;
 
-    // Find the next unpaired marker.
     let next = idx + 1;
     while (next < positions.length && paired.has(next)) next++;
     if (next >= positions.length) break;
 
-    const span = text.slice(positions[idx] + marker.length, positions[next]);
-    if (!span.includes("\n") && span.length > 0 && span.length < 200) {
+    if (isValidBoldPair(text, positions[idx], positions[next], marker.length)) {
       paired.add(idx);
       paired.add(next);
     }
@@ -538,10 +534,39 @@ function stripOrphanedMarkerOutsideCode(text: string, marker: string): string {
     }
   }
 
-  // Fallback: strip the last marker (all appeared paired, which
-  // shouldn't happen with odd count, but be safe).
-  const last = positions[positions.length - 1];
-  return text.slice(0, last) + text.slice(last + marker.length);
+  // All markers appear paired — no orphan found in this chunk.
+  return text;
+}
+
+// Check whether two marker positions form a valid self-contained
+// bold pair like **Term**. The opener must be followed by a
+// non-whitespace character and the closer must be preceded by one.
+// This distinguishes orphaned closers (e.g. "text**") from real
+// openers (e.g. "**Bold").
+function isValidBoldPair(
+  text: string,
+  openPos: number,
+  closePos: number,
+  markerLen: number,
+): boolean {
+  const span = text.slice(openPos + markerLen, closePos);
+  if (span.includes("\n") || span.length === 0 || span.length >= 200) {
+    return false;
+  }
+
+  // Opener must be followed by non-whitespace.
+  const afterOpen = text[openPos + markerLen];
+  if (!afterOpen || /\s/.test(afterOpen)) {
+    return false;
+  }
+
+  // Closer must be preceded by non-whitespace.
+  const beforeClose = text[closePos - 1];
+  if (!beforeClose || /\s/.test(beforeClose)) {
+    return false;
+  }
+
+  return true;
 }
 
 // Find the position of a trailing fence closer line (e.g. ```) at
