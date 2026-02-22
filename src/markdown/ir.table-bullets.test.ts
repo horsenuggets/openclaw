@@ -101,6 +101,33 @@ describe("markdownToIR tableMode bullets", () => {
     expect(ir.styles.some((style) => style.style === "code_block")).toBe(true);
   });
 
+  it("strips inline styles from code-mode table cells", () => {
+    const md = `
+| Scenario | Choose | Why |
+|----------|--------|-----|
+| Public API | **REST** | Compatibility |
+| Mobile app | **GraphQL** | Flexible queries |
+`.trim();
+
+    const ir = markdownToIR(md, { tableMode: "code" });
+
+    // The table is wrapped in a code block so inline styles should
+    // not produce style spans (bold markers render literally).
+    const codeBlockSpans = ir.styles.filter((s) => s.style === "code_block");
+    expect(codeBlockSpans.length).toBe(1);
+
+    // No bold style spans inside the code block region.
+    const boldInCode = ir.styles.filter(
+      (s) =>
+        s.style === "bold" && codeBlockSpans.some((cb) => s.start >= cb.start && s.end <= cb.end),
+    );
+    expect(boldInCode).toHaveLength(0);
+
+    // The text should still contain the cell content without markers.
+    expect(ir.text).toContain("REST");
+    expect(ir.text).toContain("GraphQL");
+  });
+
   it("preserves inline styles and links in bullets mode", () => {
     const md = `
 | Name | Value |
