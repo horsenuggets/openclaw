@@ -417,6 +417,12 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     accountId,
   });
 
+  // Track unclosed inline markers across block deliveries so bold
+  // spans split by streaming boundaries render correctly. Each call
+  // to deliverDiscordReply returns the markers that were left open;
+  // the next delivery strips the matching orphaned closers.
+  let pendingMarkers: string[] = [];
+
   const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping({
     ...prefixOptions,
     humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
@@ -428,7 +434,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         typingGuard.dispose();
       }
       const replyToId = replyReference.use();
-      await deliverDiscordReply({
+      pendingMarkers = await deliverDiscordReply({
         replies: [payload],
         target: deliverTarget,
         token,
@@ -441,6 +447,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         tableMode,
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
         discordTimestamps: discordConfig?.discordTimestamps,
+        pendingMarkers,
       });
       replyReference.markSent();
     },

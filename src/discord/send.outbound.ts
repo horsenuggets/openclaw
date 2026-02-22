@@ -29,6 +29,13 @@ type DiscordSendOpts = {
   replyTo?: string;
   retry?: RetryConfig;
   embeds?: unknown[];
+  /**
+   * When true, the text is already table-converted and chunked. Skip
+   * table conversion and pass maxLines=Infinity so sendDiscordText
+   * does not re-split the content. Used by deliverDiscordReply which
+   * handles its own chunking with cross-block marker rebalancing.
+   */
+  preProcessed?: boolean;
 };
 
 export async function sendMessageDiscord(
@@ -41,13 +48,18 @@ export async function sendMessageDiscord(
     cfg,
     accountId: opts.accountId,
   });
+  const pre = opts.preProcessed === true;
   const tableMode = resolveMarkdownTableMode({
     cfg,
     channel: "discord",
     accountId: accountInfo.accountId,
   });
   const chunkMode = resolveChunkMode(cfg, "discord", accountInfo.accountId);
-  const textWithTables = convertMarkdownTables(text ?? "", tableMode);
+  const textWithTables = pre ? (text ?? "") : convertMarkdownTables(text ?? "", tableMode);
+  // When preProcessed, the caller already chunked the text. Use
+  // Infinity for maxLines so sendDiscordText treats the whole string
+  // as a single chunk and does not re-split it.
+  const maxLines = pre ? Infinity : accountInfo.config.maxLinesPerMessage;
   const { token, rest, request } = createDiscordClient(opts, cfg);
   const recipient = await parseAndResolveRecipient(to, opts.accountId);
   const { channelId } = await resolveChannelId(rest, recipient, request);
@@ -61,7 +73,7 @@ export async function sendMessageDiscord(
         opts.mediaUrl,
         opts.replyTo,
         request,
-        accountInfo.config.maxLinesPerMessage,
+        maxLines,
         opts.embeds,
         chunkMode,
       );
@@ -72,7 +84,7 @@ export async function sendMessageDiscord(
         textWithTables,
         opts.replyTo,
         request,
-        accountInfo.config.maxLinesPerMessage,
+        maxLines,
         opts.embeds,
         chunkMode,
       );
