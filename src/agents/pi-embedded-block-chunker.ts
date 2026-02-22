@@ -1,5 +1,6 @@
 import type { FenceSpan } from "../markdown/fences.js";
 import { findFenceSpanAt, isSafeFenceBreak, parseFenceSpans } from "../markdown/fences.js";
+import { STRUCTURAL_RE } from "../markdown/structural.js";
 
 export type BlockReplyChunking = {
   minChars: number;
@@ -173,6 +174,19 @@ export class EmbeddedBlockChunker {
     return true;
   }
 
+  /** Check if breaking at newlineIdx produces a next line that
+   * starts with a structural element (heading, list item, etc.). */
+  #isStructuralNewlineBreak(buffer: string, newlineIdx: number): boolean {
+    const afterNewline = newlineIdx + 1;
+    if (afterNewline >= buffer.length) {
+      return false;
+    }
+    const nextLineEnd = buffer.indexOf("\n", afterNewline);
+    const nextLine =
+      nextLineEnd === -1 ? buffer.slice(afterNewline) : buffer.slice(afterNewline, nextLineEnd);
+    return STRUCTURAL_RE.test(nextLine);
+  }
+
   #pickSoftBreakIndex(buffer: string, minCharsOverride?: number): BreakResult {
     const minChars = Math.max(1, Math.floor(minCharsOverride ?? this.#chunking.minChars));
     if (buffer.length < minChars) {
@@ -201,7 +215,22 @@ export class EmbeddedBlockChunker {
     }
 
     if (preference === "paragraph" || preference === "newline") {
+      // Pass 1: prefer newlines before structural elements (headings,
+      // list items) so we never orphan continuation text.
       let newlineIdx = buffer.indexOf("\n");
+      while (newlineIdx !== -1) {
+        if (
+          newlineIdx >= minChars &&
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          this.#isStructuralNewlineBreak(buffer, newlineIdx)
+        ) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = buffer.indexOf("\n", newlineIdx + 1);
+      }
+
+      // Pass 2: fall back to any newline.
+      newlineIdx = buffer.indexOf("\n");
       while (newlineIdx !== -1) {
         if (newlineIdx >= minChars && isSafeFenceBreak(fenceSpans, newlineIdx)) {
           return { index: newlineIdx };
@@ -261,7 +290,21 @@ export class EmbeddedBlockChunker {
     }
 
     if (preference === "paragraph" || preference === "newline") {
+      // Pass 1: prefer newlines before structural elements (headings,
+      // list items) so we never orphan continuation text.
       let newlineIdx = window.lastIndexOf("\n");
+      while (newlineIdx >= minChars) {
+        if (
+          isSafeFenceBreak(fenceSpans, newlineIdx) &&
+          this.#isStructuralNewlineBreak(buffer, newlineIdx)
+        ) {
+          return { index: newlineIdx };
+        }
+        newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
+      }
+
+      // Pass 2: fall back to any newline.
+      newlineIdx = window.lastIndexOf("\n");
       while (newlineIdx >= minChars) {
         if (isSafeFenceBreak(fenceSpans, newlineIdx)) {
           return { index: newlineIdx };
