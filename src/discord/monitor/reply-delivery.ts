@@ -1,4 +1,6 @@
 import type { RequestClient } from "@buape/carbon";
+import fs from "node:fs";
+import path from "node:path";
 import type { ChunkMode } from "../../auto-reply/chunk.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { MarkdownTableMode } from "../../config/types.base.js";
@@ -12,6 +14,17 @@ import {
 import { stripHorizontalRules } from "../markdown-strip.js";
 import { sendMessageDiscord } from "../send.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
+
+let _debugBlockIndex = 0;
+let _debugChunkIndex = 0;
+
+function debugDump(stage: string, index: number, text: string) {
+  const dir = process.env.DISCORD_DEBUG_DUMP;
+  if (!dir) return;
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${String(index).padStart(2, "0")}-${stage}.txt`);
+  fs.writeFileSync(file, text);
+}
 
 export async function deliverDiscordReply(params: {
   replies: ReplyPayload[];
@@ -50,12 +63,25 @@ export async function deliverDiscordReply(params: {
       }
     }
 
+    const blockIdx = _debugBlockIndex++;
+    debugDump("raw", blockIdx, rawText);
+
     const tableMode = params.tableMode ?? "code";
     let text = convertMarkdownTables(rawText, tableMode);
     text = stripHorizontalRules(text);
+    // Normalize stray whitespace from LLM output. Web UIs absorb
+    // these during HTML rendering but Discord shows raw whitespace.
+    // 1. Collapse 3+ newlines to a paragraph break.
+    // 2. Remove blank lines between consecutive list items
+    //    (LLMs occasionally emit \n\n between bullets).
+    text = text.replace(/\n{3,}/g, "\n\n");
+    text = text.replace(/^([ \t]*[-*][ \t]+.+)\n\n([ \t]*[-*][ \t]+)/gm, "$1\n$2");
     if (params.discordTimestamps !== false) {
       text = convertTimesToDiscordTimestamps(text);
     }
+
+    debugDump("processed", blockIdx, text);
+
     if (!text && mediaList.length === 0) {
       continue;
     }
@@ -98,6 +124,7 @@ export async function deliverDiscordReply(params: {
         if (!trimmed) {
           continue;
         }
+        debugDump("chunk", _debugChunkIndex++, trimmed);
         await sendMessageDiscord(params.target, trimmed, {
           token: params.token,
           rest: params.rest,
