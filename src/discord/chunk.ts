@@ -212,12 +212,14 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
     const charLimit = effectiveMaxChars > 0 ? effectiveMaxChars : maxChars;
     const lineLimit = effectiveMaxLines > 0 ? effectiveMaxLines : maxLines;
     const prefixLen = current.length > 0 ? current.length + 1 : 0;
-    // Inside fenced code blocks, split based on remaining space to
-    // account for closing fence reserve. Outside fences, keep lines
-    // whole to prevent mid-sentence breaks; only split lines that
-    // genuinely exceed the full chunk limit.
+    // Keep lines whole unless they genuinely exceed the chunk limit.
+    // Inside fenced code blocks, preserve whitespace when splitting
+    // so indentation and table alignment are maintained. Previously
+    // all fenced lines were pre-split at the remaining space, which
+    // cut table rows mid-cell ("Nat" / "ive") when the chunk was
+    // almost full — the flush-and-reopen logic handles that now.
     const segments =
-      wasInsideFence || originalLine.length > charLimit
+      originalLine.length > charLimit
         ? splitLongLine(originalLine, Math.max(1, charLimit - prefixLen), {
             preserveWhitespace: wasInsideFence,
           })

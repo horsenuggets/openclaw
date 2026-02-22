@@ -604,6 +604,36 @@ describe("chunkDiscordText", () => {
     }
   });
 
+  it("splits code-fenced table with proper fence close and reopen", () => {
+    // Simulate a large table already converted to a code block by
+    // convertMarkdownTables. The Discord chunker should close the
+    // fence at the split point and reopen it in the next chunk.
+    const header =
+      "| Feature          | REST              | GraphQL          | gRPC                     |";
+    const divider =
+      "| ---------------- | ----------------- | ---------------- | ------------------------ |";
+    const rows = Array.from(
+      { length: 20 },
+      (_, i) =>
+        `| Row ${String(i + 1).padEnd(13)} | ${"Value".padEnd(17)} | ${"Value".padEnd(16)} | ${"Value".padEnd(24)} |`,
+    );
+    const table = ["```", header, divider, ...rows, "```"].join("\n");
+
+    const chunks = chunkDiscordText(table, { maxChars: 800 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // Every chunk should have balanced fences.
+    for (const chunk of chunks) {
+      const fenceCount = (chunk.match(/^```/gm) || []).length;
+      expect(fenceCount % 2).toBe(0);
+    }
+
+    // All rows should be present across all chunks.
+    const all = chunks.join("\n");
+    expect(all).toContain("| Row 1");
+    expect(all).toContain("| Row 20");
+  });
+
   it("keeps non-fenced lines whole even near chunk capacity", () => {
     // Reproduce the real-world bug: accumulate ~1900 chars, then a
     // 100-char bullet line should NOT be split at the remaining ~100
