@@ -4,7 +4,11 @@ import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { MarkdownTableMode } from "../../config/types.base.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
-import { chunkDiscordTextWithMode } from "../chunk.js";
+import {
+  chunkDiscordTextWithMode,
+  findUnclosedMarkers,
+  stripOrphanedMarkerOutsideCode,
+} from "../chunk.js";
 import { stripHorizontalRules } from "../markdown-strip.js";
 import { sendMessageDiscord } from "../send.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
@@ -23,11 +27,29 @@ export async function deliverDiscordReply(params: {
   chunkMode?: ChunkMode;
   /** Convert time references to Discord timestamps. Default: true. */
   discordTimestamps?: boolean;
-}) {
+  /**
+   * Inline markers left unclosed by the previous block delivery.
+   * When block streaming splits a bold span across deliveries,
+   * the new block starts with an orphaned closer that needs to
+   * be stripped before chunking.
+   */
+  pendingMarkers?: string[];
+}): Promise<string[]> {
   const chunkLimit = Math.min(params.textLimit, 2000);
+  let unclosedMarkers: string[] = params.pendingMarkers ?? [];
+
   for (const payload of params.replies) {
     const mediaList = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-    const rawText = payload.text ?? "";
+    let rawText = payload.text ?? "";
+
+    // Strip orphaned closers left by the previous block delivery
+    // so bold spans split across streaming blocks render cleanly.
+    if (unclosedMarkers.length > 0) {
+      for (const marker of unclosedMarkers) {
+        rawText = stripOrphanedMarkerOutsideCode(rawText, marker);
+      }
+    }
+
     const tableMode = params.tableMode ?? "code";
     let text = convertMarkdownTables(rawText, tableMode);
     text = stripHorizontalRules(text);
@@ -37,6 +59,13 @@ export async function deliverDiscordReply(params: {
     if (!text && mediaList.length === 0) {
       continue;
     }
+
+    // Determine which markers are unclosed in the processed text
+    // BEFORE chunking. The rebalancer closes them within chunks,
+    // but the next block delivery needs to know about them to
+    // strip the matching orphaned closers.
+    unclosedMarkers = text ? findUnclosedMarkers(text) : [];
+
     const replyTo = params.replyToId?.trim() || undefined;
 
     if (mediaList.length === 0) {
@@ -50,6 +79,20 @@ export async function deliverDiscordReply(params: {
       if (!chunks.length && text) {
         chunks.push(text);
       }
+      // The intra-chunk rebalancer skips single-chunk arrays
+      // (nothing to rebalance against). During block streaming a
+      // single-chunk block can still have unclosed markers from a
+      // span that continues into the next block. Close them so the
+      // Discord message renders each block independently. For
+      // multi-chunk blocks the rebalancer already closes markers
+      // in the last chunk, but verify to be safe.
+      if (chunks.length > 0) {
+        const lastIdx = chunks.length - 1;
+        const lastUnclosed = findUnclosedMarkers(chunks[lastIdx]);
+        if (lastUnclosed.length > 0) {
+          chunks[lastIdx] += [...lastUnclosed].reverse().join("");
+        }
+      }
       for (const chunk of chunks) {
         const trimmed = chunk.trim();
         if (!trimmed) {
@@ -60,6 +103,7 @@ export async function deliverDiscordReply(params: {
           rest: params.rest,
           accountId: params.accountId,
           replyTo: isFirstChunk ? replyTo : undefined,
+          preProcessed: true,
         });
         isFirstChunk = false;
       }
@@ -86,4 +130,6 @@ export async function deliverDiscordReply(params: {
       });
     }
   }
+
+  return unclosedMarkers;
 }
