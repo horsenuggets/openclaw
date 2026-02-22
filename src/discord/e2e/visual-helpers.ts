@@ -5,6 +5,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 900;
+const SCROLL_STEP_RATIO = 0.5;
 const SCROLL_PAUSE_MS = 1500;
 const LOAD_WAIT_MS = 3000;
 
@@ -44,8 +45,7 @@ export async function launchDiscordBrowser(): Promise<{
   const profileDir = path.join(os.homedir(), ".openclaw", "e2e", "discord-chrome-profile");
   fs.mkdirSync(profileDir, { recursive: true });
 
-  const headless =
-    process.env.DISCORD_E2E_HEADLESS === "1" || process.env.DISCORD_E2E_HEADLESS === "true";
+  const headless = process.env.DISCORD_E2E_HEADLESS !== "0";
 
   const browser = await chromium.launch({
     channel: "chrome",
@@ -94,13 +94,14 @@ export async function saveStorageState(context: BrowserContext): Promise<void> {
  */
 export async function ensureDiscordLogin(page: Page): Promise<void> {
   await page.goto("https://discord.com/channels/@me", {
-    waitUntil: "networkidle",
-    timeout: 30_000,
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
   });
 
   // Check if already logged in by looking for the guild sidebar.
+  // Give Discord extra time to hydrate with cached cookies.
   const loggedIn = await page
-    .waitForSelector('[data-list-id="guildsnav"]', { timeout: 5000 })
+    .waitForSelector('[data-list-id="guildsnav"]', { timeout: 15_000 })
     .then(() => true)
     .catch(() => false);
 
@@ -177,8 +178,30 @@ export async function captureChannelScreenshots(
     // class — continue anyway and capture whatever is visible.
   });
 
-  // Scroll to the top of the message scroller.
-  const scrollerSel = '[class*="scroller"][class*="messages"]';
+  // Try multiple selectors for the Discord message scroller.
+  const scrollerCandidates = [
+    '[class*="scroller"][class*="messages"]',
+    'main [class*="scroller"]',
+    '[class*="chatContent"] [class*="scroller"]',
+  ];
+  let scrollerSel = scrollerCandidates[0];
+  for (const sel of scrollerCandidates) {
+    const found = await page.$(sel);
+    if (found) {
+      scrollerSel = sel;
+      break;
+    }
+  }
+
+  // Scroll to the bottom first (newest messages), then capture
+  // from the top for full coverage.
+  await page.evaluate((sel: string) => {
+    const el = document.querySelector(sel);
+    if (el) el.scrollTop = el.scrollHeight;
+  }, scrollerSel);
+  await page.waitForTimeout(SCROLL_PAUSE_MS);
+
+  // Now scroll to the very top.
   await page.evaluate((sel: string) => {
     const el = document.querySelector(sel);
     if (el) el.scrollTop = 0;
@@ -198,9 +221,11 @@ export async function captureChannelScreenshots(
     });
     files.push(filepath);
 
-    // Scroll down by 80% of viewport.
+    // Scroll down by SCROLL_STEP_RATIO of viewport for good
+    // overlap between consecutive screenshots.
+    const scrollAmount = Math.floor(VIEWPORT_HEIGHT * SCROLL_STEP_RATIO);
     const scrollInfo = await page.evaluate(
-      (sel: string, amount: number) => {
+      ({ sel, amount }: { sel: string; amount: number }) => {
         const el = document.querySelector(sel);
         if (!el) return { scrollTop: 0, scrollHeight: 0, clientHeight: 0 };
         el.scrollTop += amount;
@@ -210,8 +235,7 @@ export async function captureChannelScreenshots(
           clientHeight: el.clientHeight,
         };
       },
-      scrollerSel,
-      Math.floor(VIEWPORT_HEIGHT * 0.8),
+      { sel: scrollerSel, amount: scrollAmount },
     );
 
     if (scrollInfo.scrollTop === lastScrollTop) {

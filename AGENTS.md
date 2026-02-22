@@ -107,6 +107,15 @@
      `LIVE=1 npx vitest run --config vitest.e2e.config.ts src/discord/e2e/<file>`.
      Use `-t "test name"` to run a single test.
   4. After testing, always run `pnpm gateway:killall`.
+- **Visual E2E verify cycle** (formatting/chunking changes):
+  1. `pnpm build`
+  2. `node dist/entry.js gateway --force &`
+  3. `LIVE=1 npx vitest run --config vitest.e2e.config.ts src/discord/e2e/visual-formatting.e2e.test.ts`
+  4. Review every screenshot in `src/discord/e2e/screenshots/`
+     — check for orphaned continuation text, broken bold spans,
+     mid-sentence splits, and formatting discontinuities.
+  5. `pnpm gateway:killall`
+  6. Fix issues and repeat from step 1 until zero errors.
 
 ## Commit & Pull Request Guidelines
 

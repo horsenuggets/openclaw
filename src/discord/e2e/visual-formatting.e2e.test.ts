@@ -222,6 +222,19 @@ describeLive("Discord visual formatting verification", () => {
     }
 
     if (failures.length > 0) {
+      // Print full content of failing messages for debugging.
+      for (const event of creates) {
+        const content = event.content ?? "";
+        if (!content.trim()) continue;
+        for (const marker of INLINE_MARKERS) {
+          if (!hasBalancedInlineMarkers(content, marker)) {
+            console.log(`\n=== UNBALANCED "${marker}" in ${event.messageId} ===`);
+            console.log(content);
+            console.log("=== END ===\n");
+            break;
+          }
+        }
+      }
       throw new Error("Found messages with broken inline formatting:\n" + failures.join("\n"));
     }
 
