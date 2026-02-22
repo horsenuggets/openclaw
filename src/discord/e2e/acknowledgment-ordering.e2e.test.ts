@@ -1,10 +1,7 @@
 import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
-import { randomBytes } from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
+import { type MessageEvent, e2eChannelName, resolveTestBotToken } from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
@@ -15,36 +12,11 @@ const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133"
 // Guild where the E2E tester bot can create channels.
 const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
 
-function resolveTestBotToken(): string {
-  if (process.env.DISCORD_E2E_BOT_TOKEN) {
-    return process.env.DISCORD_E2E_BOT_TOKEN;
-  }
-  const keyPath = path.join(os.homedir(), ".keys", "discord-e2e-bot-token");
-  try {
-    return fs.readFileSync(keyPath, "utf-8").trim();
-  } catch {
-    throw new Error(
-      `Discord E2E bot token not found. Set DISCORD_E2E_BOT_TOKEN or ` +
-        `create ${keyPath} with the token.`,
-    );
-  }
-}
-
-type MessageEvent = {
-  type: "create" | "update" | "delete";
-  messageId: string;
-  content?: string;
-  timestamp: number;
-};
-
 describeLive("Discord acknowledgment ordering", () => {
   let client: Client;
   let channelId: string;
   let events: MessageEvent[];
-  const nonce = randomBytes(4).toString("hex");
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const channelName = `e2e-ack-${today}-${nonce}`;
+  const channelName = e2eChannelName();
 
   beforeAll(async () => {
     const token = resolveTestBotToken();
@@ -112,7 +84,7 @@ describeLive("Discord acknowledgment ordering", () => {
           if (!ch) {
             continue;
           }
-          const match = ch.name.match(/^e2e-ack-(\d{4}-\d{2}-\d{2})-/);
+          const match = ch.name.match(/^e2e-(\d{4}-\d{2}-\d{2})-/);
           if (!match) {
             continue;
           }
