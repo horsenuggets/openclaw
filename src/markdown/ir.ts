@@ -73,8 +73,9 @@ type TableState = {
 
 type RenderState = RenderTarget & {
   env: RenderEnv;
-  headingStyle: "none" | "bold";
+  headingStyle: "none" | "bold" | "atx";
   blockquotePrefix: string;
+  bulletPrefix: string;
   enableSpoilers: boolean;
   tableMode: MarkdownTableMode;
   table: TableState | null;
@@ -84,8 +85,10 @@ type RenderState = RenderTarget & {
 export type MarkdownParseOptions = {
   linkify?: boolean;
   enableSpoilers?: boolean;
-  headingStyle?: "none" | "bold";
+  headingStyle?: "none" | "bold" | "atx";
   blockquotePrefix?: string;
+  /** Prefix for unordered list items. Default: "• ". */
+  bulletPrefix?: string;
   autolink?: boolean;
   /** How to render tables (off|bullets|code). Default: off. */
   tableMode?: MarkdownTableMode;
@@ -235,7 +238,7 @@ function appendListPrefix(state: RenderState) {
   }
   top.index += 1;
   const indent = "  ".repeat(Math.max(0, stack.length - 1));
-  const prefix = top.type === "ordered" ? `${top.index}. ` : "• ";
+  const prefix = top.type === "ordered" ? `${top.index}. ` : state.bulletPrefix;
   state.text += `${indent}${prefix}`;
 }
 
@@ -569,6 +572,8 @@ function renderTokens(tokens: MarkdownToken[], state: RenderState): void {
       case "heading_open":
         if (state.headingStyle === "bold") {
           openStyle(state, "bold");
+        } else if (state.headingStyle === "atx" && token.markup) {
+          state.text += `${token.markup} `;
         }
         break;
       case "heading_close":
@@ -815,6 +820,7 @@ export function markdownToIRWithMeta(
     env,
     headingStyle: options.headingStyle ?? "none",
     blockquotePrefix: options.blockquotePrefix ?? "",
+    bulletPrefix: options.bulletPrefix ?? "• ",
     enableSpoilers: options.enableSpoilers ?? false,
     tableMode,
     table: null,
