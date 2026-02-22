@@ -176,7 +176,7 @@ function formatGroupedFeedback(groups: GroupedTool[]): string {
  * code blocks for a clean user experience.
  */
 export function createUnifiedToolFeedback(params: {
-  onUpdate: (text: string) => void;
+  onUpdate: (text: string, toolCallIds?: string[]) => void;
   config?: UnifiedToolFeedbackConfig;
 }): {
   push: (tool: { toolName: string; toolCallId: string; input?: Record<string, unknown> }) => void;
@@ -228,7 +228,8 @@ export function createUnifiedToolFeedback(params: {
 
       if (feedback && !disposed) {
         lastEmitTime = Date.now();
-        params.onUpdate(feedback);
+        const ids = batch.map((t) => t.toolCallId);
+        params.onUpdate(feedback, ids);
       }
     } catch (err) {
       log.warn(`tool-feedback: flush failed: ${String(err)}`);

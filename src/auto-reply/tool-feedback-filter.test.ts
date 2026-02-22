@@ -264,6 +264,43 @@ describe("createUnifiedToolFeedback", () => {
     filter.dispose();
   });
 
+  it("passes flushed tool call IDs to onUpdate", () => {
+    const onUpdate = vi.fn();
+    const filter = createUnifiedToolFeedback({
+      onUpdate,
+      config: { bufferMs: 500, cooldownMs: 0 },
+    });
+
+    filter.push({ toolName: "Read", toolCallId: "call-a", input: { file_path: "/a.ts" } });
+    filter.push({ toolName: "Bash", toolCallId: "call-b", input: { command: "ls" } });
+
+    vi.advanceTimersByTime(600);
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const ids = onUpdate.mock.calls[0][1] as string[];
+    expect(ids).toEqual(["call-a", "call-b"]);
+    filter.dispose();
+  });
+
+  it("excludes removed tool call IDs from flush", () => {
+    const onUpdate = vi.fn();
+    const filter = createUnifiedToolFeedback({
+      onUpdate,
+      config: { bufferMs: 500, cooldownMs: 0 },
+    });
+
+    filter.push({ toolName: "Read", toolCallId: "call-a" });
+    filter.push({ toolName: "Bash", toolCallId: "call-b" });
+    filter.removeToolCall("call-a");
+
+    vi.advanceTimersByTime(600);
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const ids = onUpdate.mock.calls[0][1] as string[];
+    expect(ids).toEqual(["call-b"]);
+    filter.dispose();
+  });
+
   it("strips env var exports from Bash base command", () => {
     const onUpdate = vi.fn();
     const filter = createUnifiedToolFeedback({
