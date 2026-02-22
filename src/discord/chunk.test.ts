@@ -25,7 +25,98 @@ function hasBalancedFences(chunk: string) {
 }
 
 describe("chunkDiscordText", () => {
-  it("splits tall messages even when under 2000 chars", () => {
+  it("does not split tall messages under 2000 chars by default", () => {
+    const text = Array.from({ length: 45 }, (_, i) => `line-${i + 1}`).join("\n");
+    expect(text.length).toBeLessThan(2000);
+
+    const chunks = chunkDiscordText(text, { maxChars: 2000 });
+    expect(chunks).toHaveLength(1);
+  });
+
+  it("prefers paragraph boundaries over mid-paragraph line splits", () => {
+    // Build a text with two paragraphs separated by a blank line.
+    // The split should happen at the paragraph boundary, not
+    // mid-paragraph (e.g. splitting "data in one" / "round trip").
+    const para1Lines = Array.from(
+      { length: 10 },
+      (_, i) => `First paragraph line ${i + 1} with some padding text here.`,
+    );
+    const para2Lines = Array.from(
+      { length: 10 },
+      (_, i) => `Second paragraph line ${i + 1} with some padding text here.`,
+    );
+    const text = [...para1Lines, "", ...para2Lines].join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 400 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // First chunk should end with content from paragraph 1 (not
+    // bleed into paragraph 2).
+    expect(chunks[0]).toContain("First paragraph");
+    expect(chunks[0]).not.toContain("Second paragraph");
+  });
+
+  it("prefers splitting between list items over mid-item", () => {
+    // A long list without blank lines. The chunker should split
+    // between list items, not in the middle of a list item's text.
+    const items = [
+      "- **Universal compatibility**: Works everywhere HTTP works",
+      "- **Simple to understand**: Intuitive resource-based model",
+      "- **HTTP caching**: Leverage browser and CDN caching out of the box",
+      "- **Stateless**: Easy to scale horizontally",
+      "- **Tooling**: Excellent debugging tools (browser DevTools, Postman, curl)",
+      "- **Documentation standards**: OpenAPI/Swagger for standardized docs",
+    ];
+    const text = items.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 200, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // Each chunk should start with a list item marker, not a
+    // continuation line.
+    for (const chunk of chunks) {
+      const firstLine = chunk.trimStart().split("\n")[0];
+      expect(firstLine).toMatch(/^- /);
+    }
+  });
+
+  it("prefers splitting before headings", () => {
+    const text = [
+      "### REST",
+      "REST is a simple architecture.",
+      "It uses HTTP methods.",
+      "Very popular for web APIs.",
+      "",
+      "### GraphQL",
+      "GraphQL lets clients request exactly what they need.",
+      "Reduces over-fetching.",
+    ].join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 130, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // The split should happen at or before the "### GraphQL" heading.
+    expect(chunks[0]).toContain("### REST");
+    expect(chunks[0]).not.toContain("### GraphQL");
+  });
+
+  it("falls back to line split when no paragraph boundary exists", () => {
+    // One massive paragraph with no blank lines.
+    const text = Array.from(
+      { length: 20 },
+      (_, i) => `Continuous line ${i + 1} without any paragraph break.`,
+    ).join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 300 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // All content should be present across chunks.
+    const joined = chunks.join("\n");
+    expect(joined).toContain("Continuous line 1");
+    expect(joined).toContain("Continuous line 20");
+  });
+
+  it("splits tall messages when maxLines is explicitly set", () => {
     const text = Array.from({ length: 45 }, (_, i) => `line-${i + 1}`).join("\n");
     expect(text.length).toBeLessThan(2000);
 
@@ -274,6 +365,161 @@ describe("chunkDiscordText", () => {
       const boldCount = (chunk.match(/\*\*/g) || []).length;
       expect(boldCount % 2).toBe(0);
     }
+  });
+
+  it("does not garble bold in list items after cross-boundary close", () => {
+    // When bold opens in one chunk and the next chunk has its own
+    // independent bold list items (- **term**: description), the
+    // rebalancer must not prepend ** that pairs with the wrong
+    // marker, garbling formatting.
+    const lines = [
+      "- **Universal compatibility**: Works everywhere",
+      "- **Simple to understand**: Intuitive model",
+      "- **HTTP caching**: Leverage browser caching",
+      "- **Stateless**: Easy to scale",
+      "- **Tooling**: Excellent debugging tools",
+      "- **Documentation standards**: OpenAPI",
+      "",
+      "### Disadvantages",
+      "- **Over-fetching**: Fixed endpoints return more data",
+      "- **Under-fetching**: Multiple requests needed",
+      "- **Versioning**: Breaking changes require new versions",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 250, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // No chunk should have literal ** visible (all markers balanced).
+    for (const chunk of chunks) {
+      const withoutCode = chunk.replace(/`[^`]*`/g, "");
+      const boldCount = (withoutCode.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+
+    // Each list item's bold term should remain intact (not garbled).
+    const all = chunks.join("\n");
+    expect(all).toContain("**Universal compatibility**");
+    expect(all).toContain("**Simple to understand**");
+  });
+
+  it("does not prepend markers before fence openers at chunk start", () => {
+    // Bold spans across a chunk boundary where the next chunk
+    // starts with a code fence. Markers must be inserted after
+    // the fenced block, not before the opener.
+    const lines = [
+      "**Bold text that starts here",
+      "and continues for several lines.",
+      "More bold content padding here.",
+      "",
+      "```graphql",
+      "query { user { name } }",
+      "```",
+      "",
+      "Still bold text.**",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 80, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // No chunk should start with ** immediately followed by ```.
+    for (const chunk of chunks) {
+      const firstLine = chunk.split("\n")[0];
+      expect(firstLine).not.toMatch(/^\*\*`{3}/);
+    }
+
+    // Every chunk that starts with a fence should have the fence as
+    // the actual first line (not preceded by formatting markers).
+    for (const chunk of chunks) {
+      const firstLine = chunk.split("\n")[0];
+      if (firstLine.includes("```")) {
+        expect(firstLine).toMatch(/^`{3}/);
+      }
+    }
+  });
+
+  it("strips orphaned closer after self-contained bold pairs", () => {
+    // When bold opens in chunk N and the closer lands after
+    // independent **term**: desc pairs in chunk N+1, the rebalancer
+    // must strip the orphaned closer, not the opener of a
+    // self-contained pair.
+    const lines = [
+      "Some text **bold that spans across",
+      "- **File uploads**: Not natively supported",
+      "- **Real-time streaming**: Requires workarounds",
+      "the chunk boundary**",
+      "Normal text.",
+      "Extra padding.",
+      "More padding.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 120, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+
+    // The self-contained bold pairs should survive intact.
+    const all = chunks.join("\n");
+    expect(all).toContain("**File uploads**");
+    expect(all).toContain("**Real-time streaming**");
+  });
+
+  it("strips orphaned closer before self-contained bold pairs", () => {
+    // Orphaned closer at the start of the chunk, followed by
+    // independent bold pairs. Strip-first should still work here.
+    const lines = [
+      "**Bold that spans across",
+      "boundary text**. Then:",
+      "- **Over-engineering**: overkill for simple APIs",
+      "- **Backend complexity**: resolvers and N+1 queries",
+      "More text.",
+      "Extra padding.",
+      "More padding.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 100, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+
+    const all = chunks.join("\n");
+    expect(all).toContain("**Over-engineering**");
+    expect(all).toContain("**Backend complexity**");
+  });
+
+  it("strips orphaned closer between self-contained bold pairs", () => {
+    // Orphan sits between two independent bold pairs.
+    const lines = [
+      "**Bold span that opens here",
+      "- **Term A**: description of A",
+      "the orphan closer lands here**",
+      "- **Term B**: description of B",
+      "More padding text for length.",
+      "Extra padding.",
+      "More padding.",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 120, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const boldCount = (chunk.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+
+    const all = chunks.join("\n");
+    expect(all).toContain("**Term A**");
+    expect(all).toContain("**Term B**");
   });
 
   it("reopens italics while preserving leading whitespace on following chunk", () => {

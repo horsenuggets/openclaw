@@ -5,10 +5,8 @@ export type ChunkDiscordTextOpts = {
   /** Max characters per Discord message. Default: 2000. */
   maxChars?: number;
   /**
-   * Soft max line count per message. Default: 17.
-   *
-   * Discord clients can clip/collapse very tall messages in the UI; splitting
-   * by lines keeps long multi-paragraph replies readable.
+   * Soft max line count per message. Disabled by default (no line-based
+   * splitting). Set explicitly to enable line-based chunking.
    */
   maxLines?: number;
 };
@@ -21,8 +19,15 @@ type OpenFence = {
 };
 
 const DEFAULT_MAX_CHARS = 2000;
-const DEFAULT_MAX_LINES = 17;
 const FENCE_RE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+
+// Lines that represent structural boundaries — splitting before
+// these is preferred over splitting mid-paragraph.
+const STRUCTURAL_RE = /^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)/;
+
+function isStructuralBoundary(line: string): boolean {
+  return STRUCTURAL_RE.test(line);
+}
 
 function countLines(text: string) {
   if (!text) {
@@ -108,7 +113,7 @@ function splitLongLine(
  */
 export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}): string[] {
   const maxChars = Math.max(1, Math.floor(opts.maxChars ?? DEFAULT_MAX_CHARS));
-  const maxLines = Math.max(1, Math.floor(opts.maxLines ?? DEFAULT_MAX_LINES));
+  const maxLines = opts.maxLines != null ? Math.max(1, Math.floor(opts.maxLines)) : Infinity;
 
   const body = text ?? "";
   if (!body) {
@@ -127,10 +132,57 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
   let currentLines = 0;
   let openFence: OpenFence | null = null;
 
+  // Position in `current` right after the last blank line (paragraph
+  // boundary) that was added outside a fenced code block. Used to
+  // prefer paragraph-level splits over mid-paragraph line splits.
+  let lastParaBreakEnd = -1;
+
+  // Position in `current` right before the last structural boundary
+  // (list item, heading) outside a fenced code block. Used to prefer
+  // splitting between list items or before headings over arbitrary
+  // line breaks.
+  let lastStructuralBoundary = -1;
+
   const flush = () => {
     if (!current) {
       return;
     }
+
+    // When outside fenced blocks and a paragraph boundary exists at a
+    // reasonable position, split there so messages never break
+    // mid-paragraph (e.g. splitting "data in one" / "round trip").
+    if (!openFence && lastParaBreakEnd >= maxChars * 0.3) {
+      const chunkContent = current.slice(0, lastParaBreakEnd).trimEnd();
+      const remainder = current.slice(lastParaBreakEnd).replace(/^\n+/, "");
+
+      if (chunkContent.trim().length) {
+        chunks.push(chunkContent);
+      }
+
+      current = remainder;
+      currentLines = remainder ? countLines(remainder) : 0;
+      lastParaBreakEnd = -1;
+      lastStructuralBoundary = -1;
+      return;
+    }
+
+    // Fall back to structural boundary (before a list item or
+    // heading) so we don't split mid-list-item or mid-sentence.
+    if (!openFence && lastStructuralBoundary >= maxChars * 0.2) {
+      const chunkContent = current.slice(0, lastStructuralBoundary).trimEnd();
+      const remainder = current.slice(lastStructuralBoundary).replace(/^\n+/, "");
+
+      if (chunkContent.trim().length) {
+        chunks.push(chunkContent);
+      }
+
+      current = remainder;
+      currentLines = remainder ? countLines(remainder) : 0;
+      lastParaBreakEnd = -1;
+      lastStructuralBoundary = -1;
+      return;
+    }
+
     const payload = closeFenceIfNeeded(current, openFence);
     if (payload.trim().length) {
       chunks.push(payload);
@@ -141,6 +193,8 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
       current = openFence.openLine;
       currentLines = 1;
     }
+    lastParaBreakEnd = -1;
+    lastStructuralBoundary = -1;
   };
 
   for (const originalLine of lines) {
@@ -193,6 +247,23 @@ export function chunkDiscordText(text: string, opts: ChunkDiscordTextOpts = {}):
       } else {
         current = segment;
         currentLines = 1;
+      }
+    }
+
+    // Track paragraph boundaries (blank lines outside fenced blocks)
+    // so we can prefer splitting there over mid-paragraph breaks.
+    if (!wasInsideFence && originalLine.trim() === "" && current.length > 0) {
+      lastParaBreakEnd = current.length;
+    }
+
+    // Track structural boundaries (list items, headings) outside
+    // fenced blocks so we can prefer splitting between structural
+    // elements over mid-list-item or mid-sentence breaks.
+    if (!wasInsideFence && current.length > 0 && isStructuralBoundary(originalLine)) {
+      // Position right before the newline that precedes this line.
+      const posBeforeLine = current.length - originalLine.length - 1;
+      if (posBeforeLine > 0) {
+        lastStructuralBoundary = posBeforeLine;
       }
     }
 
@@ -337,8 +408,12 @@ function findUnclosedMarkers(text: string): InlineMarker[] {
   return INLINE_MARKERS.filter((m) => parity[m] % 2 !== 0);
 }
 
-// Close and reopen unclosed inline formatting markers at chunk
-// boundaries so Discord renders each chunk independently.
+// Close unclosed inline formatting markers at chunk boundaries so
+// Discord renders each chunk independently. Instead of blindly
+// reopening markers at the next chunk's start (which can pair with
+// the wrong marker and garble formatting), we close in the current
+// chunk and strip the orphaned closing marker from the next chunk
+// when its parity confirms it has one.
 function rebalanceInlineFormatting(chunks: string[]): string[] {
   if (chunks.length <= 1) {
     return chunks;
@@ -352,13 +427,139 @@ function rebalanceInlineFormatting(chunks: string[]): string[] {
       continue;
     }
 
-    // Close unclosed markers at end of chunk (reverse order for
-    // correct nesting — inner markers close first).
-    adjusted[i] += [...unclosed].reverse().join("");
+    // Close unclosed markers at end of chunk. Append before any
+    // trailing fence closer so markers don't leak into code blocks.
+    const closeMarkers = [...unclosed].reverse().join("");
+    const closerInsertPos = findTrailingFenceCloserPos(adjusted[i]);
+    if (closerInsertPos >= 0) {
+      adjusted[i] =
+        adjusted[i].slice(0, closerInsertPos) + closeMarkers + adjusted[i].slice(closerInsertPos);
+    } else {
+      adjusted[i] += closeMarkers;
+    }
 
-    // Reopen at start of next chunk (original order).
-    adjusted[i + 1] = unclosed.join("") + adjusted[i + 1];
+    // Strip orphaned closing markers from subsequent chunks. The
+    // orphaned closer may be in the immediately next chunk or further
+    // ahead (when a span crosses 3+ chunks). Scan forward until we
+    // find a chunk with odd parity for the same marker, then strip
+    // the first occurrence of that marker.
+    for (const marker of unclosed) {
+      for (let j = i + 1; j < adjusted.length; j++) {
+        const laterUnclosed = findUnclosedMarkers(adjusted[j]);
+        if (!laterUnclosed.includes(marker)) {
+          continue;
+        }
+        adjusted[j] = stripOrphanedMarkerOutsideCode(adjusted[j], marker);
+        break;
+      }
+    }
   }
 
   return adjusted;
+}
+
+// Find all positions of a 2-char marker outside fenced code blocks
+// and inline code spans. Returns an array of character offsets where
+// each occurrence starts.
+function findAllMarkerPositionsOutsideCode(text: string, marker: string): number[] {
+  const positions: number[] = [];
+  const fenceSpans = parseFenceSpans(text);
+  let inInlineCode = false;
+  let i = 0;
+
+  while (i < text.length) {
+    if (!inInlineCode) {
+      const fence = fenceSpans.find((s) => i >= s.start && i < s.end);
+      if (fence) {
+        i = fence.end;
+        continue;
+      }
+    }
+
+    const ch = text[i];
+    if (ch === "`") {
+      inInlineCode = !inInlineCode;
+      i++;
+      continue;
+    }
+    if (inInlineCode) {
+      i++;
+      continue;
+    }
+
+    if (i + 1 < text.length && text[i] === marker[0] && text[i + 1] === marker[1]) {
+      positions.push(i);
+      i += 2;
+      continue;
+    }
+
+    i++;
+  }
+
+  return positions;
+}
+
+// Strip the orphaned occurrence of a 2-char marker from a chunk.
+// Unlike stripping the first occurrence blindly, this uses greedy
+// pairing to identify self-contained spans (e.g. **term**: desc)
+// and strips the marker that is left unpaired. This prevents
+// accidentally breaking independent bold pairs when the orphaned
+// closer appears after them in the chunk.
+function stripOrphanedMarkerOutsideCode(text: string, marker: string): string {
+  const positions = findAllMarkerPositionsOutsideCode(text, marker);
+  if (positions.length === 0 || positions.length % 2 === 0) {
+    return text;
+  }
+
+  // Greedily pair consecutive markers. Two adjacent markers form a
+  // "self-contained pair" if the text between them is on a single
+  // line and reasonably short (typical **term**: description pattern).
+  const paired = new Set<number>();
+  for (let idx = 0; idx < positions.length; idx++) {
+    if (paired.has(idx)) continue;
+
+    // Find the next unpaired marker.
+    let next = idx + 1;
+    while (next < positions.length && paired.has(next)) next++;
+    if (next >= positions.length) break;
+
+    const span = text.slice(positions[idx] + marker.length, positions[next]);
+    if (!span.includes("\n") && span.length > 0 && span.length < 200) {
+      paired.add(idx);
+      paired.add(next);
+    }
+  }
+
+  // The first unpaired marker is the orphan.
+  for (let idx = 0; idx < positions.length; idx++) {
+    if (!paired.has(idx)) {
+      const pos = positions[idx];
+      return text.slice(0, pos) + text.slice(pos + marker.length);
+    }
+  }
+
+  // Fallback: strip the last marker (all appeared paired, which
+  // shouldn't happen with odd count, but be safe).
+  const last = positions[positions.length - 1];
+  return text.slice(0, last) + text.slice(last + marker.length);
+}
+
+// Find the position of a trailing fence closer line (e.g. ```) at
+// the end of a chunk, so we can insert closing markers before it
+// rather than after. Returns -1 if the chunk doesn't end with a
+// fence closer.
+function findTrailingFenceCloserPos(text: string): number {
+  const lastNewline = text.lastIndexOf("\n");
+  if (lastNewline === -1) {
+    return -1;
+  }
+  const lastLine = text.slice(lastNewline + 1);
+  if (!FENCE_RE.test(lastLine)) {
+    return -1;
+  }
+  // Verify this is actually a closer (not an opener) by checking
+  // that the fence spans show a span ending at or near the end.
+  const spans = parseFenceSpans(text);
+  const endsAtFence = spans.some((s) => s.end >= lastNewline + 1 && s.end <= text.length);
+  return endsAtFence ? lastNewline : -1;
 }
