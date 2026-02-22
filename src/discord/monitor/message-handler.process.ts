@@ -41,7 +41,12 @@ import { resolveThreadSessionKeys } from "../../routing/session-key.js";
 import { buildUntrustedChannelMetadata } from "../../security/channel-metadata.js";
 import { truncateUtf16Safe } from "../../utils.js";
 import { getActiveJobForUser, createJob, updateJob, appendJobEvent } from "../jobs/store.js";
-import { reactMessageDiscord, removeReactionDiscord, sendMessageDiscord } from "../send.js";
+import {
+  editMessageDiscord,
+  reactMessageDiscord,
+  removeReactionDiscord,
+  sendMessageDiscord,
+} from "../send.js";
 import { normalizeDiscordSlug, resolveDiscordOwnerAllowFrom } from "./allow-list.js";
 import { resolveTimestampMs } from "./format.js";
 import { startJobClassification, type JobClassificationController } from "./job-classifier.js";
@@ -483,12 +488,13 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
   // Status messages: periodic tool feedback and thinking updates sent
   // throughout a long task. Rate-limited with a cooldown to avoid
-  // flooding the channel. Messages are never edited or deleted.
-  // Tool result blocks (rich output previews) bypass the cooldown
-  // because they contain substantive content the user needs to see.
-  // When a send is in flight, result blocks are queued and flushed
-  // after the current send completes.
+  // flooding the channel. Tool result blocks edit the original status
+  // message in-place so each tool's lifecycle stays in one message.
+  // When editing would exceed Discord's 2000-char limit, results fall
+  // back to a new message. Non-tool status updates (smart-status
+  // thinking excerpts) still send as new messages.
   const STATUS_COOLDOWN_MS = 10_000;
+  const DISCORD_MAX_CONTENT = 2000;
   let lastStatusSendTime = 0;
   let sendingStatus = false;
   const pendingResultBlocks: string[] = [];
@@ -496,13 +502,74 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   let blockFlushPromise: Promise<void> | null = null;
 
   const doSendStatus = async (text: string) => {
-    await sendMessageDiscord(deliverTarget, text, {
+    const result = await sendMessageDiscord(deliverTarget, text, {
       token,
       accountId,
       rest: client.rest,
     });
     lastStatusSendTime = Date.now();
     typingGuard.reinforce();
+    return result;
+  };
+
+  // Track status messages so tool results can edit them in-place.
+  // Multiple tool calls in the same batch share one ref.
+  type StatusMessageRef = {
+    sendPromise: Promise<{ messageId: string; channelId: string } | null>;
+    content: string;
+    editChain: Promise<void>;
+  };
+  const toolCallStatusRefs = new Map<string, StatusMessageRef>();
+
+  // Edit a tracked status message to append a tool result block.
+  // Returns true if the edit succeeded, false if the caller should
+  // fall back to sending a new message.
+  const editStatusWithResult = async (
+    toolCallId: string,
+    resultBlock: string,
+  ): Promise<boolean> => {
+    const ref = toolCallStatusRefs.get(toolCallId);
+    if (!ref) return false;
+
+    const msg = await ref.sendPromise;
+    if (!msg) {
+      toolCallStatusRefs.delete(toolCallId);
+      return false;
+    }
+
+    // Replace the status line entirely with the result block,
+    // which already has its own header (e.g. *Bash* (...)).
+    const newContent = resultBlock;
+    if (newContent.length > DISCORD_MAX_CONTENT) {
+      toolCallStatusRefs.delete(toolCallId);
+      return false;
+    }
+
+    // Update content before chaining so subsequent edits see the
+    // latest state when computing their newContent.
+    ref.content = newContent;
+
+    // Chain the edit onto previous edits for the same message
+    // to avoid race conditions from concurrent tool results.
+    // Capture newContent in the closure so each edit sends the
+    // content that was current when it was queued.
+    const captured = newContent;
+    ref.editChain = ref.editChain.then(async () => {
+      try {
+        await editMessageDiscord(
+          msg.channelId,
+          msg.messageId,
+          {
+            content: captured,
+          },
+          { rest: client.rest },
+        );
+      } catch (err) {
+        logVerbose(`discord: status message edit failed: ${String(err)}`);
+      }
+    });
+    toolCallStatusRefs.delete(toolCallId);
+    return true;
   };
 
   const flushPendingResults = async () => {
@@ -560,8 +627,31 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const toolFeedbackEnabled = discordConfig?.toolFeedback !== false;
   const unifiedToolFeedback = toolFeedbackEnabled
     ? createUnifiedToolFeedback({
-        onUpdate: (feedbackText) => {
-          void sendStatusMessage(feedbackText);
+        onUpdate: (feedbackText, toolCallIds) => {
+          const sendPromise = (async () => {
+            try {
+              // Wait for any in-progress block flush first.
+              if (blockFlushPromise) await blockFlushPromise;
+              await dispatcher.waitForIdle();
+              return await doSendStatus(feedbackText);
+            } catch (err) {
+              logVerbose(`discord: tool feedback send failed: ${String(err)}`);
+              return null;
+            }
+          })();
+
+          // Associate each tool call ID with this status message
+          // so results can edit it in-place.
+          if (toolCallIds?.length) {
+            const ref: StatusMessageRef = {
+              sendPromise,
+              content: feedbackText,
+              editChain: Promise.resolve(),
+            };
+            for (const id of toolCallIds) {
+              toolCallStatusRefs.set(id, ref);
+            }
+          }
         },
       })
     : null;
@@ -834,7 +924,20 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
                 },
                 toolStartInputs.get(event.toolCallId),
               );
-              void sendStatusMessage(block, { bypassCooldown: true });
+              // Try to edit the original status message in-place
+              // so the tool's lifecycle stays in one message.
+              // Falls back to a new message if the edit would
+              // exceed Discord's character limit or no status
+              // message was sent for this tool call.
+              const tryEdit = async () => {
+                const edited = await editStatusWithResult(event.toolCallId, block);
+                if (!edited) {
+                  await sendStatusMessage(block, {
+                    bypassCooldown: true,
+                  });
+                }
+              };
+              void tryEdit();
               // Clean up tracked input.
               toolStartInputs.delete(event.toolCallId);
             }
