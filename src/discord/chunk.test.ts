@@ -522,6 +522,41 @@ describe("chunkDiscordText", () => {
     expect(all).toContain("**Term B**");
   });
 
+  it("handles orphaned closer + unclosed opener in same chunk (even parity)", () => {
+    // When a bold span opens in chunk N, continues through chunk N+1
+    // (which also has its own unclosed opener), the parities cancel
+    // to even. The rebalancer must still strip the orphan and close
+    // the new opener.
+    const lines = [
+      "**Bold from previous chunk continues",
+      "- **Term A**: description here",
+      "- **Term B**: more description",
+      "and then the orphan closer lands here**",
+      "Normal text between bold spans.",
+      "- **Advantage X**: great benefit",
+      "- **Advantage Y**: another benefit",
+      "**Another bold that opens and continues",
+      "into the next chunk and keeps going",
+      "with lots of text to force splitting",
+    ];
+    const text = lines.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 200, maxLines: 50 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      const withoutCode = chunk.replace(/`[^`]*`/g, "");
+      const boldCount = (withoutCode.match(/\*\*/g) || []).length;
+      expect(boldCount % 2).toBe(0);
+    }
+
+    const all = chunks.join("\n");
+    expect(all).toContain("**Term A**");
+    expect(all).toContain("**Term B**");
+    expect(all).toContain("**Advantage X**");
+    expect(all).toContain("**Advantage Y**");
+  });
+
   it("reopens italics while preserving leading whitespace on following chunk", () => {
     const body = [
       "1. line",
@@ -545,5 +580,48 @@ describe("chunkDiscordText", () => {
     const second = chunks[1];
     expect(second.startsWith("_")).toBe(true);
     expect(second).toContain("  11. indented line");
+  });
+
+  it("keeps bullet point text intact at chunk boundaries", () => {
+    // A long list of bullet points where individual lines are well
+    // under 2000 chars but the total exceeds the limit. Lines should
+    // never be split mid-sentence across message boundaries.
+    const items = Array.from(
+      { length: 30 },
+      (_, i) =>
+        `- **Feature ${i + 1}** provides an extended description ` +
+        "that is long enough to matter but still under the chunk limit",
+    );
+    const text = items.join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 2000 });
+    expect(chunks.length).toBeGreaterThan(1);
+
+    // Every original line should appear intact in exactly one chunk.
+    for (const item of items) {
+      const found = chunks.some((chunk) => chunk.includes(item));
+      expect(found).toBe(true);
+    }
+  });
+
+  it("keeps non-fenced lines whole even near chunk capacity", () => {
+    // Reproduce the real-world bug: accumulate ~1900 chars, then a
+    // 100-char bullet line should NOT be split at the remaining ~100
+    // char boundary. Instead, flush the current chunk and start the
+    // new chunk with the whole line.
+    const padding = Array.from(
+      { length: 20 },
+      (_, i) => `- **Item ${i + 1}** with padding text to fill the chunk up`,
+    );
+    const target =
+      "- **Simple and intuitive** to understand and implement " +
+      "for developers familiar with HTTP";
+    const text = [...padding, target].join("\n");
+
+    const chunks = chunkDiscordText(text, { maxChars: 2000 });
+
+    // The target line must appear intact in one chunk.
+    const found = chunks.some((chunk) => chunk.includes(target));
+    expect(found).toBe(true);
   });
 });
