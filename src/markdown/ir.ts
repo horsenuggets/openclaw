@@ -467,7 +467,10 @@ function renderTableAsCode(state: RenderState) {
       state.text += " ";
       const cell = cells[i];
       if (cell) {
-        appendCell(state, cell);
+        // Append text only, skip styles and links. The entire table
+        // is wrapped in a code block, so inline formatting markers
+        // (bold, italic, etc.) would render literally in Discord.
+        state.text += cell.text;
       }
       const pad = widths[i] - (cell?.text.length ?? 0);
       if (pad > 0) {
