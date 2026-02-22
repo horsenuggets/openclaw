@@ -192,26 +192,25 @@ describeLive("Discord tool feedback display", () => {
     // The bot must have responded with at least one message.
     expect(creates.length).toBeGreaterThan(0);
 
-    // No edits allowed.
-    expect(updates).toHaveLength(0);
-
     // At least one message should contain tool feedback. Accept both
     // the new rich format (*Read*, *Bash*) and the old italic format
     // (*Reading ...*) so the test works against both old and new code.
-    const hasToolFeedback = creates.some((e) => {
-      const c = e.content ?? "";
-      return (
-        c.includes("*Read*") ||
-        c.includes("*Bash*") ||
-        c.includes("*Reading") ||
-        c.includes("*Running")
-      );
-    });
+    // Tool results may be edited into status messages, so check both
+    // creates and updates.
+    const allContent = [
+      ...creates.map((e) => e.content ?? ""),
+      ...updates.map((e) => e.content ?? ""),
+    ].join("\n");
+    const hasToolFeedback =
+      allContent.includes("*Read*") ||
+      allContent.includes("*Bash*") ||
+      allContent.includes("*Reading") ||
+      allContent.includes("*Running");
 
     expect(hasToolFeedback).toBe(true);
 
-    // The final reply should contain the probe content.
-    const finalReply = creates[creates.length - 1];
-    expect(finalReply?.content).toContain(nonce);
+    // The response should contain the probe content (may appear in
+    // the final reply or in an edited status message).
+    expect(allContent).toContain(nonce);
   }, 120_000);
 });

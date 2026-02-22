@@ -333,15 +333,16 @@ describeLive("Discord multi-tool feedback display", () => {
     // The bot must have responded.
     expect(creates.length).toBeGreaterThan(0);
 
-    // No edits allowed.
-    expect(updates).toHaveLength(0);
-
     // Should contain tool feedback (Read or similar).
     assertHasToolFeedback(creates);
 
-    // The final reply should contain the probe content.
-    const finalReply = creates[creates.length - 1];
-    expect(finalReply?.content).toContain(nonce);
+    // The response should contain the probe content (may appear in
+    // the final reply or in an edited status message).
+    const allContent = [
+      ...creates.map((e) => e.content ?? ""),
+      ...updates.map((e) => e.content ?? ""),
+    ].join("\n");
+    expect(allContent).toContain(nonce);
 
     // No excessive duplication.
     assertNoExcessiveDuplication(creates);
@@ -363,12 +364,10 @@ describeLive("Discord multi-tool feedback display", () => {
     await waitForBotResponse(events, 90_000, 15_000);
 
     const creates = events.filter((e) => e.type === "create");
-    const updates = events.filter((e) => e.type === "update");
 
     logEvents("bash", events);
 
     expect(creates.length).toBeGreaterThan(0);
-    expect(updates).toHaveLength(0);
 
     // Should contain Bash tool feedback.
     const hasBashFeedback = creates.some((e) => {
@@ -403,10 +402,14 @@ describeLive("Discord multi-tool feedback display", () => {
     logEvents("multi-tool", events);
 
     expect(creates.length).toBeGreaterThan(0);
-    expect(updates).toHaveLength(0);
 
     // Should contain tool feedback for at least two different tools.
-    const allContent = creates.map((e) => e.content ?? "").join("\n");
+    // Tool results may be edited into status messages, so check
+    // both creates and updates.
+    const allContent = [
+      ...creates.map((e) => e.content ?? ""),
+      ...updates.map((e) => e.content ?? ""),
+    ].join("\n");
     const toolsFound = new Set<string>();
 
     if (allContent.includes("*Bash*") || allContent.includes("*Running")) {
@@ -425,9 +428,8 @@ describeLive("Discord multi-tool feedback display", () => {
     // We expect at least 2 different tool types to have been used.
     expect(toolsFound.size).toBeGreaterThanOrEqual(2);
 
-    // The final reply should contain the probe content.
-    const finalReply = creates[creates.length - 1];
-    expect(finalReply?.content).toContain(nonce);
+    // The response should contain the probe content.
+    expect(allContent).toContain(nonce);
 
     assertNoExcessiveDuplication(creates);
   }, 120_000);

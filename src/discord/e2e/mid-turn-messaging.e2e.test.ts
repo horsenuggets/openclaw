@@ -222,15 +222,18 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
     const creates = events.filter((e) => e.type === "create");
     expect(creates.length).toBeGreaterThanOrEqual(1);
 
+    // Tool results may be edited into status messages, so include
+    // both creates and updates when checking content.
+    const updates = events.filter((e) => e.type === "update");
+    const allContent = [
+      ...creates.map((e) => e.content ?? ""),
+      ...updates.map((e) => e.content ?? ""),
+    ].join("\n");
+
     // The original task should still complete.
-    const allContent = creates.map((e) => e.content ?? "").join("\n");
     expect(allContent).toContain(`SLOW_TASK_DONE_${nonce}`);
 
     // The follow-up was answered by the main agent.
     expect(allContent).toContain("91");
-
-    // No edits allowed.
-    const updates = events.filter((e) => e.type === "update");
-    expect(updates).toHaveLength(0);
   }, 300_000);
 });

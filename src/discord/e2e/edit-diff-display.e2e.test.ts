@@ -196,26 +196,21 @@ describeLive("Discord Edit diff display", () => {
     // The bot must have responded.
     expect(creates.length).toBeGreaterThan(0);
 
-    // No edits allowed.
-    expect(updates).toHaveLength(0);
+    // Tool results may be edited into status messages, so check
+    // both creates and updates for content.
+    const allContent = [
+      ...creates.map((e) => e.content ?? ""),
+      ...updates.map((e) => e.content ?? ""),
+    ].join("\n");
 
     // At least one message should contain an Edit tool result header.
-    const hasEditFeedback = creates.some((e) => {
-      const c = e.content ?? "";
-      return c.includes("*Edit*");
-    });
-    expect(hasEditFeedback).toBe(true);
+    expect(allContent).toContain("*Edit*");
 
     // At least one message should contain a diff code block
     // with the changed lines.
-    const hasDiffBlock = creates.some((e) => {
-      const c = e.content ?? "";
-      return c.includes("```diff");
-    });
-    expect(hasDiffBlock).toBe(true);
+    expect(allContent).toContain("```diff");
 
     // The diff should show the old and new values.
-    const allContent = creates.map((e) => e.content ?? "").join("\n");
     expect(allContent).toContain("- ");
     expect(allContent).toContain("+ ");
 
