@@ -5,6 +5,7 @@ import type { MarkdownTableMode } from "../../config/types.base.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
 import { chunkDiscordTextWithMode } from "../chunk.js";
+import { stripHorizontalRules } from "../markdown-strip.js";
 import { sendMessageDiscord } from "../send.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 
@@ -29,6 +30,7 @@ export async function deliverDiscordReply(params: {
     const rawText = payload.text ?? "";
     const tableMode = params.tableMode ?? "code";
     let text = convertMarkdownTables(rawText, tableMode);
+    text = stripHorizontalRules(text);
     if (params.discordTimestamps !== false) {
       text = convertTimesToDiscordTimestamps(text);
     }
