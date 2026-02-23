@@ -1,9 +1,9 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -44,11 +44,10 @@ describeLive("Discord chunk splitting observation", () => {
 
     // Create a dedicated test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: "E2E chunk splitting observation (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E chunk splitting observation (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Track message events from the Claw bot.

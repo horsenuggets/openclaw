@@ -1,7 +1,7 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
-import { type MessageEvent, e2eChannelName, resolveTestBotToken } from "./helpers.js";
+import { type MessageEvent, createE2eChannel, resolveTestBotToken } from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
@@ -16,7 +16,6 @@ describeLive("Discord acknowledgment ordering", () => {
   let client: Client;
   let channelId: string;
   let events: MessageEvent[];
-  const channelName = e2eChannelName();
 
   beforeAll(async () => {
     const token = resolveTestBotToken();
@@ -42,11 +41,10 @@ describeLive("Discord acknowledgment ordering", () => {
 
     // Create ephemeral test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      topic: `E2E acknowledgment ordering test (auto-created, safe to delete)`,
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E acknowledgment ordering test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Track messages from the Claw bot in the new channel.

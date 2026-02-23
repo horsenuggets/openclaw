@@ -1,20 +1,72 @@
+import type { Guild } from "discord.js";
+import { ChannelType } from "discord.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+// Names already generated in this process, so rapid-fire calls
+// (e.g. multi-tool-feedback creating 10 channels in a loop) never
+// collide even before the guild channel list is re-fetched.
+const generatedNames = new Set<string>();
+
 /**
  * Generate a standardized E2E channel name using the local
- * timestamp: `e2e-YYYY-MM-DD-t-HH-MM-SS`.
+ * timestamp: `e2e-YYYY-MM-DD-t-HH-MM-SS`. When `existingNames`
+ * is provided the seconds (and minutes/hours) are incremented
+ * until the name is unique — the timestamp may not reflect the
+ * real wall-clock time, but the format stays valid.
  */
-export function e2eChannelName(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  const hh = String(now.getHours()).padStart(2, "0");
-  const min = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
+export function e2eChannelName(existingNames?: Iterable<string>): string {
+  const taken = new Set<string>(existingNames);
+  for (const n of generatedNames) {
+    taken.add(n);
+  }
+
+  const cursor = new Date();
+  cursor.setMilliseconds(0);
+
+  let name = formatChannelTimestamp(cursor);
+
+  while (taken.has(name)) {
+    cursor.setSeconds(cursor.getSeconds() + 1);
+    name = formatChannelTimestamp(cursor);
+  }
+
+  generatedNames.add(name);
+  return name;
+}
+
+function formatChannelTimestamp(d: Date): string {
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const min = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
   return `e2e-${yyyy}-${mm}-${dd}-t-${hh}-${min}-${ss}`;
+}
+
+/**
+ * Create an E2E text channel with a clash-free timestamp name.
+ * Fetches existing guild channels, picks a unique name, and
+ * creates the channel.
+ */
+export async function createE2eChannel(guild: Guild, topic: string) {
+  const channels = await guild.channels.fetch();
+  const existingNames = new Set<string>();
+  for (const [, ch] of channels) {
+    if (ch) {
+      existingNames.add(ch.name);
+    }
+  }
+
+  const name = e2eChannelName(existingNames);
+  return guild.channels.create({
+    name,
+    type: ChannelType.GuildText,
+    topic,
+  });
 }
 
 export function resolveTestBotToken(): string {

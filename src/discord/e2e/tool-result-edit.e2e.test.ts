@@ -1,10 +1,8 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
+import { type MessageEvent, createE2eChannel, resolveTestBotToken } from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
@@ -13,36 +11,11 @@ const describeLive = LIVE ? describe : describe.skip;
 const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
 const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
 
-function resolveTestBotToken(): string {
-  if (process.env.DISCORD_E2E_BOT_TOKEN) {
-    return process.env.DISCORD_E2E_BOT_TOKEN;
-  }
-  const keyPath = path.join(os.homedir(), ".keys", "discord-e2e-bot-token");
-  try {
-    return fs.readFileSync(keyPath, "utf-8").trim();
-  } catch {
-    throw new Error(
-      `Discord E2E bot token not found. Set DISCORD_E2E_BOT_TOKEN or ` +
-        `create ${keyPath} with the token.`,
-    );
-  }
-}
-
-type MessageEvent = {
-  type: "create" | "update" | "delete";
-  messageId: string;
-  content?: string;
-  timestamp: number;
-};
-
 describeLive("Discord tool result edit-in-place", () => {
   let client: Client;
   let channelId: string;
   let events: MessageEvent[];
   const nonce = randomBytes(4).toString("hex");
-  const now = new Date();
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const channelName = `e2e-${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}-T-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
 
   beforeAll(async () => {
     const token = resolveTestBotToken();
@@ -68,11 +41,10 @@ describeLive("Discord tool result edit-in-place", () => {
 
     // Create ephemeral test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      topic: "E2E tool result edit-in-place test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E tool result edit-in-place test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Track messages from the Claw bot in the new channel.

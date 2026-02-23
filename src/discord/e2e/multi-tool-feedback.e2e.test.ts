@@ -1,4 +1,4 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -145,11 +145,10 @@ describeLive("Discord multi-tool feedback display", () => {
     // Create one channel per test suite.
     const guild = await client.guilds.fetch(GUILD_ID);
     for (const suite of TEST_SUITES) {
-      const channel = await guild.channels.create({
-        name: e2eChannelName(),
-        type: ChannelType.GuildText,
-        topic: `E2E multi-tool feedback test: ${suite} (auto-created, safe to delete)`,
-      });
+      const channel = await createE2eChannel(
+        guild,
+        `E2E multi-tool feedback test: ${suite} (auto-created, safe to delete)`,
+      );
       suiteState.set(suite, { channelId: channel.id, events: [] });
     }
 

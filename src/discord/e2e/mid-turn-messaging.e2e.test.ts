@@ -1,10 +1,10 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -61,11 +61,10 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
 
     // Create an isolated channel for this test.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: `E2E mid-turn messaging test (auto-created, safe to delete)`,
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E mid-turn messaging test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Route message events to our event list.

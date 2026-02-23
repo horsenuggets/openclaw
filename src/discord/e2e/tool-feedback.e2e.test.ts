@@ -1,11 +1,11 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
-import { type MessageEvent, e2eChannelName, resolveTestBotToken } from "./helpers.js";
+import { type MessageEvent, createE2eChannel, resolveTestBotToken } from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
@@ -21,7 +21,6 @@ describeLive("Discord tool feedback display", () => {
   let channelId: string;
   let events: MessageEvent[];
   const nonce = randomBytes(4).toString("hex");
-  const channelName = e2eChannelName();
   const probePath = path.join(os.tmpdir(), `e2e-probe-${nonce}.txt`);
 
   beforeAll(async () => {
@@ -51,11 +50,10 @@ describeLive("Discord tool feedback display", () => {
 
     // Create ephemeral test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      topic: `E2E tool feedback test (auto-created, safe to delete)`,
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E tool feedback test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Track messages from the Claw bot in the new channel.

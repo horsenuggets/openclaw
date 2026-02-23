@@ -1,9 +1,9 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -43,11 +43,10 @@ describeLive("Discord memory identity", () => {
 
     // Create a test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: "E2E memory identity test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E memory identity test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     // Track bot messages.

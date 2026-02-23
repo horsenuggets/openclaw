@@ -1,4 +1,4 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -61,11 +61,10 @@ describeLive("Discord Edit diff display", () => {
     });
 
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: "E2E edit diff display test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E edit diff display test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
