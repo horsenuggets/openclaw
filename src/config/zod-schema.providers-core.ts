@@ -342,6 +342,7 @@ export const DiscordAccountSchema = z
       .strict()
       .optional(),
     responsePrefix: z.string().optional(),
+    codeLangHints: z.boolean().optional(),
   })
   .strict();
 

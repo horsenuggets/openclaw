@@ -233,11 +233,16 @@ describe("formatToolResultBlockDiscord", () => {
       name: "Read",
       args: { file_path: "/src/config.ts" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: 'export const port = 3000;\nexport const host = "localhost";',
-      lineCount: 2,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: 'export const port = 3000;\nexport const host = "localhost";',
+        lineCount: 2,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("*Read* (`/src/config.ts`)");
     expect(result).toContain("```ts\n");
     expect(result).toContain("export const port = 3000;");
@@ -250,11 +255,16 @@ describe("formatToolResultBlockDiscord", () => {
       name: "Read",
       args: { file_path: "/src/handler.ts", offset: 530, limit: 50 },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: "sendingStatus = true;\ntry {",
-      lineCount: 2,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "sendingStatus = true;\ntry {",
+        lineCount: 2,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```ts\n");
     // Code fence should be ```ts, not ```ts:530-580
     expect(result).not.toContain("```ts:");
@@ -265,11 +275,16 @@ describe("formatToolResultBlockDiscord", () => {
       name: "Read",
       args: { file_path: "/app/package.json" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '{ "name": "test" }',
-      lineCount: 1,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '{ "name": "test" }',
+        lineCount: 1,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```json\n");
     expect(result).not.toContain("remaining");
   });
@@ -521,11 +536,16 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "gateway",
       args: { action: "config.get" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '{\n  "ok": true,\n  "config": {}\n}',
-      lineCount: 4,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '{\n  "ok": true,\n  "config": {}\n}',
+        lineCount: 4,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```json\n");
   });
 
@@ -534,11 +554,16 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "cron",
       args: { action: "list" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '[\n  { "id": "abc", "schedule": "0 * * * *" }\n]',
-      lineCount: 3,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '[\n  { "id": "abc", "schedule": "0 * * * *" }\n]',
+        lineCount: 3,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```json\n");
   });
 
@@ -547,11 +572,16 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "mcp__custom__list_items",
       args: {},
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '{\n  "items": [\n    { "id": 1 },\n    { "id": 2 }\n  ]\n}',
-      lineCount: 6,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '{\n  "items": [\n    { "id": 1 },\n    { "id": 2 }\n  ]\n}',
+        lineCount: 6,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```json\n");
   });
 
@@ -560,11 +590,16 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "mcp__custom__query",
       args: {},
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '[{"id": 1, "name": "test"}, {"id": 2}]',
-      lineCount: 1,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '[{"id": 1, "name": "test"}, {"id": 2}]',
+        lineCount: 1,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     expect(result).toContain("```json\n");
   });
 
@@ -586,11 +621,16 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "Read",
       args: { file_path: "/tmp/script" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: '#!/bin/bash\nset -euo pipefail\necho "hello"',
-      lineCount: 3,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: '#!/bin/bash\nset -euo pipefail\necho "hello"',
+        lineCount: 3,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     // No file extension, so tier 1 skips. Tier 3 detects bash.
     expect(result).toContain("```bash\n");
   });
@@ -642,13 +682,78 @@ describe("formatToolResultBlockDiscord language detection", () => {
       name: "Read",
       args: { file_path: "/src/config.yaml" },
     });
-    const result = formatToolResultBlockDiscord(display, {
-      outputPreview: "name: openclaw\nversion: 1.0.0",
-      lineCount: 2,
-      isError: false,
-    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "name: openclaw\nversion: 1.0.0",
+        lineCount: 2,
+        isError: false,
+      },
+      undefined,
+      { codeLangHints: true },
+    );
     // Tier 1 (file extension) takes precedence
     expect(result).toContain("```yaml\n");
+  });
+});
+
+describe("formatToolResultBlockDiscord codeLangHints disabled (default)", () => {
+  it("strips language hints by default", () => {
+    const display = resolveToolDisplay({
+      name: "Read",
+      args: { file_path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "export const port = 3000;",
+      lineCount: 1,
+      isError: false,
+    });
+    expect(result).toContain("```\n");
+    expect(result).not.toContain("```ts");
+  });
+
+  it("strips json hints for JSON tools by default", () => {
+    const display = resolveToolDisplay({
+      name: "gateway",
+      args: { action: "config.get" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: '{\n  "ok": true\n}',
+      lineCount: 3,
+      isError: false,
+    });
+    expect(result).toContain("```\n");
+    expect(result).not.toContain("```json");
+  });
+
+  it("preserves diff hints even when codeLangHints is disabled", () => {
+    const display = resolveToolDisplay({
+      name: "Bash",
+      args: { command: "git diff" },
+    });
+    const result = formatToolResultBlockDiscord(display, {
+      outputPreview: "--- a/file.ts\n+++ b/file.ts\n@@ -1,3 +1,3 @@\n-old line\n+new line",
+      lineCount: 5,
+      isError: false,
+    });
+    expect(result).toContain("```diff\n");
+  });
+
+  it("preserves Edit diff blocks regardless of codeLangHints", () => {
+    const display = resolveToolDisplay({
+      name: "Edit",
+      args: { path: "/src/config.ts" },
+    });
+    const result = formatToolResultBlockDiscord(
+      display,
+      {
+        outputPreview: "Successfully replaced text.",
+        lineCount: 1,
+        isError: false,
+      },
+      { old_string: "const port = 3000;", new_string: "const port = 8080;" },
+    );
+    expect(result).toContain("```diff\n");
   });
 });
 

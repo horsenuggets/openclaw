@@ -197,6 +197,12 @@ export type DiscordAccountConfig = {
    */
   discordTimestamps?: boolean;
   /**
+   * Add language hints to code fences in tool result blocks
+   * (e.g. ```json, ```typescript). When false, all code fences
+   * use plain ``` except for diff blocks. Default: false.
+   */
+  codeLangHints?: boolean;
+  /**
    * Smart triage using a fast model (Sonnet).
    * For simple messages, generates a full response without Opus dispatch.
    * For complex messages, generates an immediate status update while Opus works.

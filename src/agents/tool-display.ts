@@ -686,6 +686,7 @@ export function formatToolResultBlockDiscord(
   display: ToolDisplay,
   result: ToolResultInfo,
   args?: Record<string, unknown>,
+  options?: { codeLangHints?: boolean },
 ): string {
   const key = display.name.toLowerCase();
   const header = buildToolHeader(display);
@@ -737,7 +738,12 @@ export function formatToolResultBlockDiscord(
     codeLines.push(`...(${remaining} ${noun} remaining)`);
   }
 
-  const lang = inferCodeLang(key, display.detail, result.outputPreview);
+  let lang = inferCodeLang(key, display.detail, result.outputPreview);
+  // When codeLangHints is disabled (default), strip language hints
+  // except for diff which remains useful for readability.
+  if (!options?.codeLangHints && lang !== "diff") {
+    lang = "";
+  }
   const codeBlock = `\`\`\`${lang}\n${codeLines.join("\n")}\n\`\`\``;
 
   return `${header}\n${codeBlock}`;

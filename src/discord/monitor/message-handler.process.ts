@@ -930,6 +930,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
                   isError: event.isError,
                 },
                 toolStartInputs.get(event.toolCallId),
+                { codeLangHints: discordConfig?.codeLangHints },
               );
               // Try to edit the original status message in-place
               // so the tool's lifecycle stays in one message.
