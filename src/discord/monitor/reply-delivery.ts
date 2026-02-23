@@ -38,6 +38,7 @@ export async function deliverDiscordReply(params: {
   maxLinesPerMessage?: number;
   replyToId?: string;
   tableMode?: MarkdownTableMode;
+  tableHairspacing?: boolean;
   chunkMode?: ChunkMode;
   /** Convert time references to Discord timestamps. Default: true. */
   discordTimestamps?: boolean;
@@ -68,7 +69,8 @@ export async function deliverDiscordReply(params: {
     debugDump("raw", blockIdx, rawText);
 
     const tableMode = params.tableMode ?? "code";
-    let text = convertMarkdownTables(rawText, tableMode);
+    const tableHairspacing = params.tableHairspacing ?? true;
+    let text = convertMarkdownTables(rawText, tableMode, { tableHairspacing });
     text = stripHorizontalRules(text);
     // Normalize stray whitespace from LLM output. Web UIs absorb
     // these during HTML rendering but Discord shows raw whitespace.

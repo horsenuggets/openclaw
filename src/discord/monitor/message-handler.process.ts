@@ -32,7 +32,7 @@ import { logTypingFailure, logAckFailure } from "../../channels/logging.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { recordInboundSession } from "../../channels/session.js";
 import { createTypingCallbacks } from "../../channels/typing.js";
-import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
+import { resolveMarkdownTableMode, resolveTableHairspacing } from "../../config/markdown-tables.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../../globals.js";
 import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-events.js";
@@ -421,6 +421,11 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     channel: "discord",
     accountId,
   });
+  const tableHairspacing = resolveTableHairspacing({
+    cfg,
+    channel: "discord",
+    accountId,
+  });
 
   // Track unclosed inline markers across block deliveries so bold
   // spans split by streaming boundaries render correctly. Each call
@@ -450,6 +455,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         textLimit,
         maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
         tableMode,
+        tableHairspacing,
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
         discordTimestamps: discordConfig?.discordTimestamps,
         pendingMarkers,
@@ -487,6 +493,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       textLimit,
       maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
       tableMode,
+      tableHairspacing,
       chunkMode: resolveChunkMode(cfg, "discord", accountId),
     }).catch((err) => {
       logVerbose(`discord: quick ack failed: ${String(err)}`);
@@ -751,6 +758,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         textLimit,
         maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
         tableMode,
+        tableHairspacing,
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
         discordTimestamps: discordConfig?.discordTimestamps,
       });

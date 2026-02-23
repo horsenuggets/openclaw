@@ -5,7 +5,7 @@ import type { PollInput } from "../polls.js";
 import type { DiscordSendResult } from "./send.types.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import { loadConfig } from "../config/config.js";
-import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
+import { resolveMarkdownTableMode, resolveTableHairspacing } from "../config/markdown-tables.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
 import { resolveDiscordAccount } from "./accounts.js";
@@ -55,7 +55,14 @@ export async function sendMessageDiscord(
     accountId: accountInfo.accountId,
   });
   const chunkMode = resolveChunkMode(cfg, "discord", accountInfo.accountId);
-  const textWithTables = pre ? (text ?? "") : convertMarkdownTables(text ?? "", tableMode);
+  const tableHairspacing = resolveTableHairspacing({
+    cfg,
+    channel: "discord",
+    accountId: accountInfo.accountId,
+  });
+  const textWithTables = pre
+    ? (text ?? "")
+    : convertMarkdownTables(text ?? "", tableMode, { tableHairspacing });
   // When preProcessed, the caller already chunked the text. Use
   // Infinity for maxLines so sendDiscordText treats the whole string
   // as a single chunk and does not re-split it.
