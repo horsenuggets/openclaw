@@ -11,7 +11,11 @@ const MARKDOWN_STYLE_MARKERS = {
   code_block: { open: "```\n", close: "```" },
 } as const;
 
-export function convertMarkdownTables(markdown: string, mode: MarkdownTableMode): string {
+export function convertMarkdownTables(
+  markdown: string,
+  mode: MarkdownTableMode,
+  opts?: { tableHairspacing?: boolean },
+): string {
   if (!markdown || mode === "off") {
     return markdown;
   }
@@ -22,6 +26,7 @@ export function convertMarkdownTables(markdown: string, mode: MarkdownTableMode)
     bulletPrefix: "- ",
     blockquotePrefix: "",
     tableMode: mode,
+    tableHairspacing: opts?.tableHairspacing,
   });
   if (!hasTables) {
     // Even when no complete table was found, orphaned table rows

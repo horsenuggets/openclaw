@@ -1,6 +1,7 @@
 import MarkdownIt from "markdown-it";
 import type { MarkdownTableMode } from "../config/types.base.js";
 import { chunkText } from "../auto-reply/chunk.js";
+import { HAIRSPACE, LRM, cellVisualWidth, containsRTL, hairspaceCount } from "./unicode-width.js";
 
 type ListState = {
   type: "bullet" | "ordered";
@@ -78,6 +79,7 @@ type RenderState = RenderTarget & {
   bulletPrefix: string;
   enableSpoilers: boolean;
   tableMode: MarkdownTableMode;
+  tableHairspacing: boolean;
   table: TableState | null;
   hasTables: boolean;
 };
@@ -92,6 +94,8 @@ export type MarkdownParseOptions = {
   autolink?: boolean;
   /** How to render tables (off|bullets|code). Default: off. */
   tableMode?: MarkdownTableMode;
+  /** Insert hairspaces for wide-character alignment in code tables. Default: false. */
+  tableHairspacing?: boolean;
 };
 
 function createMarkdownIt(options: MarkdownParseOptions): MarkdownIt {
@@ -447,11 +451,17 @@ function renderTableAsCode(state: RenderState) {
     return;
   }
 
+  // When hairspacing is enabled, use visual column widths that
+  // account for wide characters (CJK, Hangul, emoji each count
+  // as 2 columns). Otherwise fall back to code-point length.
+  const hs = state.tableHairspacing;
+  const measureWidth = hs ? cellVisualWidth : (t: string) => t.length;
+
   const widths = Array.from({ length: columnCount }, () => 0);
   const updateWidths = (cells: TableCell[]) => {
     for (let i = 0; i < columnCount; i += 1) {
       const cell = cells[i];
-      const width = cell?.text.length ?? 0;
+      const width = cell ? measureWidth(cell.text) : 0;
       if (widths[i] < width) {
         widths[i] = width;
       }
@@ -462,12 +472,19 @@ function renderTableAsCode(state: RenderState) {
     updateWidths(row);
   }
 
+  // Detect RTL text in any cell. When present, insert LRM
+  // (Left-to-Right Mark) before each cell to prevent the Unicode
+  // BiDi algorithm from visually reordering columns.
+  const allCells = [headers, ...rows];
+  const hasRTL = allCells.some((row) => row.some((c) => containsRTL(c.text)));
+
   const codeStart = state.text.length;
 
   const appendRow = (cells: TableCell[]) => {
     state.text += "|";
     for (let i = 0; i < columnCount; i += 1) {
       state.text += " ";
+      if (hasRTL) state.text += LRM;
       const cell = cells[i];
       if (cell) {
         // Append text only, skip styles and links. The entire table
@@ -475,10 +492,21 @@ function renderTableAsCode(state: RenderState) {
         // (bold, italic, etc.) would render literally in Discord.
         state.text += cell.text;
       }
-      const pad = widths[i] - (cell?.text.length ?? 0);
+      const cellWidth = cell ? measureWidth(cell.text) : 0;
+      const pad = widths[i] - cellWidth;
+      if (hs) {
+        // Insert hairspaces to compensate for the fractional extra
+        // width of wide characters, then regular-space padding for
+        // the remaining integer columns.
+        const hs_count = cell ? hairspaceCount(cell.text) : 0;
+        if (hs_count > 0) {
+          state.text += HAIRSPACE.repeat(hs_count);
+        }
+      }
       if (pad > 0) {
         state.text += " ".repeat(pad);
       }
+      if (hasRTL) state.text += LRM;
       state.text += " |";
     }
     state.text += "\n";
@@ -823,6 +851,7 @@ export function markdownToIRWithMeta(
     bulletPrefix: options.bulletPrefix ?? "• ",
     enableSpoilers: options.enableSpoilers ?? false,
     tableMode,
+    tableHairspacing: options.tableHairspacing ?? false,
     table: null,
     hasTables: false,
   };
