@@ -36,6 +36,8 @@ export type MarkdownTableMode = "off" | "bullets" | "code";
 export type MarkdownConfig = {
   /** Table rendering mode (off|bullets|code). */
   tables?: MarkdownTableMode;
+  /** Insert hairspaces to align wide characters (CJK, emoji) in code-block tables. Default: true. */
+  tableHairspacing?: boolean;
 };
 
 export type HumanDelayConfig = {

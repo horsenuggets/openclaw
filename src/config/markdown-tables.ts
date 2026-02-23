@@ -5,6 +5,7 @@ import { normalizeAccountId } from "../routing/session-key.js";
 
 type MarkdownConfigEntry = {
   markdown?: {
+    tableHairspacing?: boolean;
     tables?: MarkdownTableMode;
   };
 };
@@ -65,4 +66,43 @@ export function resolveMarkdownTableMode(params: {
     | MarkdownConfigSection
     | undefined;
   return resolveMarkdownModeFromSection(section, params.accountId) ?? defaultMode;
+}
+
+/**
+ * Resolve whether hairspace compensation is enabled for
+ * code-block tables. Cascading lookup mirrors
+ * resolveMarkdownTableMode: account → channel → default (true).
+ */
+export function resolveTableHairspacing(params: {
+  cfg?: Partial<OpenClawConfig>;
+  channel?: string | null;
+  accountId?: string | null;
+}): boolean {
+  const channel = normalizeChannelId(params.channel);
+  if (!channel || !params.cfg) return true;
+  const channelsConfig = params.cfg.channels as Record<string, unknown> | undefined;
+  const section = (channelsConfig?.[channel] ??
+    (params.cfg as Record<string, unknown> | undefined)?.[channel]) as
+    | MarkdownConfigSection
+    | undefined;
+  if (!section) return true;
+  const normalizedAccountId = normalizeAccountId(params.accountId);
+  const accounts = section.accounts;
+  if (accounts && typeof accounts === "object") {
+    const direct = accounts[normalizedAccountId];
+    if (typeof direct?.markdown?.tableHairspacing === "boolean") {
+      return direct.markdown.tableHairspacing;
+    }
+    const matchKey = Object.keys(accounts).find(
+      (key) => key.toLowerCase() === normalizedAccountId.toLowerCase(),
+    );
+    const match = matchKey ? accounts[matchKey] : undefined;
+    if (typeof match?.markdown?.tableHairspacing === "boolean") {
+      return match.markdown.tableHairspacing;
+    }
+  }
+  if (typeof section.markdown?.tableHairspacing === "boolean") {
+    return section.markdown.tableHairspacing;
+  }
+  return true;
 }
