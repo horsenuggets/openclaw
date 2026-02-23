@@ -291,6 +291,25 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    proactive: z
+      .object({
+        enabled: z.boolean().optional(),
+        checkIntervalMinutes: z.number().int().positive().optional(),
+        quietHoursStart: z
+          .string()
+          .regex(/^\d{1,2}:\d{2}$/, "expected HH:mm format")
+          .optional(),
+        quietHoursEnd: z
+          .string()
+          .regex(/^\d{1,2}:\d{2}$/, "expected HH:mm format")
+          .optional(),
+        minIdleMinutes: z.number().int().nonnegative().optional(),
+        minGapMinutes: z.number().int().nonnegative().optional(),
+        maxPerDay: z.number().int().nonnegative().optional(),
+        startupGreeting: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     hooks: z
       .object({
         enabled: z.boolean().optional(),
