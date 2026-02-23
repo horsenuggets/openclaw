@@ -8,6 +8,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -16,10 +17,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-// The Claw bot's Discord user ID.
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-// Guild where the E2E tester bot can create channels.
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 // Known tool feedback patterns in the rich format (*ToolName*) and
 // the older italic format (*Verbing ...*).
@@ -154,7 +152,7 @@ describeLive("Discord multi-tool feedback display", () => {
 
     // Route message events to the correct suite's event list.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id !== CLAW_BOT_ID) {
+      if (msg.author.id !== BOT_ID) {
         return;
       }
       for (const state of suiteState.values()) {
@@ -171,7 +169,7 @@ describeLive("Discord multi-tool feedback display", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id !== CLAW_BOT_ID) {
+      if (newMsg.author?.id !== BOT_ID) {
         return;
       }
       for (const state of suiteState.values()) {
@@ -273,7 +271,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> I left a file at ${probePath} for you. ` +
+      `<@${BOT_ID}> I left a file at ${probePath} for you. ` +
         `Read it and tell me what it says. This is for an E2E test.`,
     );
 
@@ -312,7 +310,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> Please run this shell command and tell me what it outputs: ls /tmp | head -5`,
+      `<@${BOT_ID}> Please run this shell command and tell me what it outputs: ls /tmp | head -5`,
     );
 
     await waitForBotResponse(events, 90_000, 15_000);
@@ -343,7 +341,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> List the files in /tmp using a shell command, ` +
+      `<@${BOT_ID}> List the files in /tmp using a shell command, ` +
         `then read the file at ${probePath} and tell me its contents. ` +
         `This is for an E2E test.`,
     );
@@ -398,7 +396,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> Search the web for "current weather in Tokyo" ` +
+      `<@${BOT_ID}> Search the web for "current weather in Tokyo" ` +
         `and tell me what you find. This is for an E2E test.`,
     );
 
@@ -444,7 +442,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> This is a reasoning test. Please think step by step: ` +
+      `<@${BOT_ID}> This is a reasoning test. Please think step by step: ` +
         `If I have 3 boxes, the first contains only apples, the second contains ` +
         `only oranges, and the third contains both apples and oranges. All boxes ` +
         `are labeled incorrectly. If I pick one fruit from the box labeled ` +
@@ -491,7 +489,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command and show me the output: ` +
+      `<@${BOT_ID}> Run this exact bash command and show me the output: ` +
         `printf '%0.s=' {1..120} && echo "" && printf '%0.s-' {1..150} && echo "" && echo "short line"`,
     );
 
@@ -514,7 +512,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command: ` +
+      `<@${BOT_ID}> Run this exact bash command: ` +
         `echo "line 1" && echo "" && echo "" && echo "line 2" && echo "" && echo "line 3" && echo "" && echo "" && echo "" && echo "line 4"`,
     );
 
@@ -537,7 +535,7 @@ describeLive("Discord multi-tool feedback display", () => {
     const channel = await fetchTextChannel(channelId);
 
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command: ` +
+      `<@${BOT_ID}> Run this exact bash command: ` +
         `seq 1 30 | while read n; do echo "line $n: $(printf '%0.s#' $(seq 1 $n))"; done`,
     );
 
@@ -568,7 +566,7 @@ describeLive("Discord multi-tool feedback display", () => {
 
     const channel = await fetchTextChannel(channelId);
 
-    await channel.send(`<@${CLAW_BOT_ID}> Run this exact bash command: echo "hello world"`);
+    await channel.send(`<@${BOT_ID}> Run this exact bash command: echo "hello world"`);
 
     await waitForBotResponse(events, 90_000, 15_000);
 
@@ -596,7 +594,7 @@ describeLive("Discord multi-tool feedback display", () => {
     // Produce tab-separated output with lines of varying tab
     // positions so we can verify consistent visual truncation.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command and show me the output: ` +
+      `<@${BOT_ID}> Run this exact bash command and show me the output: ` +
         `printf 'ID\\tNAME\\tSTATUS\\tDESCRIPTION\\n' && ` +
         `printf '1\\tAlpha\\tactive\\tThis is a description that goes on for a while\\n' && ` +
         `printf '200\\tBravo-Long-Name\\tpending\\tAnother long description field here\\n' && ` +

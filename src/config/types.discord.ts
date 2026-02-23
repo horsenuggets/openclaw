@@ -219,7 +219,14 @@ export type DiscordAccountConfig = {
   jobs?: boolean | JobsConfig;
 };
 
+export type DiscordE2eConfig = {
+  /** Discord guild (server) ID for E2E testing. */
+  guildId?: string;
+};
+
 export type DiscordConfig = {
   /** Optional per-account Discord configuration (multi-account). */
   accounts?: Record<string, DiscordAccountConfig>;
+  /** E2E test configuration (guild ID, etc.). */
+  e2e?: DiscordE2eConfig;
 } & DiscordAccountConfig;

@@ -70,18 +70,84 @@ export async function createE2eChannel(guild: Guild, topic: string) {
 }
 
 export function resolveTestBotToken(): string {
-  if (process.env.DISCORD_E2E_BOT_TOKEN) {
-    return process.env.DISCORD_E2E_BOT_TOKEN;
-  }
-  const keyPath = path.join(os.homedir(), ".keys", "discord-e2e-bot-token");
-  try {
-    return fs.readFileSync(keyPath, "utf-8").trim();
-  } catch {
+  const token = process.env.DISCORD_E2E_BOT_TOKEN?.trim();
+  if (!token) {
     throw new Error(
-      `Discord E2E bot token not found. Set DISCORD_E2E_BOT_TOKEN or ` +
-        `create ${keyPath} with the token.`,
+      "Discord E2E bot token not found. Set the DISCORD_E2E_BOT_TOKEN " + "environment variable.",
     );
   }
+  return token;
+}
+
+/**
+ * Extract the bot user ID from a Discord bot token. Tokens are
+ * structured as base64(user_id).timestamp.hmac — the first
+ * dot-delimited segment decodes to the numeric user ID.
+ */
+export function botIdFromToken(token: string): string {
+  const segment = token.split(".")[0];
+  if (!segment) {
+    throw new Error("Invalid Discord token format (no dot-delimited segments).");
+  }
+  const decoded = Buffer.from(segment, "base64").toString("utf-8");
+  if (!/^\d+$/.test(decoded)) {
+    throw new Error(
+      "Invalid Discord token format (first segment does not decode to a numeric ID).",
+    );
+  }
+  return decoded;
+}
+
+/**
+ * Resolve E2E test configuration from environment variables and
+ * the OpenClaw config file (~/.openclaw/openclaw.json).
+ *
+ * - `botId`: derived from the Discord bot token already configured
+ *   in the OpenClaw config (channels.discord.token or
+ *   channels.discord.accounts.default.token).
+ * - `guildId`: from DISCORD_E2E_GUILD_ID env var or
+ *   channels.discord.e2e.guildId in config.
+ */
+export function resolveE2eConfig(): { botId: string; guildId: string } {
+  const configPath = path.join(os.homedir(), ".openclaw", "openclaw.json");
+
+  let cfg: Record<string, unknown> = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  } catch {
+    // Config file missing or malformed — env vars are still checked.
+  }
+
+  const discord = (cfg.channels as Record<string, unknown>)?.discord as
+    | Record<string, unknown>
+    | undefined;
+
+  // Resolve bot ID from the configured Discord token.
+  const token =
+    (discord?.token as string | undefined) ??
+    ((discord?.accounts as Record<string, Record<string, unknown>>)?.default?.token as
+      | string
+      | undefined);
+
+  if (!token) {
+    throw new Error(
+      "Cannot derive Discord bot ID. Set channels.discord.token " + "in ~/.openclaw/openclaw.json.",
+    );
+  }
+  const botId = botIdFromToken(token);
+
+  // Resolve guild ID.
+  const e2e = discord?.e2e as Record<string, unknown> | undefined;
+  const guildId = process.env.DISCORD_E2E_GUILD_ID?.trim() || (e2e?.guildId as string | undefined);
+
+  if (!guildId) {
+    throw new Error(
+      "Discord E2E guild ID not found. Set DISCORD_E2E_GUILD_ID " +
+        "or channels.discord.e2e.guildId in ~/.openclaw/openclaw.json.",
+    );
+  }
+
+  return { botId, guildId };
 }
 
 export type MessageEvent = {

@@ -4,6 +4,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -12,8 +13,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 describeLive("Discord memory identity", () => {
   let client: Client;
@@ -51,7 +51,7 @@ describeLive("Discord memory identity", () => {
 
     // Track bot messages.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -102,7 +102,7 @@ describeLive("Discord memory identity", () => {
 
     // Ask the bot where it stores memories.
     await channel.send(
-      `<@${CLAW_BOT_ID}> If I ask you to remember something, where ` +
+      `<@${BOT_ID}> If I ask you to remember something, where ` +
         `exactly do you store it? Give me the full file path.`,
     );
 

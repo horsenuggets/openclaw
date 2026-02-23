@@ -346,8 +346,15 @@ export const DiscordAccountSchema = z
   })
   .strict();
 
+const DiscordE2eSchema = z
+  .object({
+    guildId: z.string().optional(),
+  })
+  .strict();
+
 export const DiscordConfigSchema = DiscordAccountSchema.extend({
   accounts: z.record(z.string(), DiscordAccountSchema.optional()).optional(),
+  e2e: DiscordE2eSchema.optional(),
 });
 
 export const GoogleChatDmSchema = z

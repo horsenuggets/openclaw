@@ -8,6 +8,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -16,10 +17,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-// The Claw bot's Discord user ID.
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-// Guild where the E2E tester bot can create channels.
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 describeLive("Discord Edit diff display", () => {
   let client: Client;
@@ -68,7 +66,7 @@ describeLive("Discord Edit diff display", () => {
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id !== CLAW_BOT_ID || msg.channelId !== channelId) {
+      if (msg.author.id !== BOT_ID || msg.channelId !== channelId) {
         return;
       }
       events.push({
@@ -80,7 +78,7 @@ describeLive("Discord Edit diff display", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id !== CLAW_BOT_ID || newMsg.channelId !== channelId) {
+      if (newMsg.author?.id !== BOT_ID || newMsg.channelId !== channelId) {
         return;
       }
       events.push({
@@ -134,7 +132,7 @@ describeLive("Discord Edit diff display", () => {
     // Ask the bot to edit a specific string in the probe file.
     // This should trigger the Edit tool with old_string/new_string.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Edit the file at ${probePath}. ` +
+      `<@${BOT_ID}> Edit the file at ${probePath}. ` +
         `Change the line \`const greeting = "hello";\` to ` +
         `\`const greeting = "howdy";\`. ` +
         `Use the Edit tool, not Write. This is for an E2E test.`,

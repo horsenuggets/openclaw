@@ -1,62 +1,19 @@
 import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
+import {
+  type MessageEvent,
+  resolveE2eConfig,
+  resolveTestBotToken,
+  waitForBotResponse,
+} from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
-
-function resolveTestBotToken(): string {
-  if (process.env.DISCORD_E2E_BOT_TOKEN) {
-    return process.env.DISCORD_E2E_BOT_TOKEN;
-  }
-  const keyPath = path.join(os.homedir(), ".keys", "discord-e2e-bot-token");
-  try {
-    return fs.readFileSync(keyPath, "utf-8").trim();
-  } catch {
-    throw new Error(
-      `Discord E2E bot token not found. Set DISCORD_E2E_BOT_TOKEN or ` +
-        `create ${keyPath} with the token.`,
-    );
-  }
-}
-
-type MessageEvent = {
-  type: "create" | "update";
-  messageId: string;
-  content?: string;
-  timestamp: number;
-};
-
-async function waitForBotResponse(
-  events: MessageEvent[],
-  maxWaitMs: number,
-  quietPeriodMs: number,
-): Promise<void> {
-  const startTime = Date.now();
-  let lastEventTime = startTime;
-
-  while (Date.now() - startTime < maxWaitMs) {
-    await new Promise((r) => setTimeout(r, 1000));
-
-    const latestEvent = events[events.length - 1];
-    if (latestEvent) {
-      lastEventTime = latestEvent.timestamp;
-    }
-
-    const creates = events.filter((e) => e.type === "create");
-    if (creates.length > 0 && Date.now() - lastEventTime >= quietPeriodMs) {
-      break;
-    }
-  }
-}
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 describeLive("Discord timestamp conversion", () => {
   let client: Client;
@@ -95,7 +52,7 @@ describeLive("Discord timestamp conversion", () => {
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -106,7 +63,7 @@ describeLive("Discord timestamp conversion", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -151,7 +108,7 @@ describeLive("Discord timestamp conversion", () => {
     // Ask the bot to produce a schedule packed with time references
     // in both 12-hour and 24-hour formats.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Give me a detailed weekly schedule for a ` +
+      `<@${BOT_ID}> Give me a detailed weekly schedule for a ` +
         `productive work week. For each day (Monday through Friday), ` +
         `list at least 6 time slots using 24-hour time format ` +
         `(like 06:00, 09:30, 12:00, 14:30, 17:00, 21:00). ` +

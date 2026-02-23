@@ -15,12 +15,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   e2eChannelName,
   type MessageEvent,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
 
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 const TEST_BOT_TOKEN = resolveTestBotToken();
 
 // Long timeout — human needs time to send voice message from phone.
@@ -59,7 +59,7 @@ describe("voice transcription", () => {
     // Track all bot messages in this channel.
     client.on(Events.MessageCreate, (msg) => {
       if (msg.channelId !== channelId) return;
-      if (msg.author.id !== CLAW_BOT_ID) return;
+      if (msg.author.id !== BOT_ID) return;
       console.log(`[bot] ${msg.content.slice(0, 120)}`);
       events.push({
         type: "create",
@@ -71,7 +71,7 @@ describe("voice transcription", () => {
 
     client.on(Events.MessageUpdate, (_old, msg) => {
       if (msg.channelId !== channelId) return;
-      if (msg.author?.id !== CLAW_BOT_ID) return;
+      if (msg.author?.id !== BOT_ID) return;
       events.push({
         type: "update",
         messageId: msg.id,
@@ -101,7 +101,7 @@ describe("voice transcription", () => {
         const timeout = setTimeout(() => resolve(false), VOICE_MSG_WAIT_MS);
         const handler = (msg: import("discord.js").Message) => {
           if (msg.channelId !== channelId) return;
-          if (msg.author.id === CLAW_BOT_ID) return;
+          if (msg.author.id === BOT_ID) return;
           if (msg.author.bot) return;
           const hasAudio = msg.attachments.some((a) => a.contentType?.startsWith("audio/"));
           if (hasAudio) {

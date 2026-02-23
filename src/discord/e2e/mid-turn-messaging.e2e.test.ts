@@ -5,6 +5,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -13,10 +14,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-// The Claw bot's Discord user ID.
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-// Guild where the E2E tester bot can create channels.
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 /** Wait until we see at least one bot message, indicating the run
  * has started. Gives up after `maxWaitMs`. */
@@ -69,7 +67,7 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
 
     // Route message events to our event list.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -80,7 +78,7 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -154,7 +152,7 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
     // The follow-up is injected via followUp() and addressed by the
     // main agent after the bash command completes.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command and tell me the output: ` +
+      `<@${BOT_ID}> Run this exact bash command and tell me the output: ` +
         `sleep 20 && echo "SLOW_TASK_DONE_${nonce}"`,
     );
 
@@ -163,7 +161,7 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
     expect(started).toBe(true);
 
     // Send a follow-up while the sleep is running.
-    await channel.send(`<@${CLAW_BOT_ID}> Quick question while you're working: what is 7 * 13?`);
+    await channel.send(`<@${BOT_ID}> Quick question while you're working: what is 7 * 13?`);
 
     // Wait for the full task to complete (sleep 20 + agent processing).
     await waitForBotResponse(events, 120_000, 20_000);

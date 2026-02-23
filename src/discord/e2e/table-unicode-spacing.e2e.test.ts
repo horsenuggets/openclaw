@@ -4,6 +4,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   e2eChannelName,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -12,8 +13,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 /**
  * Extract code-fenced blocks from a Discord message. Tables
@@ -116,7 +116,7 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -127,7 +127,7 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -179,7 +179,7 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       throw new Error(`Channel ${channelId} not found or not text-based`);
     }
 
-    await channel.send(`<@${CLAW_BOT_ID}> ${prompt}`);
+    await channel.send(`<@${BOT_ID}> ${prompt}`);
     await waitForBotResponse(events, 180_000, 15_000);
 
     const creates = events.filter((e) => e.type === "create");

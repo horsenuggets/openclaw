@@ -7,6 +7,7 @@ import { parseFenceSpans } from "../../markdown/fences.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -21,8 +22,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 const INLINE_MARKERS = ["**", "__", "~~", "||"];
 
@@ -100,7 +100,7 @@ describeLive("Discord visual formatting verification", () => {
 
     // Track message events from the Claw bot.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -111,7 +111,7 @@ describeLive("Discord visual formatting verification", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -188,7 +188,7 @@ describeLive("Discord visual formatting verification", () => {
     // exercises cross-chunk bold rebalancing, bullet lists, and
     // tables.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Compare REST vs GraphQL vs gRPC in detail. ` +
+      `<@${BOT_ID}> Compare REST vs GraphQL vs gRPC in detail. ` +
         `For each protocol, include: a description paragraph, a ` +
         `bullet list of **bold advantages** and **bold disadvantages** ` +
         `(use - dashes for list items), a comparison table, and a ` +

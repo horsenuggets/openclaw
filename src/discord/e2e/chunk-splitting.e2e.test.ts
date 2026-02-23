@@ -4,6 +4,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
 } from "./helpers.js";
@@ -12,10 +13,7 @@ import {
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-// The Claw bot's Discord user ID.
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-// Guild where the E2E tester bot can create channels.
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 describeLive("Discord chunk splitting observation", () => {
   let client: Client;
@@ -52,7 +50,7 @@ describeLive("Discord chunk splitting observation", () => {
 
     // Track message events from the Claw bot.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -63,7 +61,7 @@ describeLive("Discord chunk splitting observation", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -109,7 +107,7 @@ describeLive("Discord chunk splitting observation", () => {
     // Prompt that should generate a long, structured response with
     // markdown formatting likely to trigger the splitting issue.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Explain the key differences between REST, ` +
+      `<@${BOT_ID}> Explain the key differences between REST, ` +
         `GraphQL, and gRPC APIs. For each one, cover: the core ` +
         `philosophy, typical use cases, advantages, disadvantages, ` +
         `and when you would choose it over the others. Use **bold** ` +

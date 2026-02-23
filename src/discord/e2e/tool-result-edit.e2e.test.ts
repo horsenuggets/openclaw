@@ -2,14 +2,18 @@ import { Client, Events, GatewayIntentBits } from "discord.js";
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
-import { type MessageEvent, createE2eChannel, resolveTestBotToken } from "./helpers.js";
+import {
+  type MessageEvent,
+  createE2eChannel,
+  resolveE2eConfig,
+  resolveTestBotToken,
+} from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 describeLive("Discord tool result edit-in-place", () => {
   let client: Client;
@@ -49,7 +53,7 @@ describeLive("Discord tool result edit-in-place", () => {
 
     // Track messages from the Claw bot in the new channel.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         events.push({
           type: "create",
           messageId: msg.id,
@@ -60,7 +64,7 @@ describeLive("Discord tool result edit-in-place", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         events.push({
           type: "update",
           messageId: newMsg.id,
@@ -110,7 +114,7 @@ describeLive("Discord tool result edit-in-place", () => {
     // edited into the existing status message rather than sent as
     // a separate message.
     await channel.send(
-      `<@${CLAW_BOT_ID}> Run this exact bash command and tell me ` +
+      `<@${BOT_ID}> Run this exact bash command and tell me ` +
         `the output: sleep 8 && echo "E2E-MARKER-${nonce}"`,
     );
 

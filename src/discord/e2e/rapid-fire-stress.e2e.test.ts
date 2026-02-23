@@ -1,14 +1,18 @@
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
-import { createE2eChannel, resolveTestBotToken, waitForBotResponse } from "./helpers.js";
+import {
+  createE2eChannel,
+  resolveE2eConfig,
+  resolveTestBotToken,
+  waitForBotResponse,
+} from "./helpers.js";
 
 // Gated behind LIVE=1 — these tests hit real Discord.
 const LIVE = isTruthyEnvValue(process.env.LIVE) || isTruthyEnvValue(process.env.CLAWDBOT_LIVE_TEST);
 const describeLive = LIVE ? describe : describe.skip;
 
-const CLAW_BOT_ID = process.env.DISCORD_E2E_CLAW_BOT_ID ?? "1468764779471700133";
-const GUILD_ID = process.env.DISCORD_E2E_GUILD_ID ?? "1471323114418733261";
+const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 
 // Short, unrelated questions the bot should answer quickly.
 // Each has unique keywords so we can verify the response covers
@@ -189,7 +193,7 @@ describeLive("Discord rapid-fire stress test", () => {
 
     // Track all bot messages in this channel.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.author.id === CLAW_BOT_ID && msg.channelId === channelId) {
+      if (msg.author.id === BOT_ID && msg.channelId === channelId) {
         allEvents.push({
           type: "create",
           messageId: msg.id,
@@ -201,7 +205,7 @@ describeLive("Discord rapid-fire stress test", () => {
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
-      if (newMsg.author?.id === CLAW_BOT_ID && newMsg.channelId === channelId) {
+      if (newMsg.author?.id === BOT_ID && newMsg.channelId === channelId) {
         allEvents.push({
           type: "update",
           messageId: newMsg.id,
@@ -246,14 +250,14 @@ describeLive("Discord rapid-fire stress test", () => {
   });
 
   it("answers every prompt in a 5-message rapid-fire burst", async () => {
-    await runBurst(client, channelId, CLAW_BOT_ID, RAPID_FIRE_PROMPTS, allEvents, "rapid-fire");
+    await runBurst(client, channelId, BOT_ID, RAPID_FIRE_PROMPTS, allEvents, "rapid-fire");
   }, 360_000);
 
   it("answers every prompt in a second burst after the first completes", async () => {
     await runBurst(
       client,
       channelId,
-      CLAW_BOT_ID,
+      BOT_ID,
       [
         {
           prompt: "What is the square root of 144?",
