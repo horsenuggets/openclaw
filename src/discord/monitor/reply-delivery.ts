@@ -5,6 +5,7 @@ import type { ChunkMode } from "../../auto-reply/chunk.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { MarkdownTableMode } from "../../config/types.base.js";
 import type { RuntimeEnv } from "../../runtime.js";
+import { parseFenceSpans } from "../../markdown/fences.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
 import {
   chunkDiscordTextWithMode,
@@ -74,8 +75,11 @@ export async function deliverDiscordReply(params: {
     // 1. Collapse 3+ newlines to a paragraph break.
     // 2. Remove blank lines between consecutive list items
     //    (LLMs occasionally emit \n\n between bullets).
+    // 3. Strip stray leading spaces from paragraph lines outside
+    //    fenced code blocks (preserves list-item indentation).
     text = text.replace(/\n{3,}/g, "\n\n");
     text = text.replace(/^([ \t]*[-*][ \t]+.+)\n\n([ \t]*[-*][ \t]+)/gm, "$1\n$2");
+    text = stripStrayLeadingSpaces(text);
     if (params.discordTimestamps !== false) {
       text = convertTimesToDiscordTimestamps(text);
     }
@@ -159,4 +163,45 @@ export async function deliverDiscordReply(params: {
   }
 
   return unclosedMarkers;
+}
+
+// Regex for lines with intentional leading whitespace: nested
+// list items (-, *, +, 1.) that use indentation for hierarchy.
+const INDENTED_LIST_RE = /^[ \t]+(?:[-*+][ \t]|\d+[.)][ \t])/;
+
+/**
+ * Strip stray leading spaces from lines outside fenced code
+ * blocks. LLMs occasionally indent paragraph lines with a space
+ * or two that renders as a visible gap in Discord. Preserves
+ * indentation on list items so nested lists keep their visual
+ * hierarchy.
+ */
+export function stripStrayLeadingSpaces(text: string): string {
+  const fenceSpans = parseFenceSpans(text);
+  const lines = text.split("\n");
+  let offset = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineStart = offset;
+    offset += line.length + 1;
+
+    // Skip lines inside fenced code blocks.
+    if (fenceSpans.some((s) => lineStart >= s.start && lineStart < s.end)) {
+      continue;
+    }
+
+    // Preserve indentation on nested list items.
+    if (INDENTED_LIST_RE.test(line)) {
+      continue;
+    }
+
+    // Strip leading whitespace from all other lines.
+    const trimmed = line.trimStart();
+    if (trimmed !== line) {
+      lines[i] = trimmed;
+    }
+  }
+
+  return lines.join("\n");
 }
