@@ -317,6 +317,11 @@
       "title": "Web Fetch",
       "detailKeys": ["url", "extractMode", "maxChars"]
     },
+    "transcribe": {
+      "emoji": "🎙️",
+      "title": "Transcribe",
+      "detailKeys": ["url"]
+    },
     "whatsapp_login": {
       "emoji": "🟢",
       "title": "WhatsApp Login",
