@@ -1,5 +1,3 @@
-import os from "node:os";
-import path from "node:path";
 import type { OpenClawConfig } from "../config/config.js";
 import type { CliBackendConfig } from "../config/types.js";
 import { normalizeProviderId } from "./model-selection.js";
@@ -43,9 +41,6 @@ const DEFAULT_CLAUDE_BACKEND: CliBackendConfig = {
   systemPromptMode: "replace",
   systemPromptWhen: "always",
   clearEnv: ["ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_OLD", "CLAUDECODE"],
-  env: {
-    CLAUDE_CONFIG_DIR: path.join(os.homedir(), ".openclaw", ".claude-config"),
-  },
   serialize: true,
 };
 
