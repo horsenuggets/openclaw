@@ -7,7 +7,6 @@ import type { FollowupRun } from "./queue.js";
 import type { TypingSignaler } from "./typing-mode.js";
 import { resolveAgentModelFallbacksOverride } from "../../agents/agent-scope.js";
 import { runCliAgent } from "../../agents/cli-runner.js";
-import { getCliSessionId } from "../../agents/cli-session.js";
 import { runWithModelFallback } from "../../agents/model-fallback.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import {
@@ -175,7 +174,6 @@ export async function runAgentTurnWithFallback(params: {
                 startedAt,
               },
             });
-            const cliSessionId = getCliSessionId(params.getActiveSessionEntry(), provider);
             return (async () => {
               // Start typing immediately as a fallback. When streaming
               // callbacks (onStreamEvent/onToolStatus) are provided, the
@@ -200,11 +198,11 @@ export async function runAgentTurnWithFallback(params: {
                   runId,
                   extraSystemPrompt: params.followupRun.run.extraSystemPrompt,
                   ownerNumbers: params.followupRun.run.ownerNumbers,
-                  cliSessionId,
                   images: params.opts?.images,
                   // Enable streaming mode when toolFeedback is configured
                   onToolStatus: params.opts?.onToolStatus,
                   onStreamEvent: params.opts?.onStreamEvent,
+                  reasoningLevel: params.followupRun.run.reasoningLevel,
                 });
 
                 // CLI backends don't emit streaming assistant events, so we need to
