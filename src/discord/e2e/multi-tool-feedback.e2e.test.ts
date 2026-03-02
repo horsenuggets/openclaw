@@ -33,14 +33,6 @@ const TOOL_FEEDBACK_PATTERNS = [
   "*WebSearch*",
   "*WebFetch*",
   "*Sub-agent*",
-  // Older italic format.
-  "*Reading",
-  "*Running",
-  "*Editing",
-  "*Writing",
-  "*Searching",
-  "*Fetching",
-  "*Globbing",
 ];
 
 /** Check that no tool result content is duplicated excessively.
@@ -324,7 +316,7 @@ describeLive("Discord multi-tool feedback display", () => {
     // Should contain Bash tool feedback.
     const hasBashFeedback = creates.some((e) => {
       const c = e.content ?? "";
-      return c.includes("*Bash*") || c.includes("*Running");
+      return c.includes("*Bash*");
     });
     expect(hasBashFeedback).toBe(true);
 
@@ -364,10 +356,10 @@ describeLive("Discord multi-tool feedback display", () => {
     ].join("\n");
     const toolsFound = new Set<string>();
 
-    if (allContent.includes("*Bash*") || allContent.includes("*Running")) {
+    if (allContent.includes("*Bash*")) {
       toolsFound.add("Bash");
     }
-    if (allContent.includes("*Read*") || allContent.includes("*Reading")) {
+    if (allContent.includes("*Read*")) {
       toolsFound.add("Read");
     }
     if (allContent.includes("*Glob*") || allContent.includes("*Globbing")) {

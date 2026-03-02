@@ -111,20 +111,19 @@ describe("tool display details", () => {
 });
 
 describe("formatToolFeedbackDiscord", () => {
-  it("formats Bash with command in inline code, no colon", () => {
+  it("formats Bash with command in inline code", () => {
     const display = resolveToolDisplay({
       name: "Bash",
       args: { command: "git status" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toBe("*Running `git status`...*");
-    expect(result).not.toContain(":");
+    expect(result).toBe("*Bash* (`git status`)");
   });
 
-  it("formats Bash without command as generic message", () => {
+  it("formats Bash without command as title only", () => {
     const display = resolveToolDisplay({ name: "Bash" });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toBe("*Running a command...*");
+    expect(result).toBe("*Bash*");
   });
 
   it("formats Read with file path in inline code", () => {
@@ -133,9 +132,8 @@ describe("formatToolFeedbackDiscord", () => {
       args: { file_path: "/home/user/project/src/index.ts" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toContain("*Reading `");
+    expect(result).toContain("*Read*");
     expect(result).toContain("index.ts");
-    expect(result).not.toContain(":");
   });
 
   it("formats Write with file path", () => {
@@ -144,7 +142,7 @@ describe("formatToolFeedbackDiscord", () => {
       args: { path: "/tmp/output.txt" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toContain("*Writing `");
+    expect(result).toContain("*Write*");
     expect(result).toContain("output.txt");
   });
 
@@ -154,7 +152,7 @@ describe("formatToolFeedbackDiscord", () => {
       args: { path: "/src/main.ts" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toContain("*Editing `");
+    expect(result).toContain("*Edit*");
     expect(result).toContain("main.ts");
   });
 
@@ -164,7 +162,7 @@ describe("formatToolFeedbackDiscord", () => {
       args: { query: "vitest fake timers" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toContain("*Searching `vitest fake timers`...*");
+    expect(result).toBe("*Web Search* (`vitest fake timers`)");
   });
 
   it("formats WebFetch with URL in inline code", () => {
@@ -173,7 +171,7 @@ describe("formatToolFeedbackDiscord", () => {
       args: { url: "https://example.com" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toContain("*Fetching `https://example.com`...*");
+    expect(result).toBe("*Web Fetch* (`https://example.com`)");
   });
 
   it("truncates long Bash commands at 120 chars", () => {
@@ -187,15 +185,16 @@ describe("formatToolFeedbackDiscord", () => {
     expect(result).toContain("...");
   });
 
-  it("strips stderr redirections and trailing pipes from Bash commands", () => {
+  it("preserves pipe chains in Bash feedback header", () => {
     const display = resolveToolDisplay({
       name: "Bash",
       args: { command: "todoist list 2>/dev/null | head -30" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toBe("*Running `todoist list`...*");
+    // buildToolHeader keeps pipe chains for context
+    expect(result).toContain("*Bash*");
+    expect(result).toContain("todoist list");
     expect(result).not.toContain("2>/dev/null");
-    expect(result).not.toContain("head");
   });
 
   it("uses only the first line of multi-line Bash commands", () => {
@@ -214,16 +213,17 @@ describe("formatToolFeedbackDiscord", () => {
       args: { prompt: "list files in /tmp" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toBe("*list files in /tmp...*");
+    // Sub-agent header uses detail directly
+    expect(result).toContain("list files in /tmp");
   });
 
-  it("formats unknown tools with label and detail in code", () => {
+  it("formats unknown tools with title and detail in code", () => {
     const display = resolveToolDisplay({
       name: "custom_tool",
       args: { path: "/some/path" },
     });
     const result = formatToolFeedbackDiscord(display);
-    expect(result).toBe("*Custom Tool `/some/path`...*");
+    expect(result).toBe("*Custom Tool* (`/some/path`)");
   });
 });
 

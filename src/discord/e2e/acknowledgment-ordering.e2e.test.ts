@@ -156,10 +156,9 @@ describeLive("Discord acknowledgment ordering", () => {
       const c = e.content ?? "";
       return (
         c.includes("*Bash*") ||
-        c.includes("*Running") ||
-        c.includes("*Reading") ||
+        c.includes("*Read*") ||
         c.match(/```/) || // Code blocks indicate tool output
-        c.match(/\*[A-Z][a-z]+.*\(.*\).*\.\.\.\*/) // Rich tool format
+        c.match(/\*[A-Z][a-z]+\*/) // Tool header format
       );
     });
 

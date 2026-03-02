@@ -167,9 +167,7 @@ describeLive("Discord tool result edit-in-place", () => {
     expect(hasCodeBlock).toBe(true);
 
     // The edited message should also contain the tool status line.
-    const hasToolStatus = editedContents.some(
-      (c) => c.includes("*Running") || c.includes("*Bash*"),
-    );
+    const hasToolStatus = editedContents.some((c) => c.includes("*Bash*"));
     expect(hasToolStatus).toBe(true);
 
     // The final reply or edit should contain our marker.

@@ -178,11 +178,7 @@ describeLive("Discord tool feedback display", () => {
       ...creates.map((e) => e.content ?? ""),
       ...updates.map((e) => e.content ?? ""),
     ].join("\n");
-    const hasToolFeedback =
-      allContent.includes("*Read*") ||
-      allContent.includes("*Bash*") ||
-      allContent.includes("*Reading") ||
-      allContent.includes("*Running");
+    const hasToolFeedback = allContent.includes("*Read*") || allContent.includes("*Bash*");
 
     expect(hasToolFeedback).toBe(true);
 

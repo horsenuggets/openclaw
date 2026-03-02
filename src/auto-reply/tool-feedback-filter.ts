@@ -135,28 +135,11 @@ function formatGroupedFeedback(groups: GroupedTool[]): string {
       args: group.firstInput,
     });
 
-    if (group.count > 1 && group.isHomogeneous) {
-      // Homogeneous group: show base command/detail with count
-      const key = group.toolName.toLowerCase();
-      if (key === "bash" || key === "exec") {
-        const cmd = group.firstInput?.command;
-        if (typeof cmd === "string") {
-          const base = extractBaseCommand(cmd);
-          lines.push(`*Running \`${base}\` (x${group.count})...*`);
-          continue;
-        }
-      }
-      // Other homogeneous groups: use standard format + count
-      const formatted = formatToolFeedbackDiscord(display);
-      // Insert count before the trailing ...*
-      lines.push(formatted.replace(/\.\.\.\*$/, ` (x${group.count})...*`));
-    } else if (group.count > 1) {
-      // Heterogeneous group: just show tool name + count
-      const formatted = formatToolFeedbackDiscord(display);
-      lines.push(formatted.replace(/\.\.\.\*$/, ` (x${group.count})...*`));
+    const header = formatToolFeedbackDiscord(display);
+    if (group.count > 1) {
+      lines.push(`${header} (x${group.count})`);
     } else {
-      // Single tool: full format
-      lines.push(formatToolFeedbackDiscord(display));
+      lines.push(header);
     }
   }
 

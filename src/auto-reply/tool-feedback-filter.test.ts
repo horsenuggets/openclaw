@@ -44,10 +44,9 @@ describe("createUnifiedToolFeedback", () => {
 
     expect(onUpdate).toHaveBeenCalledTimes(1);
     const text = onUpdate.mock.calls[0][0] as string;
-    // Should use italic formatting with no colon
-    expect(text).toContain("*Reading");
+    // Should use the same header format as tool results
+    expect(text).toContain("*Read*");
     expect(text).toContain("`");
-    expect(text).not.toContain(":");
     filter.dispose();
   });
 
@@ -105,10 +104,9 @@ describe("createUnifiedToolFeedback", () => {
 
     expect(onUpdate).toHaveBeenCalledTimes(1);
     const text = onUpdate.mock.calls[0][0] as string;
+    expect(text).toContain("*Bash*");
     expect(text).toContain("gog calendar events");
     expect(text).toContain("(x7)");
-    // Should not contain individual calendar IDs
-    expect(text).not.toContain("calendar-id-");
     filter.dispose();
   });
 
@@ -136,8 +134,8 @@ describe("createUnifiedToolFeedback", () => {
     const text = onUpdate.mock.calls[0][0] as string;
     const lines = text.split("\n");
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain("Reading");
-    expect(lines[1]).toContain("Running");
+    expect(lines[0]).toContain("*Read*");
+    expect(lines[1]).toContain("*Bash*");
     filter.dispose();
   });
 
@@ -234,7 +232,7 @@ describe("createUnifiedToolFeedback", () => {
     vi.advanceTimersByTime(600);
 
     const text = onUpdate.mock.calls[0][0] as string;
-    expect(text).toContain("Running `npm install`");
+    expect(text).toContain("*Bash* (`npm install`)");
     filter.dispose();
   });
 

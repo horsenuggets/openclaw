@@ -316,84 +316,12 @@ export function formatToolSummary(display: ToolDisplay): string {
 const MAX_DISCORD_CMD_LENGTH = 120;
 
 /**
- * Format a tool call for Discord as an italic status line.
- * No emojis, no colons. Uses ellipses and inline code.
+ * Format a tool call for Discord as a status line.
+ * Uses the same header format as completed tool results so the
+ * in-progress message and the final result look consistent.
  */
 export function formatToolFeedbackDiscord(display: ToolDisplay): string {
-  const key = display.name.toLowerCase();
-
-  // Bash/exec: show command in inline code, strip noise
-  if (key === "bash" || key === "exec") {
-    if (display.detail) {
-      let cmd = display.detail.split(/\r?\n/)[0]?.trim() ?? display.detail;
-      // Strip leading "export FOO=bar &&" prefixes
-      cmd = cmd.replace(/^(?:export\s+\S+=\S+\s*&&\s*)+/g, "").trim();
-      // Strip leading echo "..." && prefixes
-      cmd = cmd.replace(/^echo\s+"[^"]*"\s*&&\s*/g, "").trim();
-      // Strip stderr/stdout redirections (2>/dev/null, >/dev/null)
-      cmd = cmd.replace(/\s*[12]?>\s*\/dev\/null/g, "").trim();
-      // Strip trailing pipe chains that are just filtering
-      cmd = cmd.replace(/\s*\|\s*(?:head|tail)\s+.*$/g, "").trim();
-      const truncated =
-        cmd.length > MAX_DISCORD_CMD_LENGTH
-          ? `${cmd.slice(0, MAX_DISCORD_CMD_LENGTH - 3)}...`
-          : cmd;
-      return `*Running \`${truncated}\`...*`;
-    }
-    return "*Running a command...*";
-  }
-
-  // Read: show file path in inline code
-  if (key === "read") {
-    if (display.detail) {
-      return `*Reading \`${display.detail}\`...*`;
-    }
-    return "*Reading a file...*";
-  }
-
-  // Write/Edit: show file path in inline code
-  if (key === "write" || key === "edit") {
-    const verb = key === "write" ? "Writing" : "Editing";
-    if (display.detail) {
-      return `*${verb} \`${display.detail}\`...*`;
-    }
-    return `*${verb} a file...*`;
-  }
-
-  // Search tools: show query/pattern in inline code
-  if (key === "web_search" || key === "grep" || key === "glob") {
-    if (display.detail) {
-      return `*Searching \`${display.detail}\`...*`;
-    }
-    return "*Searching...*";
-  }
-
-  // Web fetch: show URL in inline code
-  if (key === "web_fetch") {
-    if (display.detail) {
-      return `*Fetching \`${display.detail}\`...*`;
-    }
-    return "*Fetching a page...*";
-  }
-
-  // Sub-agent / Task: show description
-  if (key === "task" || key === "sessions_spawn") {
-    if (display.detail) {
-      return `*${display.detail}...*`;
-    }
-    return "*Running a sub-agent...*";
-  }
-
-  // detailOnly tools (claude_code wrapper)
-  if (display.detailOnly && display.detail) {
-    return `*${display.detail}...*`;
-  }
-
-  // Default: label + optional detail in inline code
-  if (display.detail) {
-    return `*${display.label} \`${display.detail}\`...*`;
-  }
-  return `*${display.label}...*`;
+  return buildToolHeader(display);
 }
 
 const MAX_PREVIEW_LINES = 10;
