@@ -185,6 +185,14 @@ export function handleMessageUpdate(
       ctx.emitBlockChunk(ctx.state.blockBuffer);
       ctx.state.blockBuffer = "";
     }
+    // Flush the pipeline coalescer so each text block boundary produces a
+    // separate message. This is critical for CLI backends where tool events
+    // bypass the session subscriber (no tool_execution_start → no
+    // onBlockReplyFlush). For non-CLI backends this is harmless since the
+    // pipeline is flushed again from handleToolExecutionStart anyway.
+    if (ctx.params.onBlockReplyFlush) {
+      void ctx.params.onBlockReplyFlush();
+    }
   }
 }
 

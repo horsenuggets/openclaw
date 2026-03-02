@@ -67,7 +67,9 @@ describe("subscribeEmbeddedPiSession", () => {
       args: { command: "icalbuddy eventsToday" },
     });
 
-    expect(onBlockReplyFlush).toHaveBeenCalledTimes(1);
+    // text_end flushes the pipeline (1st call), then tool_execution_start
+    // flushes again (2nd call, harmless no-op since nothing is buffered).
+    expect(onBlockReplyFlush).toHaveBeenCalledTimes(2);
     expect(onBlockReplyDiscard).not.toHaveBeenCalled();
     expect(onBlockReply).toHaveBeenCalledTimes(1);
   });
