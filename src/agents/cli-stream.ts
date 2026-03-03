@@ -36,6 +36,7 @@ import {
   resolvePromptInput,
   resolveSystemPromptUsage,
 } from "./cli-runner/helpers.js";
+import { stripSelfTalk } from "./cli-runner/session-history.js";
 import { runStreamingCli } from "./cli-runner/streaming.js";
 import { startMcpBridge } from "./mcp-bridge/parent.js";
 
@@ -79,18 +80,18 @@ function emptyUsage(): Usage {
  * separately via --system-prompt.
  */
 function serializeMessagesToPrompt(context: Context): string {
-  const parts: string[] = [];
+  const turns: string[] = [];
   for (const msg of context.messages) {
     if (msg.role === "user") {
       const content = msg.content;
       if (typeof content === "string") {
-        parts.push(`[User]\n${content}`);
+        turns.push(`<user>\n${content}\n</user>`);
       } else if (Array.isArray(content)) {
         const textParts = content
           .filter((b): b is TextContent => b.type === "text")
           .map((b) => b.text);
         if (textParts.length > 0) {
-          parts.push(`[User]\n${textParts.join("\n")}`);
+          turns.push(`<user>\n${textParts.join("\n")}\n</user>`);
         }
       }
     } else if (msg.role === "assistant") {
@@ -98,12 +99,12 @@ function serializeMessagesToPrompt(context: Context): string {
         .filter((b): b is TextContent => b.type === "text")
         .map((b) => b.text);
       if (textParts.length > 0) {
-        parts.push(`[Assistant]\n${textParts.join("\n")}`);
+        turns.push(`<assistant>\n${textParts.join("\n")}\n</assistant>`);
       }
     }
     // Skip toolResult messages — the CLI handles tools internally
   }
-  return parts.join("\n\n");
+  return turns.join("\n\n");
 }
 
 /**
@@ -409,8 +410,11 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
         });
       }
 
-      // Build final message and emit done
-      const finalText = textParts.length > 0 ? textParts.join("") : result.text;
+      // Build final message and emit done. Strip any self-talk
+      // (fabricated [User]/[Assistant] continuation turns) from the
+      // collected text before building the final message.
+      const rawText = textParts.length > 0 ? textParts.join("") : result.text;
+      const finalText = rawText ? stripSelfTalk(rawText) : rawText;
       const usage = cliUsage
         ? {
             input: cliUsage.input ?? 0,

@@ -32,6 +32,7 @@ import {
   appendCliTurnToSession,
   formatHistoryForPrompt,
   readSessionHistory,
+  stripSelfTalk,
 } from "./cli-runner/session-history.js";
 import { formatToolStatusLabel, runStreamingCli } from "./cli-runner/streaming.js";
 import { resolveOpenClawDocsPath } from "./docs-path.js";
@@ -459,7 +460,10 @@ export async function runCliAgent(params: {
       return parsed ?? { text: stdout };
     });
 
-    const text = output.text?.trim();
+    // Strip any self-talk from the response (model-generated
+    // [User]/[Assistant] continuation turns) before storing or
+    // returning the text.
+    const text = output.text?.trim() ? stripSelfTalk(output.text.trim()) : undefined;
 
     // Persist this turn to the session JSONL so subsequent
     // invocations can read it back as conversation history.

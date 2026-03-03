@@ -147,20 +147,63 @@ export function formatHistoryForPrompt(turns: SessionTurn[], limit?: number): st
 
   const lines: string[] = [];
   for (const turn of limited) {
-    const label = turn.role === "user" ? "[User]" : "[Assistant]";
-    lines.push(label);
+    const tag = turn.role === "user" ? "user" : "assistant";
+    lines.push(`<${tag}>`);
     lines.push(turn.text);
+    lines.push(`</${tag}>`);
     lines.push("");
   }
 
   return [
     "The following is the prior conversation with the user.",
     "Use this context to maintain continuity.",
+    "IMPORTANT: Do not extend or continue this history. Do not",
+    "generate <user> or <assistant> tags in your response.",
     "",
+    "<conversation_history>",
     ...lines,
+    "</conversation_history>",
   ]
     .join("\n")
     .trimEnd();
+}
+
+/**
+ * Patterns that indicate the model started generating fabricated
+ * conversation turns (the "self-talk" bug). When the conversation
+ * history uses [User]/[Assistant] or <user>/<assistant> labels,
+ * the model sometimes continues the pattern in its response.
+ * Truncate the response at the first match.
+ */
+const SELF_TALK_PATTERNS = [
+  // Legacy bracket format
+  /\n\[User\]\n/,
+  /\n\[Assistant\]/,
+  // XML tag format
+  /\n<user>\n/,
+  /\n<assistant>\n/,
+  // Bracket labels at the very start of a line (after a newline)
+  /\n\[User\]\s*\n/,
+];
+
+/**
+ * Strip self-talk from an assistant response. When the model
+ * generates fabricated [User]/[Assistant] conversation turns as
+ * part of its response, truncate at the first occurrence. Returns
+ * the clean response text.
+ */
+export function stripSelfTalk(text: string): string {
+  let earliest = text.length;
+  for (const pattern of SELF_TALK_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match && match.index < earliest) {
+      earliest = match.index;
+    }
+  }
+  if (earliest < text.length) {
+    return text.slice(0, earliest).trimEnd();
+  }
+  return text;
 }
 
 /**
