@@ -27,6 +27,7 @@ import {
   handleRestartCommand,
   handleSendPolicyCommand,
   handleStopCommand,
+  handleToolFeedbackCommand,
   handleUsageCommand,
 } from "./commands-session.js";
 import { handleSubagentsCommand } from "./commands-subagents.js";
@@ -41,6 +42,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       // Plugin commands are processed first, before built-in commands
       handlePluginCommand,
       handleBashCommand,
+      handleToolFeedbackCommand,
       handleActivationCommand,
       handleSendPolicyCommand,
       handleUsageCommand,

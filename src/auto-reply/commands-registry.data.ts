@@ -439,6 +439,22 @@ function buildChatCommands(): ChatCommandDefinition[] {
       argsMenu: "auto",
     }),
     defineChatCommand({
+      key: "toolfeedback",
+      nativeName: "toolfeedback",
+      description: "Toggle tool feedback messages.",
+      textAlias: "/toolfeedback",
+      category: "options",
+      args: [
+        {
+          name: "mode",
+          description: "on or off",
+          type: "string",
+          choices: ["on", "off"],
+        },
+      ],
+      argsMenu: "auto",
+    }),
+    defineChatCommand({
       key: "verbose",
       nativeName: "verbose",
       description: "Toggle verbose mode.",

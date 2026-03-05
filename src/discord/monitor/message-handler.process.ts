@@ -33,7 +33,7 @@ import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { recordInboundSession } from "../../channels/session.js";
 import { createTypingCallbacks } from "../../channels/typing.js";
 import { resolveMarkdownTableMode, resolveTableHairspacing } from "../../config/markdown-tables.js";
-import { readSessionUpdatedAt, resolveStorePath } from "../../config/sessions.js";
+import { loadSessionStore, readSessionUpdatedAt, resolveStorePath } from "../../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../../globals.js";
 import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-events.js";
 import { buildAgentSessionKey } from "../../routing/resolve-route.js";
@@ -638,7 +638,21 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
   // Unified tool feedback: buffers tool calls, groups similar commands,
   // rate-limits output, and formats using code blocks.
-  const toolFeedbackEnabled = discordConfig?.toolFeedback !== false;
+  // Check session-level toolFeedback override (set by /toolfeedback command).
+  const sessionToolFeedback = (() => {
+    try {
+      const sessionKey = route.sessionKey;
+      if (storePath && sessionKey) {
+        const store = loadSessionStore(storePath);
+        return store[sessionKey]?.toolFeedback;
+      }
+    } catch {
+      // Ignore errors reading session store.
+    }
+    return undefined;
+  })();
+  const toolFeedbackEnabled =
+    sessionToolFeedback !== undefined ? sessionToolFeedback : discordConfig?.toolFeedback !== false;
   const unifiedToolFeedback = toolFeedbackEnabled
     ? createUnifiedToolFeedback({
         onUpdate: (feedbackText, toolCallIds) => {

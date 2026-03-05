@@ -53,6 +53,7 @@ export type SessionEntry = {
   execSecurity?: string;
   execAsk?: string;
   execNode?: string;
+  toolFeedback?: boolean;
   responseUsage?: "on" | "off" | "tokens" | "full";
   providerOverride?: string;
   modelOverride?: string;

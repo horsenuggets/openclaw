@@ -53,6 +53,77 @@ function resolveAbortTarget(params: {
   return { entry: undefined, key: targetSessionKey, sessionId: undefined };
 }
 
+export const handleToolFeedbackCommand: CommandHandler = async (params, allowTextCommands) => {
+  if (!allowTextCommands) {
+    return null;
+  }
+  const normalized = params.command.commandBodyNormalized;
+  if (normalized !== "/toolfeedback" && !normalized.startsWith("/toolfeedback ")) {
+    return null;
+  }
+  if (!params.command.isAuthorizedSender) {
+    logVerbose(
+      `Ignoring /toolfeedback from unauthorized sender: ${params.command.senderId || "<unknown>"}`,
+    );
+    return { shouldContinue: false };
+  }
+  const rawArg =
+    normalized === "/toolfeedback"
+      ? ""
+      : normalized.slice("/toolfeedback".length).trim().toLowerCase();
+
+  if (!rawArg) {
+    // Toggle: if currently off, turn on; if on (or unset), turn off
+    const current = params.sessionEntry?.toolFeedback;
+    const next = current === false ? true : false;
+    if (params.sessionEntry && params.sessionStore && params.sessionKey) {
+      if (next) {
+        delete params.sessionEntry.toolFeedback;
+      } else {
+        params.sessionEntry.toolFeedback = false;
+      }
+      params.sessionEntry.updatedAt = Date.now();
+      params.sessionStore[params.sessionKey] = params.sessionEntry;
+      if (params.storePath) {
+        await updateSessionStore(params.storePath, (store) => {
+          store[params.sessionKey] = params.sessionEntry as SessionEntry;
+        });
+      }
+    }
+    return {
+      shouldContinue: false,
+      reply: { text: `⚙️ Tool feedback ${next ? "enabled" : "disabled"}.` },
+    };
+  }
+
+  if (rawArg !== "on" && rawArg !== "off") {
+    return {
+      shouldContinue: false,
+      reply: { text: "⚙️ Usage: /toolfeedback on|off" },
+    };
+  }
+
+  const enabled = rawArg === "on";
+  if (params.sessionEntry && params.sessionStore && params.sessionKey) {
+    if (enabled) {
+      delete params.sessionEntry.toolFeedback;
+    } else {
+      params.sessionEntry.toolFeedback = false;
+    }
+    params.sessionEntry.updatedAt = Date.now();
+    params.sessionStore[params.sessionKey] = params.sessionEntry;
+    if (params.storePath) {
+      await updateSessionStore(params.storePath, (store) => {
+        store[params.sessionKey] = params.sessionEntry as SessionEntry;
+      });
+    }
+  }
+  return {
+    shouldContinue: false,
+    reply: { text: `⚙️ Tool feedback ${enabled ? "enabled" : "disabled"}.` },
+  };
+};
+
 export const handleActivationCommand: CommandHandler = async (params, allowTextCommands) => {
   if (!allowTextCommands) {
     return null;
