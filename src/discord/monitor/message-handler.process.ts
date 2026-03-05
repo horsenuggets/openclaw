@@ -911,7 +911,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
       // Feed tool calls to the unified filter for grouped, code-formatted
       // Discord feedback. Providing onToolStatus bypasses the default
       // italic block-reply formatting in dispatch-from-config.ts.
-      toolFeedback: true,
+      toolFeedback: toolFeedbackEnabled,
       // Track block flush operations so tool feedback can wait for them to complete.
       // This ensures acknowledgment text appears before tool digests.
       onBlockReplyFlush: () => {
