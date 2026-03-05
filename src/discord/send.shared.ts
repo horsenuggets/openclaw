@@ -94,6 +94,9 @@ function normalizeReactionEmoji(raw: string) {
 
 function parseRecipient(raw: string): DiscordRecipient {
   const target = parseDiscordTarget(raw, {
+    // Bare numeric IDs default to "user" (DM). Channel messages always
+    // come through with explicit "channel:" prefixes or channel objects.
+    defaultKind: "user",
     ambiguousMessage: `Ambiguous Discord recipient "${raw.trim()}". Use "user:${raw.trim()}" for DMs or "channel:${raw.trim()}" for channel messages.`,
   });
   if (!target) {
@@ -121,6 +124,9 @@ export async function parseAndResolveRecipient(
   // First try to resolve using directory lookup (handles usernames)
   const trimmed = raw.trim();
   const parseOptions = {
+    // Bare numeric IDs default to "user" (DM). Channel messages always
+    // come through with explicit "channel:" prefixes or channel objects.
+    defaultKind: "user" as const,
     ambiguousMessage: `Ambiguous Discord recipient "${trimmed}". Use "user:${trimmed}" for DMs or "channel:${trimmed}" for channel messages.`,
   };
 

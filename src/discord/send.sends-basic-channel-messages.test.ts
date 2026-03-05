@@ -96,17 +96,21 @@ describe("sendMessageDiscord", () => {
     expect(res.channelId).toBe("chan1");
   });
 
-  it("rejects bare numeric IDs as ambiguous", async () => {
-    const { rest } = makeRest();
-    await expect(
-      sendMessageDiscord("273512430271856640", "hello", { rest, token: "t" }),
-    ).rejects.toThrow(/Ambiguous Discord recipient/);
-    await expect(
-      sendMessageDiscord("273512430271856640", "hello", { rest, token: "t" }),
-    ).rejects.toThrow(/user:273512430271856640/);
-    await expect(
-      sendMessageDiscord("273512430271856640", "hello", { rest, token: "t" }),
-    ).rejects.toThrow(/channel:273512430271856640/);
+  it("treats bare numeric IDs as user DMs", async () => {
+    const { rest, postMock } = makeRest();
+    // First call: DM channel creation returns a channel object
+    postMock.mockResolvedValueOnce({ id: "dm-chan-123" });
+    // Second call: message send returns a message object
+    postMock.mockResolvedValueOnce({ id: "msg-1", channel_id: "dm-chan-123" });
+    const res = await sendMessageDiscord("273512430271856640", "hello", { rest, token: "t" });
+    expect(res.messageId).toBe("msg-1");
+    // Verify the first POST was to create a DM channel with the user ID
+    expect(postMock).toHaveBeenCalledWith(
+      expect.stringContaining("users/@me/channels"),
+      expect.objectContaining({
+        body: { recipient_id: "273512430271856640" },
+      }),
+    );
   });
 
   it("adds missing permission hints on 50013", async () => {
