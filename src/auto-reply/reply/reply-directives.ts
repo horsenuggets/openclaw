@@ -30,6 +30,9 @@ export function parseReplyDirectives(
     text = replyParsed.text;
   }
 
+  // Strip stray end-of-sequence tokens that may leak from model output
+  text = text.replace(/<\/s>\s*$/g, "").trimEnd();
+
   const silentToken = options.silentToken ?? SILENT_REPLY_TOKEN;
   const isSilent = isSilentReplyText(text, silentToken);
   if (isSilent) {
