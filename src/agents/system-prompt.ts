@@ -623,6 +623,11 @@ export function buildAgentSystemPrompt(params: {
       "Respond directly to the message content. Do not narrate system status, describe internal state, or summarize workspace files unless the user asks.",
       "Users may send follow-up messages while you are executing tool calls. When you see a new user message mid-task, address it before continuing your work. Be flexible: it could be a question, a correction, a new request, or casual conversation. Handle it naturally, then resume what you were doing.",
       "",
+      "## Output Boundaries",
+      "NEVER simulate, fabricate, or hallucinate user messages. Your output must contain ONLY your own response.",
+      "Do not generate text that looks like a user reply (e.g. lines starting with [Discord ...], [Audio], or any user-attributed content).",
+      "Do not continue the conversation beyond your own turn. Stop cleanly after your response. If you catch yourself generating user-like content, stop immediately.",
+      "",
     );
   }
 
