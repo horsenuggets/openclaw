@@ -231,6 +231,8 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
         | undefined;
       // Track tool names by callId so we can include them in result events
       const toolNameByCallId = new Map<string, string>();
+      // Capture CLI errors so we can report them to the user
+      let cliErrorMessage: string | undefined;
 
       // Emit the start event
       const partial = buildPartialMessage([], undefined);
@@ -363,6 +365,7 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
           }
           case "error": {
             log.warn(`CLI stream error: ${event.message}`);
+            cliErrorMessage = event.message;
             break;
           }
         }
@@ -426,6 +429,14 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
           }
         : emptyUsage();
 
+      // Propagate CLI errors: when the CLI exits with a non-zero code
+      // and produced no text, report it as an error so the user sees
+      // the failure instead of a silent no-response.
+      const isCliError = result.exitCode !== 0 && !finalText;
+      const errorMessage = isCliError
+        ? cliErrorMessage || result.stderr || `CLI exited with code ${result.exitCode}`
+        : undefined;
+
       const finalMessage: AssistantMessage = {
         role: "assistant",
         content: [
@@ -438,11 +449,16 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
         provider: "anthropic" as AssistantMessage["provider"],
         model: "cli",
         usage,
-        stopReason: "stop",
+        stopReason: isCliError ? "error" : "stop",
+        errorMessage,
         timestamp: Date.now(),
       };
 
-      stream.push({ type: "done", reason: "stop", message: finalMessage });
+      if (isCliError) {
+        stream.push({ type: "error", reason: "error", error: finalMessage });
+      } else {
+        stream.push({ type: "done", reason: "stop", message: finalMessage });
+      }
 
       // Clean up ephemeral directory
       await fs.rm(ephemeralDir, { recursive: true, force: true }).catch(() => {});
