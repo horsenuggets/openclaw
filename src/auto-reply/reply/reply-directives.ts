@@ -38,6 +38,11 @@ export function parseReplyDirectives(
   // remove everything after it (hallucinated user/assistant turns).
   text = text.replace(/\n*<\/?(?:user|assistant)>[\s\S]*$/g, "").trimEnd();
 
+  // Strip stray HEARTBEAT_OK tokens that may appear at the end of
+  // streamed blocks (the final-payload strip in agent-runner-payloads
+  // only runs after streaming is complete, so this catches it early).
+  text = text.replace(/\s*HEARTBEAT_OK\s*$/g, "").trimEnd();
+
   const silentToken = options.silentToken ?? SILENT_REPLY_TOKEN;
   const isSilent = isSilentReplyText(text, silentToken);
   if (isSilent) {
