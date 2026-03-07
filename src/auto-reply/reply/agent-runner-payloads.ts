@@ -2,7 +2,6 @@ import type { ReplyToMode } from "../../config/types.js";
 import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 import { logVerbose } from "../../globals.js";
-import { stripHeartbeatToken } from "../heartbeat.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { formatBunFetchSocketError, isBunFetchSocketError } from "./agent-runner-utils.js";
 import { createBlockReplyPayloadKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
@@ -46,16 +45,13 @@ export function buildReplyPayloads(params: {
         if (!text || !text.includes("HEARTBEAT_OK")) {
           return [{ ...payload, text }];
         }
-        const stripped = stripHeartbeatToken(text, { mode: "message" });
-        if (stripped.didStrip && !didLogHeartbeatStrip) {
+        // If HEARTBEAT_OK appears anywhere in the text, suppress the entire message.
+        // The model should either reply with ONLY HEARTBEAT_OK (silent) or a real message without it.
+        if (!didLogHeartbeatStrip) {
           didLogHeartbeatStrip = true;
-          logVerbose("Stripped stray HEARTBEAT_OK token from reply");
+          logVerbose("Suppressed message containing HEARTBEAT_OK token");
         }
-        const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
-        if (stripped.shouldSkip && !hasMedia) {
-          return [];
-        }
-        return [{ ...payload, text: stripped.text }];
+        return [];
       });
 
   const replyTaggedPayloads: ReplyPayload[] = applyReplyThreading({
