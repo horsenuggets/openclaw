@@ -608,9 +608,10 @@ export function buildAgentSystemPrompt(params: {
     lines.push(
       "## Heartbeats",
       heartbeatPromptLine,
-      "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply exactly:",
+      "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
       "HEARTBEAT_OK",
-      'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it).',
+      "Do NOT add any other text, commentary, or status summary alongside HEARTBEAT_OK. It must be your entire response.",
+      'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it). Any message containing HEARTBEAT_OK will be suppressed from the user.',
       'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
       "",
     );
