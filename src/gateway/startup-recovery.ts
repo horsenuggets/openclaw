@@ -208,6 +208,22 @@ export async function runStartupRecovery(params: StartupRecoveryParams): Promise
       const userText = entry.lastUserMessageText!.trim();
       const recoveryBody = buildRecoveryPrompt(userText);
 
+      // Re-check the session right before dispatching to avoid TOCTOU races.
+      // The initial isUnanswered check may have been stale if an agent run
+      // completed between loading the store and reaching this point.
+      try {
+        const freshStore = loadSessionStore(storePath, { skipCache: true });
+        const freshEntry = freshStore?.[sessionKey];
+        if (freshEntry && !isUnanswered(freshEntry, agentId)) {
+          logVerbose(
+            `startup-recovery: session "${sessionKey}" was answered between check and dispatch; skipping`,
+          );
+          continue;
+        }
+      } catch {
+        // If we can't re-read the store, proceed with caution (original check still valid).
+      }
+
       try {
         await dispatchInboundMessageWithDispatcher({
           ctx: {

@@ -330,7 +330,7 @@ export async function getReplyFromConfig(
     execOverrides,
     elevatedEnabled,
     elevatedAllowed,
-    blockStreamingEnabled,
+    blockStreamingEnabled: opts?.isHeartbeat ? false : blockStreamingEnabled,
     blockReplyChunking,
     resolvedBlockStreamingBreak,
     modelState,
