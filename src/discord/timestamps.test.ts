@@ -135,6 +135,18 @@ describe("convertTimesToDiscordTimestamps", () => {
     expect(result).toBe(input);
   });
 
+  it("does not match MM:SS portion of bold HH:MM:SS timestamps", () => {
+    const input = "**03:20:35**, Gateway started up";
+    const result = convertTimesToDiscordTimestamps(input);
+    expect(result).toBe(input);
+  });
+
+  it("preserves multiple HH:MM:SS timestamps in log output", () => {
+    const input = "**03:20:35**, Gateway started\n**03:20:43**, Heartbeat\n**03:21:15**, Response";
+    const result = convertTimesToDiscordTimestamps(input);
+    expect(result).toBe(input);
+  });
+
   it("handles multiple 24-hour times", () => {
     const result = convertTimesToDiscordTimestamps("From 09:00 to 17:30.");
     const matches = result.match(/<t:\d+:t>/g);

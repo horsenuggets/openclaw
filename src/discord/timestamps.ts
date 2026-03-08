@@ -18,9 +18,11 @@ const TIME_12H_PATTERN = /(?<!<t:|`)\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM|a\.m
 /**
  * Regex for 24-hour times: "18:30", "08:00", "0:15", "23:59".
  * Requires two-digit minutes to avoid matching scores like "3:2".
- * Negative lookahead avoids partial matches on HH:MM:SS patterns.
+ * Lookbehind `(?<!\d:)` and lookahead `(?!:\d)` together skip
+ * HH:MM:SS patterns — the first rejects "MM:SS" preceded by
+ * "HH:", the second rejects "HH:MM" followed by ":SS".
  */
-const TIME_24H_PATTERN = /(?<!<t:|`)\b([01]?\d|2[0-3]):([0-5]\d)\b(?!:\d)/g;
+const TIME_24H_PATTERN = /(?<!<t:|`|\d:)\b([01]?\d|2[0-3]):([0-5]\d)\b(?!:\d)/g;
 
 /**
  * Regex for full date-time: "February 9, 2026 at 6:30 PM" or
