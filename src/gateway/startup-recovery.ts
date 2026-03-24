@@ -25,7 +25,10 @@ import { logVerbose } from "../globals.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { normalizeAgentId, DEFAULT_AGENT_ID } from "../routing/session-key.js";
 
-const DEFAULT_RECOVERY_WINDOW_MS = 10 * 60_000;
+// How far back to look for unanswered messages on startup. 30 minutes
+// covers most "gateway died mid-run" scenarios while avoiding replaying
+// very stale conversations.
+const DEFAULT_RECOVERY_WINDOW_MS = 30 * 60_000;
 
 type StartupRecoveryParams = {
   cfg: OpenClawConfig;

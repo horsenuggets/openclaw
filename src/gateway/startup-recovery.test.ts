@@ -147,7 +147,7 @@ describe("runStartupRecovery", () => {
     const now = Date.now();
     vi.mocked(loadSessionStore).mockReturnValue({
       alice: makeEntry({
-        lastUserMessageAt: now - 15 * 60_000, // 15 minutes ago
+        lastUserMessageAt: now - 45 * 60_000, // 45 minutes ago
         lastUserMessageText: "hello",
         deliveryContext: { channel: "telegram", to: "123" },
       }),
