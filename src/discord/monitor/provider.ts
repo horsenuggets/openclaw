@@ -668,7 +668,13 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
   let helloTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let initialConnectionDone = false;
   let reconnectRecoveryId: ReturnType<typeof setTimeout> | undefined;
+  let lastRecoveryTimestamp = 0;
   const RECONNECT_RECOVERY_DELAY_MS = 5000; // Wait for RESUME replay before checking
+  // Minimum time between recovery runs. During flaky internet, the
+  // WS can reconnect every 15-30s. Without a cooldown each reconnect
+  // triggers recovery → typing flash → dedupe → dispose, which looks
+  // like the bot is repeatedly starting and stopping.
+  const RECONNECT_RECOVERY_COOLDOWN_MS = 60_000;
   const onGatewayDebug = (msg: unknown) => {
     const message = String(msg);
     if (!message.includes("WebSocket connection opened")) {
@@ -701,11 +707,22 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     if (!discordCfg.startupRecovery) {
       return;
     }
+    // Skip recovery if a recent run already checked for unanswered
+    // messages. During flaky connections, rapid reconnects would
+    // otherwise spam typing indicators for already-deduped messages.
+    const sinceLastRecovery = Date.now() - lastRecoveryTimestamp;
+    if (sinceLastRecovery < RECONNECT_RECOVERY_COOLDOWN_MS) {
+      logVerbose(
+        `discord: skipping reconnect recovery (last ran ${Math.round(sinceLastRecovery / 1000)}s ago, cooldown ${Math.round(RECONNECT_RECOVERY_COOLDOWN_MS / 1000)}s)`,
+      );
+      return;
+    }
     if (reconnectRecoveryId) {
       clearTimeout(reconnectRecoveryId);
     }
     reconnectRecoveryId = setTimeout(() => {
       reconnectRecoveryId = undefined;
+      lastRecoveryTimestamp = Date.now();
       runtime.log?.("discord: running reconnect recovery after WebSocket reconnection");
       runStartupRecovery({
         rest: client.rest,
