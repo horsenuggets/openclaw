@@ -357,17 +357,20 @@ function resolveHeartbeatSession(
   const mainEntry = store[mainSessionKey];
 
   if (scope === "global") {
-    return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry };
+    return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry, mainEntry };
   }
 
   const trimmed = heartbeat?.session?.trim() ?? "";
-  if (!trimmed) {
-    return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry };
-  }
+  // Default to a dedicated heartbeat session to prevent heartbeat
+  // thinking/reasoning from contaminating the user's conversation.
+  // The heartbeat gets its context from HEARTBEAT.md and tools
+  // (calendar, tasks, etc.), not from conversation history.
+  // Set heartbeat.session to "main" to restore the old shared behavior.
+  const effectiveSession = trimmed || "heartbeat";
 
-  const normalized = trimmed.toLowerCase();
+  const normalized = effectiveSession.toLowerCase();
   if (normalized === "main" || normalized === "global") {
-    return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry };
+    return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry, mainEntry };
   }
 
   const candidate = toAgentStoreSessionKey({
@@ -388,11 +391,12 @@ function resolveHeartbeatSession(
         storePath,
         store,
         entry: store[canonical],
+        mainEntry,
       };
     }
   }
 
-  return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry };
+  return { sessionKey: mainSessionKey, storePath, store, entry: mainEntry, mainEntry };
 }
 
 function resolveHeartbeatReplyPayload(
@@ -561,9 +565,17 @@ export async function runHeartbeatOnce(opts: {
     // The LLM prompt says "if it exists" so this is expected behavior.
   }
 
-  const { entry, sessionKey, storePath } = resolveHeartbeatSession(cfg, agentId, heartbeat);
+  const { entry, mainEntry, sessionKey, storePath } = resolveHeartbeatSession(
+    cfg,
+    agentId,
+    heartbeat,
+  );
   const previousUpdatedAt = entry?.updatedAt;
-  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
+  // Use the main session entry for delivery target resolution even when
+  // the heartbeat runs in its own isolated session. The main entry has
+  // the user's lastChannel/lastTo which tells us where to send alerts.
+  const deliveryEntry = entry ?? mainEntry;
+  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry: deliveryEntry, heartbeat });
   const heartbeatAccountId = heartbeat?.accountId?.trim();
   if (delivery.reason === "unknown-account") {
     log.warn("heartbeat: unknown accountId", {
