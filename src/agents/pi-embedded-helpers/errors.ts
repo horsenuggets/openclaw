@@ -429,6 +429,10 @@ export function sanitizeUserFacingText(text: string): string {
     return "The AI service is temporarily overloaded. Please try again in a moment.";
   }
 
+  if (isAuthErrorMessage(trimmed)) {
+    return "Authentication expired. Please re-authenticate and try again.";
+  }
+
   if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
     return formatRawAssistantErrorForUi(trimmed);
   }
