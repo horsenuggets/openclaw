@@ -13,6 +13,7 @@ import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
 import { createTestRegistry } from "../test-utils/channel-plugins.js";
 import { runHeartbeatOnce } from "./heartbeat-runner.js";
+import * as deliverModule from "./outbound/deliver.js";
 
 // Avoid pulling optional runtime deps during isolated runs.
 vi.mock("jiti", () => ({ createJiti: () => () => ({}) }));
@@ -96,6 +97,7 @@ describe("resolveHeartbeatIntervalMs", () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
+    const deliverSpy = vi.spyOn(deliverModule, "deliverOutboundPayloads").mockResolvedValue();
     try {
       const cfg: OpenClawConfig = {
         agents: {
@@ -130,26 +132,29 @@ describe("resolveHeartbeatIntervalMs", () => {
       );
 
       replySpy.mockResolvedValue({ text: "HEARTBEAT_OK" });
-      const sendWhatsApp = vi.fn().mockResolvedValue({
-        messageId: "m1",
-        toJid: "jid",
-      });
 
       await runHeartbeatOnce({
         cfg,
         deps: {
-          sendWhatsApp,
+          sendWhatsApp: vi.fn(),
           getQueueSize: () => 0,
-          nowMs: () => 0,
+          nowMs: () => Date.now(),
           webAuthExists: async () => true,
           hasActiveWebListener: () => true,
         },
       });
 
-      expect(sendWhatsApp).toHaveBeenCalledTimes(1);
-      expect(sendWhatsApp).toHaveBeenCalledWith("+1555", "HEARTBEAT_OK", expect.any(Object));
+      expect(deliverSpy).toHaveBeenCalledTimes(1);
+      expect(deliverSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: "whatsapp",
+          to: "+1555",
+          payloads: [{ text: "HEARTBEAT_OK" }],
+        }),
+      );
     } finally {
       replySpy.mockRestore();
+      deliverSpy.mockRestore();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
