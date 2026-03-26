@@ -476,10 +476,18 @@ const HEARTBEAT_NOTHING_PATTERNS = [
 ];
 
 function looksLikeHeartbeatAck(text: string, maxAckChars: number): boolean {
-  if (text.length > maxAckChars) {
-    return false;
+  // Short responses matching "nothing needs attention" patterns are
+  // always treated as acks.
+  if (text.length <= maxAckChars) {
+    return HEARTBEAT_NOTHING_PATTERNS.some((pattern) => pattern.test(text));
   }
-  return HEARTBEAT_NOTHING_PATTERNS.some((pattern) => pattern.test(text));
+  // Longer status dumps that conclude with "nothing needs attention"
+  // should also be suppressed. The heartbeat sometimes produces a
+  // summary of what it checked followed by a "nothing needs your
+  // attention" conclusion — this is internal reasoning, not something
+  // the user wants to see.
+  const lastSentence = text.slice(-120).toLowerCase();
+  return HEARTBEAT_NOTHING_PATTERNS.some((pattern) => pattern.test(lastSentence));
 }
 
 function normalizeHeartbeatReply(
