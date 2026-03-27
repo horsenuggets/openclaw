@@ -124,6 +124,32 @@ function formatDiscordDeployErrorDetails(err: unknown): string {
   return details.length > 0 ? ` (${details.join(", ")})` : "";
 }
 
+const APP_ID_RETRY_ATTEMPTS = 5;
+const APP_ID_RETRY_DELAYS = [2_000, 5_000, 10_000, 20_000];
+
+/**
+ * Resolve the Discord application ID with retries. The underlying
+ * fetchDiscordApplicationId swallows network errors and returns
+ * undefined, so we retry on undefined to handle transient outages
+ * (e.g. laptop waking from sleep with no internet).
+ */
+async function resolveApplicationIdWithRetry(token: string): Promise<string | undefined> {
+  for (let attempt = 0; attempt < APP_ID_RETRY_ATTEMPTS; attempt++) {
+    const id = await fetchDiscordApplicationId(token, 4000);
+    if (id) {
+      return id;
+    }
+    if (attempt < APP_ID_RETRY_ATTEMPTS - 1) {
+      const delayMs = APP_ID_RETRY_DELAYS[attempt] ?? 20_000;
+      console.warn(
+        `discord resolve application id failed, retry ${attempt + 1}/${APP_ID_RETRY_ATTEMPTS - 1} in ${delayMs}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return undefined;
+}
+
 function resolveDiscordGatewayIntents(
   intentsConfig?: import("../../config/types.discord.js").DiscordIntentsConfig,
 ): number {
@@ -426,7 +452,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     );
   }
 
-  const applicationId = await fetchDiscordApplicationId(token, 4000);
+  const applicationId = await resolveApplicationIdWithRetry(token);
   if (!applicationId) {
     throw new Error("Failed to resolve Discord application id");
   }
