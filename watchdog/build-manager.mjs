@@ -237,14 +237,15 @@ export function buildCommit(repoRoot, commitHash, { onProgress } = {}) {
     }
   }
 
-  // Copy node_modules (symlink to save space if on same filesystem)
+  // Link node_modules (junction on Windows, symlink elsewhere)
   const srcModules = path.join(repoRoot, "node_modules");
   const destModules = path.join(buildDir, "node_modules");
   try {
-    // Try symlink first (much faster, saves disk space)
-    fs.symlinkSync(srcModules, destModules);
+    // On Windows, use "junction" type — works without admin privileges.
+    // On other platforms, use a regular directory symlink.
+    fs.symlinkSync(srcModules, destModules, process.platform === "win32" ? "junction" : "dir");
   } catch {
-    // Fall back to copy if symlink fails
+    // Fall back to copy if linking fails
     onProgress?.(`[${shortHash}] Copying node_modules (this may take a while)...`);
     fs.cpSync(srcModules, destModules, { recursive: true });
   }
