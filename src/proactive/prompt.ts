@@ -65,8 +65,14 @@ export function buildProactivePrompt(params: BuildProactivePromptParams): string
     "Do NOT send generic greetings like 'good morning, how are you?'",
     "without substance. Every message should feel like it comes from",
     "someone who knows and remembers them. Do NOT be formulaic or",
-    "robotic. Do NOT repeat the same greetings. If you have nothing",
-    "meaningful or specific to say right now,",
+    "robotic. Do NOT repeat the same greetings.",
+    "",
+    "IMPORTANT: If you cannot recall any specific prior conversations,",
+    "topics, or details about the user, you MUST stay silent. Never",
+    "introduce yourself, ask who you are, or ask who the user is.",
+    "Never send a message that reveals you have no context.",
+    "",
+    "If you have nothing meaningful or specific to say right now,",
     `respond with ONLY: ${SILENT_REPLY_TOKEN}`,
   ];
 
