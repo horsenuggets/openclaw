@@ -448,6 +448,13 @@ export function sanitizeUserFacingText(text: string): string {
     return "*LLM request timed out.*";
   }
 
+  // Catch system/internal errors (EACCES, ENOENT, ECONNREFUSED, stack traces, file paths)
+  // that should never be shown to users in messaging channels.
+  // Check before API error detection since system errors can also match ERROR_PREFIX_RE.
+  if (isSystemErrorText(trimmed)) {
+    return "*Something went wrong internally. Please try again.*";
+  }
+
   if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
     return `*${formatRawAssistantErrorForUi(trimmed)}*`;
   }
@@ -521,6 +528,17 @@ const IMAGE_DIMENSION_ERROR_RE =
   /image dimensions exceed max allowed size for many-image requests:\s*(\d+)\s*pixels/i;
 const IMAGE_DIMENSION_PATH_RE = /messages\.(\d+)\.content\.(\d+)\.image/i;
 const IMAGE_SIZE_ERROR_RE = /image exceeds\s*(\d+(?:\.\d+)?)\s*mb/i;
+
+const SYSTEM_ERROR_RE =
+  /\bE(?:ACCESS|ACCES|NOENT|CONNREFUSED|CONNRESET|PIPE|PERM|BUSY|NOTFOUND|ADDRINUSE)\b|listen\s+EACCES|\.sock\b|\.pipe\b|permission denied|\(\S+:\d+:\d+\)|^\s+at\s+/im;
+
+/**
+ * Detect raw system/internal error text (file paths, Node error codes, stack traces)
+ * that should never be shown to end users in messaging channels.
+ */
+export function isSystemErrorText(raw: string): boolean {
+  return SYSTEM_ERROR_RE.test(raw);
+}
 
 function matchesErrorPatterns(raw: string, patterns: readonly ErrorPattern[]): boolean {
   if (!raw) {

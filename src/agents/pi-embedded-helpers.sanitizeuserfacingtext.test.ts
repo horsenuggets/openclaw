@@ -50,6 +50,22 @@ describe("sanitizeUserFacingText", () => {
     );
   });
 
+  it("sanitizes system errors (EACCES, file paths) as friendly message", () => {
+    expect(
+      sanitizeUserFacingText(
+        "listen EACCES: permission denied C:\\Users\\Chris\\AppData\\Local\\Temp\\openclaw-mcp-fc052e36.sock",
+      ),
+    ).toBe("*Something went wrong internally. Please try again.*");
+  });
+
+  it("sanitizes Node stack traces as friendly message", () => {
+    expect(
+      sanitizeUserFacingText(
+        "TypeError: Cannot read property 'foo'\n    at Object.<anonymous> (file.js:10:5)",
+      ),
+    ).toBe("*Something went wrong internally. Please try again.*");
+  });
+
   it("collapses consecutive duplicate paragraphs", () => {
     const text = "Hello there!\n\nHello there!";
     expect(sanitizeUserFacingText(text)).toBe("Hello there!");

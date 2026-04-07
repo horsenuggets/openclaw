@@ -144,6 +144,9 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
     // Set up MCP bridge with Pi runner tools
     const socketId = randomUUID().slice(0, 8);
     const socketPath = path.join(os.tmpdir(), `openclaw-mcp-${socketId}.sock`);
+    // On Windows, use named pipe instead of Unix socket
+    const connectPath =
+      process.platform === "win32" ? `\\\\.\\pipe\\openclaw-mcp-${socketId}.sock` : socketPath;
     const bridge = await startMcpBridge({
       tools,
       socketPath,
@@ -156,7 +159,7 @@ export function createCliStreamFn(params: CliStreamFnParams): StreamFunction {
         openclaw: {
           command: process.execPath,
           args: [MCP_BRIDGE_SERVER],
-          env: { OPENCLAW_MCP_SOCKET: socketPath },
+          env: { OPENCLAW_MCP_SOCKET: connectPath },
         },
       },
     };

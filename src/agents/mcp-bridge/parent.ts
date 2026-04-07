@@ -127,10 +127,12 @@ export async function startMcpBridge(params: {
     }
   }
 
-  // Start listening
+  // Start listening — use named pipe on Windows, Unix socket elsewhere
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
-    server.listen(socketPath, () => resolve());
+    const listenPath =
+      process.platform === "win32" ? `\\\\.\\pipe\\${path.basename(socketPath)}` : socketPath;
+    server.listen(listenPath, () => resolve());
   });
 
   async function cleanup() {
