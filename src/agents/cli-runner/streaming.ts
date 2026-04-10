@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -14,33 +14,41 @@ import { createSubsystemLogger } from "../../logging/subsystem.js";
 const log = createSubsystemLogger("agent/cli-streaming");
 
 // On Windows, `spawn("claude", ...)` fails with ENOENT because the
-// npm-generated shim is `claude.cmd`, and Node's spawn cannot execute
-// .cmd/.bat files without a shell. `shell: true` is unsafe when user
-// input is in argv (cmd.exe interprets &, |, >, etc.). We resolve the
-// command via PATH, and if it's a .cmd/.bat we wrap the call through
-// `cmd.exe /d /s /c` with windowsVerbatimArguments + manual escaping,
-// matching cross-spawn's approach.
+// npm-generated shim is `claude.cmd`, which Node's spawn cannot execute
+// without a shell. Routing through `cmd.exe /c` works for short command
+// lines but hits cmd.exe's 8191-character limit ("The command line is
+// too long") as soon as we pass a large system prompt as an argv element.
+//
+// Instead, we parse the npm shim to find the Node entry point it
+// ultimately calls (e.g. `node_modules\@anthropic-ai\claude-code\cli.js`)
+// and invoke `node.exe` directly with that script. CreateProcess's
+// 32767-char limit is much larger, there is no shell escaping surface,
+// and no cmd.exe involved at all.
 function resolveWindowsCommand(
   command: string,
   args: readonly string[],
   env: NodeJS.ProcessEnv,
-): { command: string; args: string[]; extra: { windowsVerbatimArguments?: boolean } } {
+): { command: string; args: string[] } {
   if (process.platform !== "win32") {
-    return { command, args: [...args], extra: {} };
+    return { command, args: [...args] };
   }
   const resolved = findOnPath(command, env);
   if (!resolved) {
-    return { command, args: [...args], extra: {} };
+    return { command, args: [...args] };
   }
   const ext = path.extname(resolved).toLowerCase();
   if (ext !== ".cmd" && ext !== ".bat") {
-    return { command: resolved, args: [...args], extra: {} };
+    return { command: resolved, args: [...args] };
   }
-  const escaped = [quoteForCmd(resolved), ...args.map(quoteForCmd)].join(" ");
+  const nodeEntry = extractNpmShimEntry(resolved);
+  if (!nodeEntry) {
+    // Unknown shim format; leave it for the spawn call to fail loudly
+    // rather than silently routing through cmd.exe with its length limit.
+    return { command: resolved, args: [...args] };
+  }
   return {
-    command: env.COMSPEC || "cmd.exe",
-    args: ["/d", "/s", "/c", escaped],
-    extra: { windowsVerbatimArguments: true },
+    command: nodeEntry.nodeExe,
+    args: [nodeEntry.scriptPath, ...args],
   };
 }
 
@@ -70,15 +78,40 @@ function findOnPath(command: string, env: NodeJS.ProcessEnv): string | undefined
   return undefined;
 }
 
-// Quote an argument for safe passage through `cmd.exe /c`. Wraps in
-// double quotes and escapes embedded quotes + cmd.exe metacharacters.
-function quoteForCmd(arg: string): string {
-  // Escape backslashes that precede a double quote (Windows CRT rules),
-  // then escape the quote itself.
-  const quoted = '"' + arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1") + '"';
-  // Escape cmd.exe metacharacters that would otherwise be interpreted
-  // even inside quotes when the outer shell parses the command line.
-  return quoted.replace(/([()%!^"<>&|])/g, "^$1");
+// Parse an npm-generated .cmd shim to find the JS entry point and the
+// node.exe to run it with. The canonical shim format, e.g. from
+// `npm install -g @anthropic-ai/claude-code`, contains a line like:
+//
+//   ... "%_prog%"  "%dp0%\node_modules\@anthropic-ai\claude-code\cli.js" %*
+//
+// where `%dp0%` is the directory of the shim itself, and `_prog` is
+// either `%dp0%\node.exe` (if bundled) or `node` (resolved via PATH).
+function extractNpmShimEntry(
+  shimPath: string,
+): { nodeExe: string; scriptPath: string } | undefined {
+  let contents: string;
+  try {
+    contents = readFileSync(shimPath, "utf8");
+  } catch {
+    return undefined;
+  }
+  // Match a quoted path ending in .js/.mjs/.cjs that uses %dp0% or %~dp0%
+  // as a prefix. This is how npm-generated shims reference their entry
+  // point; we don't want to match arbitrary strings in an unrelated .cmd.
+  const match = contents.match(/"%~?dp0%\\([^"]+\.(?:js|mjs|cjs))"/i);
+  if (!match) {
+    return undefined;
+  }
+  const shimDir = path.dirname(shimPath);
+  const scriptPath = path.join(shimDir, match[1]);
+  if (!existsSync(scriptPath)) {
+    return undefined;
+  }
+  // Prefer a bundled node.exe next to the shim if present, otherwise
+  // fall back to whichever `node` is currently running this gateway.
+  const bundledNode = path.join(shimDir, "node.exe");
+  const nodeExe = existsSync(bundledNode) ? bundledNode : process.execPath;
+  return { nodeExe, scriptPath };
 }
 
 /**
@@ -194,7 +227,6 @@ export async function runStreamingCli(options: StreamingCliOptions): Promise<{
       cwd,
       env: env ?? process.env,
       stdio: ["pipe", "pipe", "pipe"],
-      ...resolved.extra,
     });
 
     const timer = setTimeout(() => {
