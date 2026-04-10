@@ -49,13 +49,19 @@ function findOnPath(command: string, env: NodeJS.ProcessEnv): string | undefined
     return command;
   }
   const dirs = (env.PATH || env.Path || "").split(path.delimiter).filter(Boolean);
-  const exts = (env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+  const pathext = (env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
     .split(";")
     .map((e) => e.trim())
     .filter(Boolean);
+  // If the command already has a Windows executable extension, try it as-is.
+  // Otherwise try each PATHEXT extension in order; never try the extensionless
+  // name on Windows, since npm also installs Unix shell wrappers (e.g.
+  // `claude` alongside `claude.cmd`) that Windows cannot execute directly.
+  const ext = path.extname(command).toLowerCase();
+  const candidates = ext && pathext.some((e) => e.toLowerCase() === ext) ? [""] : pathext;
   for (const dir of dirs) {
-    for (const ext of ["", ...exts]) {
-      const candidate = path.join(dir, command + ext);
+    for (const suffix of candidates) {
+      const candidate = path.join(dir, command + suffix);
       if (existsSync(candidate)) {
         return candidate;
       }
