@@ -384,6 +384,15 @@ export function formatAssistantErrorText(
     return "Authentication expired. Please re-authenticate and try again.";
   }
 
+  // Raw Node/OS/shell errors from failed spawns or syscalls — we only
+  // trust the content-based detection here because we're in the error
+  // path (stopReason === "error" or errorMessage set). Catches things
+  // like "spawn claude ENOENT", "listen EACCES: permission denied ...",
+  // Node stack traces, and "The command line is too long."
+  if (isSystemErrorText(raw)) {
+    return "Something went wrong internally. Please try again.";
+  }
+
   if (isLikelyHttpErrorText(raw) || isRawApiErrorPayload(raw)) {
     return formatRawAssistantErrorForUi(raw);
   }
@@ -448,12 +457,12 @@ export function sanitizeUserFacingText(text: string): string {
     return "*LLM request timed out.*";
   }
 
-  // Catch system/internal errors (EACCES, ENOENT, ECONNREFUSED, stack traces, file paths)
-  // that should never be shown to users in messaging channels.
-  // Check before API error detection since system errors can also match ERROR_PREFIX_RE.
-  if (isSystemErrorText(trimmed)) {
-    return "*Something went wrong internally. Please try again.*";
-  }
+  // NOTE: We deliberately do NOT content-match for system errors
+  // (EACCES, "permission denied", stack traces, etc.) here. This
+  // function runs on normal assistant text, and Claw can legitimately
+  // discuss those phrases in a reply (debugging help, explanations).
+  // System-error detection lives in `formatAssistantErrorText`, which
+  // only runs when the message is already known to be an error.
 
   if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
     return `*${formatRawAssistantErrorForUi(trimmed)}*`;
@@ -529,8 +538,15 @@ const IMAGE_DIMENSION_ERROR_RE =
 const IMAGE_DIMENSION_PATH_RE = /messages\.(\d+)\.content\.(\d+)\.image/i;
 const IMAGE_SIZE_ERROR_RE = /image exceeds\s*(\d+(?:\.\d+)?)\s*mb/i;
 
+// Structural patterns that identify raw Node/OS/shell error text we get
+// back from a failed spawn or syscall. These run ONLY in the error path
+// (`formatAssistantErrorText`), where the incoming text is already known
+// to be an error (stopReason === "error" or errorMessage set). Do NOT
+// apply these to normal assistant content — "permission denied" and
+// "EACCES" can legitimately appear in natural-language replies (e.g.
+// Claw explaining a bug), and matching on them would clobber the reply.
 const SYSTEM_ERROR_RE =
-  /\bE(?:ACCESS|ACCES|NOENT|CONNREFUSED|CONNRESET|PIPE|PERM|BUSY|NOTFOUND|ADDRINUSE)\b|listen\s+EACCES|\.sock\b|\.pipe\b|permission denied|\(\S+:\d+:\d+\)|^\s+at\s+/im;
+  /\bE(?:ACCESS|ACCES|NOENT|CONNREFUSED|CONNRESET|PIPE|PERM|BUSY|NOTFOUND|ADDRINUSE|2BIG)\b|listen\s+EACCES|\.sock\b|\.pipe\b|permission denied|\(\S+:\d+:\d+\)|^\s+at\s+|the command line is too long|is not recognized as an internal or external command|the system cannot find the (?:path|file) specified|access is denied/im;
 
 /**
  * Detect raw system/internal error text (file paths, Node error codes, stack traces)

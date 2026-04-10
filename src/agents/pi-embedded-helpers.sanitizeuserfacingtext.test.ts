@@ -50,20 +50,31 @@ describe("sanitizeUserFacingText", () => {
     );
   });
 
-  it("sanitizes system errors (EACCES, file paths) as friendly message", () => {
-    expect(
-      sanitizeUserFacingText(
-        "listen EACCES: permission denied C:\\Users\\Chris\\AppData\\Local\\Temp\\openclaw-mcp-fc052e36.sock",
-      ),
-    ).toBe("*Something went wrong internally. Please try again.*");
+  // System-error content (EACCES, "permission denied", stack traces,
+  // "command line is too long", etc.) MUST pass through the normal-text
+  // sanitizer untouched — Claw can legitimately discuss those phrases in
+  // a reply. The error-path formatter (formatAssistantErrorText) handles
+  // those, since it only runs when the message is already known to be
+  // an error.
+  it("does not clobber legitimate text that mentions permission denied", () => {
+    const text = "If you see `permission denied` in your logs, try sudo or check file ACLs.";
+    expect(sanitizeUserFacingText(text)).toBe(text);
   });
 
-  it("sanitizes Node stack traces as friendly message", () => {
-    expect(
-      sanitizeUserFacingText(
-        "TypeError: Cannot read property 'foo'\n    at Object.<anonymous> (file.js:10:5)",
-      ),
-    ).toBe("*Something went wrong internally. Please try again.*");
+  it("does not clobber legitimate text that mentions EACCES", () => {
+    const text = "Node reports EACCES when your process lacks permission to open a socket.";
+    expect(sanitizeUserFacingText(text)).toBe(text);
+  });
+
+  it("does not clobber legitimate text that mentions 'command line is too long'", () => {
+    const text =
+      "Windows cmd.exe has an 8191-character limit; you'll see 'The command line is too long' if you exceed it.";
+    expect(sanitizeUserFacingText(text)).toBe(text);
+  });
+
+  it("does not clobber legitimate text containing a Node stack-frame-like pattern", () => {
+    const text = "Here's the line that threw: (server.js:42:7) — it's a null deref.";
+    expect(sanitizeUserFacingText(text)).toBe(text);
   });
 
   it("collapses consecutive duplicate paragraphs", () => {

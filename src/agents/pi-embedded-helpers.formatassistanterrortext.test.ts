@@ -90,4 +90,32 @@ describe("formatAssistantErrorText", () => {
     const result = formatAssistantErrorText(msg);
     expect(result).toBe(BILLING_ERROR_USER_MESSAGE);
   });
+  it("returns a friendly message for spawn ENOENT", () => {
+    const msg = makeAssistantError("spawn claude ENOENT");
+    expect(formatAssistantErrorText(msg)).toBe(
+      "Something went wrong internally. Please try again.",
+    );
+  });
+  it("returns a friendly message for listen EACCES with socket path", () => {
+    const msg = makeAssistantError(
+      "listen EACCES: permission denied C:\\Users\\Chris\\AppData\\Local\\Temp\\openclaw-mcp-fc052e36.sock",
+    );
+    expect(formatAssistantErrorText(msg)).toBe(
+      "Something went wrong internally. Please try again.",
+    );
+  });
+  it("returns a friendly message for cmd.exe command-line-too-long", () => {
+    const msg = makeAssistantError("The command line is too long.");
+    expect(formatAssistantErrorText(msg)).toBe(
+      "Something went wrong internally. Please try again.",
+    );
+  });
+  it("returns a friendly message for Node stack traces", () => {
+    const msg = makeAssistantError(
+      "TypeError: Cannot read property 'foo'\n    at Object.<anonymous> (file.js:10:5)",
+    );
+    expect(formatAssistantErrorText(msg)).toBe(
+      "Something went wrong internally. Please try again.",
+    );
+  });
 });
