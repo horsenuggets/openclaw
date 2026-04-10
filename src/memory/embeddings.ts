@@ -89,7 +89,18 @@ async function createLocalEmbeddingProvider(
 
   const ensureContext = async () => {
     if (!llama) {
-      llama = await getLlama({ logLevel: LlamaLogLevel.error });
+      // Allow forcing CPU-only mode via env var. Useful on machines
+      // where node-llama-cpp's auto-detected GPU backend (CUDA, Vulkan)
+      // crashes with a kernel or driver error — embeddings on a 300M
+      // model run fast enough on CPU that this is a good default
+      // escape hatch.
+      const gpuEnv = (process.env.OPENCLAW_LLAMA_GPU ?? "").trim().toLowerCase();
+      const gpuOption =
+        gpuEnv === "off" || gpuEnv === "false" || gpuEnv === "cpu" ? false : undefined;
+      llama = await getLlama({
+        logLevel: LlamaLogLevel.error,
+        ...(gpuOption === false ? { gpu: false as const } : {}),
+      });
     }
     if (!embeddingModel) {
       const resolved = await resolveModelFile(modelPath, modelCacheDir || undefined);
