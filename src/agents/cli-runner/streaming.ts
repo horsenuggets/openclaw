@@ -151,16 +151,28 @@ function extractLongPromptForStdin(args: readonly string[]): {
   if (totalLen < WIN_ARGV_LIMIT) {
     return { args: [...args] };
   }
-  // The prompt is the last argument (after all flags). Check that the
-  // last arg isn't a known flag value (doesn't start with --).
-  const last = args[args.length - 1];
-  if (!last || last.startsWith("--")) {
+  // Find the longest non-flag argument — that's the serialized prompt.
+  // cli-stream.ts appends flags (--verbose, --mcp-config, etc.) AFTER
+  // the prompt, so the prompt is NOT necessarily the last element.
+  let maxLen = 0;
+  let maxIdx = -1;
+  for (let i = 0; i < args.length; i++) {
+    if (!args[i].startsWith("--") && args[i].length > maxLen) {
+      maxLen = args[i].length;
+      maxIdx = i;
+    }
+  }
+  if (maxIdx < 0 || maxLen < SYSTEM_PROMPT_FILE_THRESHOLD) {
     return { args: [...args] };
   }
-  log.info(`Piping prompt via stdin (${last.length} chars) to stay under Windows argv limit`);
+  log.info(
+    `Piping prompt via stdin (${maxLen} chars at index ${maxIdx}) to stay under Windows argv limit`,
+  );
+  const newArgs = [...args];
+  newArgs.splice(maxIdx, 1);
   return {
-    args: args.slice(0, -1) as string[],
-    stdinData: last,
+    args: newArgs,
+    stdinData: args[maxIdx],
   };
 }
 
