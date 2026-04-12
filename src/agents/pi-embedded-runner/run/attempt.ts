@@ -398,7 +398,21 @@ export async function runEmbeddedAttempt(
       tools,
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
-    const systemPromptText = systemPromptOverride();
+    // When using a subscription-authenticated provider (OAuth token),
+    // Anthropic's server-side validation requires the system prompt to
+    // start with the Claude Code prefix. Prepend it here so the rest
+    // of the system prompt (OpenClaw identity, tools, workspace) follows
+    // naturally. The provider name is checked (not the token format) so
+    // this only activates for explicitly-configured subscription providers.
+    const needsSubscriptionPrefix =
+      params.provider === "anthropic-subscription" ||
+      params.config?.models?.providers?.[params.provider]?.auth === "oauth";
+    const CLAUDE_CODE_SUBSCRIPTION_PREFIX =
+      "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
+    const rawSystemPrompt = systemPromptOverride();
+    const systemPromptText = needsSubscriptionPrefix
+      ? CLAUDE_CODE_SUBSCRIPTION_PREFIX + rawSystemPrompt
+      : rawSystemPrompt;
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
