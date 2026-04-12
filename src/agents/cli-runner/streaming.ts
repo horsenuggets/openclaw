@@ -133,6 +133,37 @@ function materializeLongSystemPromptToFile(args: readonly string[]): {
   return { args: rewritten, cleanup };
 }
 
+// When the total argv length exceeds the Windows CreateProcess limit
+// (32767 chars), pop the last argument (the serialized prompt from -p)
+// and return it as stdin data instead. Claude Code's -p mode reads
+// stdin when no positional prompt arg is present. Only activates on
+// Windows when the combined arg length is dangerously long.
+const WIN_ARGV_LIMIT = 30000; // headroom below 32767
+
+function extractLongPromptForStdin(args: readonly string[]): {
+  args: string[];
+  stdinData?: string;
+} {
+  if (process.platform !== "win32") {
+    return { args: [...args] };
+  }
+  const totalLen = args.reduce((sum, a) => sum + a.length + 1, 0);
+  if (totalLen < WIN_ARGV_LIMIT) {
+    return { args: [...args] };
+  }
+  // The prompt is the last argument (after all flags). Check that the
+  // last arg isn't a known flag value (doesn't start with --).
+  const last = args[args.length - 1];
+  if (!last || last.startsWith("--")) {
+    return { args: [...args] };
+  }
+  log.info(`Piping prompt via stdin (${last.length} chars) to stay under Windows argv limit`);
+  return {
+    args: args.slice(0, -1) as string[],
+    stdinData: last,
+  };
+}
+
 // Parse an npm-generated .cmd shim to find the JS entry point and the
 // node.exe to run it with. The canonical shim format, e.g. from
 // `npm install -g @anthropic-ai/claude-code`, contains a line like:
@@ -279,7 +310,13 @@ export async function runStreamingCli(options: StreamingCliOptions): Promise<{
 
     const resolved = resolveWindowsCommand(command, args, env ?? process.env);
     const prepped = materializeLongSystemPromptToFile(resolved.args);
-    const child = spawn(resolved.command, prepped.args, {
+    // On Windows, if the total command line still exceeds CreateProcess's
+    // 32767-char limit (e.g. conversation history in the -p prompt arg),
+    // pop the last arg (the prompt) and pipe it via stdin instead.
+    // Claude Code's -p mode reads from stdin when no positional arg is
+    // given, so this is transparent to the child process.
+    const pipeStdin = extractLongPromptForStdin(prepped.args);
+    const child = spawn(resolved.command, pipeStdin.args, {
       cwd,
       env: env ?? process.env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -361,7 +398,11 @@ export async function runStreamingCli(options: StreamingCliOptions): Promise<{
       });
     });
 
-    // Close stdin immediately (we pass prompt via args)
+    // If the prompt was extracted for stdin piping, write it then close.
+    // Otherwise close immediately (prompt was passed via args).
+    if (pipeStdin.stdinData) {
+      child.stdin.write(pipeStdin.stdinData);
+    }
     child.stdin.end();
   });
 }
