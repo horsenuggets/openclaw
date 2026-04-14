@@ -1,6 +1,7 @@
 import {
   getOAuthApiKey,
   getOAuthProviders,
+  refreshAnthropicToken,
   type OAuthCredentials,
   type OAuthProvider,
 } from "@mariozechner/pi-ai";
@@ -76,13 +77,27 @@ async function refreshOAuthTokenWithLock(params: {
               const newCredentials = await refreshQwenPortalCredentials(cred);
               return { apiKey: newCredentials.access, newCredentials };
             })()
-          : await (async () => {
-              const oauthProvider = resolveOAuthProvider(cred.provider);
-              if (!oauthProvider) {
-                return null;
-              }
-              return await getOAuthApiKey(oauthProvider, oauthCreds);
-            })();
+          : String(cred.provider) === "anthropic-subscription"
+            ? // `anthropic-subscription` is OpenClaw's config-side name for the
+              // Claude Max OAuth flow. pi-ai's OAuth provider list registers
+              // it under "anthropic", so the generic dispatch via
+              // getOAuthApiKey() can't find it by our name. Call the refresh
+              // function directly from pi-ai and synthesize the result in
+              // the same shape the other branches return.
+              await (async () => {
+                const refreshed = await refreshAnthropicToken(cred.refresh);
+                return {
+                  apiKey: refreshed.access,
+                  newCredentials: refreshed,
+                };
+              })()
+            : await (async () => {
+                const oauthProvider = resolveOAuthProvider(cred.provider);
+                if (!oauthProvider) {
+                  return null;
+                }
+                return await getOAuthApiKey(oauthProvider, oauthCreds);
+              })();
     if (!result) {
       return null;
     }

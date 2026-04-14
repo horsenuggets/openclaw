@@ -340,10 +340,15 @@ export function formatAssistantErrorText(
     }
   }
 
+  // All error-path messages are wrapped in italic markdown (*...*) so
+  // Discord/Telegram/etc. render them distinct from the assistant's
+  // normal reply text. Error messages are system output, not the
+  // model's content, so they should look visually different.
+
   if (isContextOverflowError(raw)) {
     return (
-      "Context overflow: prompt too large for the model. " +
-      "Try again with less input or a larger-context model."
+      "*Context overflow: prompt too large for the model. " +
+      "Try again with less input or a larger-context model.*"
     );
   }
 
@@ -354,34 +359,77 @@ export function formatAssistantErrorText(
     )
   ) {
     return (
-      "Message ordering conflict - please try again. " +
-      "If this persists, use /new to start a fresh session."
+      "*Message ordering conflict — please try again. " +
+      "If this persists, use `/new` to start a fresh session.*"
     );
   }
 
   if (isMissingToolCallInputError(raw)) {
     return (
-      "Session history looks corrupted (tool call input missing). " +
-      "Use /new to start a fresh session. " +
-      "If this keeps happening, reset the session or delete the corrupted session transcript."
+      "*Session history looks corrupted (tool call input missing). " +
+      "Use `/new` to start a fresh session. " +
+      "If this keeps happening, reset the session or delete the corrupted session transcript.*"
     );
   }
 
   const invalidRequest = raw.match(/"type":"invalid_request_error".*?"message":"([^"]+)"/);
   if (invalidRequest?.[1]) {
-    return `LLM request rejected: ${invalidRequest[1]}`;
+    return `*LLM request rejected: ${invalidRequest[1]}*`;
   }
 
   if (isOverloadedErrorMessage(raw) || isRateLimitErrorMessage(raw)) {
-    return "The AI service is temporarily overloaded. Please try again in a moment.";
+    return "*The AI service is temporarily overloaded. Please try again in a moment.*";
   }
 
   if (isBillingErrorMessage(raw)) {
-    return BILLING_ERROR_USER_MESSAGE;
+    return `*${BILLING_ERROR_USER_MESSAGE.replace(/^⚠️\s*/, "⚠️ ")}*`;
   }
 
   if (isAuthErrorMessage(raw)) {
-    return "Authentication expired. Please re-authenticate and try again.";
+    // Try to be specific about which auth actually expired by pattern
+    // matching on the raw error. Anthropic API errors mention
+    // "anthropic"/"oauth"/"sk-ant"; memory_search errors mention
+    // "No API key found for provider"; gog errors mention "keyring" or
+    // "GOG_KEYRING_PASSWORD"; etc.
+    const lower = raw.toLowerCase();
+    if (/no api key found for provider/i.test(raw)) {
+      const providerMatch = raw.match(/provider\s*"?([a-z0-9_.-]+)"?/i);
+      const providerName = providerMatch?.[1] ?? "unknown";
+      return (
+        `*Memory search is disabled: the \`${providerName}\` provider has no API key configured on this host. ` +
+        "Add it to `~/.openclaw/agents/main/agent/auth-profiles.json` or set the env var. " +
+        "This is a local tool problem, not an Anthropic auth issue — your Claude subscription is fine.*"
+      );
+    }
+    if (lower.includes("gog") || lower.includes("keyring")) {
+      return (
+        "*The gog CLI's keyring token expired. " +
+        "On the host machine, run `gog auth login` or set `GOG_KEYRING_PASSWORD` in the environment. " +
+        "This is a gog auth issue, not an Anthropic auth issue.*"
+      );
+    }
+    if (
+      lower.includes("anthropic") ||
+      lower.includes("oauth") ||
+      lower.includes("sk-ant") ||
+      /\b401\b/.test(raw)
+    ) {
+      return (
+        "*Your Anthropic OAuth token for the Claude subscription has expired. " +
+        "On the gateway host, run `claude` in a terminal once to trigger a token refresh " +
+        "(Claude Code uses the refresh_token to fetch a new access_token automatically), " +
+        "then the OpenClaw gateway will pick up the new token on the next agent run. " +
+        "If that doesn't work, re-authenticate fully with `claude /login`. " +
+        "Docs: <https://docs.claude.com/en/docs/claude-code/setup>*"
+      );
+    }
+    // Fallback: generic but still tells the user where to look
+    return (
+      "*An authentication credential expired. " +
+      "Check the gateway logs for the specific provider (Anthropic, memory-search, gog, Notion, etc.) " +
+      "and refresh that credential. Your Claude subscription is most likely the culprit — " +
+      "run `claude` on the gateway host to refresh the OAuth token.*"
+    );
   }
 
   // Raw Node/OS/shell errors from failed spawns or syscalls — we only
@@ -390,15 +438,16 @@ export function formatAssistantErrorText(
   // like "spawn claude ENOENT", "listen EACCES: permission denied ...",
   // Node stack traces, and "The command line is too long."
   if (isSystemErrorText(raw)) {
-    return "Something went wrong internally. Please try again.";
+    return "*Something went wrong internally. Please try again.*";
   }
 
   if (isLikelyHttpErrorText(raw) || isRawApiErrorPayload(raw)) {
-    return formatRawAssistantErrorForUi(raw);
+    const inner = formatRawAssistantErrorForUi(raw);
+    return `*${inner}*`;
   }
 
   if (isTimeoutErrorMessage(raw)) {
-    return "LLM request timed out.";
+    return "*LLM request timed out.*";
   }
 
   // Never return raw unhandled errors - return the parsed message if available,

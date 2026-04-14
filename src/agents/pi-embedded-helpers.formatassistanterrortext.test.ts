@@ -32,7 +32,7 @@ describe("formatAssistantErrorText", () => {
       '{"type":"error","error":{"details":null,"type":"overloaded_error","message":"Overloaded"},"request_id":"req_123"}',
     );
     expect(formatAssistantErrorText(msg)).toBe(
-      "The AI service is temporarily overloaded. Please try again in a moment.",
+      "*The AI service is temporarily overloaded. Please try again in a moment.*",
     );
   });
   it("returns a friendly message for HTTP 529 overloaded errors", () => {
@@ -40,16 +40,28 @@ describe("formatAssistantErrorText", () => {
       'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_011CYeULdpxKGKgj9p4nJkyS"}',
     );
     expect(formatAssistantErrorText(msg)).toBe(
-      "The AI service is temporarily overloaded. Please try again in a moment.",
+      "*The AI service is temporarily overloaded. Please try again in a moment.*",
     );
   });
-  it("returns a friendly message for auth/expired token errors", () => {
+  it("returns a specific Anthropic auth message for OAuth token expiry", () => {
     const msg = makeAssistantError(
       '{"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired."},"request_id":"req_abc"}',
     );
-    expect(formatAssistantErrorText(msg)).toBe(
-      "Authentication expired. Please re-authenticate and try again.",
-    );
+    const result = formatAssistantErrorText(msg)!;
+    // Italic, specific to Anthropic OAuth, with actionable guidance
+    expect(result.startsWith("*")).toBe(true);
+    expect(result.endsWith("*")).toBe(true);
+    expect(result).toContain("Anthropic OAuth token");
+    expect(result).toContain("claude");
+    expect(result).toContain("refresh");
+  });
+  it("returns a specific memory-search message for missing provider key", () => {
+    const msg = makeAssistantError('No API key found for provider "openai". Auth store: ...');
+    const result = formatAssistantErrorText(msg)!;
+    expect(result.startsWith("*")).toBe(true);
+    expect(result).toContain("Memory search");
+    expect(result).toContain("openai");
+    expect(result).toContain("Claude subscription is fine");
   });
   it("returns a generic message for long unclassified errors", () => {
     const msg = makeAssistantError("x".repeat(300));
