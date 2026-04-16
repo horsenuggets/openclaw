@@ -89,6 +89,13 @@ export function wrapStreamFnWithAttribution(streamFn: StreamFn): StreamFn {
         for (let i = 0; i < Math.min(system.length, 3); i++) {
           console.error(`[attribution] Block ${i}: ${(system[i]?.text ?? "").substring(0, 80)}`);
         }
+        // Verify mutation persists by scheduling a check
+        const ref = system;
+        setTimeout(() => {
+          console.error(
+            `[attribution] POST-CHECK: Block 0 still = ${(ref[0]?.text ?? "").substring(0, 60)}`,
+          );
+        }, 100);
       } else {
         console.error("[attribution] WARNING: no system blocks found in params");
       }
