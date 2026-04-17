@@ -20,7 +20,6 @@ import { normalizeMessageChannel } from "../../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../../agent-paths.js";
 import { resolveSessionAgentIds } from "../../agent-scope.js";
-import { wrapStreamFnWithAttribution } from "../../anthropic-attribution.js";
 import { createAnthropicPayloadLogger } from "../../anthropic-payload-log.js";
 import { makeBootstrapWarn, resolveBootstrapContextForRun } from "../../bootstrap-files.js";
 import { createCacheTrace } from "../../cache-trace.js";
@@ -60,6 +59,12 @@ import {
 } from "../../skills.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
+import {
+  buildDeferredToolsPromptSection,
+  createToolSearchTool,
+  ToolSearchState,
+  wrapStreamFnWithToolSearch,
+} from "../../tool-search.js";
 import { resolveTranscriptPolicy } from "../../transcript-policy.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../../workspace.js";
 import { isAbortError } from "../abort.js";
@@ -246,8 +251,16 @@ export async function runEmbeddedAttempt(
             params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
           disableMessageTool: params.disableMessageTool,
         });
-    const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
-    logToolSchemasForGoogle({ tools, provider: params.provider });
+    const toolsSanitized = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
+    logToolSchemasForGoogle({ tools: toolsSanitized, provider: params.provider });
+
+    // For subscription providers, add tool_search and set up deferral state.
+    // All tools remain registered for execution, but only essential + loaded
+    // tool schemas are sent per API request to stay within plan quota limits.
+    const toolSearchState = needsSubscriptionPrefix ? new ToolSearchState() : undefined;
+    const tools = needsSubscriptionPrefix
+      ? [...toolsSanitized, createToolSearchTool(toolsSanitized, toolSearchState!)]
+      : toolsSanitized;
 
     const machineName = await getMachineDisplayName();
     const runtimeChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
@@ -411,8 +424,13 @@ export async function runEmbeddedAttempt(
     const CLAUDE_CODE_SUBSCRIPTION_PREFIX =
       "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
     const rawSystemPrompt = systemPromptOverride();
+    const deferredToolsSection = toolSearchState
+      ? buildDeferredToolsPromptSection(toolsSanitized)
+      : "";
     const systemPromptText = needsSubscriptionPrefix
-      ? CLAUDE_CODE_SUBSCRIPTION_PREFIX + rawSystemPrompt
+      ? CLAUDE_CODE_SUBSCRIPTION_PREFIX +
+        rawSystemPrompt +
+        (deferredToolsSection ? "\n\n" + deferredToolsSection : "")
       : rawSystemPrompt;
 
     const sessionLock = await acquireSessionWriteLock({
@@ -551,6 +569,15 @@ export async function runEmbeddedAttempt(
         }
       } else {
         activeSession.agent.streamFn = streamSimple;
+      }
+
+      // Apply tool deferral for subscription providers — filter tool schemas
+      // in each API request to stay within plan quota token limits.
+      if (toolSearchState) {
+        activeSession.agent.streamFn = wrapStreamFnWithToolSearch(
+          activeSession.agent.streamFn,
+          toolSearchState,
+        );
       }
 
       applyExtraParamsToAgent(
