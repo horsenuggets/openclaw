@@ -141,14 +141,15 @@ class RouterMessageListener extends MessageCreateListener {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async handle(data: any, client: Client): Promise<void> {
-    // Only handle DMs (channel_type 1)
-    if (data.channelType !== 1) {
-      return;
-    }
-
     const authorId = data.author?.id;
     const isBot = data.author?.bot === true;
     if (!authorId || isBot) {
+      return;
+    }
+
+    // Only handle DMs (no guild = direct message)
+    const isDM = !data.guild?.id && !data.guildId;
+    if (!isDM) {
       return;
     }
 
