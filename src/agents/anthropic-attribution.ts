@@ -79,20 +79,15 @@ export function wrapStreamFnWithAttribution(streamFn: StreamFn): StreamFn {
       const params = payload as Record<string, unknown>;
       const system = params.system as Array<{ type: string; text: string }> | undefined;
       if (system && Array.isArray(system)) {
+        // The CC prefix MUST remain as Block 0 — the server validates this.
+        // Insert the attribution header as Block 1 (after the CC prefix).
         const firstUserText = extractFirstUserMessageText(params);
         const header = getAttributionHeader(firstUserText);
-        // Prepend as Block 0
-        system.unshift({ type: "text", text: header });
-        console.error(
-          `[attribution] injected billing header as Block 0 (${system.length} system blocks)`,
-        );
-        for (let i = 0; i < Math.min(system.length, 3); i++) {
-          console.error(`[attribution] Block ${i}: ${(system[i]?.text ?? "").substring(0, 80)}`);
+        if (system.length > 0) {
+          system.splice(1, 0, { type: "text", text: header });
+        } else {
+          system.push({ type: "text", text: header });
         }
-        console.error(`[attribution] firstUserText: "${firstUserText.substring(0, 50)}"`);
-        console.error(`[attribution] header: ${header}`);
-      } else {
-        console.error("[attribution] WARNING: no system blocks found in params");
       }
       options?.onPayload?.(payload);
     };

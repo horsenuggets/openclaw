@@ -574,11 +574,10 @@ export async function runEmbeddedAttempt(
           activeSession.agent.streamFn,
         );
       }
-      // Inject billing attribution header for subscription providers so
-      // Anthropic routes usage to plan quota instead of extra usage.
-      if (needsSubscriptionPrefix) {
-        activeSession.agent.streamFn = wrapStreamFnWithAttribution(activeSession.agent.streamFn);
-      }
+      // Note: billing attribution header was removed — the Claude Code
+      // system prompt prefix (Block 0) is sufficient for plan quota routing.
+      // The attribution header was displacing the CC prefix from Block 0,
+      // which caused the server to reject requests as extra usage.
 
       try {
         const prior = await sanitizeSessionHistory({
