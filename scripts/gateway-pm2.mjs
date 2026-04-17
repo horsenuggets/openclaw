@@ -68,7 +68,14 @@ function getPm2Process() {
 
 /** Capture gateway-relevant env vars to bake into pm2. */
 function getGatewayEnv() {
-  const envKeys = ["HOME", "OPENCLAW_GATEWAY_PORT", "OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_LLAMA_GPU"];
+  const envKeys = [
+    "HOME",
+    "OPENCLAW_GATEWAY_PORT",
+    "OPENCLAW_GATEWAY_TOKEN",
+    "OPENCLAW_LLAMA_GPU",
+    "OPENCLAW_ANTHROPIC_PAYLOAD_LOG",
+    "OPENCLAW_ANTHROPIC_PAYLOAD_LOG_FILE",
+  ];
   const env = {};
   for (const key of envKeys) {
     if (process.env[key]) {
