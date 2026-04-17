@@ -57,6 +57,7 @@ import {
   loadWorkspaceSkillEntries,
   resolveSkillsPromptForRun,
 } from "../../skills.js";
+import { wrapForSubscription } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import {
@@ -419,25 +420,13 @@ export async function runEmbeddedAttempt(
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
     // When using a subscription-authenticated provider (OAuth token),
-    // Anthropic's server-side validation requires the system prompt to
-    // start with the Claude Code prefix. Prepend it here so the rest
-    // of the system prompt (OpenClaw identity, tools, workspace) follows
-    // naturally. The provider name is checked (not the token format) so
-    // this only activates for explicitly-configured subscription providers.
-    const CLAUDE_CODE_SUBSCRIPTION_PREFIX =
-      "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
-    let rawSystemPrompt = systemPromptOverride();
-    if (needsSubscriptionPrefix) {
-      // Strip identity lines that contradict the CC prefix — the server
-      // validates system prompt content for OAuth/subscription requests.
-      rawSystemPrompt = rawSystemPrompt
-        .replace(/You are NOT Claude Code\.[^\n]*/g, "")
-        .replace(/You are a personal assistant running inside OpenClaw\./g, "")
-        .replace(/You are OpenClaw\./g, "")
-        .replace(/\n{3,}/g, "\n\n");
-    }
+    const rawSystemPrompt = systemPromptOverride();
+    // For subscription providers, wrap OpenClaw's prompt inside a Claude
+    // Code-compatible base prompt. The server validates system prompt
+    // content for OAuth requests — this matches the structure used by
+    // the official CLI's --append-system-prompt flag.
     const systemPromptText = needsSubscriptionPrefix
-      ? CLAUDE_CODE_SUBSCRIPTION_PREFIX + rawSystemPrompt
+      ? wrapForSubscription(rawSystemPrompt)
       : rawSystemPrompt;
 
     const sessionLock = await acquireSessionWriteLock({
