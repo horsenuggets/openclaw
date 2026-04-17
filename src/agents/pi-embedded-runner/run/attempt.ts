@@ -254,6 +254,12 @@ export async function runEmbeddedAttempt(
     const toolsSanitized = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
     logToolSchemasForGoogle({ tools: toolsSanitized, provider: params.provider });
 
+    // Detect subscription providers early — needed for tool deferral and
+    // system prompt prefix. Checked by provider name or explicit auth config.
+    const needsSubscriptionPrefix =
+      params.provider === "anthropic-subscription" ||
+      params.config?.models?.providers?.[params.provider]?.auth === "oauth";
+
     // For subscription providers, add tool_search and set up deferral state.
     // All tools remain registered for execution, but only essential + loaded
     // tool schemas are sent per API request to stay within plan quota limits.
@@ -418,9 +424,6 @@ export async function runEmbeddedAttempt(
     // of the system prompt (OpenClaw identity, tools, workspace) follows
     // naturally. The provider name is checked (not the token format) so
     // this only activates for explicitly-configured subscription providers.
-    const needsSubscriptionPrefix =
-      params.provider === "anthropic-subscription" ||
-      params.config?.models?.providers?.[params.provider]?.auth === "oauth";
     const CLAUDE_CODE_SUBSCRIPTION_PREFIX =
       "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
     const rawSystemPrompt = systemPromptOverride();
