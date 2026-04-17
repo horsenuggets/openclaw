@@ -1,21 +1,21 @@
-# Multi-instance OpenClaw deployment.
+# Multi-instance OpenClaw deployment (Discord-first).
 #
-# Each instance gets its own config/data directory under ~/.openclaw-instances/NNNN/.
-# Instance IDs are zero-padded (0001, 0002, ..., 9999).
+# Each instance is keyed by Discord user ID. Config/data lives under
+# ~/.openclaw-instances/{discordUserId}/.
 #
 # Usage:
-#   pnpm gateway:docker:deploy          # build + start all instances
-#   pnpm gateway:docker:deploy -- 0001  # deploy single instance
+#   pnpm gateway:docker:deploy                          # build + start all instances
+#   pnpm gateway:docker:deploy -- 263176934089949194    # deploy single instance
 #
 # Instance config:
-#   ~/.openclaw-instances/0001/openclaw.json   — gateway config, Discord token, etc.
-#   ~/.openclaw-instances/0001/agents/         — agent memory, sessions, auth profiles
-#   ~/.openclaw-instances/0001/workspace/      — working directory
+#   ~/.openclaw-instances/263176934089949194/openclaw.json   — gateway config, Discord token, etc.
+#   ~/.openclaw-instances/263176934089949194/agents/         — agent memory, sessions, auth profiles
+#   ~/.openclaw-instances/263176934089949194/workspace/      — working directory
 #
 # First-time setup per instance:
 #   1. Create the instance directory
-#   2. Run onboarding: docker compose ... run --rm openclaw-NNNN onboard
-#   3. Start: docker compose ... up -d openclaw-NNNN
+#   2. Run onboarding: docker compose ... run --rm openclaw-{discordUserId} onboard
+#   3. Start: docker compose ... up -d openclaw-{discordUserId}
 
 x-openclaw-base: &openclaw-base
   image: ${OPENCLAW_IMAGE:-openclaw:local}
@@ -29,18 +29,18 @@ x-openclaw-base: &openclaw-base
     OPENCLAW_LLAMA_GPU: "off"
 
 services:
-  openclaw-0001:
+  openclaw-263176934089949194:
     <<: *openclaw-base
-    container_name: openclaw-0001
+    container_name: openclaw-263176934089949194
     environment:
       <<: *openclaw-env
       OPENCLAW_GATEWAY_PORT: "18789"
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_0001_TOKEN:-}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_263176934089949194_TOKEN:-}
     volumes:
-      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/0001:/home/node/.openclaw
-      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/0001/workspace:/home/node/.openclaw/workspace
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194:/home/node/.openclaw
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194/workspace:/home/node/.openclaw/workspace
     ports:
-      - "${OPENCLAW_0001_PORT:-18789}:18789"
+      - "${OPENCLAW_263176934089949194_PORT:-18789}:18789"
     command:
       [
         "node",
@@ -53,18 +53,18 @@ services:
         "--force",
       ]
 
-  openclaw-0002:
+  openclaw-310798523454980098:
     <<: *openclaw-base
-    container_name: openclaw-0002
+    container_name: openclaw-310798523454980098
     environment:
       <<: *openclaw-env
       OPENCLAW_GATEWAY_PORT: "18789"
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_0002_TOKEN:-}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_310798523454980098_TOKEN:-}
     volumes:
-      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/0002:/home/node/.openclaw
-      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/0002/workspace:/home/node/.openclaw/workspace
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098:/home/node/.openclaw
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098/workspace:/home/node/.openclaw/workspace
     ports:
-      - "${OPENCLAW_0002_PORT:-18791}:18789"
+      - "${OPENCLAW_310798523454980098_PORT:-18791}:18789"
     command:
       [
         "node",

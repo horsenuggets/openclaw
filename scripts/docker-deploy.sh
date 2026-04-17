@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Deploy OpenClaw Docker instances.
+# Deploy OpenClaw Docker instances (Discord-first).
+#
+# Instance IDs are Discord user IDs (17-20 digit numeric strings).
 #
 # Usage:
-#   ./scripts/docker-deploy.sh              # deploy all instances
-#   ./scripts/docker-deploy.sh 0001         # deploy single instance
-#   ./scripts/docker-deploy.sh --build-only # just build, don't start
-#   ./scripts/docker-deploy.sh --setup 0003 # create new instance + onboard
+#   ./scripts/docker-deploy.sh                              # deploy all instances
+#   ./scripts/docker-deploy.sh 263176934089949194            # deploy single instance
+#   ./scripts/docker-deploy.sh --build-only                 # just build, don't start
+#   ./scripts/docker-deploy.sh --setup 263176934089949194    # create new instance + onboard
 #
 # Environment:
 #   OPENCLAW_INSTANCES_DIR  — base dir (default: ~/.openclaw-instances)
@@ -17,6 +19,11 @@ COMPOSE_FILE="$ROOT_DIR/docker-compose.instances.yml"
 IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
 INSTANCES_DIR="${OPENCLAW_INSTANCES_DIR:-$HOME/.openclaw-instances}"
 
+# Validate that a string looks like a Discord user ID (numeric, 17-20 digits)
+is_discord_id() {
+  [[ "$1" =~ ^[0-9]{17,20}$ ]]
+}
+
 # Parse args
 ACTION="deploy"
 TARGET=""
@@ -27,8 +34,13 @@ while [[ $# -gt 0 ]]; do
     --stop) ACTION="stop"; shift ;;
     --status) ACTION="status"; shift ;;
     --logs) ACTION="logs"; shift ;;
-    [0-9][0-9][0-9][0-9]) TARGET="$1"; shift ;;
-    *) echo "Unknown arg: $1"; exit 1 ;;
+    *)
+      if is_discord_id "$1"; then
+        TARGET="$1"; shift
+      else
+        echo "Unknown arg: $1 (expected a Discord user ID: 17-20 digit number)"; exit 1
+      fi
+      ;;
   esac
 done
 
@@ -67,7 +79,7 @@ case "$ACTION" in
 
   setup)
     if [ -z "$TARGET" ]; then
-      echo "Usage: $0 --setup NNNN"
+      echo "Usage: $0 --setup <discord-user-id>"
       exit 1
     fi
     ensure_instance_dir "$TARGET"
@@ -85,10 +97,11 @@ case "$ACTION" in
       echo "Starting instance $TARGET..."
       docker compose -f "$COMPOSE_FILE" up -d "openclaw-$TARGET"
     else
-      # Deploy all instances that have directories
-      for dir in "$INSTANCES_DIR"/[0-9][0-9][0-9][0-9]; do
+      # Deploy all instances that have directories (Discord user ID pattern)
+      for dir in "$INSTANCES_DIR"/[0-9]*; do
         [ -d "$dir" ] || continue
         id="$(basename "$dir")"
+        is_discord_id "$id" || continue
         ensure_instance_dir "$id"
       done
       echo "Starting all instances..."
