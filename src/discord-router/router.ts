@@ -1,9 +1,7 @@
-import { Client, MessageCreateListener } from "@buape/carbon";
-import { GatewayIntents, GatewayPlugin } from "@buape/carbon/gateway";
 import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
+import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
-import { getDiscordGatewayEmitter, waitForDiscordGatewayStop } from "../discord/monitor.gateway.js";
 import { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
 
@@ -21,16 +19,17 @@ export type RouterRuntime = {
 };
 
 const TYPING_INTERVAL_MS = 8_000;
+const DISCORD_API = "https://discord.com/api/v10";
 
 /**
- * Start the Discord router. Connects to Discord, listens for DMs,
- * and forwards them to per-user Docker containers via gateway API.
+ * Start the Discord router using raw WebSocket connection to Discord gateway.
+ * Listens for DMs and forwards them to per-user Docker containers via gateway API.
  */
 export async function startRouter(config: RouterConfig, runtime: RouterRuntime): Promise<void> {
   const { discordToken, instances, agentTimeoutMs } = config;
 
   // Resolve application ID
-  const appIdResponse = (await fetch("https://discord.com/api/v10/applications/@me", {
+  const appIdResponse = (await fetch(`${DISCORD_API}/applications/@me`, {
     headers: { Authorization: `Bot ${discordToken}` },
   }).then((r) => r.json())) as { id?: string };
   const applicationId = appIdResponse?.id;
@@ -43,234 +42,255 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     runtime.log(`  ${userId} → localhost:${inst.port}`);
   }
 
-  // Track in-flight requests per user
+  // Get gateway URL
+  const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
+    headers: { Authorization: `Bot ${discordToken}` },
+  }).then((r) => r.json())) as { url?: string };
+  const gatewayUrl = gatewayInfo?.url ?? "wss://gateway.discord.gg";
+
   const inflight = new Set<string>();
+  let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  let lastSequence: number | null = null;
+  let sessionId: string | undefined;
+  let resumeGatewayUrl: string | undefined;
 
-  const messageListener = new RouterMessageListener({
-    instances,
-    inflight,
-    config,
-    runtime,
-    agentTimeoutMs,
-  });
+  function connect(resume = false) {
+    const url = resume && resumeGatewayUrl ? resumeGatewayUrl : gatewayUrl;
+    const ws = new WebSocket(`${url}/?v=10&encoding=json`);
 
-  const client = new Client(
-    {
-      baseUrl: "http://localhost",
-      deploySecret: "a",
-      clientId: applicationId,
-      publicKey: "a",
-      token: discordToken,
-      autoDeploy: false,
-    },
-    { commands: [], listeners: [messageListener], components: [] },
-    [
-      new GatewayPlugin({
-        reconnect: { maxAttempts: Number.POSITIVE_INFINITY },
-        intents:
-          GatewayIntents.Guilds |
-          GatewayIntents.GuildMessages |
-          GatewayIntents.MessageContent |
-          GatewayIntents.DirectMessages |
-          GatewayIntents.DirectMessageReactions,
-        autoInteractions: false,
-      }),
-    ],
-  );
-
-  // Fetch bot user info
-  try {
-    const botUser = await client.fetchUser("@me");
-    runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"}`);
-  } catch (err) {
-    runtime.error(`[router] failed to fetch bot identity: ${formatErrorMessage(err)}`);
-  }
-
-  const gateway = client.getPlugin<GatewayPlugin>("gateway");
-  const gatewayEmitter = getDiscordGatewayEmitter(gateway);
-
-  // Keep running until gateway stops or signal
-  const abortController = new AbortController();
-  const onExit = () => abortController.abort();
-  process.once("SIGINT", onExit);
-  process.once("SIGTERM", onExit);
-
-  try {
-    await waitForDiscordGatewayStop({
-      gateway: gateway
-        ? { emitter: gatewayEmitter, disconnect: () => gateway.disconnect() }
-        : undefined,
-      abortSignal: abortController.signal,
-      onGatewayError: (err) => {
-        runtime.error(`[router] gateway error: ${String(err)}`);
-      },
-      shouldStopOnError: (err) => {
-        const message = String(err);
-        return (
-          message.includes("Max reconnect attempts") || message.includes("Fatal Gateway error")
-        );
-      },
+    ws.on("open", () => {
+      runtime.log(`[router] WebSocket connected to ${url}`);
     });
-  } finally {
-    process.removeListener("SIGINT", onExit);
-    process.removeListener("SIGTERM", onExit);
+
+    ws.on("message", (raw: Buffer) => {
+      const payload = JSON.parse(raw.toString());
+      const { op, d, s, t } = payload;
+
+      if (s !== null && s !== undefined) {
+        lastSequence = s;
+      }
+
+      switch (op) {
+        case 10: {
+          // Hello — start heartbeating
+          const interval = d.heartbeat_interval;
+          if (heartbeatInterval) clearInterval(heartbeatInterval);
+          heartbeatInterval = setInterval(() => {
+            ws.send(JSON.stringify({ op: 1, d: lastSequence }));
+          }, interval);
+          // Send initial heartbeat
+          ws.send(JSON.stringify({ op: 1, d: lastSequence }));
+
+          if (resume && sessionId) {
+            // Resume
+            ws.send(
+              JSON.stringify({
+                op: 6,
+                d: { token: `Bot ${discordToken}`, session_id: sessionId, seq: lastSequence },
+              }),
+            );
+          } else {
+            // Identify
+            ws.send(
+              JSON.stringify({
+                op: 2,
+                d: {
+                  token: `Bot ${discordToken}`,
+                  intents:
+                    (1 << 0) | // GUILDS
+                    (1 << 9) | // GUILD_MESSAGES
+                    (1 << 12) | // DIRECT_MESSAGES
+                    (1 << 15), // MESSAGE_CONTENT
+                  properties: {
+                    os: "linux",
+                    browser: "openclaw-router",
+                    device: "openclaw-router",
+                  },
+                },
+              }),
+            );
+          }
+          break;
+        }
+        case 11:
+          // Heartbeat ACK
+          break;
+        case 0: {
+          // Dispatch
+          if (t === "READY") {
+            sessionId = d.session_id;
+            resumeGatewayUrl = d.resume_gateway_url;
+            const botUser = d.user;
+            runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
+          }
+
+          if (t === "MESSAGE_CREATE") {
+            const authorId = d.author?.id;
+            const isBot = d.author?.bot === true;
+            const guildId = d.guild_id;
+            const content = d.content ?? "";
+            const channelId = d.channel_id;
+
+            runtime.log(
+              `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} content=${content.slice(0, 40)}`,
+            );
+
+            if (!authorId || isBot || guildId || !content.trim()) {
+              return;
+            }
+
+            const instance = instances.get(authorId);
+            if (!instance) {
+              runtime.log(`[router] no instance for user ${authorId}`);
+              void discordSend(discordToken, channelId, "No agent is configured for your account.");
+              return;
+            }
+
+            void routeDM({
+              discordUserId: authorId,
+              channelId,
+              messageContent: content,
+              instance,
+              discordToken,
+              runtime,
+              agentTimeoutMs,
+              inflight,
+            });
+          }
+          break;
+        }
+        case 7:
+          // Reconnect requested
+          runtime.log("[router] reconnect requested by Discord");
+          ws.close();
+          setTimeout(() => connect(true), 1000);
+          break;
+        case 9:
+          // Invalid session
+          runtime.log("[router] invalid session, re-identifying");
+          sessionId = undefined;
+          ws.close();
+          setTimeout(() => connect(false), 5000);
+          break;
+      }
+    });
+
+    ws.on("close", (code: number) => {
+      runtime.log(`[router] WebSocket closed (${code})`);
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = undefined;
+      }
+      // Auto-reconnect unless we explicitly shut down
+      if (code !== 1000) {
+        setTimeout(() => connect(!!sessionId), 5000);
+      }
+    });
+
+    ws.on("error", (err: Error) => {
+      runtime.error(`[router] WebSocket error: ${err.message}`);
+    });
   }
+
+  connect(false);
+
+  // Keep running until process exit
+  await new Promise<void>((resolve) => {
+    process.once("SIGINT", resolve);
+    process.once("SIGTERM", resolve);
+  });
 }
 
-class RouterMessageListener extends MessageCreateListener {
-  private instances: Map<string, InstanceConfig>;
-  private inflight: Set<string>;
-  private config: RouterConfig;
-  private runtime: RouterRuntime;
-  private agentTimeoutMs: number;
-
-  constructor(opts: {
-    instances: Map<string, InstanceConfig>;
-    inflight: Set<string>;
-    config: RouterConfig;
-    runtime: RouterRuntime;
-    agentTimeoutMs: number;
-  }) {
-    super();
-    this.instances = opts.instances;
-    this.inflight = opts.inflight;
-    this.config = opts.config;
-    this.runtime = opts.runtime;
-    this.agentTimeoutMs = opts.agentTimeoutMs;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async handle(data: any, client: Client): Promise<void> {
-    this.runtime.log(
-      `[router] MESSAGE_CREATE: author=${data.author?.id} guild=${data.guild?.id ?? data.guildId ?? "none"} content=${(data.content ?? "").slice(0, 40)}`,
-    );
-
-    const authorId = data.author?.id;
-    const isBot = data.author?.bot === true;
-    if (!authorId || isBot) {
-      return;
-    }
-
-    // Only handle DMs (no guild = direct message)
-    const isDM = !data.guild?.id && !data.guildId;
-    if (!isDM) {
-      return;
-    }
-
-    const messageContent = data.content ?? "";
-    if (!messageContent.trim()) {
-      return;
-    }
-
-    const channelId = data.channelId;
-    const instance = this.instances.get(authorId);
-
-    if (!instance) {
-      this.runtime.log(`[router] no instance for user ${authorId}, ignoring DM`);
-      await sendDM(client.rest, channelId, "No agent is configured for your account.").catch(
-        () => {},
-      );
-      return;
-    }
-
-    // Serialize per-user requests
-    if (this.inflight.has(authorId)) {
-      this.runtime.log(`[router] user ${authorId} already has in-flight request, queuing`);
-    }
-    while (this.inflight.has(authorId)) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-
-    this.inflight.add(authorId);
-    try {
-      await handleDM({
-        discordUserId: authorId,
-        channelId,
-        messageContent,
-        instance,
-        client,
-        runtime: this.runtime,
-        agentTimeoutMs: this.agentTimeoutMs,
-      });
-    } catch (err) {
-      this.runtime.error(`[router] error handling DM from ${authorId}: ${formatErrorMessage(err)}`);
-      await sendDM(
-        client.rest,
-        channelId,
-        "Sorry, something went wrong processing your message.",
-      ).catch(() => {});
-    } finally {
-      this.inflight.delete(authorId);
-    }
-  }
-}
-
-async function handleDM(params: {
+async function routeDM(params: {
   discordUserId: string;
   channelId: string;
   messageContent: string;
   instance: InstanceConfig;
-  client: Client;
+  discordToken: string;
   runtime: RouterRuntime;
   agentTimeoutMs: number;
+  inflight: Set<string>;
 }): Promise<void> {
-  const { discordUserId, channelId, messageContent, instance, client, runtime, agentTimeoutMs } =
-    params;
+  const {
+    discordUserId,
+    channelId,
+    messageContent,
+    instance,
+    discordToken,
+    runtime,
+    agentTimeoutMs,
+    inflight,
+  } = params;
 
-  runtime.log(`[router] DM from ${discordUserId}: ${messageContent.slice(0, 80)}...`);
+  // Serialize per-user
+  if (inflight.has(discordUserId)) {
+    runtime.log(`[router] user ${discordUserId} already in-flight, queuing`);
+  }
+  while (inflight.has(discordUserId)) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 
-  // Start typing indicator
-  const typingInterval = setInterval(() => {
-    sendTyping(client.rest, channelId).catch(() => {});
-  }, TYPING_INTERVAL_MS);
-  await sendTyping(client.rest, channelId).catch(() => {});
-
+  inflight.add(discordUserId);
   try {
-    const idempotencyKey = randomUUID();
-    const result = await callGateway<AgentResult>({
-      url: `ws://127.0.0.1:${instance.port}`,
-      token: instance.token || undefined,
-      method: "agent",
-      params: {
-        message: messageContent,
-        channel: "internal",
-        deliver: false,
-        idempotencyKey,
-        timeout: Math.floor(agentTimeoutMs / 1000),
-      },
-      expectFinal: true,
-      timeoutMs: agentTimeoutMs + 30_000,
-      clientName: "cli",
-      mode: "backend",
-    });
+    runtime.log(`[router] routing DM from ${discordUserId}: ${messageContent.slice(0, 80)}`);
 
-    const payloads = result?.result?.payloads ?? [];
-    if (payloads.length === 0) {
-      runtime.log(`[router] empty response from container for ${discordUserId}`);
-      return;
-    }
+    // Typing indicator
+    const typingInterval = setInterval(() => {
+      void discordTyping(discordToken, channelId);
+    }, TYPING_INTERVAL_MS);
+    void discordTyping(discordToken, channelId);
 
-    for (const payload of payloads) {
-      const text = payload.text?.trim();
-      if (text) {
-        const chunks = chunkText(text, 2000);
-        for (const chunk of chunks) {
-          await sendDM(client.rest, channelId, chunk);
+    try {
+      const idempotencyKey = randomUUID();
+      const result = await callGateway<AgentResult>({
+        url: `ws://127.0.0.1:${instance.port}`,
+        token: instance.token || undefined,
+        method: "agent",
+        params: {
+          message: messageContent,
+          channel: "internal",
+          deliver: false,
+          idempotencyKey,
+          timeout: Math.floor(agentTimeoutMs / 1000),
+        },
+        expectFinal: true,
+        timeoutMs: agentTimeoutMs + 30_000,
+        clientName: "cli",
+        mode: "backend",
+      });
+
+      const payloads = result?.result?.payloads ?? [];
+      if (payloads.length === 0) {
+        runtime.log(`[router] empty response for ${discordUserId}`);
+        return;
+      }
+
+      for (const payload of payloads) {
+        const text = payload.text?.trim();
+        if (text) {
+          const chunks = chunkText(text, 2000);
+          for (const chunk of chunks) {
+            await discordSend(discordToken, channelId, chunk);
+          }
+        }
+        const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
+        for (const url of mediaUrls) {
+          await discordSend(discordToken, channelId, url);
         }
       }
-      const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-      for (const url of mediaUrls) {
-        await sendDM(client.rest, channelId, url);
-      }
-    }
 
-    runtime.log(`[router] delivered ${payloads.length} payload(s) to ${discordUserId}`);
+      runtime.log(`[router] delivered ${payloads.length} payload(s) to ${discordUserId}`);
+    } finally {
+      clearInterval(typingInterval);
+    }
+  } catch (err) {
+    runtime.error(`[router] error for ${discordUserId}: ${formatErrorMessage(err)}`);
+    await discordSend(discordToken, channelId, "Sorry, something went wrong.").catch(() => {});
   } finally {
-    clearInterval(typingInterval);
+    inflight.delete(discordUserId);
   }
 }
 
-/** Simple text chunking for Discord's 2000-char limit. */
 function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) {
     return [text];
@@ -295,12 +315,20 @@ function chunkText(text: string, limit: number): string[] {
   return chunks;
 }
 
-async function sendDM(rest: Client["rest"], channelId: string, content: string): Promise<void> {
-  await rest.post(Routes.channelMessages(channelId), {
-    body: { content },
+async function discordSend(token: string, channelId: string, content: string): Promise<void> {
+  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content }),
   });
 }
 
-async function sendTyping(rest: Client["rest"], channelId: string): Promise<void> {
-  await rest.post(Routes.channelTyping(channelId), {});
+async function discordTyping(token: string, channelId: string): Promise<void> {
+  await fetch(`${DISCORD_API}${Routes.channelTyping(channelId)}`, {
+    method: "POST",
+    headers: { Authorization: `Bot ${token}` },
+  }).catch(() => {});
 }
