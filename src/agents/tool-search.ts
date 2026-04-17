@@ -24,10 +24,7 @@ const ESSENTIAL_TOOL_NAMES_LOWER = new Set([
   "write",
   "edit",
   "exec",
-  "process",
   "message",
-  "web_search",
-  "web_fetch",
   "memory_search",
   "tool_search",
 ]);
