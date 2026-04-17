@@ -252,7 +252,7 @@ async function routeDM(params: {
         method: "agent",
         params: {
           message: messageContent,
-          channel: "internal",
+          channel: "webchat",
           deliver: false,
           idempotencyKey,
           timeout: Math.floor(agentTimeoutMs / 1000),
