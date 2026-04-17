@@ -426,7 +426,16 @@ export async function runEmbeddedAttempt(
     // this only activates for explicitly-configured subscription providers.
     const CLAUDE_CODE_SUBSCRIPTION_PREFIX =
       "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
-    const rawSystemPrompt = systemPromptOverride();
+    let rawSystemPrompt = systemPromptOverride();
+    if (needsSubscriptionPrefix) {
+      // Strip identity lines that contradict the CC prefix — the server
+      // validates system prompt content for OAuth/subscription requests.
+      rawSystemPrompt = rawSystemPrompt
+        .replace(/You are NOT Claude Code\.[^\n]*/g, "")
+        .replace(/You are a personal assistant running inside OpenClaw\./g, "")
+        .replace(/You are OpenClaw\./g, "")
+        .replace(/\n{3,}/g, "\n\n");
+    }
     const systemPromptText = needsSubscriptionPrefix
       ? CLAUDE_CODE_SUBSCRIPTION_PREFIX + rawSystemPrompt
       : rawSystemPrompt;
