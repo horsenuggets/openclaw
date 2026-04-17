@@ -141,6 +141,10 @@ class RouterMessageListener extends MessageCreateListener {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async handle(data: any, client: Client): Promise<void> {
+    this.runtime.log(
+      `[router] MESSAGE_CREATE: author=${data.author?.id} guild=${data.guild?.id ?? data.guildId ?? "none"} content=${(data.content ?? "").slice(0, 40)}`,
+    );
+
     const authorId = data.author?.id;
     const isBot = data.author?.bot === true;
     if (!authorId || isBot) {
