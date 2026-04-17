@@ -258,6 +258,9 @@ export async function runEmbeddedPiAgent(
           authStorage.setRuntimeApiKey(model.provider, copilotToken.token);
         } else {
           authStorage.setRuntimeApiKey(model.provider, apiKeyInfo.apiKey);
+          log.info(
+            `[auth-debug] provider=${model.provider} mode=${apiKeyInfo.mode} key=${(apiKeyInfo.apiKey ?? "").substring(0, 15)}... profile=${apiKeyInfo.profileId}`,
+          );
         }
         lastProfileId = apiKeyInfo.profileId;
       };
