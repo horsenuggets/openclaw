@@ -61,7 +61,6 @@ import { wrapForSubscription } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import {
-  buildDeferredToolsPromptSection,
   createToolSearchTool,
   ToolSearchState,
   wrapStreamFnWithToolSearch,
