@@ -49,6 +49,14 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "discord-router",
+    description: "Discord DM router for multi-user containers",
+    register: async (program) => {
+      const mod = await import("../discord-router-cli.js");
+      mod.registerDiscordRouterCli(program);
+    },
+  },
+  {
     name: "daemon",
     description: "Gateway service (legacy alias)",
     register: async (program) => {

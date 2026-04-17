@@ -27,6 +27,8 @@ x-openclaw-base: &openclaw-base
     NODE_ENV: production
     # GPU disabled by default in containers (no CUDA support)
     OPENCLAW_LLAMA_GPU: "off"
+    # Channels handled by the discord-router on the host; containers only run agents
+    OPENCLAW_SKIP_CHANNELS: "1"
 
 services:
   openclaw-263176934089949194:
