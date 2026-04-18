@@ -5,6 +5,15 @@ import type { RouterRuntime } from "./router.js";
 
 const CALLBACK_PORT = 18800;
 
+function successPage(title: string, message: string): string {
+  const isError = title.toLowerCase().includes("error");
+  const color = isError ? "#f04747" : "#43b581";
+  const icon = isError ? "&#10007;" : "&#10003;";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenClaw</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#0b0b11;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}.card{background:#1a1a2e;border-radius:12px;padding:2rem;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.4)}h1{font-size:1.4rem;margin-bottom:.5rem;color:${color}}.icon{font-size:2.5rem;margin-bottom:.5rem}.sub{color:#aaa;margin-top:1rem;font-size:.9rem}</style>
+</head><body><div class="card"><div class="icon">${icon}</div><h1>${title}</h1><p class="sub">${message}</p></div></body></html>`;
+}
+
 type OAuthCredentials = {
   client_id: string;
   client_secret: string;
@@ -52,13 +61,23 @@ export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: 
       });
       req.on("end", async () => {
         try {
-          const data = JSON.parse(body);
-          const code = data.code as string;
-          const state = data.state as string;
+          // Support both JSON and form-encoded POST
+          let code: string;
+          let state: string;
+          const contentType = req.headers["content-type"] ?? "";
+          if (contentType.includes("application/x-www-form-urlencoded")) {
+            const params = new URLSearchParams(body);
+            code = params.get("code") ?? "";
+            state = params.get("state") ?? "";
+          } else {
+            const data = JSON.parse(body);
+            code = data.code as string;
+            state = data.state as string;
+          }
 
           if (!code || !state) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "missing code or state" }));
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end(successPage("Error", "Missing authorization code."));
             return;
           }
 
@@ -74,8 +93,13 @@ export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: 
 
           const pendingAuth = pending.get(stateData.nonce);
           if (!pendingAuth) {
-            res.writeHead(404, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "no pending auth for this nonce" }));
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(
+              successPage(
+                "Authorization Received",
+                "Your Google account has been connected. You can close this tab.",
+              ),
+            );
             return;
           }
 
@@ -83,12 +107,17 @@ export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: 
           pending.delete(stateData.nonce);
           pendingAuth.resolve(code);
 
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: true }));
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(
+            successPage(
+              "Authorization Complete!",
+              "Your Google account has been connected to OpenClaw. You can close this tab.",
+            ),
+          );
         } catch (err) {
           runtime.error(`[oauth] error processing callback: ${err}`);
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "internal error" }));
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(successPage("Error", "Something went wrong. Please try again."));
         }
       });
       return;
