@@ -38,7 +38,6 @@ services:
       <<: *openclaw-env
       TZ: America/Los_Angeles
       OPENCLAW_GATEWAY_PORT: "18789"
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_263176934089949194_TOKEN:-}
       GOG_KEYRING_PASSWORD: ${OPENCLAW_263176934089949194_GOG_PASSWORD:-openclaw}
     volumes:
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194:/home/node/.openclaw
@@ -64,7 +63,6 @@ services:
     environment:
       <<: *openclaw-env
       OPENCLAW_GATEWAY_PORT: "18789"
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_310798523454980098_TOKEN:-}
     volumes:
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098:/home/node/.openclaw
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098/workspace:/home/node/.openclaw/workspace
@@ -88,7 +86,6 @@ services:
     environment:
       <<: *openclaw-env
       OPENCLAW_GATEWAY_PORT: "18789"
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_483870022134136842_TOKEN:-}
     volumes:
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/483870022134136842:/home/node/.openclaw
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/483870022134136842/workspace:/home/node/.openclaw/workspace
