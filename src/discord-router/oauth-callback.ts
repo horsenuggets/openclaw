@@ -123,6 +123,46 @@ export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: 
       return;
     }
 
+    // GET callback — receives code via redirect from GitHub Pages relay
+    if (req.method === "GET" && req.url?.startsWith("/auth/receive")) {
+      const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+      const code = url.searchParams.get("code") ?? "";
+      const state = url.searchParams.get("state") ?? "";
+
+      if (!code || !state) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(successPage("Error", "Missing authorization code."));
+        return;
+      }
+
+      let stateData: { nonce: string; host: string; port: number };
+      try {
+        stateData = JSON.parse(Buffer.from(state, "base64url").toString());
+      } catch {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(successPage("Error", "Invalid state parameter."));
+        return;
+      }
+
+      const pendingAuth = pending.get(stateData.nonce);
+      if (pendingAuth) {
+        runtime.log(`[oauth] received code for ${pendingAuth.email} via redirect`);
+        pending.delete(stateData.nonce);
+        pendingAuth.resolve(code);
+      } else {
+        runtime.log(`[oauth] received code via redirect (no pending auth, nonce may have expired)`);
+      }
+
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(
+        successPage(
+          "Authorization Complete!",
+          "Your Google account has been connected to OpenClaw. You can close this tab.",
+        ),
+      );
+      return;
+    }
+
     // Health check
     if (req.method === "GET" && req.url === "/auth/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
