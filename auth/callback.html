@@ -13,14 +13,13 @@
     .ok{color:#43b581;font-size:1.1rem;margin:1rem 0}
     .err{color:#f04747;font-size:1rem;margin:1rem 0}
     .logo{font-size:2rem;margin-bottom:.5rem}
-    .hint{color:#666;font-size:.8rem;margin-top:1rem}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">&#129438;</div>
-    <h1 id="title">Redirecting...</h1>
-    <p class="sub" id="sub">Sending authorization to your bot</p>
+    <h1 id="title">Connecting...</h1>
+    <p class="sub" id="sub">Sending authorization to OpenClaw</p>
     <div id="result"></div>
   </div>
   <script>
@@ -40,41 +39,23 @@
       titleEl.textContent = 'No Code Received';
       subEl.textContent = 'Something went wrong with the authorization.';
     } else {
-      // Redirect to the callback server via form POST (bypasses mixed content)
-      // The state contains the host and port of the callback server
       let relayUrl;
       try {
         const padded = state + '='.repeat((4 - state.length % 4) % 4);
         const stateData = JSON.parse(atob(padded.replace(/-/g,'+').replace(/_/g,'/')));
-        relayUrl = `http://${stateData.host}:${stateData.port}/auth/receive`;
+        relayUrl = 'http://' + stateData.host + ':' + stateData.port + '/auth/receive';
       } catch {
         relayUrl = null;
       }
 
       if (relayUrl) {
-        // Use a hidden form POST — form submissions are NOT blocked by mixed content
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = relayUrl;
-        form.style.display = 'none';
-
-        const addField = (name, value) => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = name;
-          input.value = value;
-          form.appendChild(input);
-        };
-
-        addField('code', code);
-        addField('state', state);
-        addField('redirect_url', location.href);
-
-        document.body.appendChild(form);
-        form.submit();
+        // GET redirect — browsers allow HTTPS to HTTP page navigation
+        window.location.href = relayUrl
+          + '?code=' + encodeURIComponent(code)
+          + '&state=' + encodeURIComponent(state);
       } else {
         titleEl.textContent = 'Authorization Complete';
-        subEl.textContent = 'Could not auto-relay. Copy the URL from your address bar and paste it in your Discord DM with OpenClaw.';
+        subEl.textContent = 'Could not determine callback server.';
       }
     }
   </script>
