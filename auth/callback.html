@@ -10,99 +10,72 @@
     .card{background:#1a1a2e;border-radius:12px;padding:2rem;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.4)}
     h1{font-size:1.4rem;margin-bottom:.5rem}
     .sub{color:#888;margin-bottom:1.5rem;font-size:.9rem}
-    .spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#5865f2;border-radius:50%;animation:spin .8s linear infinite;margin:1rem auto}
-    @keyframes spin{to{transform:rotate(360deg)}}
     .ok{color:#43b581;font-size:1.1rem;margin:1rem 0}
     .err{color:#f04747;font-size:1rem;margin:1rem 0}
-    .fallback{background:#0d0d1a;border:1px solid #333;border-radius:8px;padding:1rem;font-family:"JetBrains Mono",monospace;font-size:.85rem;word-break:break-all;margin:1rem 0;cursor:pointer;user-select:all}
-    .fallback:hover{border-color:#5865f2}
-    .hint{color:#666;font-size:.8rem;margin-top:.5rem}
     .logo{font-size:2rem;margin-bottom:.5rem}
+    .hint{color:#666;font-size:.8rem;margin-top:1rem}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">&#129438;</div>
-    <h1 id="title">Connecting to OpenClaw...</h1>
+    <h1 id="title">Redirecting...</h1>
     <p class="sub" id="sub">Sending authorization to your bot</p>
-    <div class="spinner" id="spinner"></div>
     <div id="result"></div>
-    <div id="fallback" style="display:none">
-      <p class="sub">Automatic relay failed. Copy the full URL from your address bar and paste it in your Discord DM:</p>
-      <div class="fallback" id="url" onclick="navigator.clipboard.writeText(location.href).then(()=>{document.getElementById('copied').textContent='Copied!'})"></div>
-      <div class="hint" id="copied"></div>
-    </div>
   </div>
   <script>
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
     const state = params.get('state');
     const error = params.get('error');
-
     const titleEl = document.getElementById('title');
     const subEl = document.getElementById('sub');
-    const spinnerEl = document.getElementById('spinner');
     const resultEl = document.getElementById('result');
-    const fallbackEl = document.getElementById('fallback');
-    const urlEl = document.getElementById('url');
 
     if (error) {
-      spinnerEl.style.display = 'none';
       titleEl.textContent = 'Authorization Failed';
       subEl.textContent = error;
       resultEl.innerHTML = '<div class="err">Google denied the request. Try again.</div>';
     } else if (!code) {
-      spinnerEl.style.display = 'none';
       titleEl.textContent = 'No Code Received';
       subEl.textContent = 'Something went wrong with the authorization.';
     } else {
-      // Try to relay the code to the bot's callback server
-      // The state parameter contains "host:port" encoded by the bot
+      // Redirect to the callback server via form POST (bypasses mixed content)
+      // The state contains the host and port of the callback server
       let relayUrl;
       try {
-        // State format: base64url(JSON({host, port, nonce}))
-        const stateData = JSON.parse(atob(state.replace(/-/g,'+').replace(/_/g,'/')));
+        const padded = state + '='.repeat((4 - state.length % 4) % 4);
+        const stateData = JSON.parse(atob(padded.replace(/-/g,'+').replace(/_/g,'/')));
         relayUrl = `http://${stateData.host}:${stateData.port}/auth/receive`;
       } catch {
-        // Fallback: try default callback port
         relayUrl = null;
       }
 
       if (relayUrl) {
-        fetch(relayUrl, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({code, state, redirect_url: location.href}),
-          mode: 'no-cors',
-        }).then(() => {
-          spinnerEl.style.display = 'none';
-          titleEl.textContent = 'Authorization Complete!';
-          subEl.textContent = '';
-          resultEl.innerHTML = '<div class="ok">&#10003; Sent to your bot. You can close this tab.</div>';
-        }).catch(() => {
-          showFallback();
-        });
-        // Timeout fallback in case no-cors hides the error
-        setTimeout(() => {
-          // If still showing spinner after 5s, assume it worked (no-cors gives opaque response)
-          if (spinnerEl.style.display !== 'none') {
-            spinnerEl.style.display = 'none';
-            titleEl.textContent = 'Authorization Sent!';
-            subEl.textContent = '';
-            resultEl.innerHTML = '<div class="ok">&#10003; Code sent to your bot. You can close this tab.</div>';
-          }
-        }, 5000);
-      } else {
-        showFallback();
-      }
-    }
+        // Use a hidden form POST — form submissions are NOT blocked by mixed content
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = relayUrl;
+        form.style.display = 'none';
 
-    function showFallback() {
-      spinnerEl.style.display = 'none';
-      titleEl.textContent = 'Authorization Complete';
-      subEl.textContent = 'Paste this URL in your Discord DM with OpenClaw:';
-      fallbackEl.style.display = 'block';
-      urlEl.textContent = location.href;
+        const addField = (name, value) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        };
+
+        addField('code', code);
+        addField('state', state);
+        addField('redirect_url', location.href);
+
+        document.body.appendChild(form);
+        form.submit();
+      } else {
+        titleEl.textContent = 'Authorization Complete';
+        subEl.textContent = 'Could not auto-relay. Copy the URL from your address bar and paste it in your Discord DM with OpenClaw.';
+      }
     }
   </script>
 </body>
