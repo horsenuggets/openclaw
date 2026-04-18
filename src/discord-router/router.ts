@@ -4,6 +4,7 @@ import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { markOnboarded } from "./config.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
 type AgentResult = {
@@ -130,6 +131,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             resumeGatewayUrl = d.resume_gateway_url;
             const botUser = d.user;
             runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
+
+            // Proactively onboard users who haven't been onboarded yet
+            void onboardNewUsers(
+              discordToken,
+              instances,
+              config,
+              runtime,
+              agentTimeoutMs,
+              inflight,
+            );
           }
 
           if (t === "MESSAGE_CREATE") {
@@ -166,13 +177,6 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 "*No agent is configured for your account.*",
               );
               return;
-            }
-
-            // Onboarding: if user hasn't been onboarded, send welcome and
-            // forward the message with an onboarding system prompt
-            if (!instance.onboarded) {
-              runtime.log(`[router] user ${authorId} not onboarded, injecting onboarding prompt`);
-              content = `[System: This is a new user who has not been onboarded yet. Greet them warmly, introduce yourself as OpenClaw, and ask what they'd like to be called. Keep it brief and friendly. After they respond with their name, remember it. Do not mention technical details like Docker, containers, or gogcli. Their message follows.]\n${content}`;
             }
 
             void routeDM({
@@ -396,4 +400,84 @@ async function discordTyping(token: string, channelId: string): Promise<void> {
     method: "POST",
     headers: { Authorization: `Bot ${token}` },
   }).catch(() => {});
+}
+
+/** Open a DM channel with a user and return the channel ID. */
+async function openDMChannel(token: string, userId: string): Promise<string | null> {
+  const resp = await fetch(`${DISCORD_API}/users/@me/channels`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ recipient_id: userId }),
+  });
+  if (!resp.ok) return null;
+  const data = (await resp.json()) as { id?: string };
+  return data.id ?? null;
+}
+
+/** Send a Discord embed message. */
+async function discordSendEmbed(
+  token: string,
+  channelId: string,
+  embed: { title: string; description: string; color?: number },
+): Promise<void> {
+  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ embeds: [embed] }),
+  });
+}
+
+/**
+ * Proactively message all non-onboarded users on startup.
+ * Sends a welcome DM and triggers the agent to greet them.
+ */
+async function onboardNewUsers(
+  discordToken: string,
+  instances: Map<string, InstanceConfig>,
+  config: RouterConfig,
+  runtime: RouterRuntime,
+  agentTimeoutMs: number,
+  inflight: Set<string>,
+): Promise<void> {
+  for (const [userId, instance] of instances) {
+    if (instance.onboarded) continue;
+
+    runtime.log(`[router] proactive onboarding for ${userId}`);
+
+    const channelId = await openDMChannel(discordToken, userId);
+    if (!channelId) {
+      runtime.log(`[router] could not open DM channel for ${userId}`);
+      continue;
+    }
+
+    // Send welcome embed
+    await discordSendEmbed(discordToken, channelId, {
+      title: "Welcome to OpenClaw!",
+      description:
+        "I'm your personal AI assistant. Let's get you set up!\n\nI'll ask you a few quick questions to personalize your experience.",
+      color: 0x43b581,
+    });
+
+    // Route through the agent so it starts a conversation
+    void routeDM({
+      discordUserId: userId,
+      channelId,
+      messageContent:
+        "[System: This is a brand new user. Greet them warmly, introduce yourself, and ask what they'd like to be called. Keep it brief and friendly. Do not mention Docker, containers, or any technical infrastructure. After they tell you their name, remember it and let them know you're ready to help.]",
+      instance,
+      discordToken,
+      runtime,
+      agentTimeoutMs,
+      inflight,
+    });
+
+    // Mark as onboarded so we don't send this again on restart
+    markOnboarded(instance);
+  }
 }
