@@ -27,10 +27,9 @@ x-openclaw-base: &openclaw-base
     NODE_ENV: production
     # GPU disabled by default in containers (no CUDA support)
     OPENCLAW_LLAMA_GPU: "off"
-    # Discord gateway handled by the discord-router on the host.
-    # Container config sets discord.enabled=false so the gateway WebSocket
-    # doesn't connect, but the channel plugin loads for REST API access
-    # (openclaw message send/read still work).
+    # Gateway process skips channel monitors (discord-router handles Discord).
+    # CLI commands (docker exec) override this to access Discord REST API.
+    OPENCLAW_SKIP_CHANNELS: "1"
 
 services:
   openclaw-263176934089949194:
@@ -43,6 +42,7 @@ services:
     volumes:
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194:/home/node/.openclaw
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194/workspace:/home/node/.openclaw/workspace
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/263176934089949194/gogcli:/home/node/.config/gogcli
     ports:
       - "${OPENCLAW_263176934089949194_PORT:-18789}:18789"
     command:

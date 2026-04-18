@@ -34,6 +34,11 @@ ENV NODE_ENV=production
 # Make `openclaw` available as a command in PATH
 RUN npm link
 
+# Install gogcli (Google CLI for Gmail/Calendar/Drive/Contacts/Tasks/Sheets/Docs/Slides/People)
+RUN curl -fsSL "https://github.com/steipete/gogcli/releases/download/v0.12.0/gogcli_0.12.0_linux_amd64.tar.gz" \
+    | tar -xz -C /usr/local/bin gog \
+    && chmod +x /usr/local/bin/gog
+
 # Allow non-root user to write temp files during runtime/tests.
 RUN chown -R node:node /app
 
