@@ -203,6 +203,13 @@ export type DiscordAccountConfig = {
    */
   codeLangHints?: boolean;
   /**
+   * URL of the Discord router's send API (e.g. "http://host.docker.internal:18800").
+   * When set, outbound messages are POSTed to this URL instead of being sent
+   * directly via the Discord REST API. Used by Docker containers that rely on
+   * an external Discord router service.
+   */
+  proxyUrl?: string;
+  /**
    * Smart triage using a fast model (Sonnet).
    * For simple messages, generates a full response without Opus dispatch.
    * For complex messages, generates an immediate status update while Opus works.

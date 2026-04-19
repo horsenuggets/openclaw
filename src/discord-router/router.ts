@@ -54,10 +54,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }).then((r) => r.json())) as { url?: string };
   const gatewayUrl = gatewayInfo?.url ?? "wss://gateway.discord.gg";
 
-  // Start OAuth callback server for Google auth relay
+  // Start OAuth callback server for Google auth relay + Discord send proxy
   const oauth = startOAuthCallbackServer({
     instancesDir: config.instancesDir,
     runtime,
+    discordSend: async (channelId, content) => {
+      await discordSend(discordToken, channelId, content);
+      return {};
+    },
+    openDMChannel: (userId) => openDMChannel(discordToken, userId),
     onAuthComplete: async ({ discordUserId, code }) => {
       const instance = instances.get(discordUserId);
       const pending = pendingGoogleAuth.get(discordUserId);

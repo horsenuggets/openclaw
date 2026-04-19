@@ -343,6 +343,7 @@ export const DiscordAccountSchema = z
       .optional(),
     responsePrefix: z.string().optional(),
     codeLangHints: z.boolean().optional(),
+    proxyUrl: z.string().optional(),
   })
   .strict();
 

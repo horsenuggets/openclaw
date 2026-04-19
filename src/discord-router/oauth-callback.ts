@@ -36,10 +36,17 @@ type PendingAuth = {
  */
 export type AuthCompleteCallback = (params: { discordUserId: string; code: string }) => void;
 
+export type DiscordSendFn = (channelId: string, content: string) => Promise<{ messageId?: string }>;
+export type OpenDMChannelFn = (userId: string) => Promise<string | null>;
+
 export function startOAuthCallbackServer(opts: {
   instancesDir: string;
   runtime: RouterRuntime;
   onAuthComplete?: AuthCompleteCallback;
+  /** Send a message to a Discord channel. Injected by the router. */
+  discordSend?: DiscordSendFn;
+  /** Open a DM channel with a user. Injected by the router. */
+  openDMChannel?: OpenDMChannelFn;
 }): {
   server: http.Server;
   requestAuth: (params: { discordUserId: string; email: string }) => {
@@ -169,6 +176,64 @@ export function startOAuthCallbackServer(opts: {
           "Your Google account has been connected to OpenClaw. You can close this tab.",
         ),
       );
+      return;
+    }
+
+    // Discord send proxy — containers POST here to send messages via the router
+    if (req.method === "POST" && req.url === "/discord/send") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(body) as {
+            userId?: string;
+            text?: string;
+            mediaUrl?: string;
+            replyToId?: string;
+          };
+          if (!data.userId || !data.text) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "userId and text are required" }));
+            return;
+          }
+          if (!opts.discordSend || !opts.openDMChannel) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "discord send not available" }));
+            return;
+          }
+
+          const channelId = await opts.openDMChannel(data.userId);
+          if (!channelId) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "could not open DM channel" }));
+            return;
+          }
+
+          let content = data.text;
+          // Attach media URL as a separate line if present
+          if (data.mediaUrl) {
+            content = content ? `${content}\n${data.mediaUrl}` : data.mediaUrl;
+          }
+
+          const result = await opts.discordSend(channelId, content);
+          runtime.log(`[proxy] sent message to ${data.userId} via channel ${channelId}`);
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              ok: true,
+              messageId: result.messageId ?? "unknown",
+              channelId,
+            }),
+          );
+        } catch (err) {
+          runtime.error(`[proxy] send error: ${err}`);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "send failed" }));
+        }
+      });
       return;
     }
 

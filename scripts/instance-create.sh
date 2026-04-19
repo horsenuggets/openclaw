@@ -82,6 +82,15 @@ cfg = {
                 'mode': 'safeguard',
                 'maxHistoryShare': 0.3
             },
+            'heartbeat': {
+                'every': '30m',
+                'activeHours': {
+                    'start': '06:00',
+                    'end': '23:00',
+                    'timezone': 'local'
+                },
+                'target': 'last'
+            },
             'timeoutSeconds': 1800,
             'maxConcurrent': 4,
             'memorySearch': {
@@ -119,6 +128,7 @@ cfg = {
         'discord': {
             'enabled': True,
             'token': '$DISCORD_TOKEN',
+            'proxyUrl': 'http://host.docker.internal:18800',
             'dm': {
                 'policy': 'allowlist',
                 'allowFrom': ['$DISCORD_USER_ID']
