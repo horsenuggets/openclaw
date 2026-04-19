@@ -629,6 +629,9 @@ async function routeDM(params: {
         skipDeviceAuth: true,
       });
 
+      // Stop typing as soon as we have the response
+      clearInterval(typingInterval);
+
       const payloads = result?.result?.payloads ?? [];
       if (payloads.length === 0) {
         runtime.log(`[router] empty response for ${discordUserId}`);
