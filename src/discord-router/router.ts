@@ -461,23 +461,28 @@ async function onboardNewUsers(
       title: "Welcome to OpenClaw!",
       description:
         "I'm your personal AI assistant. Let's get you set up!\n\nI'll ask you a few quick questions to personalize your experience.",
-      color: 0x43b581,
+      color: 0xff8080,
     });
 
     // Route through the agent so it starts a conversation
-    void routeDM({
+    routeDM({
       discordUserId: userId,
       channelId,
       messageContent:
-        "[System: This is a brand new user. Greet them warmly, introduce yourself, and ask what they'd like to be called. Keep it brief and friendly. Do not mention Docker, containers, or any technical infrastructure. After they tell you their name, remember it and let them know you're ready to help.]",
+        "[System: This is a brand new user who just joined. You are OpenClaw, a personal AI assistant. Do NOT refer to yourself as Claude Code or Claude — you are OpenClaw. Greet them warmly, introduce yourself as OpenClaw, and ask what they'd like to be called. Keep it brief and friendly. Do not mention Docker, containers, or any technical infrastructure.]",
       instance,
       discordToken,
       runtime,
       agentTimeoutMs,
       inflight,
-    });
-
-    // Mark as onboarded so we don't send this again on restart
-    markOnboarded(instance);
+    })
+      .then(() => {
+        // Mark as onboarded only after agent successfully responds
+        markOnboarded(instance);
+        runtime.log(`[router] onboarding complete for ${userId}`);
+      })
+      .catch(() => {
+        runtime.log(`[router] onboarding failed for ${userId}, will retry on next restart`);
+      });
   }
 }
