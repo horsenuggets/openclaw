@@ -39,6 +39,7 @@ locals {
 resource "github_repository" "openclaw" {
   name         = local.repo_name
   homepage_url = "https://openclaw.ai"
+  visibility   = "public"
 
   has_issues   = false
   has_projects = true
