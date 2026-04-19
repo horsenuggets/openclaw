@@ -1,11 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export type OnboardingState = "none" | "greeted" | "named" | "google_pending" | "complete";
+
 export type InstanceConfig = {
   port: number;
   token: string;
   onboarded: boolean;
+  onboardingState: OnboardingState;
   configPath: string;
+  instanceDir: string;
 };
 
 export type RouterConfig = {
@@ -71,8 +75,22 @@ export function loadRouterConfig(opts: {
     }
 
     // Onboarding state stored in a separate file (not openclaw.json which has schema validation)
-    const onboardedPath = path.join(instancesDir, discordUserId, ".onboarded");
-    onboarded = fs.existsSync(onboardedPath);
+    const onboardingPath = path.join(instancesDir, discordUserId, ".onboarding.json");
+    let onboardingState: OnboardingState = "none";
+    if (fs.existsSync(onboardingPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
+        onboardingState = raw?.state ?? "none";
+      } catch {
+        onboardingState = "none";
+      }
+    }
+    // Legacy: check old .onboarded flag file
+    const legacyOnboardedPath = path.join(instancesDir, discordUserId, ".onboarded");
+    if (onboardingState === "none" && fs.existsSync(legacyOnboardedPath)) {
+      onboardingState = "complete";
+    }
+    onboarded = onboardingState === "complete";
 
     // Env vars override computed values
     const envToken = process.env[`OPENCLAW_${discordUserId}_TOKEN`];
@@ -84,7 +102,15 @@ export function loadRouterConfig(opts: {
       port = Number(envPort);
     }
 
-    instances.set(discordUserId, { port, token: gatewayToken, onboarded, configPath });
+    const instanceDir = path.join(instancesDir, discordUserId);
+    instances.set(discordUserId, {
+      port,
+      token: gatewayToken,
+      onboarded,
+      onboardingState,
+      configPath,
+      instanceDir,
+    });
     portOffset++;
   }
 
@@ -96,13 +122,20 @@ export function loadRouterConfig(opts: {
   };
 }
 
-/** Mark an instance as onboarded by creating a .onboarded flag file. */
-export function markOnboarded(instance: InstanceConfig): void {
+/** Update onboarding state for an instance. */
+export function setOnboardingState(instance: InstanceConfig, state: OnboardingState): void {
   try {
-    const onboardedPath = instance.configPath.replace("openclaw.json", ".onboarded");
-    fs.writeFileSync(onboardedPath, new Date().toISOString());
-    instance.onboarded = true;
+    const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
+    const data = { state, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
+    instance.onboardingState = state;
+    instance.onboarded = state === "complete";
   } catch {
     // Best effort
   }
+}
+
+/** Legacy alias */
+export function markOnboarded(instance: InstanceConfig): void {
+  setOnboardingState(instance, "complete");
 }

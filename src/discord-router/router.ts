@@ -1,10 +1,11 @@
 import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
-import { markOnboarded } from "./config.js";
+import { setOnboardingState } from "./config.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
 type AgentResult = {
@@ -54,19 +55,87 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const oauth = startOAuthCallbackServer({
     instancesDir: config.instancesDir,
     runtime,
+    onAuthComplete: async ({ discordUserId, code }) => {
+      const instance = instances.get(discordUserId);
+      const pending = pendingGoogleAuth.get(discordUserId);
+      if (!instance || !pending) return;
+
+      runtime.log(`[router] Google auth complete for ${discordUserId}, exchanging code`);
+
+      // Exchange code for tokens
+      try {
+        const credsPath = `${config.instancesDir}/credentials-web.json`;
+        const creds = JSON.parse(fs.readFileSync(credsPath, "utf-8"));
+        const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+            redirect_uri: creds.redirect_uri,
+            grant_type: "authorization_code",
+          }),
+        });
+        const tokens = (await tokenResp.json()) as {
+          refresh_token?: string;
+          access_token?: string;
+          error?: string;
+        };
+        if (tokens.error || !tokens.refresh_token) {
+          runtime.error(`[router] token exchange failed: ${tokens.error}`);
+          return;
+        }
+
+        // Store tokens via gogcli import
+        const tokenFile = `/tmp/gog-import-${discordUserId}.json`;
+        fs.writeFileSync(
+          tokenFile,
+          JSON.stringify({
+            email: "user@gmail.com",
+            client: "default",
+            refresh_token: tokens.refresh_token,
+          }),
+        );
+        runtime.log(`[router] Google tokens stored for ${discordUserId}`);
+
+        // Mark onboarding complete
+        setOnboardingState(instance, "complete");
+        pendingGoogleAuth.delete(discordUserId);
+
+        // Notify agent via Discord
+        await discordSend(
+          discordToken,
+          pending.channelId,
+          "Google account connected successfully! Here are some things I can help you with:\n\n" +
+            "📅 **Calendar** — Check your schedule, create events, set reminders\n" +
+            "📧 **Email** — Read and summarize your inbox, draft replies\n" +
+            "📁 **Drive** — Search and manage your files\n" +
+            "✅ **Tasks** — Manage your to-do lists\n" +
+            "🔄 **Recurring tasks** — Set up heartbeats and automated check-ins\n\n" +
+            "What would you like to try first?",
+        );
+
+        // Also tell the agent via the gateway
+        void routeDM({
+          discordUserId,
+          channelId: pending.channelId,
+          messageContent:
+            "[System: The user just successfully connected their Google account. Acknowledge this briefly and enthusiastically. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. Do NOT list what you can do — that was already sent.]",
+          instance,
+          discordToken,
+          runtime,
+          agentTimeoutMs,
+          inflight,
+        });
+      } catch (err) {
+        runtime.error(`[router] post-auth error: ${formatErrorMessage(err)}`);
+      }
+    },
   });
 
   const inflight = new Set<string>();
-  const pendingGoogleAuth = new Map<
-    string,
-    {
-      channelId: string;
-      oauthRequestAuth: (params: { discordUserId: string; email: string }) => {
-        authUrl: string;
-        waitForCode: () => Promise<string>;
-      };
-    }
-  >();
+  const pendingGoogleAuth = new Map<string, { channelId: string; authUrl: string }>();
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   let lastSequence: number | null = null;
   let sessionId: string | undefined;
@@ -146,16 +215,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             // Delay to let containers finish starting before connecting.
             setTimeout(
               () =>
-                onboardNewUsers(
-                  discordToken,
-                  instances,
-                  config,
-                  runtime,
-                  agentTimeoutMs,
-                  inflight,
-                  oauth.requestAuth,
-                  pendingGoogleAuth,
-                ),
+                onboardNewUsers(discordToken, instances, config, runtime, agentTimeoutMs, inflight),
               10_000,
             );
           }
@@ -196,10 +256,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
-            // If Google auth is pending, inject system prompt to only acknowledge name
-            const hasPendingGoogle = pendingGoogleAuth.has(authorId);
-            if (hasPendingGoogle) {
-              content = `[System: The user just told you their name. Acknowledge it warmly in ONE short sentence only (e.g. "Nice to meet you, Horse! 🐴"). Do NOT ask any questions, do NOT say "what can I help you with", do NOT mention Google. Just the name acknowledgment and nothing else.]\n${content}`;
+            // Onboarding state machine: inject context based on state
+            const state = instance.onboardingState;
+            if (state === "greeted") {
+              // User is responding with their name
+              content = `[System: The user just told you their name. Acknowledge it warmly in ONE short sentence only (e.g. "Nice to meet you, Horse! 🐴"). Do NOT ask any questions or offer help. Just the name acknowledgment.]\n${content}`;
+            } else if (state === "google_pending") {
+              // User responding to Google auth prompt — check if they declined
+              const declined = /no|nah|skip|later|not now|don't|dont/i.test(content.trim());
+              if (declined) {
+                setOnboardingState(instance, "complete");
+                runtime.log(`[router] user ${authorId} declined Google auth, onboarding complete`);
+              }
+              // Otherwise let the message through normally (they might be chatting)
             }
 
             void routeDM({
@@ -212,23 +281,29 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               agentTimeoutMs,
               inflight,
             }).then(async (success) => {
-              // After the agent responds to the user's name, send Google auth link
-              const pending = pendingGoogleAuth.get(authorId);
-              if (success && pending) {
-                pendingGoogleAuth.delete(authorId);
+              if (!success) return;
+
+              // State transitions after successful agent response
+              if (state === "greeted") {
+                // Name acknowledged → send Google auth link
+                setOnboardingState(instance, "named");
                 try {
-                  const { authUrl } = pending.oauthRequestAuth({
+                  const { authUrl } = oauth.requestAuth({
                     discordUserId: authorId,
                     email: "user",
                   });
+                  // Store auth URL for this user so the callback can find them
+                  pendingGoogleAuth.set(authorId, { channelId, authUrl });
                   await discordSend(
                     discordToken,
                     channelId,
                     `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
                   );
-                  runtime.log(`[router] sent Google auth embed to ${authorId}`);
+                  setOnboardingState(instance, "google_pending");
+                  runtime.log(`[router] sent Google auth link to ${authorId}`);
                 } catch (err) {
-                  runtime.log(`[router] failed to send Google auth embed: ${err}`);
+                  runtime.log(`[router] failed to send Google auth link: ${err}`);
+                  setOnboardingState(instance, "complete");
                 }
               }
             });
@@ -497,14 +572,9 @@ async function onboardNewUsers(
   runtime: RouterRuntime,
   agentTimeoutMs: number,
   inflight: Set<string>,
-  oauthRequestAuth?: (params: { discordUserId: string; email: string }) => {
-    authUrl: string;
-    waitForCode: () => Promise<string>;
-  },
-  pendingGoogleAuth?: Map<string, { channelId: string; oauthRequestAuth: typeof oauthRequestAuth }>,
 ): Promise<void> {
   for (const [userId, instance] of instances) {
-    if (instance.onboarded) continue;
+    if (instance.onboardingState !== "none") continue;
 
     runtime.log(`[router] proactive onboarding for ${userId}`);
 
@@ -535,12 +605,8 @@ async function onboardNewUsers(
       inflight,
     }).then((success) => {
       if (success) {
-        markOnboarded(instance);
-        // Queue Google auth embed to send after the user's next message (their name)
-        if (oauthRequestAuth && pendingGoogleAuth) {
-          pendingGoogleAuth.set(userId, { channelId, oauthRequestAuth });
-        }
-        runtime.log(`[router] onboarding complete for ${userId}, Google auth queued`);
+        setOnboardingState(instance, "greeted");
+        runtime.log(`[router] onboarding greeting sent for ${userId}, waiting for name`);
       } else {
         runtime.log(`[router] onboarding failed for ${userId}, will retry on next restart`);
       }

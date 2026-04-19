@@ -8,10 +8,12 @@ const CALLBACK_PORT = 18800;
 function successPage(title: string, message: string): string {
   const isError = title.toLowerCase().includes("error");
   const color = isError ? "#f04747" : "#43b581";
-  const icon = isError ? "&#10007;" : "&#10003;";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenClaw</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#0b0b11;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}.card{background:#1a1a2e;border-radius:12px;padding:2rem;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.4)}h1{font-size:1.4rem;margin-bottom:.5rem;color:${color}}.icon{font-size:2.5rem;margin-bottom:.5rem}.sub{color:#aaa;margin-top:1rem;font-size:.9rem}</style>
-</head><body><div class="card"><div class="icon">${icon}</div><h1>${title}</h1><p class="sub">${message}</p></div></body></html>`;
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500&display=swap" rel="stylesheet">
+<style>body{font-family:'Lexend',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.wrap{text-align:center;max-width:420px;padding:2rem}h1{font-size:1.3rem;font-weight:500;color:${color};margin-bottom:.75rem}p{font-size:.95rem;font-weight:400;color:#aaa;line-height:1.5}</style>
+</head><body><div class="wrap"><h1>${title}</h1><p>${message}</p></div></body></html>`;
 }
 
 type OAuthCredentials = {
@@ -32,7 +34,13 @@ type PendingAuth = {
  * OAuth callback server that receives auth codes from the GitHub Pages relay.
  * Runs on port 18800 and handles Google OAuth token exchange.
  */
-export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: RouterRuntime }): {
+export type AuthCompleteCallback = (params: { discordUserId: string; code: string }) => void;
+
+export function startOAuthCallbackServer(opts: {
+  instancesDir: string;
+  runtime: RouterRuntime;
+  onAuthComplete?: AuthCompleteCallback;
+}): {
   server: http.Server;
   requestAuth: (params: { discordUserId: string; email: string }) => {
     authUrl: string;
@@ -149,6 +157,7 @@ export function startOAuthCallbackServer(opts: { instancesDir: string; runtime: 
         runtime.log(`[oauth] received code for ${pendingAuth.email} via redirect`);
         pending.delete(stateData.nonce);
         pendingAuth.resolve(code);
+        opts.onAuthComplete?.({ discordUserId: pendingAuth.discordUserId, code });
       } else {
         runtime.log(`[oauth] received code via redirect (no pending auth, nonce may have expired)`);
       }
