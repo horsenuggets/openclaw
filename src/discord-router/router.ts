@@ -100,14 +100,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         if (!fs.existsSync(gogDir)) {
           fs.mkdirSync(gogDir, { recursive: true });
         }
-        const sharedCreds = `${config.instancesDir}/263176934089949194/gogcli/credentials.json`;
+        // Copy shared gogcli credentials (OAuth client config) if not yet present.
+        // Look in shared/gogcli/ first, then fall back to any existing instance.
         const instanceCreds = `${gogDir}/credentials.json`;
-        if (!fs.existsSync(instanceCreds) && fs.existsSync(sharedCreds)) {
-          fs.copyFileSync(sharedCreds, instanceCreds);
-          fs.copyFileSync(
-            sharedCreds.replace("credentials.json", "config.json"),
-            `${gogDir}/config.json`,
-          );
+        if (!fs.existsSync(instanceCreds)) {
+          const sharedGog = `${config.instancesDir}/shared/gogcli/credentials.json`;
+          let sourceDir: string | undefined;
+          if (fs.existsSync(sharedGog)) {
+            sourceDir = `${config.instancesDir}/shared/gogcli`;
+          } else {
+            // Fall back: find any instance that has gogcli credentials
+            for (const [uid] of instances) {
+              const candidate = `${config.instancesDir}/${uid}/gogcli/credentials.json`;
+              if (fs.existsSync(candidate)) {
+                sourceDir = `${config.instancesDir}/${uid}/gogcli`;
+                break;
+              }
+            }
+          }
+          if (sourceDir) {
+            try {
+              fs.copyFileSync(`${sourceDir}/credentials.json`, instanceCreds);
+              const srcConfig = `${sourceDir}/config.json`;
+              if (fs.existsSync(srcConfig)) {
+                fs.copyFileSync(srcConfig, `${gogDir}/config.json`);
+              }
+            } catch (copyErr) {
+              runtime.error(`[router] failed to copy gogcli credentials: ${copyErr}`);
+            }
+          }
         }
 
         // Import tokens into the user's container via docker exec

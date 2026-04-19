@@ -271,7 +271,11 @@ export function startOAuthCallbackServer(opts: {
 
     const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
     const stateData = Buffer.from(
-      JSON.stringify({ nonce, host: "98.194.32.22", port: CALLBACK_PORT }),
+      JSON.stringify({
+        nonce,
+        host: process.env.OPENCLAW_OAUTH_HOST ?? "127.0.0.1",
+        port: CALLBACK_PORT,
+      }),
     ).toString("base64url");
 
     const scopes = [
