@@ -57,6 +57,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   });
 
   const inflight = new Set<string>();
+  const pendingGoogleAuth = new Map<
+    string,
+    {
+      channelId: string;
+      oauthRequestAuth: (params: { discordUserId: string; email: string }) => {
+        authUrl: string;
+        waitForCode: () => Promise<string>;
+      };
+    }
+  >();
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   let lastSequence: number | null = null;
   let sessionId: string | undefined;
@@ -194,6 +204,26 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime,
               agentTimeoutMs,
               inflight,
+            }).then(async (success) => {
+              // After the agent responds to the user's name, send Google auth embed
+              const pending = pendingGoogleAuth.get(authorId);
+              if (success && pending) {
+                pendingGoogleAuth.delete(authorId);
+                try {
+                  const { authUrl } = pending.oauthRequestAuth({
+                    discordUserId: authorId,
+                    email: "user",
+                  });
+                  await discordSend(
+                    discordToken,
+                    channelId,
+                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\n[Click here to connect Google](${authUrl})`,
+                  );
+                  runtime.log(`[router] sent Google auth embed to ${authorId}`);
+                } catch (err) {
+                  runtime.log(`[router] failed to send Google auth embed: ${err}`);
+                }
+              }
             });
           }
           break;
@@ -495,24 +525,14 @@ async function onboardNewUsers(
       runtime,
       agentTimeoutMs,
       inflight,
-    }).then(async (success) => {
+    }).then((success) => {
       if (success) {
-        // Send Google auth embed after the agent greeting
-        if (oauthRequestAuth) {
-          try {
-            const { authUrl } = oauthRequestAuth({ discordUserId: userId, email: "user" });
-            await discordSendEmbed(discordToken, channelId, {
-              title: "Connect Google Account",
-              description: `Connect your Google account to unlock Calendar, Gmail, Drive, and more.\n\n[Click here to connect Google](${authUrl})`,
-              color: 0xff8080,
-            });
-            runtime.log(`[router] sent Google auth embed to ${userId}`);
-          } catch (err) {
-            runtime.log(`[router] failed to send Google auth embed: ${err}`);
-          }
-        }
         markOnboarded(instance);
-        runtime.log(`[router] onboarding complete for ${userId}`);
+        // Queue Google auth embed to send after the user's next message (their name)
+        if (oauthRequestAuth) {
+          pendingGoogleAuth.set(userId, { channelId, oauthRequestAuth });
+        }
+        runtime.log(`[router] onboarding complete for ${userId}, Google auth queued`);
       } else {
         runtime.log(`[router] onboarding failed for ${userId}, will retry on next restart`);
       }
