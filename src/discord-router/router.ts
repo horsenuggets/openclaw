@@ -645,6 +645,14 @@ async function routeDM(params: {
 
       for (const payload of payloads) {
         let text = payload.text?.trim() ?? "";
+
+        // Filter out raw JS/system errors that leaked into agent output.
+        // These should never be shown to the user as normal text.
+        if (isLeakedError(text)) {
+          runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
+          continue;
+        }
+
         // Apply Discord text formatting pipeline
         if (text) {
           text = convertMarkdownTables(text, "code");
@@ -706,6 +714,28 @@ async function routeDM(params: {
   } finally {
     inflight.delete(discordUserId);
   }
+}
+
+/**
+ * Detect raw JS/system errors that leaked into agent output.
+ * These are tool execution errors that got captured as response text
+ * instead of being handled internally.
+ */
+function isLeakedError(text: string): boolean {
+  if (!text) return false;
+  const t = text.trim();
+  // Common JS error patterns that should never appear in user-facing text
+  return (
+    /^Cannot read propert(y|ies) of (undefined|null)/.test(t) ||
+    /^TypeError:/.test(t) ||
+    /^ReferenceError:/.test(t) ||
+    /^SyntaxError:/.test(t) ||
+    /^RangeError:/.test(t) ||
+    /^Error: (ENOENT|EACCES|EPERM|ECONNREFUSED)/.test(t) ||
+    /^Command exited with code \d+/.test(t) ||
+    /^\[tools\] exec failed:/.test(t) ||
+    /^at\s+\S+\s+\(.*:\d+:\d+\)/.test(t)
+  );
 }
 
 function chunkText(text: string, limit: number): string[] {
