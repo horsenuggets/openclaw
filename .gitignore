@@ -3,6 +3,10 @@ node_modules
 .env
 docker-compose.extra.yml
 docker-compose.generated.yml
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
 dist
 *.bun-build
 pnpm-lock.yaml

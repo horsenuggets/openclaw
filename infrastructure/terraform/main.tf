@@ -35,24 +35,38 @@ locals {
   ])
 }
 
-# Repository settings
+# Repository settings — match existing config, only manage what we need
 resource "github_repository" "openclaw" {
-  name        = local.repo_name
-  description = "Multi-platform AI assistant with Discord, voice, and Docker multi-user support."
-  visibility  = "private"
+  name         = local.repo_name
+  homepage_url = "https://openclaw.ai"
 
-  has_issues   = true
-  has_projects = false
+  has_issues   = false
+  has_projects = true
   has_wiki     = false
 
   allow_squash_merge = true
   allow_merge_commit = true
-  allow_rebase_merge = false
+  allow_rebase_merge = true
 
-  delete_branch_on_merge = true
+  delete_branch_on_merge = false
 
-  squash_merge_commit_title   = "PR_TITLE"
-  squash_merge_commit_message = "PR_BODY"
+  # Preserve existing pages config
+  pages {
+    build_type = "legacy"
+    source {
+      branch = "gh-pages"
+      path   = "/"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      description,
+      visibility,
+      topics,
+      has_downloads,
+    ]
+  }
 }
 
 # Branch protection for main — no direct pushes, require CI checks
