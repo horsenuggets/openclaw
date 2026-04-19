@@ -635,6 +635,11 @@ async function routeDM(params: {
       const payloads = result?.result?.payloads ?? [];
       if (payloads.length === 0) {
         runtime.log(`[router] empty response for ${discordUserId}`);
+        await discordSend(
+          discordToken,
+          channelId,
+          "*I processed your message but wasn't able to generate a response. Please try again.*",
+        );
         return;
       }
 

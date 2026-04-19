@@ -39,6 +39,9 @@ RUN curl -fsSL "https://github.com/steipete/gogcli/releases/download/v0.12.0/gog
     | tar -xz -C /usr/local/bin gog \
     && chmod +x /usr/local/bin/gog
 
+# Install skill CLIs (Todoist, etc.)
+RUN npm install -g todoist-ts-cli
+
 # Allow non-root user to write temp files during runtime/tests.
 RUN chown -R node:node /app
 
