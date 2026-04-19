@@ -531,7 +531,7 @@ async function onboardNewUsers(
       if (success) {
         markOnboarded(instance);
         // Queue Google auth embed to send after the user's next message (their name)
-        if (oauthRequestAuth) {
+        if (oauthRequestAuth && pendingGoogleAuth) {
           pendingGoogleAuth.set(userId, { channelId, oauthRequestAuth });
         }
         runtime.log(`[router] onboarding complete for ${userId}, Google auth queued`);
