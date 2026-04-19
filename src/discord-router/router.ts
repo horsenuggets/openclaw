@@ -664,8 +664,8 @@ async function recoverUnansweredDMs(
       const channelId = await openDMChannel(discordToken, userId);
       if (!channelId) continue;
 
-      // Fetch last 3 messages
-      const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=3`, {
+      // Fetch last 10 messages to look past lifecycle messages
+      const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
         headers: { Authorization: `Bot ${discordToken}` },
       });
       if (!resp.ok) continue;
@@ -676,12 +676,24 @@ async function recoverUnansweredDMs(
       }>;
       if (messages.length === 0) continue;
 
-      // Most recent message first
-      const latest = messages[0];
-      if (!latest || latest.author.bot || latest.author.id === botId) continue;
+      // Skip italic lifecycle messages (*Back online.*, *Shutting down...*)
+      const isLifecycle = (c: string) => /^\*[^*]+\*$/.test(c?.trim() ?? "");
 
-      // Skip if it's a lifecycle message reply or empty
-      const content = latest.content?.trim();
+      // Walk messages (newest first) — find last real user message
+      // that wasn't followed by a real (non-lifecycle) bot response
+      let lastUserMsg: (typeof messages)[0] | undefined;
+      let botRespondedAfter = false;
+      for (const msg of messages) {
+        if (isLifecycle(msg.content)) continue;
+        if (msg.author.bot || msg.author.id === botId) {
+          botRespondedAfter = true;
+          break;
+        }
+        if (!lastUserMsg) lastUserMsg = msg;
+      }
+
+      if (!lastUserMsg || botRespondedAfter) continue;
+      const content = lastUserMsg.content?.trim();
       if (!content) continue;
 
       runtime.log(`[router] recovering unanswered DM from ${userId}: ${content.slice(0, 60)}`);
