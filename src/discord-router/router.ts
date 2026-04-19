@@ -87,17 +87,45 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           return;
         }
 
-        // Store tokens via gogcli import
+        // Ensure gogcli credentials exist for this instance
+        const gogDir = `${config.instancesDir}/${discordUserId}/gogcli`;
+        if (!fs.existsSync(gogDir)) {
+          fs.mkdirSync(gogDir, { recursive: true });
+        }
+        const sharedCreds = `${config.instancesDir}/263176934089949194/gogcli/credentials.json`;
+        const instanceCreds = `${gogDir}/credentials.json`;
+        if (!fs.existsSync(instanceCreds) && fs.existsSync(sharedCreds)) {
+          fs.copyFileSync(sharedCreds, instanceCreds);
+          fs.copyFileSync(
+            sharedCreds.replace("credentials.json", "config.json"),
+            `${gogDir}/config.json`,
+          );
+        }
+
+        // Import tokens into the user's container via docker exec
         const tokenFile = `/tmp/gog-import-${discordUserId}.json`;
-        fs.writeFileSync(
-          tokenFile,
-          JSON.stringify({
-            email: "user@gmail.com",
-            client: "default",
-            refresh_token: tokens.refresh_token,
-          }),
-        );
-        runtime.log(`[router] Google tokens stored for ${discordUserId}`);
+        const tokenData = {
+          email: "default",
+          client: "default",
+          refresh_token: tokens.refresh_token,
+        };
+        fs.writeFileSync(tokenFile, JSON.stringify(tokenData));
+
+        // Copy token file into container and import
+        const { execSync } = await import("node:child_process");
+        const container = `openclaw-${discordUserId}`;
+        try {
+          execSync(`docker cp ${tokenFile} ${container}:/tmp/gog-token.json`, { stdio: "pipe" });
+          execSync(
+            `docker exec -e GOG_KEYRING_PASSWORD=openclaw ${container} gog auth tokens import /tmp/gog-token.json`,
+            { stdio: "pipe" },
+          );
+          execSync(`docker exec ${container} rm /tmp/gog-token.json`, { stdio: "pipe" });
+          runtime.log(`[router] Google tokens imported into container for ${discordUserId}`);
+        } catch (importErr) {
+          runtime.error(`[router] gogcli import failed: ${formatErrorMessage(importErr)}`);
+        }
+        fs.unlinkSync(tokenFile);
 
         // Mark onboarding complete
         setOnboardingState(instance, "complete");

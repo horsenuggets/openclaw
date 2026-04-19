@@ -75,9 +75,11 @@ services:
     environment:
       <<: *openclaw-env
       OPENCLAW_GATEWAY_PORT: "18789"
+      GOG_KEYRING_PASSWORD: ${OPENCLAW_310798523454980098_GOG_PASSWORD:-openclaw}
     volumes:
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098:/home/node/.openclaw
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098/workspace:/home/node/.openclaw/workspace
+      - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/310798523454980098/gogcli:/home/node/.config/gogcli
       - ${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/shared/auth/auth-profiles.json:/home/node/.openclaw/agents/main/agent/auth-profiles.json
     ports:
       - "${OPENCLAW_310798523454980098_PORT:-18791}:18789"
