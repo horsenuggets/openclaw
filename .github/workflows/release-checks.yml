@@ -1,0 +1,201 @@
+name: Release checks
+
+on:
+  pull_request:
+    branches:
+      - release
+
+jobs:
+  pr-title:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title format
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "Checking PR title: $TITLE"
+
+          # Must be exactly "Release YYYY.M.D-horse.X.Y"
+          if [[ ! "$TITLE" =~ ^Release\ [0-9]+\.[0-9]+\.[0-9]+-horse\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::PR title must be 'Release YYYY.M.D-horse.X.Y' (e.g., 'Release 2026.2.4-horse.0.2')"
+            exit 1
+          fi
+
+          echo "PR title is valid."
+
+  diff-check:
+    name: Verify diff matches main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check diff with main
+        run: |
+          git fetch origin main
+
+          # Get the diff between the PR branch and main
+          DIFF=$(git diff origin/main..HEAD)
+
+          if [ -n "$DIFF" ]; then
+            echo "::error::PR branch has changes that differ from main. The release branch must contain exactly what is in main."
+            echo "Diff:"
+            echo "$DIFF" | head -100
+            exit 1
+          fi
+
+          echo "PR branch matches main exactly."
+
+  version:
+    name: Validate version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Read and validate version
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          echo "Package version: $VERSION"
+
+          # Must follow YYYY.M.D-horse.X.Y format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-horse\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' does not match expected format YYYY.M.D-horse.X.Y"
+            exit 1
+          fi
+
+          echo "Version format is valid."
+
+      - name: Verify PR title matches version
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          EXPECTED_TITLE="Release $VERSION"
+          ACTUAL_TITLE="${{ github.event.pull_request.title }}"
+
+          if [ "$EXPECTED_TITLE" != "$ACTUAL_TITLE" ]; then
+            echo "::error::PR title '$ACTUAL_TITLE' does not match package.json version. Expected '$EXPECTED_TITLE'"
+            exit 1
+          fi
+
+          echo "PR title matches package.json version."
+
+      - name: Verify version bump is valid
+        run: |
+          git fetch origin release 2>/dev/null || true
+
+          # If release branch exists, compare versions
+          if git rev-parse origin/release >/dev/null 2>&1; then
+            OLD_VERSION=$(git show origin/release:package.json | node -p 'JSON.parse(require("fs").readFileSync("/dev/stdin","utf8")).version')
+            NEW_VERSION=$(node -p 'require("./package.json").version')
+
+            echo "Previous version: $OLD_VERSION"
+            echo "New version:      $NEW_VERSION"
+
+            # Extract horse.X.Y parts
+            OLD_HORSE=$(echo "$OLD_VERSION" | grep -oP 'horse\.\K[0-9]+\.[0-9]+')
+            NEW_HORSE=$(echo "$NEW_VERSION" | grep -oP 'horse\.\K[0-9]+\.[0-9]+')
+
+            OLD_MAJOR=$(echo "$OLD_HORSE" | cut -d. -f1)
+            OLD_MINOR=$(echo "$OLD_HORSE" | cut -d. -f2)
+            NEW_MAJOR=$(echo "$NEW_HORSE" | cut -d. -f1)
+            NEW_MINOR=$(echo "$NEW_HORSE" | cut -d. -f2)
+
+            # Upstream part should not change unless explicitly pulling from upstream
+            OLD_UPSTREAM=$(echo "$OLD_VERSION" | grep -oP '^[^-]+')
+            NEW_UPSTREAM=$(echo "$NEW_VERSION" | grep -oP '^[^-]+')
+
+            if [ "$OLD_UPSTREAM" != "$NEW_UPSTREAM" ]; then
+              echo "::warning::Upstream version changed from $OLD_UPSTREAM to $NEW_UPSTREAM. Make sure this is an intentional upstream merge."
+            fi
+
+            # Version must increase
+            if [ "$NEW_MAJOR" -lt "$OLD_MAJOR" ] || ([ "$NEW_MAJOR" -eq "$OLD_MAJOR" ] && [ "$NEW_MINOR" -le "$OLD_MINOR" ]); then
+              if [ "$OLD_UPSTREAM" = "$NEW_UPSTREAM" ]; then
+                echo "::error::Version must increase. Old: horse.$OLD_HORSE, New: horse.$NEW_HORSE"
+                exit 1
+              fi
+            fi
+
+            echo "Version bump is valid."
+          else
+            echo "No previous release branch found, skipping version comparison."
+          fi
+
+  deploy-check:
+    name: Verify deploy target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test SSH connectivity
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::Deploy secrets not configured. Set DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER."
+            exit 1
+          fi
+
+          # Set up SSH key
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Test SSH connectivity
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/deploy_key \
+              -p "${DEPLOY_PORT:-22}" \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              "echo 'SSH connection OK'"
+
+      - name: Verify deploy environment
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT:-22} ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          # Verify required directories and tools exist
+          $SSH_CMD bash -c '
+            set -e
+            echo "Checking deploy environment..."
+
+            # Git repo
+            [ -d ~/git/openclaw/.git ] && echo "OK: git repo exists" || { echo "FAIL: git repo missing"; exit 1; }
+
+            # Docker
+            command -v docker >/dev/null && echo "OK: docker available" || { echo "FAIL: docker not found"; exit 1; }
+
+            # PM2
+            command -v pm2 >/dev/null && echo "OK: pm2 available" || { echo "FAIL: pm2 not found"; exit 1; }
+
+            # Node
+            command -v node >/dev/null && echo "OK: node available" || { echo "FAIL: node not found"; exit 1; }
+
+            # Instances directory
+            [ -d ~/.openclaw-instances ] && echo "OK: instances dir exists" || { echo "FAIL: instances dir missing"; exit 1; }
+
+            # Compose script
+            [ -f ~/git/openclaw/scripts/instance-compose.sh ] && echo "OK: compose script exists" || { echo "WARN: compose script missing"; }
+
+            echo "Deploy environment verified."
+          '
+
+          rm -f ~/.ssh/deploy_key
