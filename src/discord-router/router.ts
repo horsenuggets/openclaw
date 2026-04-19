@@ -224,7 +224,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   await discordSend(
                     discordToken,
                     channelId,
-                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect Google!`,
+                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
                   );
                   runtime.log(`[router] sent Google auth embed to ${authorId}`);
                 } catch (err) {
