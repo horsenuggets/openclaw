@@ -512,7 +512,7 @@ async function onboardNewUsers(
     await discordSendEmbed(discordToken, channelId, {
       title: "Welcome to OpenClaw!",
       description:
-        "I'm your personal AI assistant. Let's get you set up!\n\nI'll ask you a few quick questions to personalize your experience.",
+        "I'm your personal AI assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
       color: 0xff8080,
     });
 
