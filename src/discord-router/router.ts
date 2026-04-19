@@ -63,6 +63,21 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       return {};
     },
     openDMChannel: (userId) => openDMChannel(discordToken, userId),
+    discordSendEmbed: (channelId, embed) => discordSendEmbed(discordToken, channelId, embed),
+    routeMessage: (userId, channelId, message) => {
+      const instance = instances.get(userId);
+      if (!instance) return Promise.resolve();
+      return routeDM({
+        discordUserId: userId,
+        channelId,
+        messageContent: message,
+        instance,
+        discordToken,
+        runtime,
+        agentTimeoutMs,
+        inflight,
+      }).then(() => {});
+    },
     onAuthComplete: async ({ discordUserId, code }) => {
       const instance = instances.get(discordUserId);
       if (!instance) return;

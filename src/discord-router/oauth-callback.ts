@@ -38,6 +38,12 @@ export type AuthCompleteCallback = (params: { discordUserId: string; code: strin
 
 export type DiscordSendFn = (channelId: string, content: string) => Promise<{ messageId?: string }>;
 export type OpenDMChannelFn = (userId: string) => Promise<string | null>;
+export type DiscordSendEmbedFn = (
+  channelId: string,
+  embed: { title: string; description: string; color?: number },
+) => Promise<void>;
+/** Route a message through the same pipeline as user DMs. */
+export type RouteMessageFn = (userId: string, channelId: string, message: string) => Promise<void>;
 
 export function startOAuthCallbackServer(opts: {
   instancesDir: string;
@@ -47,6 +53,10 @@ export function startOAuthCallbackServer(opts: {
   discordSend?: DiscordSendFn;
   /** Open a DM channel with a user. Injected by the router. */
   openDMChannel?: OpenDMChannelFn;
+  /** Send an embed to a Discord channel. Injected by the router. */
+  discordSendEmbed?: DiscordSendEmbedFn;
+  /** Route a message through the standard DM pipeline. Injected by the router. */
+  routeMessage?: RouteMessageFn;
 }): {
   server: http.Server;
   requestAuth: (params: { discordUserId: string; email: string }) => {
@@ -232,6 +242,60 @@ export function startOAuthCallbackServer(opts: {
           runtime.error(`[proxy] send error: ${err}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "send failed" }));
+        }
+      });
+      return;
+    }
+
+    // System message — send embed + route through the same pipeline as user DMs
+    if (req.method === "POST" && req.url === "/discord/system") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(body) as {
+            userId?: string;
+            message?: string;
+          };
+          if (!data.userId || !data.message) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "userId and message required" }));
+            return;
+          }
+          if (!opts.openDMChannel || !opts.discordSendEmbed || !opts.routeMessage) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "not available" }));
+            return;
+          }
+
+          const channelId = await opts.openDMChannel(data.userId);
+          if (!channelId) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "could not open DM channel" }));
+            return;
+          }
+
+          // 1. Send embed showing the system message
+          await opts.discordSendEmbed(channelId, {
+            title: "System",
+            description: data.message,
+            color: 0x808080,
+          });
+
+          // 2. Route through the same pipeline as user messages
+          void opts.routeMessage(data.userId, channelId, `[System: ${data.message}]`);
+
+          runtime.log(
+            `[system] sent system message to ${data.userId}: ${data.message.slice(0, 60)}`,
+          );
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, channelId }));
+        } catch (err) {
+          runtime.error(`[system] error: ${err}`);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: String(err) }));
         }
       });
       return;
