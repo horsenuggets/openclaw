@@ -65,8 +65,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     openDMChannel: (userId) => openDMChannel(discordToken, userId),
     onAuthComplete: async ({ discordUserId, code }) => {
       const instance = instances.get(discordUserId);
+      if (!instance) return;
+
+      // Get channel ID from pendingGoogleAuth or open a fresh DM
       const pending = pendingGoogleAuth.get(discordUserId);
-      if (!instance || !pending) return;
+      const channelId = pending?.channelId ?? (await openDMChannel(discordToken, discordUserId));
+      if (!channelId) {
+        runtime.error(`[router] could not open DM channel for ${discordUserId} after auth`);
+        return;
+      }
 
       runtime.log(`[router] Google auth complete for ${discordUserId}, exchanging code`);
 
@@ -163,7 +170,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         // Notify agent via Discord
         await discordSend(
           discordToken,
-          pending.channelId,
+          channelId,
           "Google account connected successfully! Here are some things I can help you with:\n\n" +
             "📅 **Calendar** — Check your schedule, create events, set reminders\n" +
             "📧 **Email** — Read and summarize your inbox, draft replies\n" +
@@ -176,7 +183,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         // Also tell the agent via the gateway
         void routeDM({
           discordUserId,
-          channelId: pending.channelId,
+          channelId,
           messageContent:
             "[System: The user just successfully connected their Google account. Acknowledge this briefly and enthusiastically. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. Do NOT list what you can do — that was already sent.]",
           instance,
