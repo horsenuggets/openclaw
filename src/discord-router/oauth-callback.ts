@@ -237,6 +237,52 @@ export function startOAuthCallbackServer(opts: {
       return;
     }
 
+    // Trigger auth for a user — generates an OAuth URL and sends it to their Discord DM.
+    // POST /auth/trigger { userId: "discordUserId" }
+    if (req.method === "POST" && req.url === "/auth/trigger") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(body) as { userId?: string };
+          if (!data.userId) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "userId is required" }));
+            return;
+          }
+          if (!opts.discordSend || !opts.openDMChannel) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "discord not available" }));
+            return;
+          }
+
+          const { authUrl } = requestAuth({ discordUserId: data.userId, email: "user" });
+          const channelId = await opts.openDMChannel(data.userId);
+          if (!channelId) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "could not open DM channel" }));
+            return;
+          }
+
+          await opts.discordSend(
+            channelId,
+            `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
+          );
+          runtime.log(`[auth/trigger] sent auth link to ${data.userId}`);
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, authUrl }));
+        } catch (err) {
+          runtime.error(`[auth/trigger] error: ${err}`);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+      return;
+    }
+
     // Health check
     if (req.method === "GET" && req.url === "/auth/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
