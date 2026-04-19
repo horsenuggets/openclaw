@@ -1,8 +1,8 @@
 import AppKit
+import Foundation
 import OpenClawChatUI
 import OpenClawKit
 import OpenClawProtocol
-import Foundation
 import OSLog
 import QuartzCore
 import SwiftUI
@@ -16,7 +16,7 @@ private enum WebChatSwiftUILayout {
     static let anchorPadding: CGFloat = 8
 }
 
-struct MacGatewayChatTransport: OpenClawChatTransport, Sendable {
+struct MacGatewayChatTransport: OpenClawChatTransport {
     func requestHistory(sessionKey: String) async throws -> OpenClawChatHistoryPayload {
         try await GatewayConnection.shared.chatHistory(sessionKey: sessionKey)
     }

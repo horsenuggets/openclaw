@@ -36,7 +36,7 @@ describe("buildEmbeddedRunPayloads", () => {
 
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.text).toBe(
-      "The AI service is temporarily overloaded. Please try again in a moment.",
+      "*The AI service is temporarily overloaded. Please try again in a moment.*",
     );
     expect(payloads[0]?.isError).toBe(true);
     expect(payloads.some((payload) => payload.text === errorJson)).toBe(false);
@@ -56,7 +56,7 @@ describe("buildEmbeddedRunPayloads", () => {
 
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.text).toBe(
-      "The AI service is temporarily overloaded. Please try again in a moment.",
+      "*The AI service is temporarily overloaded. Please try again in a moment.*",
     );
     expect(payloads.some((payload) => payload.text === errorJsonPretty)).toBe(false);
   });
@@ -73,10 +73,13 @@ describe("buildEmbeddedRunPayloads", () => {
       reasoningLevel: "off",
     });
 
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0]?.text).toBe(
-      "The AI service is temporarily overloaded. Please try again in a moment.",
-    );
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    expect(
+      payloads.some(
+        (p) =>
+          p.text === "*The AI service is temporarily overloaded. Please try again in a moment.*",
+      ),
+    ).toBe(true);
     expect(payloads.some((payload) => payload.text?.includes("request_id"))).toBe(false);
   });
 

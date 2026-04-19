@@ -85,27 +85,27 @@ describe("formatAssistantErrorText", () => {
     const msg = makeAssistantError(
       '{"type":"error","error":{"message":"Something exploded","type":"server_error"}}',
     );
-    expect(formatAssistantErrorText(msg)).toBe("Something exploded");
+    expect(formatAssistantErrorText(msg)).toBe("*Something exploded*");
   });
   it("returns a friendly billing message for credit balance errors", () => {
     const msg = makeAssistantError("Your credit balance is too low to access the Anthropic API.");
     const result = formatAssistantErrorText(msg);
-    expect(result).toBe(BILLING_ERROR_USER_MESSAGE);
+    expect(result).toBe(`*${BILLING_ERROR_USER_MESSAGE}*`);
   });
   it("returns a friendly billing message for HTTP 402 errors", () => {
     const msg = makeAssistantError("HTTP 402 Payment Required");
     const result = formatAssistantErrorText(msg);
-    expect(result).toBe(BILLING_ERROR_USER_MESSAGE);
+    expect(result).toBe(`*${BILLING_ERROR_USER_MESSAGE}*`);
   });
   it("returns a friendly billing message for insufficient credits", () => {
     const msg = makeAssistantError("insufficient credits");
     const result = formatAssistantErrorText(msg);
-    expect(result).toBe(BILLING_ERROR_USER_MESSAGE);
+    expect(result).toBe(`*${BILLING_ERROR_USER_MESSAGE}*`);
   });
   it("returns a friendly message for spawn ENOENT", () => {
     const msg = makeAssistantError("spawn claude ENOENT");
     expect(formatAssistantErrorText(msg)).toBe(
-      "Something went wrong internally. Please try again.",
+      "*Something went wrong internally. Please try again.*",
     );
   });
   it("returns a friendly message for listen EACCES with socket path", () => {
@@ -113,13 +113,13 @@ describe("formatAssistantErrorText", () => {
       "listen EACCES: permission denied C:\\Users\\Chris\\AppData\\Local\\Temp\\openclaw-mcp-fc052e36.sock",
     );
     expect(formatAssistantErrorText(msg)).toBe(
-      "Something went wrong internally. Please try again.",
+      "*Something went wrong internally. Please try again.*",
     );
   });
   it("returns a friendly message for cmd.exe command-line-too-long", () => {
     const msg = makeAssistantError("The command line is too long.");
     expect(formatAssistantErrorText(msg)).toBe(
-      "Something went wrong internally. Please try again.",
+      "*Something went wrong internally. Please try again.*",
     );
   });
   it("returns a friendly message for Node stack traces", () => {
@@ -127,7 +127,7 @@ describe("formatAssistantErrorText", () => {
       "TypeError: Cannot read property 'foo'\n    at Object.<anonymous> (file.js:10:5)",
     );
     expect(formatAssistantErrorText(msg)).toBe(
-      "Something went wrong internally. Please try again.",
+      "*Something went wrong internally. Please try again.*",
     );
   });
 });

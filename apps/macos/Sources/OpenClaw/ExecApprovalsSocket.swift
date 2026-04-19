@@ -1,11 +1,11 @@
 import AppKit
-import OpenClawKit
 import CryptoKit
 import Darwin
 import Foundation
+import OpenClawKit
 import OSLog
 
-struct ExecApprovalPromptRequest: Codable, Sendable {
+struct ExecApprovalPromptRequest: Codable {
     var command: String
     var cwd: String?
     var host: String?
@@ -76,7 +76,9 @@ private struct ExecHostResponse: Codable {
 enum ExecApprovalsSocketClient {
     private struct TimeoutError: LocalizedError {
         var message: String
-        var errorDescription: String? { self.message }
+        var errorDescription: String? {
+            self.message
+        }
     }
 
     static func requestDecision(
