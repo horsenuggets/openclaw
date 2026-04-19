@@ -237,6 +237,128 @@ export function startOAuthCallbackServer(opts: {
       return;
     }
 
+    // Discord embed proxy — send an embed message to a user's DM
+    if (req.method === "POST" && req.url === "/discord/embed") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(body) as {
+            userId?: string;
+            title?: string;
+            description?: string;
+            color?: number;
+          };
+          if (!data.userId || !data.description) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "userId and description required" }));
+            return;
+          }
+          if (!opts.openDMChannel) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "discord not available" }));
+            return;
+          }
+
+          const channelId = await opts.openDMChannel(data.userId);
+          if (!channelId) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "could not open DM channel" }));
+            return;
+          }
+
+          // Send embed via Discord REST API directly
+          const discordToken = process.env.DISCORD_BOT_TOKEN ?? "";
+          await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bot ${discordToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              embeds: [
+                {
+                  title: data.title ?? "System",
+                  description: data.description,
+                  color: data.color ?? 0x808080,
+                },
+              ],
+            }),
+          });
+          runtime.log(`[proxy] sent embed to ${data.userId}`);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, channelId }));
+        } catch (err) {
+          runtime.error(`[proxy] embed error: ${err}`);
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "embed failed" }));
+        }
+      });
+      return;
+    }
+
+    // Discord read proxy — read messages from a user's DM
+    if (req.method === "GET" && req.url?.startsWith("/discord/read")) {
+      const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+      const userId = url.searchParams.get("userId") ?? "";
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? "10"), 50);
+
+      if (!userId || !opts.openDMChannel) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "userId required" }));
+        return;
+      }
+
+      try {
+        const channelId = await opts.openDMChannel(userId);
+        if (!channelId) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "could not open DM channel" }));
+          return;
+        }
+
+        const discordToken = process.env.DISCORD_BOT_TOKEN ?? "";
+        const msgsResp = await fetch(
+          `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`,
+          { headers: { Authorization: `Bot ${discordToken}` } },
+        );
+        if (!msgsResp.ok) {
+          res.writeHead(msgsResp.status, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "discord API error" }));
+          return;
+        }
+
+        const msgs = (await msgsResp.json()) as Array<{
+          id: string;
+          author: { username: string; bot?: boolean };
+          content: string;
+          timestamp: string;
+          attachments?: Array<{ filename: string; content_type?: string }>;
+          embeds?: Array<{ title?: string; description?: string }>;
+        }>;
+
+        // Format for easy reading
+        const formatted = msgs.reverse().map((m) => ({
+          time: m.timestamp.slice(0, 19),
+          author: m.author.username,
+          bot: m.author.bot ?? false,
+          content: m.content.slice(0, 300),
+          attachments: (m.attachments ?? []).map((a) => a.filename),
+          embeds: (m.embeds ?? []).map((e) => e.title ?? e.description?.slice(0, 80) ?? ""),
+        }));
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ messages: formatted }));
+      } catch (err) {
+        runtime.error(`[proxy] read error: ${err}`);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "read failed" }));
+      }
+      return;
+    }
+
     // Trigger auth for a user — generates an OAuth URL and sends it to their Discord DM.
     // POST /auth/trigger { userId: "discordUserId" }
     if (req.method === "POST" && req.url === "/auth/trigger") {
