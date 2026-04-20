@@ -26,6 +26,9 @@ locals {
     "checks (node, format, pnpm format)",
   ]
 
+  # gh-pages only changes via workflow or controlled pushes
+  ghpages_checks = []
+
   # Additional checks required only for release PRs
   release_checks = concat(local.required_checks, [
     "Validate PR title",
@@ -130,6 +133,29 @@ resource "github_repository_ruleset" "release" {
           integration_id = 0
         }
       }
+    }
+  }
+}
+
+# Branch protection for gh-pages — no force pushes, no deletions
+resource "github_repository_ruleset" "ghpages" {
+  name        = "gh-pages"
+  repository  = github_repository.openclaw.name
+  target      = "branch"
+  enforcement = "active"
+
+  conditions {
+    ref_name {
+      include = ["refs/heads/gh-pages"]
+      exclude = []
+    }
+  }
+
+  rules {
+    # Require PRs (prevents direct pushes including from admins)
+    pull_request {
+      required_approving_review_count = 0
+      dismiss_stale_reviews_on_push   = true
     }
   }
 }
