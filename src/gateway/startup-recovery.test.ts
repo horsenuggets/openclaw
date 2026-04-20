@@ -4,7 +4,7 @@ import type { SessionEntry } from "../config/sessions/types.js";
 
 // Mock the external dependencies before importing the module under test.
 vi.mock("../config/sessions.js", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
+  const original = await importOriginal();
   return {
     ...original,
     loadSessionStore: vi.fn(() => ({})),
@@ -94,7 +94,7 @@ describe("runStartupRecovery", () => {
     await runStartupRecovery({ cfg: baseCfg, log });
 
     expect(dispatchInboundMessageWithDispatcher).toHaveBeenCalledOnce();
-    const call = vi.mocked(dispatchInboundMessageWithDispatcher).mock.calls[0]!;
+    const call = vi.mocked(dispatchInboundMessageWithDispatcher).mock.calls[0];
     const ctx = call[0].ctx;
 
     // The body should contain the recovery preamble and original text.
@@ -224,7 +224,7 @@ describe("runStartupRecovery", () => {
     await runStartupRecovery({ cfg: baseCfg, log });
 
     expect(dispatchInboundMessageWithDispatcher).toHaveBeenCalledOnce();
-    const ctx = vi.mocked(dispatchInboundMessageWithDispatcher).mock.calls[0]![0].ctx;
+    const ctx = vi.mocked(dispatchInboundMessageWithDispatcher).mock.calls[0][0].ctx;
     expect(ctx.OriginatingChannel).toBe("slack");
     expect(ctx.OriginatingTo).toBe("C123");
   });

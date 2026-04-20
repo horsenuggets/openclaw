@@ -352,8 +352,12 @@ describe("chunkDiscordText", () => {
 
   it("propagates bold across three chunks", () => {
     const lines = Array.from({ length: 30 }, (_, i) => {
-      if (i === 2) return "**Bold starts here.";
-      if (i === 28) return "Bold ends here.**";
+      if (i === 2) {
+        return "**Bold starts here.";
+      }
+      if (i === 28) {
+        return "Bold ends here.**";
+      }
       return `Line ${i + 1} of content.`;
     });
     const text = lines.join("\n");

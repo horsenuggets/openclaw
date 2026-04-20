@@ -21,7 +21,9 @@ let _debugChunkIndex = 0;
 
 function debugDump(stage: string, index: number, text: string) {
   const dir = process.env.DISCORD_DEBUG_DUMP;
-  if (!dir) return;
+  if (!dir) {
+    return;
+  }
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${String(index).padStart(2, "0")}-${stage}.txt`);
   fs.writeFileSync(file, text);
@@ -122,7 +124,7 @@ export async function deliverDiscordReply(params: {
         const lastIdx = chunks.length - 1;
         const lastUnclosed = findUnclosedMarkers(chunks[lastIdx]);
         if (lastUnclosed.length > 0) {
-          chunks[lastIdx] += [...lastUnclosed].reverse().join("");
+          chunks[lastIdx] += [...lastUnclosed].toReversed().join("");
         }
       }
       for (const chunk of chunks) {

@@ -83,7 +83,9 @@ export function createTypingGuard(params: {
       fire();
     },
     dispose() {
-      if (disposed) return;
+      if (disposed) {
+        return;
+      }
       disposed = true;
       refCount = 0;
       stopLoop();

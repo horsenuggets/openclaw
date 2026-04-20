@@ -414,7 +414,9 @@ function inferCodeLang(key: string, detail?: string, outputPreview?: string): st
   }
 
   // Tier 2: tools that always return JSON
-  if (JSON_TOOLS.has(key)) return "json";
+  if (JSON_TOOLS.has(key)) {
+    return "json";
+  }
 
   // Tier 3: content-based detection via highlight.js
   if (outputPreview) {
@@ -563,20 +565,28 @@ function buildEditDiffBlock(args: Record<string, unknown>): string | undefined {
   const newString =
     (typeof args.new_string === "string" ? args.new_string : undefined) ??
     (typeof args.newText === "string" ? args.newText : undefined);
-  if (oldString === undefined || newString === undefined) return undefined;
+  if (oldString === undefined || newString === undefined) {
+    return undefined;
+  }
 
   const diff = formatTextDiff(oldString, newString);
-  if (!diff) return undefined;
+  if (!diff) {
+    return undefined;
+  }
 
   const allLines = diff.split("\n");
   const visibleLines: string[] = [];
 
   for (const line of allLines) {
-    if (visibleLines.length >= MAX_PREVIEW_LINES) break;
+    if (visibleLines.length >= MAX_PREVIEW_LINES) {
+      break;
+    }
     visibleLines.push(truncateColumn(line));
   }
 
-  if (visibleLines.length === 0) return undefined;
+  if (visibleLines.length === 0) {
+    return undefined;
+  }
 
   const remaining = allLines.length - visibleLines.length;
   const codeLines = [...visibleLines];

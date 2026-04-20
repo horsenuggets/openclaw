@@ -90,7 +90,7 @@ describeLive("Discord typing indicator", () => {
     const creates = events.filter((e) => e.type === "create");
     expect(creates.length).toBeGreaterThan(0);
 
-    const lastReplyTime = creates[creates.length - 1]!.timestamp;
+    const lastReplyTime = creates[creates.length - 1].timestamp;
 
     // After the last reply, wait 8 seconds (longer than the
     // 6-second typing guard interval) and collect any late typing

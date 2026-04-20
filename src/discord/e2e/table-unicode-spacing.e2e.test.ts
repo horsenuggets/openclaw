@@ -48,14 +48,18 @@ function extractTableLines(codeBlock: string): string[] {
  * diagnostics (empty = all aligned).
  */
 function checkPipeAlignment(lines: string[]): string[] {
-  if (lines.length < 2) return [];
+  if (lines.length < 2) {
+    return [];
+  }
 
   const pipePositions = (line: string): number[] => {
     const positions: number[] = [];
     // Use Array.from to iterate over code points properly
     const chars = Array.from(line);
     for (let i = 0; i < chars.length; i++) {
-      if (chars[i] === "|") positions.push(i);
+      if (chars[i] === "|") {
+        positions.push(i);
+      }
     }
     return positions;
   };
@@ -145,7 +149,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       const channels = await guild.channels.fetch();
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       for (const [, ch] of channels) {
-        if (!ch) continue;
+        if (!ch) {
+          continue;
+        }
         const match = ch.name.match(/^e2e-(\d{4}-\d{2}-\d{2})-/);
         if (match) {
           const channelDate = new Date(match[1]).getTime();
@@ -208,7 +214,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== ASCII TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -218,7 +226,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (ASCII table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       expect(issues).toEqual([]);
     }
@@ -236,7 +246,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== EMOJI TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -246,7 +258,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (emoji table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       // Log but do not assert yet; we expect this may fail.
       if (issues.length > 0) {
@@ -269,7 +283,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== CJK TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -279,7 +295,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (CJK table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       if (issues.length > 0) {
         console.warn(`CJK table has ${issues.length} alignment issues (expected for now)`);
@@ -300,7 +318,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== DIACRITICS TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -310,7 +330,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (diacritics table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       if (issues.length > 0) {
         console.warn(`Diacritics table has ${issues.length} alignment issues`);
@@ -331,7 +353,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== CURRENCY TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -341,7 +365,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (currency table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       if (issues.length > 0) {
         console.warn(`Currency table has ${issues.length} alignment issues`);
@@ -365,7 +391,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     );
 
     console.log("\n=== MIXED STRESS TABLE RAW OUTPUT ===");
-    for (const chunk of rawChunks) console.log(chunk);
+    for (const chunk of rawChunks) {
+      console.log(chunk);
+    }
     console.log("=== END ===\n");
 
     expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -375,7 +403,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
       if (issues.length > 0) {
         console.log("ALIGNMENT ISSUES (mixed stress table):");
         console.log(codeBlock);
-        for (const issue of issues) console.log(`  ${issue}`);
+        for (const issue of issues) {
+          console.log(`  ${issue}`);
+        }
       }
       if (issues.length > 0) {
         console.warn(`Mixed stress table has ${issues.length} alignment issues`);

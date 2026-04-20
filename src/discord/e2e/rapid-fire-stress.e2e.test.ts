@@ -93,7 +93,7 @@ async function runBurst(
 
   // Collect all bot output.
   const creates = events.filter((e) => e.type === "create");
-  const firstResponseAt = creates.length > 0 ? creates[0]!.timestamp : null;
+  const firstResponseAt = creates.length > 0 ? creates[0].timestamp : null;
   const allBotContent = creates.map((e) => e.content ?? "").join("\n");
   const allBotContentLower = allBotContent.toLowerCase();
 

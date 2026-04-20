@@ -430,7 +430,7 @@ function rebalanceInlineFormatting(chunks: string[]): string[] {
 
     // Close unclosed markers at end of chunk. Append before any
     // trailing fence closer so markers don't leak into code blocks.
-    const closeMarkers = [...unclosed].reverse().join("");
+    const closeMarkers = [...unclosed].toReversed().join("");
     const closerInsertPos = findTrailingFenceCloserPos(adjusted[i]);
     if (closerInsertPos >= 0) {
       adjusted[i] =
@@ -516,11 +516,17 @@ export function stripOrphanedMarkerOutsideCode(text: string, marker: string): st
   // character and the closer is preceded by one (e.g. **Bold Term**).
   const paired = new Set<number>();
   for (let idx = 0; idx < positions.length; idx++) {
-    if (paired.has(idx)) continue;
+    if (paired.has(idx)) {
+      continue;
+    }
 
     let next = idx + 1;
-    while (next < positions.length && paired.has(next)) next++;
-    if (next >= positions.length) break;
+    while (next < positions.length && paired.has(next)) {
+      next++;
+    }
+    if (next >= positions.length) {
+      break;
+    }
 
     if (isValidBoldPair(text, positions[idx], positions[next], marker.length)) {
       paired.add(idx);

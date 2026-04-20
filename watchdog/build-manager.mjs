@@ -256,7 +256,9 @@ export function buildCommit(repoRoot, commitHash, { onProgress } = {}) {
   for (const dirName of ["skills", "extensions"]) {
     const src = path.join(repoRoot, dirName);
     const dest = path.join(buildDir, dirName);
-    if (!fs.existsSync(src)) continue;
+    if (!fs.existsSync(src)) {
+      continue;
+    }
     try {
       fs.symlinkSync(src, dest, linkType);
     } catch {

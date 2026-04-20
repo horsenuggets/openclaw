@@ -79,7 +79,9 @@ describeLive("Discord chunk splitting observation", () => {
       const channels = await guild.channels.fetch();
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       for (const [, ch] of channels) {
-        if (!ch) continue;
+        if (!ch) {
+          continue;
+        }
         const match = ch.name.match(/^e2e-(\d{4}-\d{2}-\d{2})-/);
         if (match) {
           const channelDate = new Date(match[1]).getTime();
