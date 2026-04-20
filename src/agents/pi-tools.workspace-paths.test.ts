@@ -18,7 +18,7 @@ function getTextContent(result?: { content?: Array<{ type: string; text?: string
   return textBlock?.text ?? "";
 }
 
-describe("workspace path resolution", () => {
+describe.sequential("workspace path resolution", () => {
   it("reads relative paths against workspaceDir even after cwd changes", async () => {
     await withTempDir("openclaw-ws-", async (workspaceDir) => {
       await withTempDir("openclaw-cwd-", async (otherDir) => {
