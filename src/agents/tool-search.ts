@@ -129,7 +129,7 @@ export function createToolSearchTool(
         text: `Loaded ${matches.length} tool(s). They are now available for use:\n${lines.join("\n")}`,
       };
     },
-  } as AnyAgentTool;
+  } as unknown as AnyAgentTool;
 }
 
 /**

@@ -556,7 +556,9 @@ export async function runEmbeddedAttempt(
             config: params.config,
             workspaceDir: params.workspaceDir,
             timeoutMs: params.timeoutMs ?? 120_000,
-            onStreamEvent: params.streamParams?.onStreamEvent,
+            onStreamEvent: (params.streamParams as Record<string, unknown>)?.onStreamEvent as
+              | ((event: unknown) => void)
+              | undefined,
             onAgentEvent: params.onAgentEvent,
           });
         } else {
@@ -1005,7 +1007,7 @@ function backfillAssistantUsage(messages: AgentMessage[]): void {
     if (msg.role !== "assistant") {
       continue;
     }
-    const assistant = msg as Record<string, unknown>;
+    const assistant = msg as unknown as Record<string, unknown>;
     if (!assistant.usage || typeof assistant.usage !== "object") {
       assistant.usage = { ...EMPTY_USAGE, cost: { ...EMPTY_USAGE.cost } };
     }
