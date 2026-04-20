@@ -194,7 +194,15 @@ export async function seedSessionHistoryFromPrevious(params: {
         const content = (
           Array.isArray(entry.message.content)
             ? entry.message.content
-            : [{ type: "text", text: String(entry.message.content) }]
+            : [
+                {
+                  type: "text",
+                  text:
+                    typeof entry.message.content === "string"
+                      ? entry.message.content
+                      : JSON.stringify(entry.message.content),
+                },
+              ]
         ) as Array<{ type: string; text?: string }>;
         for (const block of content) {
           if (block.type === "text" && block.text) {

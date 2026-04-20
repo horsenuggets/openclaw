@@ -75,7 +75,7 @@ export const handleToolFeedbackCommand: CommandHandler = async (params, allowTex
   if (!rawArg) {
     // Toggle: if currently off, turn on; if on (or unset), turn off
     const current = params.sessionEntry?.toolFeedback;
-    const next = current === false ? true : false;
+    const next = current !== false;
     if (params.sessionEntry && params.sessionStore && params.sessionKey) {
       if (next) {
         delete params.sessionEntry.toolFeedback;

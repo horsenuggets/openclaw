@@ -140,7 +140,7 @@ export function startOAuthCallbackServer(opts: {
             ),
           );
         } catch (err) {
-          runtime.error(`[oauth] error processing callback: ${err}`);
+          runtime.error(`[oauth] error processing callback: ${String(err)}`);
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end(successPage("Error", "Something went wrong. Please try again."));
         }
@@ -239,7 +239,7 @@ export function startOAuthCallbackServer(opts: {
             }),
           );
         } catch (err) {
-          runtime.error(`[proxy] send error: ${err}`);
+          runtime.error(`[proxy] send error: ${String(err)}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "send failed" }));
         }
@@ -293,7 +293,7 @@ export function startOAuthCallbackServer(opts: {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, channelId }));
         } catch (err) {
-          runtime.error(`[system] error: ${err}`);
+          runtime.error(`[system] error: ${String(err)}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: String(err) }));
         }
@@ -355,7 +355,7 @@ export function startOAuthCallbackServer(opts: {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, channelId }));
         } catch (err) {
-          runtime.error(`[proxy] embed error: ${err}`);
+          runtime.error(`[proxy] embed error: ${String(err)}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "embed failed" }));
         }
@@ -404,7 +404,7 @@ export function startOAuthCallbackServer(opts: {
         }>;
 
         // Format for easy reading
-        const formatted = msgs.reverse().map((m) => ({
+        const formatted = msgs.toReversed().map((m) => ({
           time: m.timestamp.slice(0, 19),
           author: m.author.username,
           bot: m.author.bot ?? false,
@@ -416,7 +416,7 @@ export function startOAuthCallbackServer(opts: {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: formatted }));
       } catch (err) {
-        runtime.error(`[proxy] read error: ${err}`);
+        runtime.error(`[proxy] read error: ${String(err)}`);
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "read failed" }));
       }
@@ -461,7 +461,7 @@ export function startOAuthCallbackServer(opts: {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, authUrl }));
         } catch (err) {
-          runtime.error(`[auth/trigger] error: ${err}`);
+          runtime.error(`[auth/trigger] error: ${String(err)}`);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: String(err) }));
         }

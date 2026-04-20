@@ -66,7 +66,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     discordSendEmbed: (channelId, embed) => discordSendEmbed(discordToken, channelId, embed),
     routeMessage: (userId, channelId, message) => {
       const instance = instances.get(userId);
-      if (!instance) return Promise.resolve();
+      if (!instance) {
+        return Promise.resolve();
+      }
       return routeDM({
         discordUserId: userId,
         channelId,
@@ -80,7 +82,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     onAuthComplete: async ({ discordUserId, code }) => {
       const instance = instances.get(discordUserId);
-      if (!instance) return;
+      if (!instance) {
+        return;
+      }
 
       // Get channel ID from pendingGoogleAuth or open a fresh DM
       const pending = pendingGoogleAuth.get(discordUserId);
@@ -148,7 +152,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 fs.copyFileSync(srcConfig, `${gogDir}/config.json`);
               }
             } catch (copyErr) {
-              runtime.error(`[router] failed to copy gogcli credentials: ${copyErr}`);
+              runtime.error(`[router] failed to copy gogcli credentials: ${String(copyErr)}`);
             }
           }
         }
@@ -241,7 +245,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         case 10: {
           // Hello — start heartbeating
           const interval = d.heartbeat_interval;
-          if (heartbeatInterval) clearInterval(heartbeatInterval);
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+          }
           heartbeatInterval = setInterval(() => {
             ws.send(JSON.stringify({ op: 1, d: lastSequence }));
           }, interval);
@@ -387,7 +393,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     `[router] re-sent Google auth link to ${authorId} (was in named state)`,
                   );
                 } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${err}`);
+                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
                   setOnboardingState(instance, "complete");
                 }
               })();
@@ -413,7 +419,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               agentTimeoutMs,
               inflight,
             }).then(async (success) => {
-              if (!success) return;
+              if (!success) {
+                return;
+              }
 
               // State transitions after successful agent response
               if (state === "greeted") {
@@ -434,7 +442,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   setOnboardingState(instance, "google_pending");
                   runtime.log(`[router] sent Google auth link to ${authorId}`);
                 } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${err}`);
+                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
                   setOnboardingState(instance, "complete");
                 }
               }
@@ -564,7 +572,9 @@ async function routeDM(params: {
           }
           try {
             const resp = await fetch(att.url);
-            if (!resp.ok) continue;
+            if (!resp.ok) {
+              continue;
+            }
             const buf = Buffer.from(await resp.arrayBuffer());
             const mime = att.content_type ?? "application/octet-stream";
 
@@ -599,7 +609,7 @@ async function routeDM(params: {
                   );
                 }
               } catch (whisperErr) {
-                runtime.error(`[router] whisper error: ${whisperErr}`);
+                runtime.error(`[router] whisper error: ${String(whisperErr)}`);
               }
             } else if (mime.startsWith("image/")) {
               // Pass images to gateway as attachments
@@ -616,7 +626,9 @@ async function routeDM(params: {
               runtime.log(`[router] skipping unsupported attachment ${att.filename} (${mime})`);
             }
           } catch (dlErr) {
-            runtime.error(`[router] failed to download attachment ${att.filename}: ${dlErr}`);
+            runtime.error(
+              `[router] failed to download attachment ${att.filename}: ${String(dlErr)}`,
+            );
           }
         }
       }
@@ -737,18 +749,20 @@ async function routeDM(params: {
  * instead of being handled internally.
  */
 function isLeakedError(text: string): boolean {
-  if (!text) return false;
+  if (!text) {
+    return false;
+  }
   const t = text.trim();
   // Common JS error patterns that should never appear in user-facing text
   return (
     /^Cannot read propert(y|ies) of (undefined|null)/.test(t) ||
-    /^TypeError:/.test(t) ||
-    /^ReferenceError:/.test(t) ||
-    /^SyntaxError:/.test(t) ||
-    /^RangeError:/.test(t) ||
+    t.startsWith("TypeError:") ||
+    t.startsWith("ReferenceError:") ||
+    t.startsWith("SyntaxError:") ||
+    t.startsWith("RangeError:") ||
     /^Error: (ENOENT|EACCES|EPERM|ECONNREFUSED)/.test(t) ||
     /^Command exited with code \d+/.test(t) ||
-    /^\[tools\] exec failed:/.test(t) ||
+    t.startsWith("[tools] exec failed:") ||
     /^at\s+\S+\s+\(.*:\d+:\d+\)/.test(t)
   );
 }
@@ -803,7 +817,9 @@ async function sendLifecycleToAll(
   runtime: RouterRuntime,
 ): Promise<void> {
   for (const [userId, instance] of instances) {
-    if (instance.onboardingState !== "complete") continue;
+    if (instance.onboardingState !== "complete") {
+      continue;
+    }
     try {
       const channelId = await openDMChannel(discordToken, userId);
       if (channelId) {
@@ -825,7 +841,9 @@ async function openDMChannel(token: string, userId: string): Promise<string | nu
     },
     body: JSON.stringify({ recipient_id: userId }),
   });
-  if (!resp.ok) return null;
+  if (!resp.ok) {
+    return null;
+  }
   const data = (await resp.json()) as { id?: string };
   return data.id ?? null;
 }
@@ -868,17 +886,23 @@ async function recoverUnansweredDMs(
   )?.id;
 
   for (const [userId, instance] of instances) {
-    if (instance.onboardingState !== "complete") continue;
+    if (instance.onboardingState !== "complete") {
+      continue;
+    }
 
     try {
       const channelId = await openDMChannel(discordToken, userId);
-      if (!channelId) continue;
+      if (!channelId) {
+        continue;
+      }
 
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
         headers: { Authorization: `Bot ${discordToken}` },
       });
-      if (!resp.ok) continue;
+      if (!resp.ok) {
+        continue;
+      }
       const messages = (await resp.json()) as Array<{
         id: string;
         author: { id: string; bot?: boolean };
@@ -891,7 +915,9 @@ async function recoverUnansweredDMs(
           size: number;
         }>;
       }>;
-      if (messages.length === 0) continue;
+      if (messages.length === 0) {
+        continue;
+      }
 
       // Skip italic lifecycle messages (*Back online.*, *Shutting down...*)
       const isLifecycle = (c: string) => /^\*[^*]+\*$/.test(c?.trim() ?? "");
@@ -901,16 +927,24 @@ async function recoverUnansweredDMs(
       // If it's from the bot → already responded, skip.
       let lastUserMsg: (typeof messages)[0] | undefined;
       for (const msg of messages) {
-        if (isLifecycle(msg.content)) continue;
-        if (msg.author.bot || msg.author.id === botId) break; // bot responded
+        if (isLifecycle(msg.content)) {
+          continue;
+        }
+        if (msg.author.bot || msg.author.id === botId) {
+          break;
+        } // bot responded
         lastUserMsg = msg;
         break; // found the user's unanswered message
       }
 
-      if (!lastUserMsg) continue;
+      if (!lastUserMsg) {
+        continue;
+      }
       const content = lastUserMsg.content?.trim();
       const msgAttachments = lastUserMsg.attachments ?? [];
-      if (!content && msgAttachments.length === 0) continue;
+      if (!content && msgAttachments.length === 0) {
+        continue;
+      }
 
       runtime.log(
         `[router] recovering unanswered DM from ${userId}: ${content?.slice(0, 60) || `(${msgAttachments.length} attachment(s))`}`,
@@ -942,7 +976,9 @@ async function onboardNewUsers(
   inflight: Set<string>,
 ): Promise<void> {
   for (const [userId, instance] of instances) {
-    if (instance.onboardingState !== "none") continue;
+    if (instance.onboardingState !== "none") {
+      continue;
+    }
 
     runtime.log(`[router] proactive onboarding for ${userId}`);
 
@@ -961,7 +997,7 @@ async function onboardNewUsers(
     });
 
     // Route through the agent for the greeting
-    routeDM({
+    void routeDM({
       discordUserId: userId,
       channelId,
       messageContent:

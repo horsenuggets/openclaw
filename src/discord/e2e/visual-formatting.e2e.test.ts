@@ -137,8 +137,12 @@ describeLive("Discord visual formatting verification", () => {
         "Browser login failed (screenshots will be skipped):",
         err instanceof Error ? err.message : err,
       );
-      if (context) await context.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
+      if (context) {
+        await context.close().catch(() => {});
+      }
+      if (browser) {
+        await browser.close().catch(() => {});
+      }
       context = undefined;
       browser = undefined;
     }
@@ -151,7 +155,9 @@ describeLive("Discord visual formatting verification", () => {
       const channels = await guild.channels.fetch();
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       for (const [, ch] of channels) {
-        if (!ch) continue;
+        if (!ch) {
+          continue;
+        }
         const match = ch.name.match(/^e2e-(\d{4}-\d{2}-\d{2})-/);
         if (match) {
           const channelDate = new Date(match[1]).getTime();
@@ -207,7 +213,9 @@ describeLive("Discord visual formatting verification", () => {
     const failures: string[] = [];
     for (const event of creates) {
       const content = event.content ?? "";
-      if (!content.trim()) continue;
+      if (!content.trim()) {
+        continue;
+      }
 
       for (const marker of INLINE_MARKERS) {
         if (!hasBalancedInlineMarkers(content, marker)) {
@@ -224,7 +232,9 @@ describeLive("Discord visual formatting verification", () => {
       // Print full content of failing messages for debugging.
       for (const event of creates) {
         const content = event.content ?? "";
-        if (!content.trim()) continue;
+        if (!content.trim()) {
+          continue;
+        }
         for (const marker of INLINE_MARKERS) {
           if (!hasBalancedInlineMarkers(content, marker)) {
             console.log(`\n=== UNBALANCED "${marker}" in ${event.messageId} ===`);
@@ -247,7 +257,7 @@ describeLive("Discord visual formatting verification", () => {
       await page.close();
 
       console.log(
-        `Captured ${result.files.length} screenshots for ` + `${creates.length} message chunks.`,
+        `Captured ${result.files.length} screenshots for ${creates.length} message chunks.`,
       );
       for (const file of result.files) {
         console.log(`  ${file}`);
@@ -262,9 +272,7 @@ describeLive("Discord visual formatting verification", () => {
     }
 
     if (creates.length > 1) {
-      console.log(
-        `Verified ${creates.length} message chunks all have ` + "balanced inline formatting.",
-      );
+      console.log(`Verified ${creates.length} message chunks all have balanced inline formatting.`);
     }
   }, 240_000);
 });

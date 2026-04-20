@@ -48,7 +48,9 @@ export async function startMcpBridge(params: {
       while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
         const line = buffer.slice(0, newlineIdx);
         buffer = buffer.slice(newlineIdx + 1);
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
         try {
           const request = JSON.parse(line) as McpIpcRequest;
           handleRequest(request, socket).catch(() => {
@@ -77,7 +79,7 @@ export async function startMcpBridge(params: {
         response = {
           id: (request as McpIpcRequest).id,
           type: "error",
-          message: `Unknown request type: ${(request as Record<string, unknown>).type}`,
+          message: `Unknown request type: ${String((request as Record<string, unknown>).type)}`,
         };
     }
 

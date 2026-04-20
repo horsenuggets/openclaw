@@ -22,7 +22,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
   result: RunResult;
 }) {
   const {
-    cfg,
+    cfg: _cfg,
     sessionId,
     sessionKey,
     storePath,
