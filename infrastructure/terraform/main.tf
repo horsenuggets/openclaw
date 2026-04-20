@@ -24,6 +24,13 @@ locals {
     "checks (node, lint, pnpm build && pnpm lint)",
     "checks (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
     "checks (node, format, pnpm format)",
+    "checks (node, protocol, pnpm protocol:check)",
+    "checks (bun, test, pnpm canvas:a2ui:bundle && bunx vitest run)",
+    "checks-windows (node, build & lint, pnpm build && pnpm lint)",
+    "checks-windows (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
+    "checks-windows (node, protocol, pnpm protocol:check)",
+    "secrets",
+    "no-tabs",
   ]
 
   # Additional checks required only for release PRs
