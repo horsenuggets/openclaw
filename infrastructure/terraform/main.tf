@@ -26,9 +26,6 @@ locals {
     "checks (node, format, pnpm format)",
   ]
 
-  # gh-pages only changes via workflow or controlled pushes
-  ghpages_checks = []
-
   # Additional checks required only for release PRs
   release_checks = concat(local.required_checks, [
     "Validate PR title",
