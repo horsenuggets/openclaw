@@ -59,7 +59,7 @@ describe("cli program (smoke)", () => {
     runTui.mockResolvedValue(undefined);
   });
 
-  it("runs message with required options", { timeout: 300_000 }, async () => {
+  it("runs message with required options", async () => {
     const program = buildProgram();
     await program.parseAsync(["message", "send", "--target", "+1", "--message", "hi"], {
       from: "user",
