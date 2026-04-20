@@ -514,7 +514,7 @@ async function routeDM(params: {
   runtime: RouterRuntime;
   agentTimeoutMs: number;
   inflight: Set<string>;
-}): Promise<void> {
+}): Promise<boolean> {
   const {
     discordUserId,
     channelId,
@@ -655,7 +655,7 @@ async function routeDM(params: {
           channelId,
           "*I processed your message but wasn't able to generate a response. Please try again.*",
         );
-        return;
+        return false;
       }
 
       for (const payload of payloads) {
