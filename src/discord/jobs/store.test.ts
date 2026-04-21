@@ -84,11 +84,18 @@ describe("job store", () => {
   });
 
   it("gets active job for user", async () => {
-    await createJob({
+    const first = await createJob({
       agentId: "test-agent",
       userId: "user-1",
       sessionKey: "key",
       prompt: "first",
+    });
+
+    // Complete the first job so only the second is active
+    await updateJob({
+      agentId: "test-agent",
+      jobId: first.jobId,
+      status: "completed",
     });
 
     const second = await createJob({
