@@ -3,11 +3,17 @@ import path from "node:path";
 
 export type OnboardingState = "none" | "greeted" | "named" | "google_pending" | "complete";
 
+export type UserPreferences = {
+  /** Show "Back online." / "Shutting down..." lifecycle messages. Default: false. */
+  lifecycleMessages?: boolean;
+};
+
 export type InstanceConfig = {
   port: number;
   token: string;
   onboarded: boolean;
   onboardingState: OnboardingState;
+  preferences: UserPreferences;
   configPath: string;
   instanceDir: string;
 };
@@ -77,10 +83,12 @@ export function loadRouterConfig(opts: {
     // Onboarding state stored in a separate file (not openclaw.json which has schema validation)
     const onboardingPath = path.join(instancesDir, discordUserId, ".onboarding.json");
     let onboardingState: OnboardingState = "none";
+    let preferences: UserPreferences = {};
     if (fs.existsSync(onboardingPath)) {
       try {
         const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
         onboardingState = raw?.state ?? "none";
+        preferences = raw?.preferences ?? {};
       } catch {
         onboardingState = "none";
       }
@@ -108,6 +116,7 @@ export function loadRouterConfig(opts: {
       token: gatewayToken,
       onboarded,
       onboardingState,
+      preferences,
       configPath,
       instanceDir,
     });
@@ -122,14 +131,49 @@ export function loadRouterConfig(opts: {
   };
 }
 
+/** Read the full onboarding file (state + preferences). */
+function readOnboardingFile(instance: InstanceConfig): Record<string, unknown> {
+  try {
+    const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
+    return JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/** Write the onboarding file preserving all fields. */
+function writeOnboardingFile(instance: InstanceConfig, data: Record<string, unknown>): void {
+  const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
+  fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
+}
+
 /** Update onboarding state for an instance. */
 export function setOnboardingState(instance: InstanceConfig, state: OnboardingState): void {
   try {
-    const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
-    const data = { state, updatedAt: new Date().toISOString() };
-    fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
+    const existing = readOnboardingFile(instance);
+    existing.state = state;
+    existing.updatedAt = new Date().toISOString();
+    writeOnboardingFile(instance, existing);
     instance.onboardingState = state;
     instance.onboarded = state === "complete";
+  } catch {
+    // Best effort
+  }
+}
+
+/** Update a user preference. */
+export function setUserPreference(
+  instance: InstanceConfig,
+  key: keyof UserPreferences,
+  value: boolean,
+): void {
+  try {
+    const existing = readOnboardingFile(instance);
+    const prefs = (existing.preferences as UserPreferences) ?? {};
+    prefs[key] = value;
+    existing.preferences = prefs;
+    writeOnboardingFile(instance, existing);
+    instance.preferences = prefs;
   } catch {
     // Best effort
   }

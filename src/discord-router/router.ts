@@ -8,7 +8,7 @@ import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
-import { refreshToken, setOnboardingState } from "./config.js";
+import { refreshToken, setOnboardingState, setUserPreference } from "./config.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
 type AgentResult = {
@@ -47,6 +47,22 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   for (const [userId, inst] of instances) {
     runtime.log(`  ${userId} → localhost:${inst.port}`);
   }
+
+  // Register slash commands
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: "lifecycle",
+      description: "Toggle startup/shutdown notification messages",
+      type: 1,
+    }),
+  }).catch((err) =>
+    runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
+  );
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -448,6 +464,44 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               }
             });
           }
+
+          // Handle slash command interactions
+          if (t === "INTERACTION_CREATE" && d.type === 2) {
+            const interactionData = d.data;
+            const interactionUser = d.user?.id ?? d.member?.user?.id;
+            const interactionToken = d.token;
+            const interactionId = d.id;
+
+            if (interactionData?.name === "lifecycle" && interactionUser) {
+              const instance = instances.get(interactionUser);
+              if (instance) {
+                const current = instance.preferences.lifecycleMessages ?? false;
+                const newValue = !current;
+                setUserPreference(instance, "lifecycleMessages", newValue);
+                const statusText = newValue
+                  ? "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages."
+                  : "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
+
+                // Respond to the interaction
+                void fetch(
+                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      type: 4,
+                      data: { content: statusText, flags: 64 },
+                    }),
+                  },
+                ).catch((err) =>
+                  runtime.error(`[router] interaction response failed: ${String(err)}`),
+                );
+                runtime.log(
+                  `[router] lifecycle toggled for ${interactionUser}: ${String(newValue)}`,
+                );
+              }
+            }
+          }
           break;
         }
         case 7:
@@ -818,6 +872,10 @@ async function sendLifecycleToAll(
 ): Promise<void> {
   for (const [userId, instance] of instances) {
     if (instance.onboardingState !== "complete") {
+      continue;
+    }
+    // Only send lifecycle messages to users who opted in (off by default)
+    if (!instance.preferences.lifecycleMessages) {
       continue;
     }
     try {
