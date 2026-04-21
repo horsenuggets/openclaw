@@ -101,7 +101,9 @@ function transcriptShowsAssistantLast(entry: SessionEntry, agentId?: string): bo
   const lines = content.split(/\r?\n/);
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
     try {
       const parsed = JSON.parse(line) as {
         type?: string;

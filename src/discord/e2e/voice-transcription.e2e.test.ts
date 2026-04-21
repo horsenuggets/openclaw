@@ -58,8 +58,12 @@ describe("voice transcription", () => {
 
     // Track all bot messages in this channel.
     client.on(Events.MessageCreate, (msg) => {
-      if (msg.channelId !== channelId) return;
-      if (msg.author.id !== BOT_ID) return;
+      if (msg.channelId !== channelId) {
+        return;
+      }
+      if (msg.author.id !== BOT_ID) {
+        return;
+      }
       console.log(`[bot] ${msg.content.slice(0, 120)}`);
       events.push({
         type: "create",
@@ -70,8 +74,12 @@ describe("voice transcription", () => {
     });
 
     client.on(Events.MessageUpdate, (_old, msg) => {
-      if (msg.channelId !== channelId) return;
-      if (msg.author?.id !== BOT_ID) return;
+      if (msg.channelId !== channelId) {
+        return;
+      }
+      if (msg.author?.id !== BOT_ID) {
+        return;
+      }
       events.push({
         type: "update",
         messageId: msg.id,
@@ -82,17 +90,19 @@ describe("voice transcription", () => {
   }, 30_000);
 
   afterAll(async () => {
-    client?.destroy();
+    void client?.destroy();
   });
 
   it(
     "bot transcribes a voice message sent by a human",
     async () => {
       const channel = await client.channels.fetch(channelId);
-      if (!channel?.isTextBased()) throw new Error("Channel not text-based");
+      if (!channel?.isTextBased()) {
+        throw new Error("Channel not text-based");
+      }
 
       // Send a heads-up so the human knows where to go.
-      await channel.send("Waiting for a voice message. " + "Please send one from your phone now.");
+      await channel.send("Waiting for a voice message. Please send one from your phone now.");
 
       console.log("\n--- Waiting up to 3 minutes for a voice message ---\n");
 
@@ -100,9 +110,15 @@ describe("voice transcription", () => {
       const voiceReceived = await new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => resolve(false), VOICE_MSG_WAIT_MS);
         const handler = (msg: import("discord.js").Message) => {
-          if (msg.channelId !== channelId) return;
-          if (msg.author.id === BOT_ID) return;
-          if (msg.author.bot) return;
+          if (msg.channelId !== channelId) {
+            return;
+          }
+          if (msg.author.id === BOT_ID) {
+            return;
+          }
+          if (msg.author.bot) {
+            return;
+          }
           const hasAudio = msg.attachments.some((a) => a.contentType?.startsWith("audio/"));
           if (hasAudio) {
             console.log(

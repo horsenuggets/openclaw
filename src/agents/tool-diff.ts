@@ -55,7 +55,7 @@ function flattenObject(
     return result;
   }
   const record = obj as Record<string, unknown>;
-  for (const key of Object.keys(record).sort()) {
+  for (const key of Object.keys(record).toSorted()) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     const value = record[key];
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
@@ -69,10 +69,18 @@ function flattenObject(
 
 /** Format a value concisely for display in a single diff line. */
 function formatValue(value: unknown): string {
-  if (value === undefined) return "undefined";
-  if (value === null) return "null";
-  if (typeof value === "string") return JSON.stringify(value);
-  if (typeof value === "boolean" || typeof value === "number") return String(value);
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "boolean" || typeof value === "number") {
+    return String(value);
+  }
   const json = JSON.stringify(value);
   return json.length > 60 ? `${json.slice(0, 57)}...` : json;
 }
@@ -93,7 +101,9 @@ export function computeConfigDiff(oldConfig: unknown, newConfig: unknown): DiffE
   const entries: DiffEntry[] = [];
 
   for (const [path, oldValue] of oldFlat) {
-    if (shouldIgnoreConfigKey(path)) continue;
+    if (shouldIgnoreConfigKey(path)) {
+      continue;
+    }
     if (!newFlat.has(path)) {
       entries.push({ path, kind: "removed", oldValue });
     } else {
@@ -105,7 +115,9 @@ export function computeConfigDiff(oldConfig: unknown, newConfig: unknown): DiffE
   }
 
   for (const [path, newValue] of newFlat) {
-    if (shouldIgnoreConfigKey(path)) continue;
+    if (shouldIgnoreConfigKey(path)) {
+      continue;
+    }
     if (!oldFlat.has(path)) {
       entries.push({ path, kind: "added", newValue });
     }
@@ -127,7 +139,9 @@ export function computeConfigDiff(oldConfig: unknown, newConfig: unknown): DiffE
  */
 export function formatConfigDiff(oldConfig: unknown, newConfig: unknown): string | undefined {
   const entries = computeConfigDiff(oldConfig, newConfig);
-  if (entries.length === 0) return undefined;
+  if (entries.length === 0) {
+    return undefined;
+  }
 
   const lines: string[] = [];
   for (const entry of entries) {

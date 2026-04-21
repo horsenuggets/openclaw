@@ -79,13 +79,17 @@ export function resolveTableHairspacing(params: {
   accountId?: string | null;
 }): boolean {
   const channel = normalizeChannelId(params.channel);
-  if (!channel || !params.cfg) return true;
+  if (!channel || !params.cfg) {
+    return true;
+  }
   const channelsConfig = params.cfg.channels as Record<string, unknown> | undefined;
   const section = (channelsConfig?.[channel] ??
     (params.cfg as Record<string, unknown> | undefined)?.[channel]) as
     | MarkdownConfigSection
     | undefined;
-  if (!section) return true;
+  if (!section) {
+    return true;
+  }
   const normalizedAccountId = normalizeAccountId(params.accountId);
   const accounts = section.accounts;
   if (accounts && typeof accounts === "object") {

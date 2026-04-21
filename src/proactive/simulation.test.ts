@@ -440,8 +440,8 @@ describe("Multi-day proactive messaging simulation", () => {
   it("startup greeting fires with relaxed idle threshold", async () => {
     // Session was active 45 min ago (under normal 60-min threshold,
     // above startup's relaxed 30-min threshold)
-    sessionStore["discord:peter-123"]!.lastUserMessageAt = SIM_START - 45 * MINUTE;
-    sessionStore["discord:peter-123"]!.lastAgentResponseAt = SIM_START - 45 * MINUTE;
+    sessionStore["discord:peter-123"].lastUserMessageAt = SIM_START - 45 * MINUTE;
+    sessionStore["discord:peter-123"].lastAgentResponseAt = SIM_START - 45 * MINUTE;
 
     const service = buildService();
     await service.checkNow({ isStartup: true });

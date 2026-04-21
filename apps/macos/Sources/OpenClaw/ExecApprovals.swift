@@ -8,7 +8,9 @@ enum ExecSecurity: String, CaseIterable, Codable, Identifiable {
     case allowlist
     case full
 
-    var id: String { self.rawValue }
+    var id: String {
+        self.rawValue
+    }
 
     var title: String {
         switch self {
@@ -24,7 +26,9 @@ enum ExecApprovalQuickMode: String, CaseIterable, Identifiable {
     case ask
     case allow
 
-    var id: String { self.rawValue }
+    var id: String {
+        self.rawValue
+    }
 
     var title: String {
         switch self {
@@ -67,7 +71,9 @@ enum ExecAsk: String, CaseIterable, Codable, Identifiable {
     case onMiss = "on-miss"
     case always
 
-    var id: String { self.rawValue }
+    var id: String {
+        self.rawValue
+    }
 
     var title: String {
         switch self {
@@ -78,7 +84,7 @@ enum ExecAsk: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum ExecApprovalDecision: String, Codable, Sendable {
+enum ExecApprovalDecision: String, Codable {
     case allowOnce = "allow-once"
     case allowAlways = "allow-always"
     case deny
@@ -546,7 +552,7 @@ enum ExecApprovalsStore {
     }
 }
 
-struct ExecCommandResolution: Sendable {
+struct ExecCommandResolution {
     let rawExecutable: String
     let resolvedPath: String?
     let executableName: String
@@ -730,7 +736,7 @@ enum ExecAllowlistMatcher {
     }
 }
 
-struct ExecEventPayload: Codable, Sendable {
+struct ExecEventPayload: Codable {
     var sessionKey: String
     var runId: String
     var host: String

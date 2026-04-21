@@ -197,14 +197,18 @@ export async function captureChannelScreenshots(
   // from the top for full coverage.
   await page.evaluate((sel: string) => {
     const el = document.querySelector(sel);
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, scrollerSel);
   await page.waitForTimeout(SCROLL_PAUSE_MS);
 
   // Now scroll to the very top.
   await page.evaluate((sel: string) => {
     const el = document.querySelector(sel);
-    if (el) el.scrollTop = 0;
+    if (el) {
+      el.scrollTop = 0;
+    }
   }, scrollerSel);
   await page.waitForTimeout(SCROLL_PAUSE_MS);
 
@@ -227,7 +231,9 @@ export async function captureChannelScreenshots(
     const scrollInfo = await page.evaluate(
       ({ sel, amount }: { sel: string; amount: number }) => {
         const el = document.querySelector(sel);
-        if (!el) return { scrollTop: 0, scrollHeight: 0, clientHeight: 0 };
+        if (!el) {
+          return { scrollTop: 0, scrollHeight: 0, clientHeight: 0 };
+        }
         el.scrollTop += amount;
         return {
           scrollTop: el.scrollTop,

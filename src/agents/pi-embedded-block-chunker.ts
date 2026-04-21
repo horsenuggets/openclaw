@@ -194,7 +194,9 @@ export class EmbeddedBlockChunker {
     const beforeStart = buffer.lastIndexOf("\n", newlineIdx - 1);
     const lineBefore = buffer.slice(beforeStart === -1 ? 0 : beforeStart + 1, newlineIdx);
     const afterStart = newlineIdx + 1;
-    if (afterStart >= buffer.length) return false;
+    if (afterStart >= buffer.length) {
+      return false;
+    }
     const afterEnd = buffer.indexOf("\n", afterStart);
     const lineAfter =
       afterEnd === -1 ? buffer.slice(afterStart) : buffer.slice(afterStart, afterEnd);
@@ -207,13 +209,23 @@ export class EmbeddedBlockChunker {
    * preceding text. */
   #isContinuationNewlineBreak(buffer: string, newlineIdx: number): boolean {
     const afterStart = newlineIdx + 1;
-    if (afterStart >= buffer.length) return false;
+    if (afterStart >= buffer.length) {
+      return false;
+    }
     const nextEnd = buffer.indexOf("\n", afterStart);
     const nextLine = nextEnd === -1 ? buffer.slice(afterStart) : buffer.slice(afterStart, nextEnd);
-    if (nextLine.trim() === "") return false;
-    if (STRUCTURAL_RE.test(nextLine)) return false;
-    if (isFenceOpener(nextLine)) return false;
-    if (isTableRow(nextLine)) return false;
+    if (nextLine.trim() === "") {
+      return false;
+    }
+    if (STRUCTURAL_RE.test(nextLine)) {
+      return false;
+    }
+    if (isFenceOpener(nextLine)) {
+      return false;
+    }
+    if (isTableRow(nextLine)) {
+      return false;
+    }
     return true;
   }
 

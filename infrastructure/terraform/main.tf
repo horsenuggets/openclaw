@@ -24,6 +24,13 @@ locals {
     "checks (node, lint, pnpm build && pnpm lint)",
     "checks (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
     "checks (node, format, pnpm format)",
+    "checks (node, protocol, pnpm protocol:check)",
+    "checks (bun, test, pnpm canvas:a2ui:bundle && bunx vitest run)",
+    "checks-windows (node, build & lint, pnpm build && pnpm lint)",
+    "checks-windows (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
+    "checks-windows (node, protocol, pnpm protocol:check)",
+    "secrets",
+    "no-tabs",
   ]
 
   # Additional checks required only for release PRs
@@ -35,24 +42,39 @@ locals {
   ])
 }
 
-# Repository settings
+# Repository settings — match existing config, only manage what we need
 resource "github_repository" "openclaw" {
-  name        = local.repo_name
-  description = "Multi-platform AI assistant with Discord, voice, and Docker multi-user support."
-  visibility  = "private"
+  name         = local.repo_name
+  homepage_url = "https://openclaw.ai"
+  visibility   = "public"
 
-  has_issues   = true
-  has_projects = false
+  has_issues   = false
+  has_projects = true
   has_wiki     = false
 
   allow_squash_merge = true
   allow_merge_commit = true
-  allow_rebase_merge = false
+  allow_rebase_merge = true
 
-  delete_branch_on_merge = true
+  delete_branch_on_merge = false
 
-  squash_merge_commit_title   = "PR_TITLE"
-  squash_merge_commit_message = "PR_BODY"
+  # Preserve existing pages config
+  pages {
+    build_type = "legacy"
+    source {
+      branch = "gh-pages"
+      path   = "/"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      description,
+      visibility,
+      topics,
+      has_downloads,
+    ]
+  }
 }
 
 # Branch protection for main — no direct pushes, require CI checks
@@ -115,6 +137,29 @@ resource "github_repository_ruleset" "release" {
           integration_id = 0
         }
       }
+    }
+  }
+}
+
+# Branch protection for gh-pages — no force pushes, no deletions
+resource "github_repository_ruleset" "ghpages" {
+  name        = "gh-pages"
+  repository  = github_repository.openclaw.name
+  target      = "branch"
+  enforcement = "active"
+
+  conditions {
+    ref_name {
+      include = ["refs/heads/gh-pages"]
+      exclude = []
+    }
+  }
+
+  rules {
+    # Require PRs (prevents direct pushes including from admins)
+    pull_request {
+      required_approving_review_count = 0
+      dismiss_stale_reviews_on_push   = true
     }
   }
 }

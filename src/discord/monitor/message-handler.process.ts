@@ -438,7 +438,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
   const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping({
     ...prefixOptions,
     humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
-    deliver: async (payload: ReplyPayload, info) => {
+    deliver: async (payload: ReplyPayload, _info) => {
       // Dispose the typing guard before delivery so no stale typing
       // signals arrive at Discord after the message (which would
       // briefly re-show "typing"). This applies to all reply kinds
@@ -544,7 +544,9 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     resultBlock: string,
   ): Promise<boolean> => {
     const ref = toolCallStatusRefs.get(toolCallId);
-    if (!ref) return false;
+    if (!ref) {
+      return false;
+    }
 
     const msg = await ref.sendPromise;
     if (!msg) {
@@ -660,7 +662,9 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
           const sendPromise = (async () => {
             try {
               // Wait for any in-progress block flush first.
-              if (blockFlushPromise) await blockFlushPromise;
+              if (blockFlushPromise) {
+                await blockFlushPromise;
+              }
               await dispatcher.waitForIdle();
               return await doSendStatus(feedbackText);
             } catch (err) {

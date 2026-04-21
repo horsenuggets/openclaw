@@ -9,9 +9,16 @@ describe("canvas a2ui copy", () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-a2ui-"));
 
     try {
-      await expect(copyA2uiAssets({ srcDir: dir, outDir: path.join(dir, "out") })).rejects.toThrow(
-        'Run "pnpm canvas:a2ui:bundle"',
-      );
+      if (process.platform === "win32") {
+        // On Windows, copyA2uiAssets skips instead of throwing
+        await expect(
+          copyA2uiAssets({ srcDir: dir, outDir: path.join(dir, "out") }),
+        ).resolves.toBeUndefined();
+      } else {
+        await expect(
+          copyA2uiAssets({ srcDir: dir, outDir: path.join(dir, "out") }),
+        ).rejects.toThrow('Run "pnpm canvas:a2ui:bundle"');
+      }
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }

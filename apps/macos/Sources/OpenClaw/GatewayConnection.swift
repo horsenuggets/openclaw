@@ -1,12 +1,12 @@
+import Foundation
 import OpenClawChatUI
 import OpenClawKit
 import OpenClawProtocol
-import Foundation
 import OSLog
 
 private let gatewayConnectionLogger = Logger(subsystem: "ai.openclaw", category: "gateway.connection")
 
-enum GatewayAgentChannel: String, Codable, CaseIterable, Sendable {
+enum GatewayAgentChannel: String, Codable, CaseIterable {
     case last
     case whatsapp
     case telegram
@@ -24,12 +24,16 @@ enum GatewayAgentChannel: String, Codable, CaseIterable, Sendable {
         self = GatewayAgentChannel(rawValue: normalized) ?? .last
     }
 
-    var isDeliverable: Bool { self != .webchat }
+    var isDeliverable: Bool {
+        self != .webchat
+    }
 
-    func shouldDeliver(_ deliver: Bool) -> Bool { deliver && self.isDeliverable }
+    func shouldDeliver(_ deliver: Bool) -> Bool {
+        deliver && self.isDeliverable
+    }
 }
 
-struct GatewayAgentInvocation: Sendable {
+struct GatewayAgentInvocation {
     var message: String
     var sessionKey: String = "main"
     var thinking: String?
@@ -49,7 +53,7 @@ actor GatewayConnection {
 
     typealias Config = (url: URL, token: String?, password: String?)
 
-    enum Method: String, Sendable {
+    enum Method: String {
         case agent
         case status
         case setHeartbeats = "set-heartbeats"
@@ -385,9 +389,9 @@ actor GatewayConnection {
 // MARK: - Typed gateway API
 
 extension GatewayConnection {
-    struct ConfigGetSnapshot: Decodable, Sendable {
-        struct SnapshotConfig: Decodable, Sendable {
-            struct Session: Decodable, Sendable {
+    struct ConfigGetSnapshot: Decodable {
+        struct SnapshotConfig: Decodable {
+            struct Session: Decodable {
                 let mainKey: String?
                 let scope: String?
             }
@@ -686,7 +690,7 @@ extension GatewayConnection {
 
     // MARK: - Cron
 
-    struct CronSchedulerStatus: Decodable, Sendable {
+    struct CronSchedulerStatus: Decodable {
         let enabled: Bool
         let storePath: String
         let jobs: Int

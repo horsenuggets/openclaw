@@ -295,7 +295,7 @@ describe("EmbeddedBlockChunker", () => {
         "exactly what they need and nothing more without additional",
       "technologies.",
       "",
-      "- **Precise data fetching** allows clients to request exactly " + "the data they need",
+      "- **Precise data fetching** allows clients to request exactly the data they need",
       "- **Single endpoint** for all queries reduces API surface area",
       "- **Strong typing** with schema validation on every request",
       "- **Built-in introspection** enables automatic documentation",
@@ -322,7 +322,7 @@ describe("EmbeddedBlockChunker", () => {
     expect(reassembled).not.toContain("without additional\n\ntechnologies");
 
     // Every bullet should appear intact.
-    const bulletLines = text.split("\n").filter((l) => /^- \*\*/.test(l.trim()));
+    const bulletLines = text.split("\n").filter((l) => l.trim().startsWith("- **"));
     for (const bullet of bulletLines) {
       expect(reassembled).toContain(bullet);
     }

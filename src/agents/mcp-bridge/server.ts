@@ -45,7 +45,9 @@ function connectToParent(): Promise<net.Socket> {
       while ((newlineIdx = ipcBuffer.indexOf("\n")) !== -1) {
         const line = ipcBuffer.slice(0, newlineIdx);
         ipcBuffer = ipcBuffer.slice(newlineIdx + 1);
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
         try {
           const msg = JSON.parse(line) as McpIpcResponse;
           const pending = pendingIpc.get(msg.id);
@@ -179,7 +181,9 @@ async function main() {
 
   const rl = readline.createInterface({ input: process.stdin });
   rl.on("line", (line) => {
-    if (!line.trim()) return;
+    if (!line.trim()) {
+      return;
+    }
     try {
       const req = JSON.parse(line) as JsonRpcRequest;
       handleRequest(req).catch((err) => {

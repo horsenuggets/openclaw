@@ -134,7 +134,7 @@ export function resolveTestBotToken(): string {
   const token = process.env.DISCORD_E2E_BOT_TOKEN?.trim();
   if (!token) {
     throw new Error(
-      "Discord E2E bot token not found. Set the DISCORD_E2E_BOT_TOKEN " + "environment variable.",
+      "Discord E2E bot token not found. Set the DISCORD_E2E_BOT_TOKEN environment variable.",
     );
   }
   return token;
@@ -192,7 +192,7 @@ export function resolveE2eConfig(): { botId: string; guildId: string } {
 
   if (!token) {
     throw new Error(
-      "Cannot derive Discord bot ID. Set channels.discord.token " + "in ~/.openclaw/openclaw.json.",
+      "Cannot derive Discord bot ID. Set channels.discord.token in ~/.openclaw/openclaw.json.",
     );
   }
   const botId = botIdFromToken(token);

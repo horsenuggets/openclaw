@@ -106,7 +106,11 @@ function cleanupStubBuild(): void {
   }
 }
 
-describe("watchdog port lock", () => {
+// Watchdog tests use Unix-only utilities (lsof, symlinks) and are not
+// supported on Windows where these commands don't exist.
+const isWindows = process.platform === "win32";
+
+describe.skipIf(isWindows)("watchdog port lock", () => {
   beforeAll(() => {
     ensureStubBuild();
   });
@@ -251,7 +255,7 @@ describe("watchdog port lock", () => {
   }, 10000);
 });
 
-describe("gateway lock cleanup", () => {
+describe.skipIf(isWindows)("gateway lock cleanup", () => {
   it("removes stale gateway lock files after killing processes", async () => {
     const lockDir = gatewayLockDir();
     fs.mkdirSync(lockDir, { recursive: true });

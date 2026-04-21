@@ -485,7 +485,9 @@ function renderTableAsCode(state: RenderState) {
     state.text += "|";
     for (let i = 0; i < columnCount; i += 1) {
       state.text += " ";
-      if (hasRTL) state.text += LRM;
+      if (hasRTL) {
+        state.text += LRM;
+      }
       const cell = cells[i];
       if (cell) {
         // Append text only, skip styles and links. The entire table
@@ -507,7 +509,9 @@ function renderTableAsCode(state: RenderState) {
       if (pad > 0) {
         state.text += " ".repeat(pad);
       }
-      if (hasRTL) state.text += LRM;
+      if (hasRTL) {
+        state.text += LRM;
+      }
       state.text += " |";
     }
     state.text += "\n";

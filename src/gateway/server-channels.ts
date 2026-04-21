@@ -187,7 +187,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
                 );
                 const timer = setTimeout(() => {
                   store.restartTimers.delete(id);
-                  startChannel(channelId, id);
+                  void startChannel(channelId, id);
                 }, delayMs);
                 store.restartTimers.set(id, timer);
               } else {

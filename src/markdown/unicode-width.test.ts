@@ -119,7 +119,7 @@ describe("table hairspacing", () => {
     const jpLine = lines.find((l) => l.includes("こんにちは"))!;
     const krLine = lines.find((l) => l.includes("안녕하세요"))!;
 
-    const countHairspaces = (s: string) => [...s].filter((c) => c === HAIRSPACE).length;
+    const countHairspaces = (s: string) => Array.from(s).filter((c) => c === HAIRSPACE).length;
     const jpHs = countHairspaces(jpLine);
     const krHs = countHairspaces(krLine);
 
