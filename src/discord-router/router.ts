@@ -57,8 +57,20 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     body: JSON.stringify({
       name: "lifecycle",
-      description: "Toggle startup/shutdown notification messages",
+      description: "Show or set startup/shutdown notification messages",
       type: 1,
+      options: [
+        {
+          name: "setting",
+          description: "on, off, or omit to see current status",
+          type: 3, // STRING
+          required: false,
+          choices: [
+            { name: "on", value: "on" },
+            { name: "off", value: "off" },
+          ],
+        },
+      ],
     }),
   }).catch((err) =>
     runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
@@ -476,13 +488,27 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               const instance = instances.get(interactionUser);
               if (instance) {
                 const current = instance.preferences.lifecycleMessages ?? false;
-                const newValue = !current;
-                setUserPreference(instance, "lifecycleMessages", newValue);
-                const statusText = newValue
-                  ? "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages."
-                  : "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
+                const setting = (
+                  interactionData.options as Array<{ name: string; value: string }> | undefined
+                )?.find((o: { name: string }) => o.name === "setting")?.value;
 
-                // Respond to the interaction
+                let statusText: string;
+                if (setting === "on") {
+                  setUserPreference(instance, "lifecycleMessages", true);
+                  statusText =
+                    "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
+                } else if (setting === "off") {
+                  setUserPreference(instance, "lifecycleMessages", false);
+                  statusText =
+                    "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
+                } else {
+                  // No argument — show current status
+                  statusText = current
+                    ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
+                    : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
+                }
+
+                // Respond to the interaction (ephemeral)
                 void fetch(
                   `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
                   {
@@ -497,7 +523,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   runtime.error(`[router] interaction response failed: ${String(err)}`),
                 );
                 runtime.log(
-                  `[router] lifecycle toggled for ${interactionUser}: ${String(newValue)}`,
+                  `[router] lifecycle for ${interactionUser}: setting=${setting ?? "status"} current=${String(current)}`,
                 );
               }
             }
