@@ -182,7 +182,7 @@ jobs:
           fi
 
   checks-windows:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows]
     env:
       NODE_OPTIONS: --max-old-space-size=4096
       CLAWDBOT_TEST_WORKERS: 1
