@@ -97,6 +97,9 @@ resource "github_repository_ruleset" "main" {
       dismiss_stale_reviews_on_push   = true
     }
 
+    # Automatically request Copilot code review on every PR
+    copilot_code_review {}
+
     required_status_checks {
       dynamic "required_check" {
         for_each = local.required_checks
@@ -128,6 +131,9 @@ resource "github_repository_ruleset" "release" {
       required_approving_review_count = 0
       dismiss_stale_reviews_on_push   = true
     }
+
+    # Automatically request Copilot code review on every PR
+    copilot_code_review {}
 
     required_status_checks {
       dynamic "required_check" {

@@ -93,3 +93,4 @@ memory/
 .builds/
 .watchdog/
 .pm2-ecosystem.json
+.claude/scheduled_tasks.lock

@@ -8,7 +8,7 @@ import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
-import { refreshToken, setOnboardingState } from "./config.js";
+import { refreshToken, setOnboardingState, setUserPreference } from "./config.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
 type AgentResult = {
@@ -47,6 +47,34 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   for (const [userId, inst] of instances) {
     runtime.log(`  ${userId} → localhost:${inst.port}`);
   }
+
+  // Register slash commands
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: "lifecycle",
+      description: "Show or set startup/shutdown notification messages",
+      type: 1,
+      options: [
+        {
+          name: "setting",
+          description: "on, off, or omit to see current status",
+          type: 3, // STRING
+          required: false,
+          choices: [
+            { name: "on", value: "on" },
+            { name: "off", value: "off" },
+          ],
+        },
+      ],
+    }),
+  }).catch((err) =>
+    runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
+  );
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -368,6 +396,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
+            // Text command fallback: handle /command and //command prefixes
+            const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
+            if (commandMatch) {
+              const cmdName = commandMatch[1].toLowerCase();
+              const cmdArg = commandMatch[2]?.trim().toLowerCase();
+              const messageId = d.id;
+              void handleTextCommand({
+                cmdName,
+                cmdArg,
+                userId: authorId,
+                channelId,
+                messageId,
+                instance,
+                discordToken,
+                runtime,
+              }).then((handled) => {
+                if (!handled) {
+                  // Not a recognized command — treat as normal message
+                  void routeDM({
+                    discordUserId: authorId,
+                    channelId,
+                    messageContent: content,
+                    attachments: rawAttachments,
+                    instance,
+                    discordToken,
+                    runtime,
+                    agentTimeoutMs,
+                    inflight,
+                  });
+                }
+              });
+              return;
+            }
+
             // Onboarding state machine: inject context based on state
             const state = instance.onboardingState;
             if (state === "greeted") {
@@ -447,6 +509,70 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 }
               }
             });
+          }
+
+          // Handle slash command interactions
+          if (t === "INTERACTION_CREATE" && d.type === 2) {
+            const interactionData = d.data;
+            const interactionUser = d.user?.id ?? d.member?.user?.id;
+            const interactionToken = d.token;
+            const interactionId = d.id;
+
+            // Helper to respond to interactions
+            const respondToInteraction = (text: string) => {
+              void fetch(
+                `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    type: 4,
+                    data: { content: text, flags: 64 },
+                  }),
+                },
+              )
+                .then((resp) => {
+                  if (!resp.ok) {
+                    runtime.error(`[router] interaction response failed (${resp.status})`);
+                  }
+                })
+                .catch((err) =>
+                  runtime.error(`[router] interaction response failed: ${String(err)}`),
+                );
+            };
+
+            if (interactionData?.name === "lifecycle" && interactionUser) {
+              const instance = instances.get(interactionUser);
+              if (!instance) {
+                respondToInteraction("*No agent is configured for your account.*");
+                return;
+              }
+
+              const current = instance.preferences.lifecycleMessages ?? false;
+              const setting = (
+                interactionData.options as Array<{ name: string; value: string }> | undefined
+              )?.find((o: { name: string }) => o.name === "setting")?.value;
+
+              let statusText: string;
+              if (setting === "on") {
+                setUserPreference(instance, "lifecycleMessages", true);
+                statusText =
+                  "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
+              } else if (setting === "off") {
+                setUserPreference(instance, "lifecycleMessages", false);
+                statusText =
+                  "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
+              } else {
+                statusText = current
+                  ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
+                  : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
+              }
+
+              respondToInteraction(statusText);
+              runtime.log(
+                `[router] lifecycle for ${interactionUser}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
+              );
+            }
           }
           break;
         }
@@ -767,6 +893,68 @@ function isLeakedError(text: string): boolean {
   );
 }
 
+/**
+ * Handle text-based slash commands (fallback for when Discord slash commands
+ * haven't propagated yet). Returns true if the command was handled.
+ */
+async function handleTextCommand(params: {
+  cmdName: string;
+  cmdArg: string | undefined;
+  userId: string;
+  channelId: string;
+  messageId: string;
+  instance: InstanceConfig;
+  discordToken: string;
+  runtime: RouterRuntime;
+}): Promise<boolean> {
+  const { cmdName, cmdArg, userId, channelId, messageId, instance, discordToken, runtime } = params;
+
+  // Reply to the user's command message
+  async function reply(text: string): Promise<void> {
+    const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: text,
+        message_reference: { message_id: messageId },
+      }),
+    });
+    if (!resp.ok) {
+      runtime.error(`[router] text command reply failed (${resp.status})`);
+    }
+  }
+
+  switch (cmdName) {
+    case "lifecycle": {
+      const current = instance.preferences.lifecycleMessages ?? false;
+      if (cmdArg === "on") {
+        setUserPreference(instance, "lifecycleMessages", true);
+        await reply(
+          "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.",
+        );
+      } else if (cmdArg === "off") {
+        setUserPreference(instance, "lifecycleMessages", false);
+        await reply(
+          "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.",
+        );
+      } else {
+        await reply(
+          current
+            ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
+            : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.",
+        );
+      }
+      runtime.log(`[router] text command /lifecycle for ${userId}: arg=${cmdArg ?? "status"}`);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
 function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) {
     return [text];
@@ -818,6 +1006,10 @@ async function sendLifecycleToAll(
 ): Promise<void> {
   for (const [userId, instance] of instances) {
     if (instance.onboardingState !== "complete") {
+      continue;
+    }
+    // Only send lifecycle messages to users who opted in (off by default)
+    if (!instance.preferences.lifecycleMessages) {
       continue;
     }
     try {
