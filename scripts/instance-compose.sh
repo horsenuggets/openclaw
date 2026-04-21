@@ -64,6 +64,7 @@ ${TZ_LINE:+$TZ_LINE
       - \${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/${DISCORD_USER_ID}:/home/node/.openclaw
       - \${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/${DISCORD_USER_ID}/workspace:/home/node/.openclaw/workspace
       - \${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/${DISCORD_USER_ID}/gogcli:/home/node/.config/gogcli
+      - \${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/${DISCORD_USER_ID}/todoist-cli:/home/node/.config/todoist-cli
       - \${OPENCLAW_INSTANCES_DIR:-~/.openclaw-instances}/shared/auth/auth-profiles.json:/home/node/.openclaw/agents/main/agent/auth-profiles.json
     ports:
       - "\${OPENCLAW_${DISCORD_USER_ID}_PORT:-${HOST_PORT}}:18789"
