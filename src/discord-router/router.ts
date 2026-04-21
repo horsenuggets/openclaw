@@ -396,6 +396,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
+            // Text command fallback: handle /command and //command prefixes
+            const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
+            if (commandMatch) {
+              const cmdName = commandMatch[1].toLowerCase();
+              const cmdArg = commandMatch[2]?.trim();
+              const messageId = d.id;
+              void handleTextCommand({
+                cmdName,
+                cmdArg,
+                userId: authorId,
+                channelId,
+                messageId,
+                instance,
+                discordToken,
+                runtime,
+              }).then((handled) => {
+                if (!handled) {
+                  // Not a recognized command — treat as normal message
+                  void routeDM({
+                    discordUserId: authorId,
+                    channelId,
+                    messageContent: content,
+                    attachments: rawAttachments,
+                    instance,
+                    discordToken,
+                    runtime,
+                    agentTimeoutMs,
+                    inflight,
+                  });
+                }
+              });
+              return;
+            }
+
             // Onboarding state machine: inject context based on state
             const state = instance.onboardingState;
             if (state === "greeted") {
@@ -845,6 +879,65 @@ function isLeakedError(text: string): boolean {
     t.startsWith("[tools] exec failed:") ||
     /^at\s+\S+\s+\(.*:\d+:\d+\)/.test(t)
   );
+}
+
+/**
+ * Handle text-based slash commands (fallback for when Discord slash commands
+ * haven't propagated yet). Returns true if the command was handled.
+ */
+async function handleTextCommand(params: {
+  cmdName: string;
+  cmdArg: string | undefined;
+  userId: string;
+  channelId: string;
+  messageId: string;
+  instance: InstanceConfig;
+  discordToken: string;
+  runtime: RouterRuntime;
+}): Promise<boolean> {
+  const { cmdName, cmdArg, userId, channelId, messageId, instance, discordToken, runtime } = params;
+
+  // Reply to the user's command message
+  async function reply(text: string): Promise<void> {
+    await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: text,
+        message_reference: { message_id: messageId },
+      }),
+    });
+  }
+
+  switch (cmdName) {
+    case "lifecycle": {
+      const current = instance.preferences.lifecycleMessages ?? false;
+      if (cmdArg === "on") {
+        setUserPreference(instance, "lifecycleMessages", true);
+        await reply(
+          "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.",
+        );
+      } else if (cmdArg === "off") {
+        setUserPreference(instance, "lifecycleMessages", false);
+        await reply(
+          "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.",
+        );
+      } else {
+        await reply(
+          current
+            ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
+            : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.",
+        );
+      }
+      runtime.log(`[router] text command /lifecycle for ${userId}: arg=${cmdArg ?? "status"}`);
+      return true;
+    }
+    default:
+      return false;
+  }
 }
 
 function chunkText(text: string, limit: number): string[] {
