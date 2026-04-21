@@ -169,7 +169,9 @@ export function setUserPreference(
 ): void {
   try {
     const existing = readOnboardingFile(instance);
-    const prefs = (existing.preferences as UserPreferences) ?? {};
+    const raw = existing.preferences;
+    const prefs: UserPreferences =
+      raw != null && typeof raw === "object" && !Array.isArray(raw) ? (raw as UserPreferences) : {};
     prefs[key] = value;
     existing.preferences = prefs;
     writeOnboardingFile(instance, existing);

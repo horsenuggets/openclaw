@@ -518,48 +518,60 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             const interactionToken = d.token;
             const interactionId = d.id;
 
-            if (interactionData?.name === "lifecycle" && interactionUser) {
-              const instance = instances.get(interactionUser);
-              if (instance) {
-                const current = instance.preferences.lifecycleMessages ?? false;
-                const setting = (
-                  interactionData.options as Array<{ name: string; value: string }> | undefined
-                )?.find((o: { name: string }) => o.name === "setting")?.value;
-
-                let statusText: string;
-                if (setting === "on") {
-                  setUserPreference(instance, "lifecycleMessages", true);
-                  statusText =
-                    "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
-                } else if (setting === "off") {
-                  setUserPreference(instance, "lifecycleMessages", false);
-                  statusText =
-                    "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
-                } else {
-                  // No argument — show current status
-                  statusText = current
-                    ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
-                    : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
-                }
-
-                // Respond to the interaction (ephemeral)
-                void fetch(
-                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      type: 4,
-                      data: { content: statusText, flags: 64 },
-                    }),
-                  },
-                ).catch((err) =>
+            // Helper to respond to interactions
+            const respondToInteraction = (text: string) => {
+              void fetch(
+                `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    type: 4,
+                    data: { content: text, flags: 64 },
+                  }),
+                },
+              )
+                .then((resp) => {
+                  if (!resp.ok) {
+                    runtime.error(`[router] interaction response failed (${resp.status})`);
+                  }
+                })
+                .catch((err) =>
                   runtime.error(`[router] interaction response failed: ${String(err)}`),
                 );
-                runtime.log(
-                  `[router] lifecycle for ${interactionUser}: setting=${setting ?? "status"} current=${String(current)}`,
-                );
+            };
+
+            if (interactionData?.name === "lifecycle" && interactionUser) {
+              const instance = instances.get(interactionUser);
+              if (!instance) {
+                respondToInteraction("*No agent is configured for your account.*");
+                return;
               }
+
+              const current = instance.preferences.lifecycleMessages ?? false;
+              const setting = (
+                interactionData.options as Array<{ name: string; value: string }> | undefined
+              )?.find((o: { name: string }) => o.name === "setting")?.value;
+
+              let statusText: string;
+              if (setting === "on") {
+                setUserPreference(instance, "lifecycleMessages", true);
+                statusText =
+                  "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
+              } else if (setting === "off") {
+                setUserPreference(instance, "lifecycleMessages", false);
+                statusText =
+                  "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
+              } else {
+                statusText = current
+                  ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
+                  : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
+              }
+
+              respondToInteraction(statusText);
+              runtime.log(
+                `[router] lifecycle for ${interactionUser}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
+              );
             }
           }
           break;
@@ -899,7 +911,7 @@ async function handleTextCommand(params: {
 
   // Reply to the user's command message
   async function reply(text: string): Promise<void> {
-    await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
       method: "POST",
       headers: {
         Authorization: `Bot ${discordToken}`,
@@ -910,6 +922,9 @@ async function handleTextCommand(params: {
         message_reference: { message_id: messageId },
       }),
     });
+    if (!resp.ok) {
+      runtime.error(`[router] text command reply failed (${resp.status})`);
+    }
   }
 
   switch (cmdName) {
