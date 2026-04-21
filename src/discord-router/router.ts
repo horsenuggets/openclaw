@@ -400,7 +400,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
             if (commandMatch) {
               const cmdName = commandMatch[1].toLowerCase();
-              const cmdArg = commandMatch[2]?.trim();
+              const cmdArg = commandMatch[2]?.trim().toLowerCase();
               const messageId = d.id;
               void handleTextCommand({
                 cmdName,
