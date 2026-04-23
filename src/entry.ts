@@ -38,6 +38,10 @@ function ensureExperimentalWarningSuppressed(): boolean {
   if (isTruthyEnvValue(process.env.OPENCLAW_NODE_OPTIONS_READY)) {
     return false;
   }
+  // Bun doesn't support --disable-warning and doesn't emit ExperimentalWarning.
+  if (typeof globalThis.Bun !== "undefined") {
+    return false;
+  }
   if (hasExperimentalWarningSuppressed()) {
     return false;
   }

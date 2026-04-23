@@ -1,0 +1,263 @@
+#!/usr/bin/env node
+
+/**
+ * Compile OpenClaw into standalone binaries for distribution.
+ *
+ * Requires Bun to be installed. Builds the project first (tsdown),
+ * then compiles the entry point into standalone binaries using
+ * `bun build --compile`.
+ *
+ * Native addons (sharp) are excluded from the binary and must be
+ * shipped alongside it or installed on the target.
+ *
+ * Usage:
+ *   node scripts/compile.mjs                        # Build all platforms
+ *   node scripts/compile.mjs --target linux-x64     # Build one platform
+ *   node scripts/compile.mjs --skip-build           # Skip tsdown, compile only
+ */
+
+import { execSync } from "child_process";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
+
+const TARGETS = [
+  { name: "linux-arm64", bunTarget: "bun-linux-arm64" },
+  { name: "linux-x64", bunTarget: "bun-linux-x64" },
+  { name: "macos-arm64", bunTarget: "bun-darwin-arm64" },
+  { name: "macos-x64", bunTarget: "bun-darwin-x64" },
+  { name: "windows-arm64", bunTarget: "bun-windows-arm64" },
+  { name: "windows-x64", bunTarget: "bun-windows-x64" },
+];
+
+// Native addons and platform-specific packages that cannot be embedded.
+// These must be available on the target system or shipped alongside.
+const EXTERNAL_MODULES = [
+  // Image processing (native C++ addon)
+  "sharp",
+  "@img/sharp-*",
+  // LLM inference (platform-specific native bindings)
+  "node-llama-cpp",
+  "@node-llama-cpp/*",
+  // Browser automation (playwright needs full install with browsers)
+  "playwright",
+  "electron",
+  // Other native modules
+  "@xenova/*",
+  "onnxruntime-node",
+];
+
+// Parse flags
+const args = process.argv.slice(2);
+const targetArg = args.indexOf("--target");
+const selectedTarget = targetArg !== -1 ? args[targetArg + 1] : undefined;
+const skipBuild = args.includes("--skip-build");
+
+if (selectedTarget && !TARGETS.find((t) => t.name === selectedTarget)) {
+  console.error(
+    `Unknown target: ${selectedTarget}\nValid targets: ${TARGETS.map((t) => t.name).join(", ")}`,
+  );
+  process.exit(1);
+}
+
+const targets = selectedTarget ? TARGETS.filter((t) => t.name === selectedTarget) : TARGETS;
+
+// Step 1: Build with tsdown (produces dist/)
+if (!skipBuild) {
+  console.log("Building with tsdown...");
+  execSync("pnpm build", { stdio: "inherit" });
+}
+
+if (!existsSync("dist/entry.js")) {
+  console.error("Build failed: dist/entry.js not found");
+  process.exit(1);
+}
+
+const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+
+// Step 2: Replace __OPENCLAW_VERSION__ in all dist chunks.
+// Bun's --define only applies to the entry file, not code-split chunks.
+// Do a literal text replacement so the version is inlined everywhere.
+{
+  let replaced = 0;
+  for (const file of readdirSync("dist").filter((f) => f.endsWith(".js"))) {
+    const filePath = `dist/${file}`;
+    let content = readFileSync(filePath, "utf-8");
+    if (content.includes("__OPENCLAW_VERSION__")) {
+      content = content.replace(/__OPENCLAW_VERSION__/g, JSON.stringify(pkg.version));
+      writeFileSync(filePath, content);
+      replaced++;
+    }
+  }
+  console.log(`Replaced __OPENCLAW_VERSION__ in ${replaced} chunk(s)`);
+}
+
+// Step 3: Generate standalone binary wrapper entry point.
+// The @mariozechner/pi-coding-agent config.js detects Bun binaries and reads
+// package.json from dirname(process.execPath) or PI_PACKAGE_DIR. Since the
+// compiled binary is standalone (no files shipped alongside), we generate a
+// wrapper that writes a temporary package.json and sets the env var before
+// any modules load.
+const wrapperEntry = `dist/binary-entry.js`;
+writeFileSync(
+  wrapperEntry,
+  [
+    `import { writeFileSync, mkdirSync, existsSync } from "node:fs";`,
+    `import { tmpdir } from "node:os";`,
+    `import { join, dirname } from "node:path";`,
+    ``,
+    `// Ensure pi-coding-agent finds a package.json without shipping extra files.`,
+    `const pkgDir = join(tmpdir(), "openclaw-runtime");`,
+    `try { mkdirSync(pkgDir, { recursive: true }); } catch {}`,
+    `const pkgPath = join(pkgDir, "package.json");`,
+    `if (!existsSync(pkgPath)) {`,
+    `  writeFileSync(pkgPath, ${JSON.stringify(JSON.stringify({ name: pkg.name, version: pkg.version }))});`,
+    `}`,
+    `process.env.PI_PACKAGE_DIR = pkgDir;`,
+    ``,
+    `// Pre-load plugin SDK so extensions loaded from disk can access the same`,
+    `// module instances via a lightweight CJS shim (avoids jiti/babel for the SDK).`,
+    `const pluginSdk = await import("./plugin-sdk/index.js");`,
+    `globalThis.__OPENCLAW_PLUGIN_SDK__ = pluginSdk;`,
+    ``,
+    `await import("./entry.js");`,
+  ].join("\n") + "\n",
+);
+console.log(`Generated ${wrapperEntry} (standalone binary entry)`);
+
+// Step 4: Create shims for optional native dependencies that aren't installed.
+// playwright-core references chromium-bidi (optional peer dep) which pnpm
+// doesn't hoist. Create empty shims next to playwright-core so bun can
+// resolve and bundle them into the standalone binary.
+{
+  const pwCoreDirs = readdirSync("node_modules/.pnpm")
+    .filter((d) => d.startsWith("playwright-core@"))
+    .map((d) => `node_modules/.pnpm/${d}/node_modules`);
+  const pwDir = pwCoreDirs[0];
+  if (!pwDir) {
+    console.log("playwright-core not found, skipping chromium-bidi shims");
+  } else {
+    const shimPaths = [
+      `${pwDir}/chromium-bidi/package.json`,
+      `${pwDir}/chromium-bidi/index.js`,
+      `${pwDir}/chromium-bidi/lib/cjs/bidiMapper/BidiMapper.js`,
+      `${pwDir}/chromium-bidi/lib/cjs/cdp/CdpConnection.js`,
+    ];
+    for (const p of shimPaths) {
+      const dir = p.substring(0, p.lastIndexOf("/"));
+      if (!existsSync(dir)) {
+        execSync(`mkdir -p "${dir}"`, { stdio: "pipe" });
+      }
+    }
+    if (!existsSync(`${pwDir}/chromium-bidi/index.js`)) {
+      writeFileSync(
+        `${pwDir}/chromium-bidi/package.json`,
+        '{"name":"chromium-bidi","version":"0.0.0-shim","main":"index.js"}\n',
+      );
+      writeFileSync(`${pwDir}/chromium-bidi/index.js`, "module.exports = {};\n");
+      writeFileSync(
+        `${pwDir}/chromium-bidi/lib/cjs/bidiMapper/BidiMapper.js`,
+        "module.exports = {};\n",
+      );
+      writeFileSync(
+        `${pwDir}/chromium-bidi/lib/cjs/cdp/CdpConnection.js`,
+        "module.exports = {};\n",
+      );
+      console.log("Created chromium-bidi shims for standalone binary");
+    }
+  }
+}
+
+// Step 5: Compile for each target
+const externals = EXTERNAL_MODULES.map((m) => `--external ${m}`).join(" ");
+
+console.log(`\nCompiling ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const outfile = `dist/openclaw-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${outfile}`);
+
+  try {
+    execSync(
+      `bun build ${wrapperEntry} --compile --target=${target.bunTarget} ${externals} --outfile ${outfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile for ${target.name}`);
+    process.exit(1);
+  }
+}
+
+// Step 6: Copy extensions directory for plugin resolution
+// The binary looks for extensions/ next to the executable.
+// Ship the full extensions directory alongside the binary.
+if (existsSync("extensions")) {
+  console.log("\nCopying extensions...");
+  // Remove old copy — pnpm hardlinks/symlinks can resist rm -rf,
+  // so move to tmp and let the OS garbage-collect it
+  if (existsSync("dist/extensions")) {
+    const tmpDir = `${process.env.TMPDIR ?? "/tmp"}/openclaw-ext-cleanup-${Date.now()}`;
+    execSync(`mv dist/extensions "${tmpDir}" && rm -rf "${tmpDir}" &`, {
+      stdio: "inherit",
+      shell: true,
+    });
+  }
+  // Copy only source files (skip node_modules and build caches)
+  execSync("rsync -a --exclude='node_modules' --exclude='.builds' extensions/ dist/extensions/", {
+    stdio: "inherit",
+  });
+  // Pre-compile TypeScript extensions to JS so jiti/babel isn't needed at runtime.
+  // Also rewrite package.json entry points from .ts to .js.
+  console.log("  Pre-compiling extensions...");
+  let compiledCount = 0;
+  let failedCount = 0;
+  for (const extDir of readdirSync("dist/extensions")) {
+    const extPath = `dist/extensions/${extDir}`;
+    const indexTs = `${extPath}/index.ts`;
+    if (!existsSync(indexTs)) {
+      continue;
+    }
+    try {
+      execSync(
+        `bun build "${indexTs}" --outdir "${extPath}" --target node --external openclaw --external "openclaw/*"`,
+        { stdio: "pipe" },
+      );
+      // Rewrite package.json to point to .js instead of .ts
+      const pkgPath = `${extPath}/package.json`;
+      if (existsSync(pkgPath)) {
+        let content = readFileSync(pkgPath, "utf-8");
+        content = content.replace(/\.\/index\.ts/g, "./index.js");
+        content = content.replace(/\.\/src\//g, "./src/");
+        writeFileSync(pkgPath, content);
+      }
+      compiledCount++;
+    } catch {
+      console.log(`    Warning: failed to pre-compile ${extDir}`);
+      failedCount++;
+    }
+  }
+  console.log(`  Extensions: ${compiledCount} compiled, ${failedCount} failed`);
+
+  // Create node_modules shim so extensions can resolve "openclaw/plugin-sdk"
+  // via standard Node module resolution. The shim delegates to a global that
+  // binary-entry.js pre-populates with the real bundled plugin-sdk module.
+  const shimPkgDir = "dist/extensions/node_modules/openclaw";
+  const shimSdkDir = `${shimPkgDir}/plugin-sdk`;
+  execSync(`mkdir -p "${shimSdkDir}"`, { stdio: "pipe" });
+  writeFileSync(
+    `${shimPkgDir}/package.json`,
+    '{"name":"openclaw","exports":{"./plugin-sdk":"./plugin-sdk/index.js"}}\n',
+  );
+  writeFileSync(`${shimSdkDir}/index.js`, "module.exports = globalThis.__OPENCLAW_PLUGIN_SDK__;\n");
+  console.log("  Created openclaw/plugin-sdk shim in extensions/node_modules/");
+}
+
+// Summary
+console.log("\nCompilation complete.");
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const outfile = `dist/openclaw-${target.name}${isWindows ? ".exe" : ""}`;
+  if (existsSync(outfile)) {
+    const size = statSync(outfile).size;
+    console.log(`  ${outfile} (${(size / 1024 / 1024).toFixed(1)} MB)`);
+  }
+}
