@@ -58,7 +58,7 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * URLs) tokenizes at ~3-4 chars/token, so 8K chars ≈ 2-3K tokens which
  * leaves room for tool schemas and messages.
  */
-const MAX_APPENDED_CHARS = 8000;
+const MAX_APPENDED_CHARS = 5000;
 
 export function wrapForSubscription(openClawPrompt: string): string {
   // Strip any existing CC prefix and anti-CC identity lines.
