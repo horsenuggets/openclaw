@@ -18,6 +18,20 @@
 
 import { execSync } from "child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
+import { join } from "path";
+
+function walkJsFiles(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...walkJsFiles(full));
+    } else if (entry.name.endsWith(".js")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
 
 const TARGETS = [
   { name: "linux-arm64", bunTarget: "bun-linux-arm64" },
@@ -78,8 +92,7 @@ const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 // Do a literal text replacement so the version is inlined everywhere.
 {
   let replaced = 0;
-  for (const file of readdirSync("dist").filter((f) => f.endsWith(".js"))) {
-    const filePath = `dist/${file}`;
+  for (const filePath of walkJsFiles("dist")) {
     let content = readFileSync(filePath, "utf-8");
     if (content.includes("__OPENCLAW_VERSION__")) {
       content = content.replace(/__OPENCLAW_VERSION__/g, JSON.stringify(pkg.version));
@@ -96,15 +109,17 @@ const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 // compiled binary is standalone (no files shipped alongside), we generate a
 // wrapper that writes a temporary package.json and sets the env var before
 // any modules load.
-const wrapperEntry = `dist/binary-entry.js`;
+// Generate environment setup module (must run before plugin-sdk loads).
+// pi-coding-agent reads package.json at import time with no try/catch;
+// PI_PACKAGE_DIR redirects it to a temp dir with a generated package.json.
+const setupEntry = `dist/binary-setup-env.js`;
 writeFileSync(
-  wrapperEntry,
+  setupEntry,
   [
     `import { writeFileSync, mkdirSync, existsSync } from "node:fs";`,
     `import { tmpdir } from "node:os";`,
-    `import { join, dirname } from "node:path";`,
+    `import { join } from "node:path";`,
     ``,
-    `// Ensure pi-coding-agent finds a package.json without shipping extra files.`,
     `const pkgDir = join(tmpdir(), "openclaw-runtime");`,
     `try { mkdirSync(pkgDir, { recursive: true }); } catch {}`,
     `const pkgPath = join(pkgDir, "package.json");`,
@@ -112,10 +127,20 @@ writeFileSync(
     `  writeFileSync(pkgPath, ${JSON.stringify(JSON.stringify({ name: pkg.name, version: pkg.version }))});`,
     `}`,
     `process.env.PI_PACKAGE_DIR = pkgDir;`,
-    ``,
-    `// Pre-load plugin SDK so extensions loaded from disk can access the same`,
-    `// module instances via a lightweight CJS shim (avoids jiti/babel for the SDK).`,
-    `const pluginSdk = await import("./plugin-sdk/index.js");`,
+  ].join("\n") + "\n",
+);
+
+// Generate the main binary entry.
+// Static imports are evaluated in declaration order (for non-circular deps):
+// 1. binary-setup-env.js sets PI_PACKAGE_DIR (only uses node: builtins)
+// 2. plugin-sdk/index.js loads, populates globalThis for extension shims
+// 3. Module body dynamically imports entry.js to start the CLI
+const wrapperEntry = `dist/binary-entry.js`;
+writeFileSync(
+  wrapperEntry,
+  [
+    `import "./binary-setup-env.js";`,
+    `import * as pluginSdk from "./plugin-sdk/index.js";`,
     `globalThis.__OPENCLAW_PLUGIN_SDK__ = pluginSdk;`,
     ``,
     `await import("./entry.js");`,
@@ -249,6 +274,16 @@ if (existsSync("extensions")) {
   );
   writeFileSync(`${shimSdkDir}/index.js`, "module.exports = globalThis.__OPENCLAW_PLUGIN_SDK__;\n");
   console.log("  Created openclaw/plugin-sdk shim in extensions/node_modules/");
+}
+
+// Step 7: Copy workspace templates for agent system prompts.
+// The binary resolves templates relative to process.execPath.
+if (existsSync("docs/reference/templates")) {
+  console.log("\nCopying workspace templates...");
+  execSync("mkdir -p dist/docs/reference && cp -r docs/reference/templates dist/docs/reference/", {
+    stdio: "inherit",
+  });
+  console.log("  Copied docs/reference/templates/");
 }
 
 // Summary

@@ -1,0 +1,16 @@
+services:
+  whisper:
+    image: ubuntu:24.04
+    container_name: openclaw-whisper
+    restart: unless-stopped
+    volumes:
+      - ~/deploy/bin/whisper:/usr/local/bin/whisper:ro
+      - ~/logs/whisper:/var/log/whisper
+    ports:
+      - "${WHISPER_PORT}:${WHISPER_PORT}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: ["whisper", "--port", "${WHISPER_PORT}"]

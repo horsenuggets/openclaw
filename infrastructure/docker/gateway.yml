@@ -1,0 +1,19 @@
+services:
+  gateway:
+    image: ubuntu:24.04
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
+      - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/.openclaw:/root/.openclaw
+      - ~/logs/gateway:/tmp/openclaw
+    environment:
+      - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: ["openclaw", "gateway", "--bind", "lan", "--port", "18789"]

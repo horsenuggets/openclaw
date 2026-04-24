@@ -1,0 +1,24 @@
+# User container template.
+# Used with -p flag and env vars to create per-user instances:
+#   OPENCLAW_USER_ID=263... OPENCLAW_USER_PORT=18791 \
+#     docker compose -f ~/deploy/docker/user.yml -p openclaw-user-263... up -d
+services:
+  user:
+    image: ubuntu:24.04
+    restart: unless-stopped
+    volumes:
+      - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
+      - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/.openclaw-instances/${OPENCLAW_USER_ID}:/root/.openclaw
+      - ~/logs/user-${OPENCLAW_USER_ID}:/tmp/openclaw
+    environment:
+      - OPENCLAW_SKIP_CHANNELS=1
+      - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
+    ports:
+      - "${OPENCLAW_USER_PORT}:18789"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: ["openclaw", "gateway", "--port", "18789"]
