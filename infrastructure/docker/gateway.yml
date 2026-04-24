@@ -7,7 +7,9 @@ services:
     volumes:
       - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
       - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/deploy/docs:/usr/local/bin/docs:ro
       - ~/.openclaw:/root/.openclaw
+      - ~/.claude:/root/.claude
       - ~/logs/gateway:/tmp/openclaw
     environment:
       - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions

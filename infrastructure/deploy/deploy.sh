@@ -36,6 +36,16 @@ mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker"
 cp "$PROJECT_ROOT/dist/openclaw-linux-x64" "$STAGING/deploy/bin/openclaw"
 # cp "$PROJECT_ROOT/dist/whisper-linux-x64" "$STAGING/deploy/bin/whisper"  # when available
 
+# Extensions (pre-compiled plugins)
+if [ -d "$PROJECT_ROOT/dist/extensions" ]; then
+  cp -r "$PROJECT_ROOT/dist/extensions" "$STAGING/deploy/"
+fi
+
+# Workspace templates
+if [ -d "$PROJECT_ROOT/dist/docs" ]; then
+  cp -r "$PROJECT_ROOT/dist/docs" "$STAGING/deploy/"
+fi
+
 # Docker compose files
 cp "$INFRA_DIR/docker/gateway.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"

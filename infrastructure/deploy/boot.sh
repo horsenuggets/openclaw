@@ -12,14 +12,7 @@ if [ -f ~/deploy/bin/whisper ]; then
   docker compose -f ~/deploy/docker/whisper.yml up -d
 fi
 
-# Start per-user instances
-PORT=18791
-for dir in ~/.openclaw-instances/*/; do
-  [ -d "$dir" ] || continue
-  id=$(basename "$dir")
-  # Skip non-numeric directories (e.g. "shared")
-  [[ "$id" =~ ^[0-9]+$ ]] || continue
-  OPENCLAW_USER_ID="$id" OPENCLAW_USER_PORT="$PORT" \
-    docker compose -f ~/deploy/docker/user.yml -p "openclaw-user-$id" up -d
-  PORT=$((PORT + 2))
-done
+# Per-user instances are managed by the gateway (not started on boot).
+# To start manually:
+#   OPENCLAW_USER_ID=<id> OPENCLAW_USER_PORT=<port> \
+#     docker compose -f ~/deploy/docker/user.yml -p openclaw-user-<id> up -d
