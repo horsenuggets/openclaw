@@ -354,6 +354,11 @@ function buildMessageToolDescription(options?: {
   currentChannelId?: string;
 }): string {
   const baseDescription = "Send, delete, and manage messages via channel plugins.";
+  // Tell the agent its text response is already delivered to the current
+  // channel so it doesn't use the message tool to reply to the user.
+  const replyHint = options?.currentChannel
+    ? ` IMPORTANT: Your text response is automatically delivered to the user on ${options.currentChannel}. Do NOT use this tool to reply to the current conversation. Only use it for cross-channel messaging, media, reactions, or other actions.`
+    : "";
 
   // If we have a current channel, show only its supported actions
   if (options?.currentChannel) {
@@ -369,7 +374,7 @@ function buildMessageToolDescription(options?: {
       // Always include "send" as a base action
       const allActions = new Set(["send", ...channelActions]);
       const actionList = Array.from(allActions).toSorted().join(", ");
-      return `${baseDescription} Current channel (${options.currentChannel}) supports: ${actionList}.`;
+      return `${baseDescription}${replyHint} Current channel (${options.currentChannel}) supports: ${actionList}.`;
     }
   }
 
