@@ -12,6 +12,7 @@ services:
     network_mode: host
     volumes:
       - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
+      - ~/deploy/bin/gog:/usr/local/bin/gog:ro
       - ~/deploy/extensions:/opt/openclaw/extensions:ro
       - ~/deploy/docs:/usr/local/bin/docs:ro
       - ~/.openclaw-instances/${OPENCLAW_USER_ID}:/root/.openclaw
