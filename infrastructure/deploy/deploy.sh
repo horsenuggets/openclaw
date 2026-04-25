@@ -47,9 +47,9 @@ if [ -d "$PROJECT_ROOT/dist/docs" ]; then
 fi
 
 # Docker compose files
-cp "$INFRA_DIR/docker/gateway.yml" "$STAGING/deploy/docker/"
-cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
+cp "$INFRA_DIR/docker/discord-router.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/user.yml" "$STAGING/deploy/docker/"
+cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
 
 # Setup + boot scripts
 cp "$SCRIPT_DIR/setup.sh" "$STAGING/"

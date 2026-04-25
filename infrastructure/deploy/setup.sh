@@ -8,10 +8,10 @@ set -euo pipefail
 
 echo "=== OpenClaw Setup ==="
 
-# 1. Stop all OpenClaw containers
+# 1. Stop all containers (this WSL distro is exclusively OpenClaw)
 echo "[1/5] Stopping containers..."
-docker ps -a --filter "name=openclaw-" -q | xargs -r docker stop
-docker ps -a --filter "name=openclaw-" -q | xargs -r docker rm
+docker ps -a -q | xargs -r docker stop
+docker ps -a -q | xargs -r docker rm
 
 # 2. Replace deploy directory
 echo "[2/5] Installing new deployment..."

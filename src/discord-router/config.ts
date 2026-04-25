@@ -55,11 +55,12 @@ export function loadRouterConfig(opts: {
   }
 
   const entries = fs.readdirSync(instancesDir, { withFileTypes: true });
+  // Sort by name to ensure deterministic port assignment matching boot.sh
+  const sortedEntries = entries
+    .filter((e) => e.isDirectory() && DISCORD_ID_RE.test(e.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
   let portOffset = 0;
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !DISCORD_ID_RE.test(entry.name)) {
-      continue;
-    }
+  for (const entry of sortedEntries) {
     const discordUserId = entry.name;
     const configPath = path.join(instancesDir, discordUserId, "openclaw.json");
 

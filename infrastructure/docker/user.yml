@@ -1,24 +1,28 @@
-# User container template.
-# Used with -p flag and env vars to create per-user instances:
-#   OPENCLAW_USER_ID=263... OPENCLAW_USER_PORT=18791 \
+# Per-user gateway container.
+# Each user gets their own isolated agent with workspace, memory, tools.
+# The discord-router forwards Discord DMs to these containers.
+#
+# Usage:
+#   OPENCLAW_USER_ID=263... OPENCLAW_USER_PORT=18789 \
 #     docker compose -f ~/deploy/docker/user.yml -p openclaw-user-263... up -d
 services:
   user:
     image: ubuntu:24.04
     restart: unless-stopped
+    network_mode: host
     volumes:
       - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
       - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/deploy/docs:/usr/local/bin/docs:ro
       - ~/.openclaw-instances/${OPENCLAW_USER_ID}:/root/.openclaw
+      - ~/.claude:/root/.claude
       - ~/logs/user-${OPENCLAW_USER_ID}:/tmp/openclaw
     environment:
-      - OPENCLAW_SKIP_CHANNELS=1
       - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
-    ports:
-      - "${OPENCLAW_USER_PORT}:18789"
+      - OPENCLAW_SKIP_CHANNELS=1
     logging:
       driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["openclaw", "gateway", "--port", "18789"]
+    command: ["openclaw", "gateway", "--bind", "lan", "--port", "${OPENCLAW_USER_PORT}"]
