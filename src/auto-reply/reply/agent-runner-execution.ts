@@ -77,6 +77,25 @@ export async function runAgentTurnWithFallback(params: {
   storePath?: string;
   resolvedVerboseLevel: VerboseLevel;
 }): Promise<AgentRunLoopResult> {
+  try {
+    return await runAgentTurnWithFallbackInner(params);
+  } catch (topLevelErr) {
+    // Safety net: no runtime error should ever leak to the user.
+    // Log the full error for debugging, return a generic message.
+    defaultRuntime.error(`Agent turn top-level crash: ${String(topLevelErr)}`);
+    if (topLevelErr instanceof Error && topLevelErr.stack) {
+      defaultRuntime.error(topLevelErr.stack);
+    }
+    return {
+      kind: "final",
+      payload: { text: "*An internal error occurred. Please try again.*" },
+    };
+  }
+}
+
+async function runAgentTurnWithFallbackInner(
+  params: Parameters<typeof runAgentTurnWithFallback>[0],
+): Promise<AgentRunLoopResult> {
   let didLogHeartbeatStrip = false;
   let autoCompactionCompleted = false;
   // Track payloads sent directly (not via pipeline) during tool flush to avoid duplicates.
