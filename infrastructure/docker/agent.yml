@@ -1,0 +1,30 @@
+# Per-channel agent container.
+# Each registered channel gets its own isolated agent with workspace, memory, tools.
+# The discord-router forwards messages to these containers by channel ID.
+#
+# Usage:
+#   OPENCLAW_CHANNEL_ID=... OPENCLAW_CHANNEL_PORT=18789 \
+#     docker compose -f ~/deploy/docker/agent.yml up -d
+services:
+  agent:
+    image: ubuntu:24.04
+    container_name: agents.channel-${OPENCLAW_CHANNEL_ID}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
+      - ~/deploy/bin/gog:/usr/local/bin/gog:ro
+      - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/deploy/docs:/usr/local/bin/docs:ro
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}:/root/.openclaw
+      - ~/.claude:/root/.claude
+      - ~/logs/channel-${OPENCLAW_CHANNEL_ID}:/tmp/openclaw
+    environment:
+      - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
+      - OPENCLAW_SKIP_CHANNELS=1
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: ["openclaw", "gateway", "--bind", "lan", "--port", "${OPENCLAW_CHANNEL_PORT}"]

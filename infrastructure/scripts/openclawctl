@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+# openclawctl — Management script for OpenClaw channel-based agent containers.
+# Runs on the WSL host. Manages the port registry, instance directories,
+# and Docker containers for per-channel agents.
+set -euo pipefail
+
+INSTANCES_DIR="$HOME/.openclaw-instances"
+PORTS_FILE="$INSTANCES_DIR/ports.json"
+AGENT_YML="$HOME/deploy/docker/agent.yml"
+
+# Ensure instances directory exists
+mkdir -p "$INSTANCES_DIR"
+
+# --- Port registry helpers ---
+
+ensure_ports_file() {
+  if [ ! -f "$PORTS_FILE" ]; then
+    echo '{"basePort": 18789, "assignments": {}}' > "$PORTS_FILE"
+  fi
+}
+
+get_port() {
+  local channelId="$1"
+  python3 -c "
+import json
+ports = json.load(open('$PORTS_FILE'))
+print(ports.get('assignments', {}).get('$channelId', ''))
+"
+}
+
+allocate_port() {
+  python3 -c "
+import json
+ports = json.load(open('$PORTS_FILE'))
+used = set(ports.get('assignments', {}).values())
+port = ports.get('basePort', 18789)
+while port in used:
+    port += 1
+print(port)
+"
+}
+
+assign_port() {
+  local channelId="$1"
+  local port="$2"
+  python3 -c "
+import json
+ports = json.load(open('$PORTS_FILE'))
+ports.setdefault('assignments', {})['$channelId'] = $port
+json.dump(ports, open('$PORTS_FILE', 'w'), indent=2)
+print('')
+"
+}
+
+free_port() {
+  local channelId="$1"
+  python3 -c "
+import json
+ports = json.load(open('$PORTS_FILE'))
+ports.get('assignments', {}).pop('$channelId', None)
+json.dump(ports, open('$PORTS_FILE', 'w'), indent=2)
+"
+}
+
+# --- Discord API helpers ---
+
+get_discord_token() {
+  if [ -n "${DISCORD_BOT_TOKEN:-}" ]; then
+    echo "$DISCORD_BOT_TOKEN"
+    return
+  fi
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    local token
+    token=$(python3 -c "
+import json
+try:
+    cfg = json.load(open('${dir}openclaw.json'))
+    print(cfg.get('channels',{}).get('discord',{}).get('token',''))
+except: pass
+" 2>/dev/null)
+    if [ -n "$token" ]; then
+      echo "$token"
+      return
+    fi
+  done
+  echo ""
+}
+
+resolve_dm_channel() {
+  local userId="$1"
+  local token
+  token=$(get_discord_token)
+  if [ -z "$token" ]; then
+    echo "Error: No Discord bot token found." >&2
+    return 1
+  fi
+  local resp
+  resp=$(curl -s -X POST "https://discord.com/api/v10/users/@me/channels" \
+    -H "Authorization: Bot $token" \
+    -H "Content-Type: application/json" \
+    -d "{\"recipient_id\": \"$userId\"}")
+  python3 -c "
+import json, sys
+try:
+    data = json.loads('''$resp''')
+    cid = data.get('id', '')
+    if cid:
+        print(cid)
+    else:
+        print('Error: Could not resolve DM channel.', file=sys.stderr)
+        sys.exit(1)
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+"
+}
+
+# --- Container helpers ---
+
+start_container() {
+  local channelId="$1"
+  local port="$2"
+  OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
+    docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d
+}
+
+stop_container() {
+  local channelId="$1"
+  local container="agents.channel-$channelId"
+  docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
+}
+
+# --- Commands ---
+
+cmd_add_dm() {
+  local userId="${1:-}"
+  if [ -z "$userId" ]; then
+    echo "Usage: openclawctl add-dm <userId>"
+    exit 1
+  fi
+
+  echo "Resolving DM channel for user $userId..."
+  local channelId
+  channelId=$(resolve_dm_channel "$userId")
+  echo "DM channel ID: $channelId"
+
+  # Check if already registered
+  local existing_port
+  existing_port=$(get_port "$channelId")
+  if [ -n "$existing_port" ]; then
+    echo "Channel $channelId is already registered on port $existing_port."
+    exit 0
+  fi
+
+  # Allocate port and register
+  local port
+  port=$(allocate_port)
+  assign_port "$channelId" "$port"
+  echo "Assigned port $port"
+
+  # Create instance directory
+  mkdir -p "$INSTANCES_DIR/$channelId"
+
+  # Copy openclaw.json from an existing instance if available
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}openclaw.json" ]; then
+      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
+      echo "Copied config from $(basename "$dir")"
+      break
+    fi
+  done
+
+  # Start container
+  echo "Starting container agents.channel-$channelId on port $port..."
+  start_container "$channelId" "$port"
+  echo "Done. User $userId can now DM the bot."
+}
+
+cmd_add_channel() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl add-channel <channelId>"
+    exit 1
+  fi
+
+  local existing_port
+  existing_port=$(get_port "$channelId")
+  if [ -n "$existing_port" ]; then
+    echo "Channel $channelId is already registered on port $existing_port."
+    exit 0
+  fi
+
+  local port
+  port=$(allocate_port)
+  assign_port "$channelId" "$port"
+  echo "Assigned port $port"
+
+  mkdir -p "$INSTANCES_DIR/$channelId"
+
+  # Copy openclaw.json from an existing instance if available
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}openclaw.json" ]; then
+      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
+      echo "Copied config from $(basename "$dir")"
+      break
+    fi
+  done
+
+  echo "Starting container agents.channel-$channelId on port $port..."
+  start_container "$channelId" "$port"
+  echo "Done. Channel $channelId is now registered."
+}
+
+cmd_remove() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl remove <channelId>"
+    exit 1
+  fi
+
+  echo "Stopping container for channel $channelId..."
+  stop_container "$channelId"
+
+  echo "Freeing port..."
+  free_port "$channelId"
+
+  echo "Done. Instance data preserved at $INSTANCES_DIR/$channelId/"
+  echo "To delete data: rm -rf $INSTANCES_DIR/$channelId"
+}
+
+cmd_restart() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl restart <channelId>"
+    exit 1
+  fi
+
+  local port
+  port=$(get_port "$channelId")
+  if [ -z "$port" ]; then
+    echo "Error: Channel $channelId is not registered."
+    exit 1
+  fi
+
+  echo "Restarting container for channel $channelId on port $port..."
+  stop_container "$channelId"
+  start_container "$channelId" "$port"
+  echo "Done."
+}
+
+cmd_list() {
+  ensure_ports_file
+  echo "Registered channels:"
+  echo ""
+  python3 -c "
+import json, subprocess
+ports = json.load(open('$PORTS_FILE'))
+assignments = ports.get('assignments', {})
+if not assignments:
+    print('  (none)')
+else:
+    for cid, port in sorted(assignments.items(), key=lambda x: x[1]):
+        # Check if container is running
+        result = subprocess.run(
+            ['docker', 'inspect', '-f', '{{.State.Status}}', f'agents.channel-{cid}'],
+            capture_output=True, text=True
+        )
+        status = result.stdout.strip() if result.returncode == 0 else 'not found'
+        print(f'  {cid}  port={port}  status={status}')
+"
+}
+
+# --- Main ---
+
+ensure_ports_file
+
+case "${1:-}" in
+  add-dm)     cmd_add_dm "${2:-}" ;;
+  add-channel) cmd_add_channel "${2:-}" ;;
+  remove)     cmd_remove "${2:-}" ;;
+  restart)    cmd_restart "${2:-}" ;;
+  list)       cmd_list ;;
+  *)
+    echo "openclawctl — Manage OpenClaw agent containers"
+    echo ""
+    echo "Commands:"
+    echo "  add-dm <userId>         Register a DM channel for a Discord user"
+    echo "  add-channel <channelId> Register a text channel"
+    echo "  remove <channelId>      Stop and deregister a channel"
+    echo "  restart <channelId>     Restart a channel's container"
+    echo "  list                    List all registered channels"
+    ;;
+esac

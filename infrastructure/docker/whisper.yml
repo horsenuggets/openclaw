@@ -1,7 +1,7 @@
 services:
   whisper:
     image: ubuntu:24.04
-    container_name: openclaw-whisper
+    container_name: services.whisper
     restart: unless-stopped
     volumes:
       - ~/deploy/bin/whisper:/usr/local/bin/whisper:ro

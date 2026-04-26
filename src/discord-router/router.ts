@@ -44,8 +44,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }
   runtime.log(`[router] application id: ${applicationId}`);
   runtime.log(`[router] instances: ${instances.size}`);
-  for (const [userId, inst] of instances) {
-    runtime.log(`  ${userId} → localhost:${inst.port}`);
+  for (const [channelId, inst] of instances) {
+    runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
   }
 
   // Register slash commands
@@ -93,12 +93,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     openDMChannel: (userId) => openDMChannel(discordToken, userId),
     discordSendEmbed: (channelId, embed) => discordSendEmbed(discordToken, channelId, embed),
     routeMessage: (userId, channelId, message) => {
-      const instance = instances.get(userId);
+      const instance = instances.get(channelId);
       if (!instance) {
         return Promise.resolve();
       }
-      return routeDM({
-        discordUserId: userId,
+      return routeMessage({
+        authorId: userId,
         channelId,
         messageContent: message,
         instance,
@@ -109,20 +109,21 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }).then(() => {});
     },
     onAuthComplete: async ({ discordUserId, code }) => {
-      const instance = instances.get(discordUserId);
+      // Find the channel instance for this user's pending auth
+      const pending = pendingGoogleAuth.get(discordUserId);
+      const channelId = pending?.channelId ?? (await openDMChannel(discordToken, discordUserId));
+      if (!channelId) {
+        runtime.error(`[router] could not resolve channel for ${discordUserId} after auth`);
+        return;
+      }
+      const instance = instances.get(channelId);
       if (!instance) {
         return;
       }
 
-      // Get channel ID from pendingGoogleAuth or open a fresh DM
-      const pending = pendingGoogleAuth.get(discordUserId);
-      const channelId = pending?.channelId ?? (await openDMChannel(discordToken, discordUserId));
-      if (!channelId) {
-        runtime.error(`[router] could not open DM channel for ${discordUserId} after auth`);
-        return;
-      }
-
-      runtime.log(`[router] Google auth complete for ${discordUserId}, exchanging code`);
+      runtime.log(
+        `[router] Google auth complete for ${discordUserId} (channel ${channelId}), exchanging code`,
+      );
 
       // Exchange code for tokens
       try {
@@ -150,7 +151,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         }
 
         // Ensure gogcli credentials exist for this instance
-        const gogDir = `${config.instancesDir}/${discordUserId}/gogcli`;
+        const gogDir = `${config.instancesDir}/${channelId}/gogcli`;
         if (!fs.existsSync(gogDir)) {
           fs.mkdirSync(gogDir, { recursive: true });
         }
@@ -164,8 +165,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             sourceDir = `${config.instancesDir}/shared/gogcli`;
           } else {
             // Fall back: find any instance that has gogcli credentials
-            for (const [uid] of instances) {
-              const candidate = `${config.instancesDir}/${uid}/gogcli/credentials.json`;
+            for (const [cid] of instances) {
+              const candidate = `${config.instancesDir}/${cid}/gogcli/credentials.json`;
               if (fs.existsSync(candidate)) {
                 sourceDir = `${config.instancesDir}/${uid}/gogcli`;
                 break;
@@ -186,7 +187,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         }
 
         // Import tokens into the user's container via docker exec
-        const tokenFile = `/tmp/gog-import-${discordUserId}.json`;
+        const tokenFile = `/tmp/gog-import-${channelId}.json`;
         const tokenData = {
           email: "default",
           client: "default",
@@ -196,7 +197,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
         // Copy token file into container and import
         const { execSync } = await import("node:child_process");
-        const container = `openclaw-${discordUserId}`;
+        const container = `agents.channel-${channelId}`;
         try {
           execSync(`docker cp ${tokenFile} ${container}:/tmp/gog-token.json`, { stdio: "pipe" });
           execSync(
@@ -204,7 +205,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             { stdio: "pipe" },
           );
           execSync(`docker exec ${container} rm /tmp/gog-token.json`, { stdio: "pipe" });
-          runtime.log(`[router] Google tokens imported into container for ${discordUserId}`);
+          runtime.log(`[router] Google tokens imported into container for channel ${channelId}`);
         } catch (importErr) {
           runtime.error(`[router] gogcli import failed: ${formatErrorMessage(importErr)}`);
         }
@@ -228,8 +229,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         );
 
         // Also tell the agent via the gateway
-        void routeDM({
-          discordUserId,
+        void routeMessage({
+          authorId: discordUserId,
           channelId,
           messageContent:
             "[System: The user just successfully connected their Google account. Acknowledge this briefly and enthusiastically. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. Do NOT list what you can do — that was already sent.]",
@@ -331,7 +332,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             // Delay to let containers finish starting before connecting.
             setTimeout(async () => {
               // Onboard new users first
-              await onboardNewUsers(
+              await onboardNewChannels(
                 discordToken,
                 instances,
                 config,
@@ -340,7 +341,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 inflight,
               );
               // Then recover unanswered messages
-              await recoverUnansweredDMs(
+              await recoverUnansweredMessages(
                 discordToken,
                 instances,
                 runtime,
@@ -381,17 +382,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
             );
 
-            if (!authorId || isBot || guildId || (!content.trim() && !hasAttachments)) {
+            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
               return;
             }
 
-            const instance = instances.get(authorId);
+            const instance = instances.get(channelId);
             if (!instance) {
-              runtime.log(`[router] no instance for user ${authorId}`);
-              void discordSend(
+              runtime.log(`[router] no instance for channel ${channelId}`);
+              // Send ephemeral-style response for unregistered channels
+              void discordSendEphemeral(
                 discordToken,
                 channelId,
-                "*No agent is configured for your account.*",
+                "*This channel is not registered.*",
               );
               return;
             }
@@ -413,9 +415,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 runtime,
               }).then((handled) => {
                 if (!handled) {
-                  // Not a recognized command — treat as normal message
-                  void routeDM({
-                    discordUserId: authorId,
+                  void routeMessage({
+                    authorId,
                     channelId,
                     messageContent: content,
                     attachments: rawAttachments,
@@ -470,8 +471,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               // Otherwise let the message through normally (they might be chatting)
             }
 
-            void routeDM({
-              discordUserId: authorId,
+            void routeMessage({
+              authorId,
               channelId,
               messageContent: content,
               attachments: rawAttachments,
@@ -514,11 +515,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           // Handle slash command interactions
           if (t === "INTERACTION_CREATE" && d.type === 2) {
             const interactionData = d.data;
-            const interactionUser = d.user?.id ?? d.member?.user?.id;
+            const interactionChannelId = d.channel_id;
             const interactionToken = d.token;
             const interactionId = d.id;
 
-            // Helper to respond to interactions
+            // Helper to respond to interactions (always ephemeral)
             const respondToInteraction = (text: string) => {
               void fetch(
                 `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
@@ -541,10 +542,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 );
             };
 
-            if (interactionData?.name === "lifecycle" && interactionUser) {
-              const instance = instances.get(interactionUser);
+            if (interactionData?.name === "lifecycle" && interactionChannelId) {
+              const instance = instances.get(interactionChannelId);
               if (!instance) {
-                respondToInteraction("*No agent is configured for your account.*");
+                respondToInteraction("*This channel is not registered.*");
                 return;
               }
 
@@ -570,7 +571,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
               respondToInteraction(statusText);
               runtime.log(
-                `[router] lifecycle for ${interactionUser}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
+                `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
               );
             }
           }
@@ -638,8 +639,8 @@ type DiscordAttachment = {
 };
 
 /** Returns true if the agent responded successfully. */
-async function routeDM(params: {
-  discordUserId: string;
+async function routeMessage(params: {
+  authorId: string;
   channelId: string;
   messageContent: string;
   attachments?: DiscordAttachment[];
@@ -650,7 +651,7 @@ async function routeDM(params: {
   inflight: Set<string>;
 }): Promise<boolean> {
   const {
-    discordUserId,
+    authorId,
     channelId,
     attachments,
     instance,
@@ -661,17 +662,19 @@ async function routeDM(params: {
   } = params;
   let messageContent = params.messageContent;
 
-  // Serialize per-user
-  if (inflight.has(discordUserId)) {
-    runtime.log(`[router] user ${discordUserId} already in-flight, queuing`);
+  // Serialize per-channel
+  if (inflight.has(channelId)) {
+    runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
   }
-  while (inflight.has(discordUserId)) {
+  while (inflight.has(channelId)) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  inflight.add(discordUserId);
+  inflight.add(channelId);
   try {
-    runtime.log(`[router] routing DM from ${discordUserId}: ${messageContent.slice(0, 80)}`);
+    runtime.log(
+      `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
+    );
 
     // Typing indicator
     const typingInterval = setInterval(() => {
@@ -771,7 +774,7 @@ async function routeDM(params: {
           channel: "webchat",
           deliver: false,
           idempotencyKey,
-          sessionKey: `agent:main:discord:default:dm:${discordUserId}`,
+          sessionKey: `agent:main:discord:default:channel:${channelId}`,
           timeout: Math.floor(agentTimeoutMs / 1000),
           ...(gatewayAttachments.length > 0 ? { attachments: gatewayAttachments } : {}),
         },
@@ -787,7 +790,7 @@ async function routeDM(params: {
 
       const payloads = result?.result?.payloads ?? [];
       if (payloads.length === 0) {
-        runtime.log(`[router] empty response for ${discordUserId}`);
+        runtime.log(`[router] empty response for channel ${channelId}`);
         await discordSend(
           discordToken,
           channelId,
@@ -824,14 +827,14 @@ async function routeDM(params: {
         }
       }
 
-      runtime.log(`[router] delivered ${payloads.length} payload(s) to ${discordUserId}`);
+      runtime.log(`[router] delivered ${payloads.length} payload(s) to channel ${channelId}`);
       return true;
     } finally {
       clearInterval(typingInterval);
     }
   } catch (err) {
     const errMsg = formatErrorMessage(err);
-    runtime.error(`[router] error for ${discordUserId}: ${errMsg}`);
+    runtime.error(`[router] error for channel ${channelId}: ${errMsg}`);
 
     const isConnectionRefused =
       errMsg.includes("ECONNREFUSED") || errMsg.includes("connect ECONNREFUSED");
@@ -865,7 +868,7 @@ async function routeDM(params: {
     }
     return false;
   } finally {
-    inflight.delete(discordUserId);
+    inflight.delete(channelId);
   }
 }
 
@@ -990,6 +993,38 @@ async function discordSend(token: string, channelId: string, content: string): P
   });
 }
 
+/**
+ * Send a message that looks ephemeral (italic, low-key).
+ * True ephemeral messages require interaction responses — for regular messages
+ * we send a normal message that auto-deletes after a few seconds.
+ */
+async function discordSendEphemeral(
+  token: string,
+  channelId: string,
+  content: string,
+): Promise<void> {
+  const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content }),
+  });
+  if (resp.ok) {
+    // Auto-delete after 10 seconds
+    const msg = (await resp.json()) as { id?: string };
+    if (msg.id) {
+      setTimeout(() => {
+        void fetch(`${DISCORD_API}${Routes.channelMessage(channelId, msg.id!)}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bot ${token}` },
+        }).catch(() => {});
+      }, 10_000);
+    }
+  }
+}
+
 async function discordTyping(token: string, channelId: string): Promise<void> {
   await fetch(`${DISCORD_API}${Routes.channelTyping(channelId)}`, {
     method: "POST",
@@ -997,28 +1032,24 @@ async function discordTyping(token: string, channelId: string): Promise<void> {
   }).catch(() => {});
 }
 
-/** Send a lifecycle message (Back online / Shutting down) to all onboarded users. */
+/** Send a lifecycle message (Back online / Shutting down) to all onboarded channels. */
 async function sendLifecycleToAll(
   discordToken: string,
   instances: Map<string, InstanceConfig>,
   message: string,
   runtime: RouterRuntime,
 ): Promise<void> {
-  for (const [userId, instance] of instances) {
+  for (const [channelId, instance] of instances) {
     if (instance.onboardingState !== "complete") {
       continue;
     }
-    // Only send lifecycle messages to users who opted in (off by default)
     if (!instance.preferences.lifecycleMessages) {
       continue;
     }
     try {
-      const channelId = await openDMChannel(discordToken, userId);
-      if (channelId) {
-        await discordSend(discordToken, channelId, message);
-      }
+      await discordSend(discordToken, channelId, message);
     } catch {
-      runtime.log(`[router] failed to send lifecycle DM to ${userId}`);
+      runtime.log(`[router] failed to send lifecycle message to channel ${channelId}`);
     }
   }
 }
@@ -1064,7 +1095,7 @@ async function discordSendEmbed(
  * Check each onboarded user's DM for unanswered messages.
  * If the most recent message is from the user (not the bot), route it to the agent.
  */
-async function recoverUnansweredDMs(
+async function recoverUnansweredMessages(
   discordToken: string,
   instances: Map<string, InstanceConfig>,
   runtime: RouterRuntime,
@@ -1077,17 +1108,12 @@ async function recoverUnansweredDMs(
     }).then((r) => r.json())) as { id?: string }
   )?.id;
 
-  for (const [userId, instance] of instances) {
+  for (const [channelId, instance] of instances) {
     if (instance.onboardingState !== "complete") {
       continue;
     }
 
     try {
-      const channelId = await openDMChannel(discordToken, userId);
-      if (!channelId) {
-        continue;
-      }
-
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
         headers: { Authorization: `Bot ${discordToken}` },
@@ -1114,9 +1140,6 @@ async function recoverUnansweredDMs(
       // Skip italic lifecycle messages (*Back online.*, *Shutting down...*)
       const isLifecycle = (c: string) => /^\*[^*]+\*$/.test(c?.trim() ?? "");
 
-      // Walk messages (newest first). Skip lifecycle messages.
-      // If the first non-lifecycle message is from the user → unanswered.
-      // If it's from the bot → already responded, skip.
       let lastUserMsg: (typeof messages)[0] | undefined;
       for (const msg of messages) {
         if (isLifecycle(msg.content)) {
@@ -1124,9 +1147,9 @@ async function recoverUnansweredDMs(
         }
         if (msg.author.bot || msg.author.id === botId) {
           break;
-        } // bot responded
+        }
         lastUserMsg = msg;
-        break; // found the user's unanswered message
+        break;
       }
 
       if (!lastUserMsg) {
@@ -1139,11 +1162,11 @@ async function recoverUnansweredDMs(
       }
 
       runtime.log(
-        `[router] recovering unanswered DM from ${userId}: ${content?.slice(0, 60) || `(${msgAttachments.length} attachment(s))`}`,
+        `[router] recovering unanswered message in channel ${channelId}: ${content?.slice(0, 60) || `(${msgAttachments.length} attachment(s))`}`,
       );
 
-      void routeDM({
-        discordUserId: userId,
+      void routeMessage({
+        authorId: lastUserMsg.author.id,
         channelId,
         messageContent: content ?? "",
         attachments: msgAttachments,
@@ -1154,12 +1177,12 @@ async function recoverUnansweredDMs(
         inflight,
       });
     } catch (err) {
-      runtime.log(`[router] recovery failed for ${userId}: ${formatErrorMessage(err)}`);
+      runtime.log(`[router] recovery failed for channel ${channelId}: ${formatErrorMessage(err)}`);
     }
   }
 }
 
-async function onboardNewUsers(
+async function onboardNewChannels(
   discordToken: string,
   instances: Map<string, InstanceConfig>,
   config: RouterConfig,
@@ -1167,18 +1190,12 @@ async function onboardNewUsers(
   agentTimeoutMs: number,
   inflight: Set<string>,
 ): Promise<void> {
-  for (const [userId, instance] of instances) {
+  for (const [channelId, instance] of instances) {
     if (instance.onboardingState !== "none") {
       continue;
     }
 
-    runtime.log(`[router] proactive onboarding for ${userId}`);
-
-    const channelId = await openDMChannel(discordToken, userId);
-    if (!channelId) {
-      runtime.log(`[router] could not open DM channel for ${userId}`);
-      continue;
-    }
+    runtime.log(`[router] proactive onboarding for channel ${channelId}`);
 
     // Send welcome embed
     await discordSendEmbed(discordToken, channelId, {
@@ -1189,8 +1206,8 @@ async function onboardNewUsers(
     });
 
     // Route through the agent for the greeting
-    void routeDM({
-      discordUserId: userId,
+    void routeMessage({
+      authorId: "system",
       channelId,
       messageContent:
         "[System: This is a brand new user who just joined. You are OpenClaw, a personal AI assistant. Do NOT refer to yourself as Claude Code or Claude — you are OpenClaw. Greet them warmly, introduce yourself as OpenClaw, and ask what they'd like to be called. Keep it brief and friendly — 2-3 sentences max. Do not mention Docker, containers, Google, OAuth, or any technical infrastructure. Just greet and ask their name.]",
@@ -1202,9 +1219,11 @@ async function onboardNewUsers(
     }).then((success) => {
       if (success) {
         setOnboardingState(instance, "greeted");
-        runtime.log(`[router] onboarding greeting sent for ${userId}, waiting for name`);
+        runtime.log(`[router] onboarding greeting sent for channel ${channelId}, waiting for name`);
       } else {
-        runtime.log(`[router] onboarding failed for ${userId}, will retry on next restart`);
+        runtime.log(
+          `[router] onboarding failed for channel ${channelId}, will retry on next restart`,
+        );
       }
     });
   }

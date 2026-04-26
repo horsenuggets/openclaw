@@ -48,8 +48,10 @@ fi
 
 # Docker compose files
 cp "$INFRA_DIR/docker/discord-router.yml" "$STAGING/deploy/docker/"
-cp "$INFRA_DIR/docker/user.yml" "$STAGING/deploy/docker/"
+cp "$INFRA_DIR/docker/agent.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
+cp "$INFRA_DIR/scripts/openclawctl" "$STAGING/deploy/bin/openclawctl"
+chmod +x "$STAGING/deploy/bin/openclawctl"
 
 # Setup + boot scripts
 cp "$SCRIPT_DIR/setup.sh" "$STAGING/"

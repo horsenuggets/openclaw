@@ -1,7 +1,7 @@
 services:
   discord-router:
     image: ubuntu:24.04
-    container_name: openclaw-discord-router
+    container_name: services.discord-router
     restart: unless-stopped
     network_mode: host
     volumes:
@@ -17,4 +17,4 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["openclaw", "discord-router", "--base-port", "18789"]
+    command: ["openclaw", "discord-router"]
