@@ -13,10 +13,22 @@ echo "[1/5] Stopping containers..."
 docker ps -a -q | xargs -r docker stop
 docker ps -a -q | xargs -r docker rm
 
-# 2. Replace deploy directory
+# 2. Replace deploy directory (preserve persistent data: models, locally-compiled tools)
 echo "[2/5] Installing new deployment..."
+# Back up persistent data that isn't in the tarball
+for dir in models bin/gog bin/whisper-server; do
+  if [ -e "$HOME/deploy/$dir" ]; then
+    mkdir -p /tmp/deploy-preserve/$(dirname "$dir")
+    cp -a "$HOME/deploy/$dir" "/tmp/deploy-preserve/$dir"
+  fi
+done
 rm -rf ~/deploy
 mv deploy ~/deploy
+# Restore persistent data
+if [ -d /tmp/deploy-preserve ]; then
+  cp -a /tmp/deploy-preserve/* ~/deploy/ 2>/dev/null || true
+  rm -rf /tmp/deploy-preserve
+fi
 chmod +x ~/deploy/bin/*
 
 # 3. Install .env (if shipped in tarball)

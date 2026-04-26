@@ -5,16 +5,14 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
-      - ~/deploy/extensions:/opt/openclaw/extensions:ro
+      - ~/deploy/bin/discord-router:/usr/local/bin/discord-router:ro
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
-      - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
     logging:
       driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["openclaw", "discord-router"]
+    command: ["discord-router"]

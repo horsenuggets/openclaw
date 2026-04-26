@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ~/deploy/bin/whisper:/usr/local/bin/whisper:ro
+      - ~/deploy/bin/whisper-server:/usr/local/bin/whisper-server:ro
       - ~/deploy/models:/models:ro
       - ~/logs/whisper:/var/log/whisper
     logging:
@@ -14,4 +14,12 @@ services:
         max-size: "50m"
         max-file: "5"
     command:
-      ["whisper", "--model", "/models/ggml-base.en.bin", "--host", "127.0.0.1", "--port", "8787"]
+      [
+        "whisper-server",
+        "--model",
+        "/models/ggml-base.en.bin",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8787",
+      ]

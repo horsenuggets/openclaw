@@ -212,6 +212,25 @@ for (const target of targets) {
   }
 }
 
+// Step 5b: Compile discord-router standalone binary for each target
+console.log(`\nCompiling discord-router for ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const routerOutfile = `dist/discord-router-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${routerOutfile}`);
+
+  try {
+    execSync(
+      `bun build src/discord-router/entry.ts --compile --target=${target.bunTarget} --outfile ${routerOutfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile discord-router for ${target.name}`);
+    // Non-fatal — the main binary's discord-router subcommand still works
+  }
+}
+
 // Step 6: Copy extensions directory for plugin resolution
 // The binary looks for extensions/ next to the executable.
 // Ship the full extensions directory alongside the binary.

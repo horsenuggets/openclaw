@@ -5,10 +5,9 @@ import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
-import { callGateway } from "../gateway/call.js";
-import { formatErrorMessage } from "../infra/errors.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
 import { refreshToken, setOnboardingState, setUserPreference } from "./config.js";
+import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
 type AgentResult = {
@@ -207,7 +206,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           execSync(`docker exec ${container} rm /tmp/gog-token.json`, { stdio: "pipe" });
           runtime.log(`[router] Google tokens imported into container for channel ${channelId}`);
         } catch (importErr) {
-          runtime.error(`[router] gogcli import failed: ${formatErrorMessage(importErr)}`);
+          runtime.error(`[router] gogcli import failed: ${String(importErr)}`);
         }
         fs.unlinkSync(tokenFile);
 
@@ -241,7 +240,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           inflight,
         });
       } catch (err) {
-        runtime.error(`[router] post-auth error: ${formatErrorMessage(err)}`);
+        runtime.error(`[router] post-auth error: ${String(err)}`);
       }
     },
   });
@@ -766,7 +765,7 @@ async function routeMessage(params: {
       // Re-read token from disk so we never use a stale cached value
       const freshToken = refreshToken(instance);
       const idempotencyKey = randomUUID();
-      const result = await callGateway<AgentResult>({
+      const result = await callGatewaySimple<AgentResult>({
         url: `ws://127.0.0.1:${instance.port}`,
         token: freshToken || undefined,
         method: "agent",
@@ -781,9 +780,6 @@ async function routeMessage(params: {
         },
         expectFinal: true,
         timeoutMs: agentTimeoutMs + 30_000,
-        clientName: "cli",
-        mode: "backend",
-        skipDeviceAuth: true,
       });
 
       // Stop typing as soon as we have the response
@@ -834,7 +830,7 @@ async function routeMessage(params: {
       clearInterval(typingInterval);
     }
   } catch (err) {
-    const errMsg = formatErrorMessage(err);
+    const errMsg = String(err);
     runtime.error(`[router] error for channel ${channelId}: ${errMsg}`);
 
     const isConnectionRefused =
@@ -1178,7 +1174,7 @@ async function recoverUnansweredMessages(
         inflight,
       });
     } catch (err) {
-      runtime.log(`[router] recovery failed for channel ${channelId}: ${formatErrorMessage(err)}`);
+      runtime.log(`[router] recovery failed for channel ${channelId}: ${String(err)}`);
     }
   }
 }
