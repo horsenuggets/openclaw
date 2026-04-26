@@ -12,6 +12,9 @@ if [ ! -f "$PORTS_FILE" ]; then
   exit 1
 fi
 
+# Reconcile ports.json with actual instance directories on boot
+~/deploy/bin/openclawctl reconcile
+
 # Read port assignments into a temp file to avoid subshell issues with pipes
 ASSIGNMENTS=$(python3 -c "
 import json

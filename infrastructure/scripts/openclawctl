@@ -19,6 +19,14 @@ ensure_ports_file() {
   fi
 }
 
+# Atomic write: write to temp file, then rename (prevents corruption)
+write_ports_file() {
+  local content="$1"
+  local tmp="${PORTS_FILE}.tmp.$$"
+  echo "$content" > "$tmp"
+  mv "$tmp" "$PORTS_FILE"
+}
+
 get_port() {
   local channelId="$1"
   python3 -c "
@@ -44,21 +52,69 @@ assign_port() {
   local channelId="$1"
   local port="$2"
   python3 -c "
-import json
+import json, os
 ports = json.load(open('$PORTS_FILE'))
+# Check for port conflict
+used = ports.get('assignments', {})
+for cid, p in used.items():
+    if p == $port and cid != '$channelId':
+        print(f'ERROR: port $port already assigned to {cid}', flush=True)
+        exit(1)
 ports.setdefault('assignments', {})['$channelId'] = $port
-json.dump(ports, open('$PORTS_FILE', 'w'), indent=2)
-print('')
+tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
+with open(tmp, 'w') as f:
+    json.dump(ports, f, indent=2)
+    f.write('\n')
+os.rename(tmp, '$PORTS_FILE')
 "
 }
 
 free_port() {
   local channelId="$1"
   python3 -c "
-import json
+import json, os
 ports = json.load(open('$PORTS_FILE'))
 ports.get('assignments', {}).pop('$channelId', None)
-json.dump(ports, open('$PORTS_FILE', 'w'), indent=2)
+tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
+with open(tmp, 'w') as f:
+    json.dump(ports, f, indent=2)
+    f.write('\n')
+os.rename(tmp, '$PORTS_FILE')
+"
+}
+
+# Reconcile ports.json with actual instance directories.
+# Removes stale entries (dirs that don't exist), warns about dirs without ports.
+reconcile_ports() {
+  python3 -c "
+import json, os
+ports = json.load(open('$PORTS_FILE'))
+assignments = ports.get('assignments', {})
+instances_dir = '$INSTANCES_DIR'
+changed = False
+
+# Remove entries whose instance directories no longer exist
+stale = [cid for cid in assignments if not os.path.isdir(os.path.join(instances_dir, cid))]
+for cid in stale:
+    print(f'  Removing stale entry: {cid} (port {assignments[cid]})')
+    del assignments[cid]
+    changed = True
+
+# Warn about dirs without port assignments
+import re
+for entry in sorted(os.listdir(instances_dir)):
+    if re.match(r'^\d{17,20}$', entry) and entry not in assignments:
+        print(f'  Warning: {entry} has no port assignment')
+
+if changed:
+    tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
+    with open(tmp, 'w') as f:
+        json.dump(ports, f, indent=2)
+        f.write('\n')
+    os.rename(tmp, '$PORTS_FILE')
+    print('  Ports file updated.')
+else:
+    print('  No changes needed.')
 "
 }
 
@@ -253,24 +309,41 @@ cmd_restart() {
 
 cmd_list() {
   ensure_ports_file
-  echo "Registered channels:"
-  echo ""
   python3 -c "
 import json, subprocess
 ports = json.load(open('$PORTS_FILE'))
 assignments = ports.get('assignments', {})
+base = ports.get('basePort', 18789)
+
+print('Registered channels:')
+print()
 if not assignments:
     print('  (none)')
 else:
     for cid, port in sorted(assignments.items(), key=lambda x: x[1]):
-        # Check if container is running
         result = subprocess.run(
             ['docker', 'inspect', '-f', '{{.State.Status}}', f'agents.channel-{cid}'],
             capture_output=True, text=True
         )
         status = result.stdout.strip() if result.returncode == 0 else 'not found'
         print(f'  {cid}  port={port}  status={status}')
+
+# Show port summary
+used = set(assignments.values())
+max_port = max(used) if used else base - 1
+gaps = [p for p in range(base, max_port + 1) if p not in used]
+print()
+print(f'Port range: {base}-{max_port} ({len(assignments)} used)')
+if gaps:
+    print(f'Available ports (gaps): {gaps}')
+print(f'Next port: {max_port + 1 if not gaps else min(gaps)}')
 "
+}
+
+cmd_reconcile() {
+  ensure_ports_file
+  echo "Reconciling ports.json with instance directories..."
+  reconcile_ports
 }
 
 # --- Main ---
@@ -278,11 +351,12 @@ else:
 ensure_ports_file
 
 case "${1:-}" in
-  add-dm)     cmd_add_dm "${2:-}" ;;
+  add-dm)      cmd_add_dm "${2:-}" ;;
   add-channel) cmd_add_channel "${2:-}" ;;
-  remove)     cmd_remove "${2:-}" ;;
-  restart)    cmd_restart "${2:-}" ;;
-  list)       cmd_list ;;
+  remove)      cmd_remove "${2:-}" ;;
+  restart)     cmd_restart "${2:-}" ;;
+  list)        cmd_list ;;
+  reconcile)   cmd_reconcile ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -291,6 +365,7 @@ case "${1:-}" in
     echo "  add-channel <channelId> Register a text channel"
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
-    echo "  list                    List all registered channels"
+    echo "  list                    List all registered channels and ports"
+    echo "  reconcile               Sync ports.json with instance directories"
     ;;
 esac
