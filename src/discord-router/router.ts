@@ -388,13 +388,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
             const instance = instances.get(channelId);
             if (!instance) {
-              runtime.log(`[router] no instance for channel ${channelId}`);
-              // Send ephemeral-style response for unregistered channels
-              void discordSendEphemeral(
-                discordToken,
-                channelId,
-                "*This channel is not registered.*",
-              );
+              // Only respond in DMs (no guild_id), silently ignore unregistered guild channels
+              if (!guildId) {
+                void discordSendEphemeral(
+                  discordToken,
+                  channelId,
+                  "*This channel is not registered.*",
+                );
+              }
               return;
             }
 
