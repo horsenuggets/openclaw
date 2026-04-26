@@ -43,5 +43,9 @@ except: pass
   export DISCORD_BOT_TOKEN
 fi
 
+# Start whisper (speech-to-text)
+docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
+
+# Start discord router
 DISCORD_BOT_TOKEN="$DISCORD_BOT_TOKEN" \
   docker compose -f ~/deploy/docker/discord-router.yml -p services up -d
