@@ -79,8 +79,17 @@ jobs:
             task: lint
             command: pnpm build && pnpm lint
           - runtime: node
-            task: test
-            command: pnpm canvas:a2ui:bundle && pnpm test
+            task: test-1/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=1/4
+          - runtime: node
+            task: test-2/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=2/4
+          - runtime: node
+            task: test-3/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=3/4
+          - runtime: node
+            task: test-4/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=4/4
           - runtime: node
             task: protocol
             command: pnpm protocol:check
@@ -88,8 +97,17 @@ jobs:
             task: format
             command: pnpm format
           - runtime: bun
-            task: test
-            command: pnpm canvas:a2ui:bundle && bunx vitest run
+            task: test-1/4
+            command: pnpm canvas:a2ui:bundle && bunx vitest run --shard=1/4
+          - runtime: bun
+            task: test-2/4
+            command: pnpm canvas:a2ui:bundle && bunx vitest run --shard=2/4
+          - runtime: bun
+            task: test-3/4
+            command: pnpm canvas:a2ui:bundle && bunx vitest run --shard=3/4
+          - runtime: bun
+            task: test-4/4
+            command: pnpm canvas:a2ui:bundle && bunx vitest run --shard=4/4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -184,10 +202,9 @@ jobs:
           fi
 
   checks-windows:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64]
     env:
       NODE_OPTIONS: --max-old-space-size=4096
-      CLAWDBOT_TEST_WORKERS: 1
     defaults:
       run:
         shell: bash
@@ -199,8 +216,17 @@ jobs:
             task: build & lint
             command: pnpm build && pnpm lint
           - runtime: node
-            task: test
-            command: pnpm canvas:a2ui:bundle && pnpm test
+            task: test-1/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=1/4
+          - runtime: node
+            task: test-2/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=2/4
+          - runtime: node
+            task: test-3/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=3/4
+          - runtime: node
+            task: test-4/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=4/4
           - runtime: node
             task: protocol
             command: pnpm protocol:check
@@ -279,8 +305,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - task: test
-            command: pnpm test
+          - task: test-1/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=1/4
+          - task: test-2/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=2/4
+          - task: test-3/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=3/4
+          - task: test-4/4
+            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=4/4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
