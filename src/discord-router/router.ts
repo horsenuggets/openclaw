@@ -771,7 +771,7 @@ async function routeMessage(params: {
         method: "agent",
         params: {
           message: messageContent || "<media>",
-          channel: "webchat",
+          channel: "discord",
           deliver: false,
           idempotencyKey,
           sessionKey: `agent:main:discord:default:channel:${channelId}`,
