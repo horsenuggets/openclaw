@@ -684,8 +684,7 @@ async function routeMessage(params: {
 
     try {
       // Process attachments: transcribe audio locally, pass images to gateway
-      const WHISPER_URL =
-        process.env.OPENCLAW_WHISPER_URL ?? "http://127.0.0.1:8787/v1/audio/transcriptions";
+      const WHISPER_URL = process.env.OPENCLAW_WHISPER_URL ?? "http://127.0.0.1:8787/inference";
       let gatewayAttachments: Array<{
         type: string;
         mimeType: string;
@@ -715,7 +714,8 @@ async function routeMessage(params: {
               try {
                 const form = new FormData();
                 form.append("file", new Blob([buf], { type: mime }), att.filename);
-                form.append("model", "whisper-1");
+                form.append("response_format", "json");
+                form.append("temperature", "0.0");
                 const whisperResp = await fetch(WHISPER_URL, {
                   method: "POST",
                   body: form,
