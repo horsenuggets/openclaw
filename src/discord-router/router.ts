@@ -167,7 +167,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             for (const [cid] of instances) {
               const candidate = `${config.instancesDir}/${cid}/gogcli/credentials.json`;
               if (fs.existsSync(candidate)) {
-                sourceDir = `${config.instancesDir}/${uid}/gogcli`;
+                sourceDir = `${config.instancesDir}/${cid}/gogcli`;
                 break;
               }
             }
@@ -849,7 +849,7 @@ async function routeMessage(params: {
       ).catch(() => {});
     } else if (isAuthError) {
       // Don't send error to user for auth issues — admin problem
-      runtime.error(`[router] auth error for ${discordUserId}, container may need restart`);
+      runtime.error(`[router] auth error for channel ${channelId}, container may need restart`);
     } else if (isTimeout) {
       await discordSend(
         discordToken,

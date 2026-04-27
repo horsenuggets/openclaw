@@ -376,6 +376,7 @@ export function discoverOpenClawPlugins(params: {
         source: `embedded:${pluginId}/index.js`,
         origin: "bundled",
         workspaceDir: undefined,
+        idHint: pluginId,
       });
     }
   }
