@@ -1,0 +1,18 @@
+services:
+  discord-router:
+    image: ubuntu:24.04
+    container_name: services.discord-router
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ~/deploy/bin/discord-router:/usr/local/bin/discord-router:ro
+      - ~/.openclaw-instances:/root/.openclaw-instances:ro
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: ["discord-router"]

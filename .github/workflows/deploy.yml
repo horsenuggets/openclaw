@@ -7,78 +7,116 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to gateway host
+    name: Deploy to production
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Compile binary
+        run: node scripts/compile.mjs --target linux-x64 --skip-build
 
       - name: Read version
         id: version
         run: |
           VERSION=$(node -p 'require("./package.json").version')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Deploying version: $VERSION"
 
-      - name: Deploy via SSH
+      - name: Assemble deployment tarball
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+        run: |
+          STAGING="/tmp/openclaw-deployment-staging"
+          mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker" "$STAGING/deploy/extensions"
+
+          # Binary
+          cp dist/openclaw-linux-x64 "$STAGING/deploy/bin/openclaw"
+          chmod +x "$STAGING/deploy/bin/openclaw"
+
+          # Extensions
+          cp -r dist/extensions/* "$STAGING/deploy/extensions/"
+
+          # Docker compose files
+          cp infrastructure/docker/discord-router.yml "$STAGING/deploy/docker/"
+          cp infrastructure/docker/agent.yml "$STAGING/deploy/docker/"
+          cp infrastructure/docker/whisper.yml "$STAGING/deploy/docker/"
+
+          # Deploy scripts
+          cp infrastructure/deploy/setup.sh "$STAGING/"
+          cp infrastructure/deploy/boot.sh "$STAGING/"
+          chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh"
+
+          # .env from GitHub Secrets
+          cat > "$STAGING/.env" << EOF
+          DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+          ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+          OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+          EOF
+
+          tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
+          rm -rf "$STAGING"
+          echo "Tarball size: $(du -h /tmp/openclaw-deployment.tar.gz | cut -f1)"
+
+      - name: Deploy to host
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT:-22} ${DEPLOY_USER}@${DEPLOY_HOST}"
+          SCP_CMD="scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${DEPLOY_PORT}"
+          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
 
-          $SSH_CMD bash -c "
-            set -euo pipefail
-            echo '=== Deploying OpenClaw $VERSION ==='
+          $SCP_CMD /tmp/openclaw-deployment.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
 
-            cd ~/git/openclaw
-
-            # Pull latest from release branch
-            git fetch origin release
-            git checkout release
-            git reset --hard origin/release
-            echo 'Pulled release branch.'
-
-            # Build the router (bare-metal Node.js)
-            npm run build
-            echo 'Router built.'
-
-            # Rebuild Docker image
-            docker build -t openclaw:local .
-            echo 'Docker image built.'
-
-            # Regenerate compose and recreate containers
-            bash scripts/instance-compose.sh
-            docker compose -f docker-compose.generated.yml up -d --force-recreate
-            echo 'Containers recreated.'
-
-            # Restart the Discord router
-            pm2 restart openclaw-router
-            echo 'Router restarted.'
-
-            # Wait for containers to be healthy
-            sleep 15
-            docker ps --format 'table {{.Names}}\t{{.Status}}'
-
-            echo '=== Deploy complete: $VERSION ==='
+          $SSH_CMD "
+            rm -rf /tmp/openclaw-deployment
+            mkdir /tmp/openclaw-deployment
+            cd /tmp/openclaw-deployment
+            tar xzf /tmp/openclaw-deployment.tar.gz
+            bash setup.sh
+            rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz
           "
 
           rm -f ~/.ssh/deploy_key
 
-      - name: Create GitHub Release
+      - name: Verify deployment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            --generate-notes \
-            --latest
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          sleep 10
+          $SSH_CMD 'docker ps -a --format "table {{.Names}}\t{{.Status}}"'
+
+          rm -f ~/.ssh/deploy_key

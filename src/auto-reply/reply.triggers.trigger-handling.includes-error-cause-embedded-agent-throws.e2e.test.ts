@@ -110,9 +110,7 @@ describe("trigger handling", () => {
       );
 
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
-      expect(text).toBe(
-        "⚠️ Agent failed before reply: sandbox is not defined.\nLogs: openclaw logs --follow",
-      );
+      expect(text).toBe("⚠️ *Something went wrong. Please try again later.*");
       expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
     });
   });

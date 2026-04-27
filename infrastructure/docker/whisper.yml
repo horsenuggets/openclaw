@@ -1,0 +1,21 @@
+services:
+  whisper:
+    image: ubuntu:24.04
+    container_name: services.whisper
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ~/deploy/bin/whisper-server:/usr/local/bin/whisper-server:ro
+      - ~/deploy/models:/models:ro
+      - ~/logs/whisper:/var/log/whisper
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command:
+      [
+        "sh",
+        "-c",
+        "apt-get update -qq && apt-get install -y -qq ffmpeg >/dev/null 2>&1 && exec whisper-server --model /models/ggml-base.en.bin --host 127.0.0.1 --port 8787 --convert",
+      ]

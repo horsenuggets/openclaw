@@ -502,7 +502,39 @@ export function sanitizeUserFacingText(text: string): string {
     return `*${formatRawAssistantErrorForUi(trimmed)}*`;
   }
 
+  // Catch raw JS/system errors that leaked into agent output. These are
+  // runtime exceptions from tool execution that got captured as response
+  // text. Structural check only (line shape), not content-matching on
+  // normal reply text.
+  if (isLeakedRuntimeError(trimmed)) {
+    return "*An internal error occurred. Please try again.*";
+  }
+
   return collapseConsecutiveDuplicateBlocks(stripped);
+}
+
+/**
+ * Detect raw JS/system runtime errors that should never appear in
+ * user-facing text. Uses structural patterns (error class prefixes,
+ * stack trace shapes) rather than keyword matching.
+ */
+function isLeakedRuntimeError(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  const t = text.trim();
+  return (
+    // Node.js style
+    /^Cannot read propert(y|ies) of (undefined|null)/.test(t) ||
+    // Bun/Safari style
+    /^(undefined|null) is not an object/.test(t) ||
+    // Typed error prefixes
+    /^(TypeError|ReferenceError|SyntaxError|RangeError|EvalError):/.test(t) ||
+    // System error codes
+    /^Error: (ENOENT|EACCES|EPERM|ECONNREFUSED|ETIMEDOUT)/.test(t) ||
+    // Stack trace lines
+    /^at\s+\S+\s+\(.*:\d+:\d+\)/.test(t)
+  );
 }
 
 export function isRateLimitAssistantError(msg: AssistantMessage | undefined): boolean {

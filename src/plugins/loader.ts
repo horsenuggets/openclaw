@@ -1,5 +1,6 @@
 import { createJiti } from "jiti";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OpenClawConfig } from "../config/config.js";
@@ -170,6 +171,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   const cfg = options.config ?? {};
   const logger = options.logger ?? defaultLogger();
   const validateOnly = options.mode === "validate";
+  const isBunBinary =
+    typeof (globalThis as Record<string, unknown>).Bun !== "undefined" &&
+    Boolean((globalThis as Record<string, unknown>).__OPENCLAW_PLUGIN_SDK__);
   const normalized = normalizePluginsConfig(cfg.plugins);
   const cacheKey = buildCacheKey({
     workspaceDir: options.workspaceDir,
@@ -293,7 +297,21 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
 
     let mod: OpenClawPluginModule | null = null;
     try {
-      mod = jiti(candidate.source) as OpenClawPluginModule;
+      // Check for embedded plugins first (statically bundled into binary)
+      const embedded = (globalThis as Record<string, unknown>).__OPENCLAW_EMBEDDED_PLUGINS__ as
+        | Map<string, unknown>
+        | undefined;
+      if (embedded?.has(pluginId)) {
+        mod = embedded.get(pluginId) as OpenClawPluginModule;
+      } else if (isBunBinary) {
+        // Binary mode: extensions are pre-compiled .js, use native require.
+        // The node_modules/openclaw/plugin-sdk shim in the extensions dir
+        // handles "openclaw/plugin-sdk" resolution via globalThis proxy.
+        const nativeRequire = createRequire(candidate.source);
+        mod = nativeRequire(candidate.source) as OpenClawPluginModule;
+      } else {
+        mod = jiti(candidate.source) as OpenClawPluginModule;
+      }
     } catch (err) {
       logger.error(`[plugins] ${record.id} failed to load from ${record.source}: ${String(err)}`);
       record.status = "error";

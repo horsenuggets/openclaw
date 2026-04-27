@@ -6,6 +6,7 @@ import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import type { FollowupRun } from "./queue.js";
 import type { TypingSignaler } from "./typing-mode.js";
 import { resolveAgentModelFallbacksOverride } from "../../agents/agent-scope.js";
+import { FailoverError } from "../../agents/failover-error.js";
 import { runWithModelFallback } from "../../agents/model-fallback.js";
 import {
   isCompactionFailureError,
@@ -76,6 +77,25 @@ export async function runAgentTurnWithFallback(params: {
   storePath?: string;
   resolvedVerboseLevel: VerboseLevel;
 }): Promise<AgentRunLoopResult> {
+  try {
+    return await runAgentTurnWithFallbackInner(params);
+  } catch (topLevelErr) {
+    // Safety net: no runtime error should ever leak to the user.
+    // Log the full error for debugging, return a generic message.
+    defaultRuntime.error(`Agent turn top-level crash: ${String(topLevelErr)}`);
+    if (topLevelErr instanceof Error && topLevelErr.stack) {
+      defaultRuntime.error(topLevelErr.stack);
+    }
+    return {
+      kind: "final",
+      payload: { text: "*An internal error occurred. Please try again.*" },
+    };
+  }
+}
+
+async function runAgentTurnWithFallbackInner(
+  params: Parameters<typeof runAgentTurnWithFallback>[0],
+): Promise<AgentRunLoopResult> {
   let didLogHeartbeatStrip = false;
   let autoCompactionCompleted = false;
   // Track payloads sent directly (not via pipeline) during tool flush to avoid duplicates.
@@ -551,12 +571,25 @@ export async function runAgentTurnWithFallback(params: {
       }
 
       defaultRuntime.error(`Embedded agent failed before reply: ${message}`);
-      const trimmedMessage = message.replace(/\.\s*$/, "");
+
+      // Use structured error classification when available (FailoverError),
+      // fall back to a generic user-friendly message. Never expose raw error
+      // details (JSON bodies, auth tokens, internal paths) to the user.
+      const failoverErr = err instanceof FailoverError ? err : undefined;
+      const reason = failoverErr?.reason;
+      const status = failoverErr?.status;
+
       const fallbackText = isContextOverflow
-        ? "⚠️ Context overflow — prompt too large for this model. Try a shorter message or a larger-context model."
+        ? "⚠️ Context overflow: prompt too large for this model. Try a shorter message or a larger-context model."
         : isRoleOrderingError
-          ? "⚠️ Message ordering conflict - please try again. If this persists, use /new to start a fresh session."
-          : `⚠️ Agent failed before reply: ${trimmedMessage}.\nLogs: openclaw logs --follow`;
+          ? "⚠️ Message ordering conflict. Please try again. If this persists, use /new to start a fresh session."
+          : reason === "auth" || status === 401 || status === 403
+            ? "⚠️ *Authentication error. Please contact the operator.*"
+            : reason === "rate_limit" || status === 429
+              ? "⚠️ *Rate limited. Please try again in a moment.*"
+              : reason === "billing"
+                ? "⚠️ *Usage limit reached. Please contact the operator.*"
+                : "⚠️ *Something went wrong. Please try again later.*";
 
       return {
         kind: "final",

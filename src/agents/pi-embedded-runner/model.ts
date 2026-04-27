@@ -16,6 +16,7 @@ type InlineModelEntry = ModelDefinitionConfig & { provider: string; baseUrl?: st
 type InlineProviderConfig = {
   baseUrl?: string;
   api?: ModelDefinitionConfig["api"];
+  headers?: Record<string, string>;
   models?: ModelDefinitionConfig[];
 };
 
@@ -32,6 +33,7 @@ export function buildInlineProviderModels(
       provider: trimmed,
       baseUrl: entry?.baseUrl,
       api: model.api ?? entry?.api,
+      headers: model.headers ?? entry?.headers,
     }));
   });
 }
@@ -93,6 +95,7 @@ export function resolveModel(
         api: providerCfg?.api ?? "openai-responses",
         provider,
         baseUrl: providerCfg?.baseUrl,
+        headers: providerCfg?.headers,
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

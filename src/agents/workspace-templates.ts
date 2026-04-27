@@ -38,8 +38,15 @@ export async function resolveWorkspaceTemplateDir(opts?: {
     const cwd = opts?.cwd ?? process.cwd();
 
     const packageRoot = await resolveOpenClawPackageRoot({ moduleUrl, argv1, cwd });
+    // In binary mode (bun --compile), check next to the executable.
+    const execDirCandidate =
+      typeof (globalThis as Record<string, unknown>).Bun !== "undefined"
+        ? path.join(path.dirname(process.execPath), "docs", "reference", "templates")
+        : null;
+
     const candidates = [
       packageRoot ? path.join(packageRoot, "docs", "reference", "templates") : null,
+      execDirCandidate,
       cwd ? path.resolve(cwd, "docs", "reference", "templates") : null,
       FALLBACK_TEMPLATE_DIR,
     ].filter(Boolean) as string[];

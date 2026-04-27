@@ -360,5 +360,26 @@ export function discoverOpenClawPlugins(params: {
     });
   }
 
+  // Add embedded plugins (statically bundled into the binary at build time).
+  // These don't exist on the filesystem — they're already loaded in memory.
+  const embedded = (globalThis as Record<string, unknown>).__OPENCLAW_EMBEDDED_PLUGINS__ as
+    | Map<string, unknown>
+    | undefined;
+  if (embedded) {
+    for (const [pluginId] of embedded) {
+      if (seen.has(pluginId)) {
+        continue; // filesystem version takes precedence
+      }
+      seen.add(pluginId);
+      candidates.push({
+        rootDir: `embedded:${pluginId}`,
+        source: `embedded:${pluginId}/index.js`,
+        origin: "bundled",
+        workspaceDir: undefined,
+        idHint: pluginId,
+      });
+    }
+  }
+
   return { candidates, diagnostics };
 }

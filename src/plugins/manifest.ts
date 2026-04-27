@@ -45,6 +45,45 @@ export function resolvePluginManifestPath(rootDir: string): string {
 }
 
 export function loadPluginManifest(rootDir: string): PluginManifestLoadResult {
+  // Handle embedded plugins (statically bundled into binary at build time)
+  if (rootDir.startsWith("embedded:")) {
+    const pluginId = rootDir.slice("embedded:".length);
+    const embedded = (globalThis as Record<string, unknown>).__OPENCLAW_EMBEDDED_PLUGINS__ as
+      | Map<string, unknown>
+      | undefined;
+    const mod = embedded?.get(pluginId) as Record<string, unknown> | undefined;
+    const def =
+      mod && typeof mod === "object" ? ((mod as { default?: unknown }).default ?? mod) : undefined;
+    if (!def || (typeof def !== "object" && typeof def !== "function")) {
+      return {
+        ok: false,
+        error: `embedded plugin ${pluginId} has no valid export`,
+        manifestPath: rootDir,
+      };
+    }
+    // Plugin can export an object { id, name, configSchema, register } or just a function.
+    // For function exports, synthesize a minimal manifest.
+    const d = typeof def === "function" ? { id: pluginId } : (def as Record<string, unknown>);
+    const id = typeof d.id === "string" ? d.id : pluginId;
+    return {
+      ok: true,
+      manifest: {
+        id,
+        configSchema: isRecord(d.configSchema)
+          ? d.configSchema
+          : { type: "object", properties: {} },
+        kind: typeof d.kind === "string" ? (d.kind as PluginKind) : undefined,
+        name: typeof d.name === "string" ? d.name : undefined,
+        description: typeof d.description === "string" ? d.description : undefined,
+        version: typeof d.version === "string" ? d.version : undefined,
+        channels: normalizeStringList(d.channels),
+        providers: normalizeStringList(d.providers),
+        skills: normalizeStringList(d.skills),
+      },
+      manifestPath: rootDir,
+    };
+  }
+
   const manifestPath = resolvePluginManifestPath(rootDir);
   if (!fs.existsSync(manifestPath)) {
     return { ok: false, error: `plugin manifest not found: ${manifestPath}`, manifestPath };

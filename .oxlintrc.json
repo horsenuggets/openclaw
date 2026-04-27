@@ -25,6 +25,7 @@
     "dist/",
     "docs/_layouts/",
     "node_modules/",
+    "whisper/",
     "patches/",
     "pnpm-lock.yaml/",
     "skills/",
