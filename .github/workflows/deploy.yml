@@ -102,20 +102,29 @@ jobs:
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          SCP_CMD="scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${DEPLOY_PORT}"
-          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key"
+          WIN_SSH="ssh $SSH_OPTS -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
+          WSL_SSH="ssh $SSH_OPTS -p 10022 openclaw@${DEPLOY_HOST}"
 
-          $SCP_CMD /tmp/openclaw-deployment.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
+          # Ensure C:\tmp exists on Windows
+          $WIN_SSH "New-Item -ItemType Directory -Force -Path C:\tmp | Out-Null"
 
-          $SSH_CMD "
+          # Upload tarball to Windows host
+          scp $SSH_OPTS -P ${DEPLOY_PORT} /tmp/openclaw-deployment.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:C:/tmp/openclaw-deployment.tar.gz"
+
+          # Copy into WSL and run setup
+          $WIN_SSH "wsl -d OpenClaw -u openclaw -e bash -lc '
+            cp /mnt/c/tmp/openclaw-deployment.tar.gz /tmp/
             rm -rf /tmp/openclaw-deployment
-            mkdir /tmp/openclaw-deployment
+            mkdir -p /tmp/openclaw-deployment
             cd /tmp/openclaw-deployment
             tar xzf /tmp/openclaw-deployment.tar.gz
             bash setup.sh
             rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz
-          "
+          '"
 
+          # Cleanup Windows temp
+          $WIN_SSH "Remove-Item -Force C:\tmp\openclaw-deployment.tar.gz -ErrorAction SilentlyContinue"
           rm -f ~/.ssh/deploy_key
 
       - name: Verify deployment
@@ -129,9 +138,10 @@ jobs:
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key"
+          WIN_SSH="ssh $SSH_OPTS -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
 
           sleep 15
-          $SSH_CMD 'docker ps -a --format "table {{.Names}}\t{{.Status}}"'
+          $WIN_SSH "wsl -d OpenClaw -u openclaw -e bash -c 'docker ps -a --format \"table {{.Names}}\t{{.Status}}\"'"
 
           rm -f ~/.ssh/deploy_key
