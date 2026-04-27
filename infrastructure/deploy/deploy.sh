@@ -38,6 +38,8 @@ cp "$PROJECT_ROOT/dist/discord-router-linux-x64" "$STAGING/deploy/bin/discord-ro
 # cp "$PROJECT_ROOT/dist/whisper-linux-x64" "$STAGING/deploy/bin/whisper"  # when available
 
 # Extensions (pre-compiled plugins)
+# Extensions are now embedded in the binary. Still ship them as fallback
+# for non-binary execution (dev/npm installs).
 if [ -d "$PROJECT_ROOT/dist/extensions" ]; then
   cp -r "$PROJECT_ROOT/dist/extensions" "$STAGING/deploy/"
 fi

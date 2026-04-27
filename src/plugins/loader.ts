@@ -297,7 +297,13 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
 
     let mod: OpenClawPluginModule | null = null;
     try {
-      if (isBunBinary) {
+      // Check for embedded plugins first (statically bundled into binary)
+      const embedded = (globalThis as Record<string, unknown>).__OPENCLAW_EMBEDDED_PLUGINS__ as
+        | Map<string, unknown>
+        | undefined;
+      if (embedded?.has(pluginId)) {
+        mod = embedded.get(pluginId) as OpenClawPluginModule;
+      } else if (isBunBinary) {
         // Binary mode: extensions are pre-compiled .js, use native require.
         // The node_modules/openclaw/plugin-sdk shim in the extensions dir
         // handles "openclaw/plugin-sdk" resolution via globalThis proxy.

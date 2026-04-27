@@ -22,7 +22,7 @@ for dir in models bin/gog bin/whisper-server; do
     cp -a "$HOME/deploy/$dir" "/tmp/deploy-preserve/$dir"
   fi
 done
-rm -rf ~/deploy
+sudo rm -rf ~/deploy
 mv deploy ~/deploy
 # Restore persistent data
 if [ -d /tmp/deploy-preserve ]; then

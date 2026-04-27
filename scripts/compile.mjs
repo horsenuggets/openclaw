@@ -143,6 +143,9 @@ writeFileSync(
     `import * as pluginSdk from "./plugin-sdk/index.js";`,
     `globalThis.__OPENCLAW_PLUGIN_SDK__ = pluginSdk;`,
     ``,
+    `// Import embedded plugins (generated at build time, may not exist yet)`,
+    `try { await import("./binary-embedded-plugins.js"); } catch (e) { console.error("[embedded-plugins] failed to load:", e?.message ?? e); }`,
+    ``,
     `await import("./entry.js");`,
   ].join("\n") + "\n",
 );
@@ -191,47 +194,9 @@ console.log(`Generated ${wrapperEntry} (standalone binary entry)`);
   }
 }
 
-// Step 5: Compile for each target
-const externals = EXTERNAL_MODULES.map((m) => `--external ${m}`).join(" ");
-
-console.log(`\nCompiling ${targets.length} target(s)...`);
-
-for (const target of targets) {
-  const isWindows = target.name.startsWith("windows");
-  const outfile = `dist/openclaw-${target.name}${isWindows ? ".exe" : ""}`;
-  console.log(`  ${target.name} -> ${outfile}`);
-
-  try {
-    execSync(
-      `bun build ${wrapperEntry} --compile --target=${target.bunTarget} ${externals} --outfile ${outfile}`,
-      { stdio: "inherit" },
-    );
-  } catch {
-    console.error(`  Failed to compile for ${target.name}`);
-    process.exit(1);
-  }
-}
-
-// Step 5b: Compile discord-router standalone binary for each target
-console.log(`\nCompiling discord-router for ${targets.length} target(s)...`);
-
-for (const target of targets) {
-  const isWindows = target.name.startsWith("windows");
-  const routerOutfile = `dist/discord-router-${target.name}${isWindows ? ".exe" : ""}`;
-  console.log(`  ${target.name} -> ${routerOutfile}`);
-
-  try {
-    execSync(
-      `bun build src/discord-router/entry.ts --compile --target=${target.bunTarget} --outfile ${routerOutfile}`,
-      { stdio: "inherit" },
-    );
-  } catch {
-    console.error(`  Failed to compile discord-router for ${target.name}`);
-    // Non-fatal — the main binary's discord-router subcommand still works
-  }
-}
-
-// Step 6: Copy extensions directory for plugin resolution
+// Step 5: Copy and pre-compile extensions (must happen before binary compilation
+// so embedded plugins can be included in the binary).
+// Step 6 (below) then compiles the binaries with extensions embedded.
 // The binary looks for extensions/ next to the executable.
 // Ship the full extensions directory alongside the binary.
 if (existsSync("extensions")) {
@@ -293,6 +258,76 @@ if (existsSync("extensions")) {
   );
   writeFileSync(`${shimSdkDir}/index.js`, "module.exports = globalThis.__OPENCLAW_PLUGIN_SDK__;\n");
   console.log("  Created openclaw/plugin-sdk shim in extensions/node_modules/");
+
+  // Generate embedded plugins module that statically imports all compiled extensions.
+  // This allows bun --compile to include them in the binary.
+  const embeddedImports = [];
+  const embeddedRegistrations = [];
+  // Extensions that fail to load as embedded (legacy export patterns, import issues).
+  // These still load from the extensions/ directory fallback.
+  const EMBEDDED_SKIP = new Set(["lobster", "open-prose"]);
+  for (const extDir of readdirSync("dist/extensions").sort()) {
+    const indexJs = `dist/extensions/${extDir}/index.js`;
+    if (!existsSync(indexJs) || extDir === "node_modules" || EMBEDDED_SKIP.has(extDir)) {
+      continue;
+    }
+    const varName = `ext_${extDir.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    embeddedImports.push(`import ${varName} from "./extensions/${extDir}/index.js";`);
+    embeddedRegistrations.push(`  ["${extDir}", ${varName}],`);
+  }
+  const embeddedEntry = "dist/binary-embedded-plugins.js";
+  writeFileSync(
+    embeddedEntry,
+    [
+      `// Auto-generated: statically import all extensions for binary embedding.`,
+      ...embeddedImports,
+      ``,
+      `globalThis.__OPENCLAW_EMBEDDED_PLUGINS__ = new Map([`,
+      ...embeddedRegistrations,
+      `]);`,
+      ``,
+    ].join("\n"),
+  );
+  console.log(`  Generated ${embeddedEntry} (${embeddedRegistrations.length} extensions embedded)`);
+}
+
+// Step 6: Compile binaries (after extensions are embedded)
+const externals = EXTERNAL_MODULES.map((m) => `--external ${m}`).join(" ");
+
+console.log(`\nCompiling ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const outfile = `dist/openclaw-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${outfile}`);
+
+  try {
+    execSync(
+      `bun build ${wrapperEntry} --compile --target=${target.bunTarget} ${externals} --outfile ${outfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile for ${target.name}`);
+    process.exit(1);
+  }
+}
+
+// Step 6b: Compile discord-router standalone binary
+console.log(`\nCompiling discord-router for ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const routerOutfile = `dist/discord-router-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${routerOutfile}`);
+
+  try {
+    execSync(
+      `bun build src/discord-router/entry.ts --compile --target=${target.bunTarget} --outfile ${routerOutfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile discord-router for ${target.name}`);
+  }
 }
 
 // Step 7: Copy workspace templates for agent system prompts.

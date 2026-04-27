@@ -14,13 +14,11 @@ services:
     volumes:
       - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro
-      - ~/deploy/extensions:/opt/openclaw/extensions:ro
       - ~/deploy/docs:/usr/local/bin/docs:ro
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}:/root/.openclaw
       - ~/.claude:/root/.claude
       - ~/logs/channel-${OPENCLAW_CHANNEL_ID}:/tmp/openclaw
     environment:
-      - OPENCLAW_BUNDLED_PLUGINS_DIR=/opt/openclaw/extensions
       - OPENCLAW_SKIP_CHANNELS=1
     logging:
       driver: json-file
