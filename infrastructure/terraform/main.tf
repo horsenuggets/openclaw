@@ -10,7 +10,7 @@ terraform {
 }
 
 provider "github" {
-  owner = "HorseNuggets"
+  owner = "horsenuggets"
   # Authenticates via GITHUB_TOKEN environment variable
 }
 
