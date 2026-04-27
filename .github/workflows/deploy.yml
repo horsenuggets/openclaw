@@ -56,9 +56,9 @@ jobs:
           cp -r dist/extensions/* "$STAGING/deploy/extensions/"
 
           # Docker compose files
-          cp infrastructure/docker/gateway.yml "$STAGING/deploy/docker/"
+          cp infrastructure/docker/discord-router.yml "$STAGING/deploy/docker/"
+          cp infrastructure/docker/agent.yml "$STAGING/deploy/docker/"
           cp infrastructure/docker/whisper.yml "$STAGING/deploy/docker/"
-          cp infrastructure/docker/user.yml "$STAGING/deploy/docker/"
 
           # Deploy scripts
           cp infrastructure/deploy/setup.sh "$STAGING/"
@@ -117,6 +117,6 @@ jobs:
           SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
 
           sleep 10
-          $SSH_CMD 'docker ps -a --filter "name=openclaw-" --format "table {{.Names}}\t{{.Status}}"'
+          $SSH_CMD 'docker ps -a --format "table {{.Names}}\t{{.Status}}"'
 
           rm -f ~/.ssh/deploy_key

@@ -60,7 +60,16 @@ export function loadRouterConfig(opts: {
   let portRegistry: PortRegistry = { basePort: 18789, assignments: {} };
   if (fs.existsSync(portsPath)) {
     try {
-      portRegistry = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
+      const parsed = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
+      if (parsed && typeof parsed === "object" && typeof parsed.basePort === "number") {
+        portRegistry = {
+          basePort: parsed.basePort,
+          assignments:
+            parsed.assignments && typeof parsed.assignments === "object"
+              ? (parsed.assignments as Record<string, number>)
+              : {},
+        };
+      }
     } catch {
       // Fall through with defaults
     }
@@ -123,7 +132,7 @@ export function loadRouterConfig(opts: {
 
     instances.set(channelId, {
       channelId,
-      port: envPort ? Number(envPort) : port,
+      port: envPort && Number.isFinite(Number(envPort)) ? Number(envPort) : port,
       token: gatewayToken,
       onboarded: onboardingState === "complete",
       onboardingState,

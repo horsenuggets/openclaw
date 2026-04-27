@@ -14,7 +14,7 @@ ssh "$HOST" 'echo "$(whoami)@$(hostname) | $(uptime)"'
 
 echo ""
 echo "--- Containers ---"
-ssh "$HOST" 'docker ps -a --filter "name=openclaw-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+ssh "$HOST" 'docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 
 echo ""
 echo "--- Instances ---"
