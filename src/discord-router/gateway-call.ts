@@ -1,7 +1,7 @@
 /**
  * Lightweight gateway WebSocket call for the discord-router.
- * No config loading, TLS, tailnet, or device identity — just a direct
- * WebSocket JSON-RPC call to a local container.
+ * Uses the OpenClaw gateway wire protocol (not JSON-RPC).
+ * No config loading, TLS, tailnet, or device identity.
  */
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
@@ -24,14 +24,15 @@ export type CallGatewayOpts = {
 };
 
 /**
- * Connect to a gateway container via WebSocket, authenticate, send a
- * JSON-RPC request, and wait for the final response.
+ * Connect to a gateway container via WebSocket, send a connect handshake,
+ * then send the actual request and wait for the final response.
  */
 export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts): Promise<T> {
   const timeoutMs = opts.timeoutMs ?? 60_000;
 
   return new Promise<T>((resolve, reject) => {
     let settled = false;
+    const connectId = randomUUID();
     const requestId = randomUUID();
 
     const stop = (err?: Error, value?: T) => {
@@ -48,19 +49,27 @@ export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts):
     const ws = new WebSocket(opts.url);
 
     ws.on("open", () => {
-      // Send hello with auth
+      // Send connect handshake (OpenClaw gateway protocol)
       ws.send(
         JSON.stringify({
-          jsonrpc: "2.0",
-          method: "hello",
+          type: "req",
+          id: connectId,
+          method: "connect",
           params: {
-            clientName: "cli",
-            clientVersion: "router",
-            mode: "backend",
-            protocolVersion: 1,
-            ...(opts.token ? { token: opts.token } : {}),
+            minProtocol: 3,
+            maxProtocol: 3,
+            client: {
+              id: "cli",
+              version: "router",
+              platform: "linux",
+              mode: "backend",
+              instanceId: randomUUID(),
+            },
+            caps: [],
+            auth: opts.token ? { token: opts.token } : undefined,
+            role: "operator",
+            scopes: ["operator.admin"],
           },
-          id: randomUUID(),
         }),
       );
     });
@@ -74,41 +83,46 @@ export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts):
         return;
       }
 
-      // Handle hello response — send the actual request
-      if (
-        msg.id &&
-        msg.result &&
-        typeof msg.result === "object" &&
-        "ok" in (msg.result as object)
-      ) {
+      const msgType = msg.type as string | undefined;
+      const msgId = msg.id as string | undefined;
+
+      // Handle connect response — send the actual request
+      if (msgType === "res" && msgId === connectId && msg.ok !== false) {
         ws.send(
           JSON.stringify({
-            jsonrpc: "2.0",
+            type: "req",
+            id: requestId,
             method: opts.method,
             params: opts.params ?? {},
-            id: requestId,
           }),
         );
         return;
       }
 
-      // Handle final response
-      if (msg.id === requestId && msg.result !== undefined) {
-        stop(undefined, msg.result as T);
+      // Handle connect error
+      if (msgType === "res" && msgId === connectId && msg.ok === false) {
+        const err = msg.error as { message?: string } | undefined;
+        stop(new Error(`gateway connect failed: ${err?.message ?? "unknown error"}`));
         return;
       }
 
-      // Handle error
-      if (msg.id === requestId && msg.error) {
-        const err = msg.error as { message?: string; data?: string };
-        stop(new Error(err.message ?? err.data ?? "gateway error"));
+      // Handle response to our request
+      if (msgType === "res" && msgId === requestId) {
+        if (msg.ok === false) {
+          const err = msg.error as { message?: string } | undefined;
+          stop(new Error(err?.message ?? "gateway request failed"));
+          return;
+        }
+        // If expectFinal, skip "accepted" acks and wait for the final result
+        const payload = msg.payload as { status?: string } | undefined;
+        if (opts.expectFinal && payload?.status === "accepted") {
+          return; // keep waiting
+        }
+        stop(undefined, msg.payload as T);
         return;
       }
 
-      // Handle streaming notifications — ignore (wait for final)
-      if (opts.expectFinal && !msg.id && msg.method) {
-        return;
-      }
+      // Ignore streaming notifications (type: "event", etc.) — wait for final "res"
     });
 
     ws.on("error", (err: Error) => {
