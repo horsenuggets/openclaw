@@ -16,6 +16,7 @@ type InlineModelEntry = ModelDefinitionConfig & { provider: string; baseUrl?: st
 type InlineProviderConfig = {
   baseUrl?: string;
   api?: ModelDefinitionConfig["api"];
+  headers?: Record<string, string>;
   models?: ModelDefinitionConfig[];
 };
 

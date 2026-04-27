@@ -172,7 +172,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   const logger = options.logger ?? defaultLogger();
   const validateOnly = options.mode === "validate";
   const isBunBinary =
-    typeof globalThis.Bun !== "undefined" &&
+    typeof (globalThis as Record<string, unknown>).Bun !== "undefined" &&
     Boolean((globalThis as Record<string, unknown>).__OPENCLAW_PLUGIN_SDK__);
   const normalized = normalizePluginsConfig(cfg.plugins);
   const cacheKey = buildCacheKey({

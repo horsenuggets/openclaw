@@ -519,7 +519,9 @@ export function sanitizeUserFacingText(text: string): string {
  * stack trace shapes) rather than keyword matching.
  */
 function isLeakedRuntimeError(text: string): boolean {
-  if (!text) return false;
+  if (!text) {
+    return false;
+  }
   const t = text.trim();
   return (
     // Node.js style

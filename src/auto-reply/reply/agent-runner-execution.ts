@@ -585,7 +585,7 @@ async function runAgentTurnWithFallbackInner(
           ? "⚠️ Message ordering conflict. Please try again. If this persists, use /new to start a fresh session."
           : reason === "auth" || status === 401 || status === 403
             ? "⚠️ *Authentication error. Please contact the operator.*"
-            : reason === "rate-limit" || status === 429
+            : reason === "rate_limit" || status === 429
               ? "⚠️ *Rate limited. Please try again in a moment.*"
               : reason === "billing"
                 ? "⚠️ *Usage limit reached. Please contact the operator.*"

@@ -72,7 +72,7 @@ export function loadRouterConfig(opts: {
   const entries = fs.readdirSync(instancesDir, { withFileTypes: true });
   const sortedEntries = entries
     .filter((e) => e.isDirectory() && DISCORD_ID_RE.test(e.name))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .toSorted((a, b) => a.name.localeCompare(b.name));
 
   for (const entry of sortedEntries) {
     const channelId = entry.name;

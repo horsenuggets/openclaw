@@ -36,14 +36,19 @@ export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts):
     const requestId = randomUUID();
 
     const stop = (err?: Error, value?: T) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       clearTimeout(timer);
       try {
         ws.close();
       } catch {}
-      if (err) reject(err);
-      else resolve(value as T);
+      if (err) {
+        reject(err);
+      } else {
+        resolve(value as T);
+      }
     };
 
     const ws = new WebSocket(opts.url);
@@ -75,7 +80,9 @@ export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts):
     });
 
     ws.on("message", (raw: Buffer) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       let msg: Record<string, unknown>;
       try {
         msg = JSON.parse(raw.toString());

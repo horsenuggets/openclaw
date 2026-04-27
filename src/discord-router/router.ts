@@ -10,14 +10,6 @@ import { refreshToken, setOnboardingState, setUserPreference } from "./config.js
 import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
 
-type AgentResult = {
-  runId: string;
-  status: string;
-  result?: {
-    payloads?: Array<{ text?: string; mediaUrl?: string; mediaUrls?: string[] }>;
-  };
-};
-
 export type RouterRuntime = {
   log: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
@@ -765,7 +757,7 @@ async function routeMessage(params: {
       // Re-read token from disk so we never use a stale cached value
       const freshToken = refreshToken(instance);
       const idempotencyKey = randomUUID();
-      const result = await callGatewaySimple<AgentResult>({
+      const result = await callGatewaySimple({
         url: `ws://127.0.0.1:${instance.port}`,
         token: freshToken || undefined,
         method: "agent",

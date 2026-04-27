@@ -266,7 +266,7 @@ if (existsSync("extensions")) {
   // Extensions that fail to load as embedded (legacy export patterns, import issues).
   // These still load from the extensions/ directory fallback.
   const EMBEDDED_SKIP = new Set(["lobster", "open-prose"]);
-  for (const extDir of readdirSync("dist/extensions").sort()) {
+  for (const extDir of readdirSync("dist/extensions").toSorted()) {
     const indexJs = `dist/extensions/${extDir}/index.js`;
     if (!existsSync(indexJs) || extDir === "node_modules" || EMBEDDED_SKIP.has(extDir)) {
       continue;

@@ -39,7 +39,7 @@ function ensureExperimentalWarningSuppressed(): boolean {
     return false;
   }
   // Bun doesn't support --disable-warning and doesn't emit ExperimentalWarning.
-  if (typeof globalThis.Bun !== "undefined") {
+  if (typeof (globalThis as Record<string, unknown>).Bun !== "undefined") {
     return false;
   }
   if (hasExperimentalWarningSuppressed()) {
