@@ -15,11 +15,7 @@ services:
         max-file: "5"
     command:
       [
-        "whisper-server",
-        "--model",
-        "/models/ggml-base.en.bin",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "8787",
+        "sh",
+        "-c",
+        "apt-get update -qq && apt-get install -y -qq ffmpeg >/dev/null 2>&1 && exec whisper-server --model /models/ggml-base.en.bin --host 127.0.0.1 --port 8787 --convert",
       ]
