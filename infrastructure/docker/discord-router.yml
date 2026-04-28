@@ -6,13 +6,21 @@ services:
     network_mode: host
     volumes:
       - ~/deploy/bin/discord-router:/usr/local/bin/discord-router:ro
+      - ~/deploy/bin/health-monitor:/usr/local/bin/health-monitor:ro
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
+      - ROUTER_BIN=/usr/local/bin/discord-router
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:18801/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["discord-router"]
+    command: ["health-monitor"]

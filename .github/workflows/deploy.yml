@@ -64,6 +64,7 @@ jobs:
           # Binaries
           cp dist/openclaw-linux-x64 "$STAGING/deploy/bin/openclaw"
           cp dist/discord-router-linux-x64 "$STAGING/deploy/bin/discord-router"
+          cp dist/health-monitor-linux-x64 "$STAGING/deploy/bin/health-monitor"
           cp infrastructure/scripts/openclawctl "$STAGING/deploy/bin/openclawctl"
           chmod +x "$STAGING/deploy/bin/"*
 
