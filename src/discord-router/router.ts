@@ -316,8 +316,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             const botUser = d.user;
             runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
 
-            // Send "Back online." to all onboarded users
-            void sendLifecycleToAll(discordToken, instances, "*Back online.*", runtime);
+            // Lifecycle messages ("Back online") handled by health-monitor sidecar.
 
             // Startup recovery: check for unanswered DMs and respond
             // Delay to let containers finish starting before connecting.
@@ -612,13 +611,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   // Keep running until process exit
   await new Promise<void>((resolve) => {
-    const shutdown = async () => {
+    const shutdown = () => {
       shuttingDown = true;
-      await sendLifecycleToAll(discordToken, instances, "*Shutting down...*", runtime);
+      // Lifecycle messages ("Shutting down") handled by health-monitor sidecar.
       resolve();
     };
-    process.once("SIGINT", () => void shutdown());
-    process.once("SIGTERM", () => void shutdown());
+    process.once("SIGINT", () => shutdown());
+    process.once("SIGTERM", () => shutdown());
   });
 }
 
@@ -1021,27 +1020,9 @@ async function discordTyping(token: string, channelId: string): Promise<void> {
   }).catch(() => {});
 }
 
-/** Send a lifecycle message (Back online / Shutting down) to all onboarded channels. */
-async function sendLifecycleToAll(
-  discordToken: string,
-  instances: Map<string, InstanceConfig>,
-  message: string,
-  runtime: RouterRuntime,
-): Promise<void> {
-  for (const [channelId, instance] of instances) {
-    if (instance.onboardingState !== "complete") {
-      continue;
-    }
-    if (!instance.preferences.lifecycleMessages) {
-      continue;
-    }
-    try {
-      await discordSend(discordToken, channelId, message);
-    } catch {
-      runtime.log(`[router] failed to send lifecycle message to channel ${channelId}`);
-    }
-  }
-}
+// Lifecycle messages moved to health-monitor sidecar.
+// The monitor sends "Back online" / "Shutting down" via Discord REST API
+// based on the router process state, respecting per-channel preferences.
 
 /** Open a DM channel with a user and return the channel ID. */
 async function openDMChannel(token: string, userId: string): Promise<string | null> {

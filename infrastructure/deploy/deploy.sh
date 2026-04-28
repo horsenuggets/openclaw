@@ -35,6 +35,7 @@ mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker"
 # Binaries
 cp "$PROJECT_ROOT/dist/openclaw-linux-x64" "$STAGING/deploy/bin/openclaw"
 cp "$PROJECT_ROOT/dist/discord-router-linux-x64" "$STAGING/deploy/bin/discord-router"
+cp "$PROJECT_ROOT/dist/health-monitor-linux-x64" "$STAGING/deploy/bin/health-monitor"
 # cp "$PROJECT_ROOT/dist/whisper-linux-x64" "$STAGING/deploy/bin/whisper"  # when available
 
 # Extensions (pre-compiled plugins)

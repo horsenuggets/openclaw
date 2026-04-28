@@ -330,6 +330,24 @@ for (const target of targets) {
   }
 }
 
+// Step 6c: Compile health-monitor standalone binary
+console.log(`\nCompiling health-monitor for ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const monitorOutfile = `dist/health-monitor-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${monitorOutfile}`);
+
+  try {
+    execSync(
+      `bun build discord-health-monitor/entry.ts --compile --target=${target.bunTarget} --outfile ${monitorOutfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile health-monitor for ${target.name}`);
+  }
+}
+
 // Step 7: Copy workspace templates for agent system prompts.
 // The binary resolves templates relative to process.execPath.
 if (existsSync("docs/reference/templates")) {
