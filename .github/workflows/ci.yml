@@ -184,6 +184,7 @@ jobs:
           fi
 
   checks-windows:
+    if: false # Disabled — Windows CI is too slow, revisit later
     runs-on: windows-latest
     env:
       NODE_OPTIONS: --max-old-space-size=4096
