@@ -616,8 +616,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       // Lifecycle messages ("Shutting down") handled by health-monitor sidecar.
       resolve();
     };
-    process.once("SIGINT", () => void shutdown());
-    process.once("SIGTERM", () => void shutdown());
+    process.once("SIGINT", () => shutdown());
+    process.once("SIGTERM", () => shutdown());
   });
 }
 
