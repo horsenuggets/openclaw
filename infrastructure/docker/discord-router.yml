@@ -13,7 +13,11 @@ services:
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:18801/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /tmp/health-monitor.ok && test $(($(date +%s) - $(stat -c %Y /tmp/health-monitor.ok))) -lt 30",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3

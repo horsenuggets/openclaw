@@ -140,6 +140,10 @@ function spawnRouter(): ChildProcess {
     console.log(`[health] discord-router started (pid ${child.pid})`);
     supervisorState = "running";
     lastHealthyAt = Date.now();
+    // Write heartbeat file for Docker healthcheck
+    try {
+      fs.writeFileSync("/tmp/health-monitor.ok", String(Date.now()));
+    } catch {}
 
     // Reset backoff after 30s stable
     setTimeout(() => {
@@ -226,6 +230,20 @@ async function main() {
 
   // Spawn router
   routerProcess = spawnRouter();
+
+  // Periodic heartbeat file for Docker healthcheck (every 10s)
+  setInterval(() => {
+    if (supervisorState === "running") {
+      try {
+        fs.writeFileSync("/tmp/health-monitor.ok", String(Date.now()));
+      } catch {}
+    } else {
+      // Remove heartbeat file when unhealthy
+      try {
+        fs.unlinkSync("/tmp/health-monitor.ok");
+      } catch {}
+    }
+  }, 10_000);
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
