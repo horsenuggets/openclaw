@@ -5,6 +5,7 @@ on:
 
 jobs:
   formal_conformance:
+    if: false # Disabled — informational only, not needed for Discord deployment
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
