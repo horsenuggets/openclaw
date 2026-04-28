@@ -216,17 +216,8 @@ jobs:
             task: build & lint
             command: pnpm build && pnpm lint
           - runtime: node
-            task: test-1/4
-            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=1/4
-          - runtime: node
-            task: test-2/4
-            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=2/4
-          - runtime: node
-            task: test-3/4
-            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=3/4
-          - runtime: node
-            task: test-4/4
-            command: pnpm canvas:a2ui:bundle && npx vitest run --shard=4/4
+            task: test
+            command: pnpm canvas:a2ui:bundle && pnpm test
           - runtime: node
             task: protocol
             command: pnpm protocol:check
