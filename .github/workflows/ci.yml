@@ -202,9 +202,10 @@ jobs:
           fi
 
   checks-windows:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      CLAWDBOT_TEST_WORKERS: 1
     defaults:
       run:
         shell: bash
