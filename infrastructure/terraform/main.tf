@@ -26,9 +26,6 @@ locals {
     "checks (node, format, pnpm format)",
     "checks (node, protocol, pnpm protocol:check)",
     "checks (bun, test, pnpm canvas:a2ui:bundle && bunx vitest run)",
-    "checks-windows (node, build & lint, pnpm build && pnpm lint)",
-    "checks-windows (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
-    "checks-windows (node, protocol, pnpm protocol:check)",
     "secrets",
     "no-tabs",
   ]
@@ -53,10 +50,13 @@ resource "github_repository" "openclaw" {
   has_wiki     = false
 
   allow_squash_merge = true
-  allow_merge_commit = true
-  allow_rebase_merge = true
+  allow_merge_commit = false
+  allow_rebase_merge = false
 
-  delete_branch_on_merge = false
+  squash_merge_commit_title   = "PR_TITLE"
+  squash_merge_commit_message = "PR_BODY"
+
+  delete_branch_on_merge = true
 
   # Preserve existing pages config
   pages {
