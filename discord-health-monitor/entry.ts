@@ -4,13 +4,6 @@
  *
  * Supervises the discord-router process and manages lifecycle messages.
  * Runs as the container entrypoint, spawning discord-router as a child process.
- *
- * Responsibilities:
- * - Spawn and supervise the discord-router process
- * - Restart with exponential backoff on crashes
- * - Send "Back online" / "Shutting down" via Discord REST API
- * - Respect per-channel lifecycleMessages preference
- * - Expose health endpoint for Docker healthcheck
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -24,6 +17,8 @@ const INSTANCES_DIR =
   path.join(process.env.HOME ?? "/root", ".openclaw-instances");
 const ROUTER_BIN = process.env.ROUTER_BIN ?? "/usr/local/bin/discord-router";
 const DISCORD_ID_RE = /^\d{17,20}$/;
+// Max time to wait for lifecycle messages before giving up (prevents hang)
+const LIFECYCLE_TIMEOUT_MS = 5_000;
 
 // --- Config loading ---
 
@@ -33,12 +28,10 @@ type ChannelConfig = {
 };
 
 function loadDiscordToken(): string {
-  // Try env first
   const envToken = process.env.DISCORD_BOT_TOKEN ?? process.env.OPENCLAW_DISCORD_TOKEN;
   if (envToken) {
     return envToken;
   }
-  // Read from first instance's openclaw.json
   if (!fs.existsSync(INSTANCES_DIR)) {
     return "";
   }
@@ -77,15 +70,25 @@ function loadChannels(): ChannelConfig[] {
   for (const channelId of Object.keys(ports.assignments ?? {})) {
     const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
     let lifecycleMessages = false;
+    let onboardingComplete = false;
     if (fs.existsSync(onboardingPath)) {
       try {
         const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
         lifecycleMessages = raw?.preferences?.lifecycleMessages === true;
+        onboardingComplete = raw?.state === "complete";
       } catch {
         // default false
       }
     }
-    channels.push({ channelId, lifecycleMessages });
+    // Legacy: check .onboarded flag file
+    if (!onboardingComplete) {
+      const legacyPath = path.join(INSTANCES_DIR, channelId, ".onboarded");
+      onboardingComplete = fs.existsSync(legacyPath);
+    }
+    // Only include fully onboarded channels with lifecycle enabled
+    if (onboardingComplete && lifecycleMessages) {
+      channels.push({ channelId, lifecycleMessages });
+    }
   }
   return channels;
 }
@@ -94,7 +97,7 @@ function loadChannels(): ChannelConfig[] {
 
 async function discordSend(token: string, channelId: string, content: string): Promise<void> {
   try {
-    await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+    const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bot ${token}`,
@@ -102,19 +105,29 @@ async function discordSend(token: string, channelId: string, content: string): P
       },
       body: JSON.stringify({ content }),
     });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      console.error(
+        `[health] Discord API error ${resp.status} for ${channelId}: ${body.slice(0, 200)}`,
+      );
+    }
   } catch (err) {
     console.error(`[health] failed to send to ${channelId}: ${String(err)}`);
   }
 }
 
+/** Send lifecycle message to all opted-in channels with a timeout to prevent hangs. */
 async function sendLifecycleMessage(token: string, message: string): Promise<void> {
   const channels = loadChannels();
-  for (const ch of channels) {
-    if (!ch.lifecycleMessages) {
-      continue;
-    }
-    await discordSend(token, ch.channelId, message);
+  if (channels.length === 0) {
+    return;
   }
+  // Send in parallel with a global timeout
+  const sends = channels.map((ch) => discordSend(token, ch.channelId, message));
+  await Promise.race([
+    Promise.allSettled(sends),
+    new Promise((resolve) => setTimeout(resolve, LIFECYCLE_TIMEOUT_MS)),
+  ]);
 }
 
 // --- Process supervisor ---
@@ -126,6 +139,27 @@ let supervisorState: SupervisorState = "stopped";
 let reconnectAttempts = 0;
 let lastHealthyAt = 0;
 let shuttingDown = false;
+let discordToken = "";
+
+function scheduleRestart() {
+  if (shuttingDown) {
+    return;
+  }
+  supervisorState = "restarting";
+  reconnectAttempts++;
+
+  const jitter = Math.floor(Math.random() * 1000);
+  const backoff = Math.min(2000 * Math.pow(2, reconnectAttempts - 1), 300_000) + jitter;
+  console.log(
+    `[health] restarting in ${Math.round(backoff / 1000)}s (attempt ${reconnectAttempts})`,
+  );
+
+  setTimeout(() => {
+    if (!shuttingDown) {
+      routerProcess = spawnRouter();
+    }
+  }, backoff);
+}
 
 function spawnRouter(): ChildProcess {
   console.log(`[health] spawning discord-router (attempt ${reconnectAttempts})`);
@@ -140,10 +174,12 @@ function spawnRouter(): ChildProcess {
     console.log(`[health] discord-router started (pid ${child.pid})`);
     supervisorState = "running";
     lastHealthyAt = Date.now();
-    // Write heartbeat file for Docker healthcheck
     try {
       fs.writeFileSync("/tmp/health-monitor.ok", String(Date.now()));
     } catch {}
+
+    // Send "Back online" now that router is confirmed running
+    void sendLifecycleMessage(discordToken, "*Back online.*");
 
     // Reset backoff after 30s stable
     setTimeout(() => {
@@ -163,25 +199,16 @@ function spawnRouter(): ChildProcess {
       return;
     }
 
-    supervisorState = "restarting";
-    reconnectAttempts++;
-
-    // Exponential backoff with jitter: 2s base, 5min max
-    const jitter = Math.floor(Math.random() * 1000);
-    const backoff = Math.min(2000 * Math.pow(2, reconnectAttempts - 1), 300_000) + jitter;
-    console.log(
-      `[health] restarting in ${Math.round(backoff / 1000)}s (attempt ${reconnectAttempts})`,
-    );
-
-    setTimeout(() => {
-      if (!shuttingDown) {
-        routerProcess = spawnRouter();
-      }
-    }, backoff);
+    scheduleRestart();
   });
 
   child.on("error", (err) => {
     console.error(`[health] discord-router spawn error: ${err.message}`);
+    routerProcess = null;
+    // Treat spawn errors same as exit — schedule restart with backoff
+    if (!shuttingDown && supervisorState !== "restarting") {
+      scheduleRestart();
+    }
   });
 
   return child;
@@ -211,8 +238,8 @@ const healthServer = http.createServer((req, res) => {
 // --- Main ---
 
 async function main() {
-  const token = loadDiscordToken();
-  if (!token) {
+  discordToken = loadDiscordToken();
+  if (!discordToken) {
     console.error("[health] no Discord bot token found");
     process.exit(1);
   }
@@ -222,13 +249,7 @@ async function main() {
     console.log(`[health] health endpoint at http://127.0.0.1:${HEALTH_PORT}/health`);
   });
 
-  // Send "Back online" on startup
-  const wasOffline = true; // cold start is always "was offline"
-  if (wasOffline) {
-    await sendLifecycleMessage(token, "*Back online.*");
-  }
-
-  // Spawn router
+  // Spawn router (lifecycle "Back online" sent after router confirms running)
   routerProcess = spawnRouter();
 
   // Periodic heartbeat file for Docker healthcheck (every 10s)
@@ -238,7 +259,6 @@ async function main() {
         fs.writeFileSync("/tmp/health-monitor.ok", String(Date.now()));
       } catch {}
     } else {
-      // Remove heartbeat file when unhealthy
       try {
         fs.unlinkSync("/tmp/health-monitor.ok");
       } catch {}
@@ -253,13 +273,12 @@ async function main() {
     shuttingDown = true;
     console.log(`[health] received ${signal}, shutting down`);
 
-    // Send "Shutting down" before stopping
-    await sendLifecycleMessage(token, "*Shutting down...*");
+    // Best-effort "Shutting down" with timeout (don't block shutdown)
+    await sendLifecycleMessage(discordToken, "*Shutting down...*");
 
     // Stop router
     if (routerProcess) {
       routerProcess.kill("SIGTERM");
-      // Wait up to 10s for graceful exit
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
           routerProcess?.kill("SIGKILL");
@@ -271,6 +290,11 @@ async function main() {
         });
       });
     }
+
+    // Remove heartbeat file
+    try {
+      fs.unlinkSync("/tmp/health-monitor.ok");
+    } catch {}
 
     healthServer.close();
     process.exit(0);
