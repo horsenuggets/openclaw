@@ -347,7 +347,7 @@ jobs:
         run: ${{ matrix.command }}
 
   macos-app:
-    if: github.event_name == 'pull_request'
+    if: false # Disabled — not building the macOS app, Discord-only deployment
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -591,6 +591,7 @@ jobs:
           PY
 
   android:
+    if: false # Disabled — not building the Android app, Discord-only deployment
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
