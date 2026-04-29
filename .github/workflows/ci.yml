@@ -649,32 +649,21 @@ jobs:
         working-directory: apps/android
         run: ${{ matrix.command }}
 
-  check-targets:
-    name: Validate COMPILE_TARGETS
+  compile:
+    name: Compile
+    needs: [checks]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
-    outputs:
-      targets: ${{ steps.parse.outputs.targets }}
     steps:
-      - name: Parse and validate
-        id: parse
+      - name: Validate DEPLOY_PLATFORM
+        env:
+          DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
         run: |
-          TARGETS='${{ vars.COMPILE_TARGETS }}'
-          if [ -z "$TARGETS" ]; then
-            echo "::error::COMPILE_TARGETS repository variable is not set. Configure it as a JSON array, e.g. [\"linux-x64\"]"
+          if [ -z "$DEPLOY_PLATFORM" ]; then
+            echo "::error::DEPLOY_PLATFORM repository variable is not set. Set it to the target platform, e.g. linux-x64"
             exit 1
           fi
-          echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
 
-  compile:
-    name: Compile (${{ matrix.target }})
-    needs: [checks, check-targets]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: ${{ fromJSON(needs.check-targets.outputs.targets) }}
-    steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -733,14 +722,15 @@ jobs:
         run: pnpm build
 
       - name: Compile binaries
-        run: node scripts/compile.mjs --target ${{ matrix.target }} --skip-build
+        run: node scripts/compile.mjs --target ${{ vars.DEPLOY_PLATFORM }} --skip-build
 
       - name: Upload artifacts
+        if: github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.target }}
+          name: binaries-${{ vars.DEPLOY_PLATFORM }}
           path: |
-            dist/openclaw-${{ matrix.target }}
-            dist/discord-router-${{ matrix.target }}
-            dist/health-monitor-${{ matrix.target }}
+            dist/openclaw-${{ vars.DEPLOY_PLATFORM }}
+            dist/discord-router-${{ vars.DEPLOY_PLATFORM }}
+            dist/health-monitor-${{ vars.DEPLOY_PLATFORM }}
           retention-days: 90
