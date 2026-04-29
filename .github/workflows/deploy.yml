@@ -20,23 +20,15 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Validate COMPILE_TARGETS
+      - name: Validate DEPLOY_PLATFORM
+        env:
+          DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
         run: |
-          if [ -z '${{ vars.COMPILE_TARGETS }}' ]; then
-            echo "::error::COMPILE_TARGETS repository variable is not set. Configure it as a JSON array, e.g. [\"linux-x64\"]"
+          if [ -z "$DEPLOY_PLATFORM" ]; then
+            echo "::error::DEPLOY_PLATFORM repository variable is not set. Set it to the target platform, e.g. linux-x64"
             exit 1
           fi
-
-      - name: Parse deploy target
-        id: target
-        run: |
-          TARGET=$(echo '${{ vars.COMPILE_TARGETS }}' | jq -r '.[0]')
-          if [ -z "$TARGET" ] || [ "$TARGET" = "null" ]; then
-            echo "::error::COMPILE_TARGETS must be a non-empty JSON array"
-            exit 1
-          fi
-          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
-          echo "Deploy target: $TARGET"
+          echo "Deploy target: $DEPLOY_PLATFORM"
 
       - name: Checkout (deploy scripts and docker files)
         uses: actions/checkout@v4
@@ -44,17 +36,19 @@ jobs:
       - name: Download compiled artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
         run: |
-          TARGET="${{ steps.target.outputs.target }}"
           RUN_ID="${{ github.event.workflow_run.id || inputs.run_id }}"
-          echo "Downloading binaries-$TARGET from CI run $RUN_ID"
+          echo "Downloading binaries-$DEPLOY_PLATFORM from CI run $RUN_ID"
           mkdir -p artifacts/
-          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "binaries-$TARGET" --dir artifacts/
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "binaries-$DEPLOY_PLATFORM" --dir artifacts/
           ls -la artifacts/
 
       - name: Assemble deployment tarball
+        env:
+          DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
         run: |
-          TARGET="${{ steps.target.outputs.target }}"
+          TARGET="$DEPLOY_PLATFORM"
           STAGING="/tmp/openclaw-deployment-staging"
           mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker" "$STAGING/deploy/extensions" "$STAGING/deploy/docs/reference"
 
