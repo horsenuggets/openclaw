@@ -1,86 +1,79 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [release]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: CI run ID to download artifacts from
+        required: true
 
 jobs:
   deploy:
     name: Deploy to production
     runs-on: ubuntu-latest
     environment: production
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Checkout
+      - name: Validate COMPILE_TARGETS
+        run: |
+          if [ -z '${{ vars.COMPILE_TARGETS }}' ]; then
+            echo "::error::COMPILE_TARGETS repository variable is not set. Configure it as a JSON array, e.g. [\"linux-x64\"]"
+            exit 1
+          fi
+
+      - name: Parse deploy target
+        id: target
+        run: |
+          TARGET=$(echo '${{ vars.COMPILE_TARGETS }}' | jq -r '.[0]')
+          if [ -z "$TARGET" ] || [ "$TARGET" = "null" ]; then
+            echo "::error::COMPILE_TARGETS must be a non-empty JSON array"
+            exit 1
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "Deploy target: $TARGET"
+
+      - name: Checkout (deploy scripts and docker files)
         uses: actions/checkout@v4
-        with:
-          submodules: false
 
-      - name: Checkout submodules (retry)
+      - name: Download compiled artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule sync --recursive
-          for attempt in 1 2 3 4 5; do
-            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
-              exit 0
-            fi
-            echo "Submodule update failed (attempt $attempt/5). Retrying…"
-            sleep $((attempt * 10))
-          done
-          exit 1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Compile binaries
-        run: node scripts/compile.mjs --target linux-x64 --skip-build
-
-      - name: Read version
-        id: version
-        run: |
-          VERSION=$(node -p 'require("./package.json").version')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          TARGET="${{ steps.target.outputs.target }}"
+          RUN_ID="${{ github.event.workflow_run.id || inputs.run_id }}"
+          echo "Downloading binaries-$TARGET from CI run $RUN_ID"
+          mkdir -p artifacts/
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "binaries-$TARGET" --dir artifacts/
+          ls -la artifacts/
 
       - name: Assemble deployment tarball
         run: |
+          TARGET="${{ steps.target.outputs.target }}"
           STAGING="/tmp/openclaw-deployment-staging"
           mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker" "$STAGING/deploy/extensions" "$STAGING/deploy/docs/reference"
 
-          # Binaries
-          cp dist/openclaw-linux-x64 "$STAGING/deploy/bin/openclaw"
-          cp dist/discord-router-linux-x64 "$STAGING/deploy/bin/discord-router"
-          cp dist/health-monitor-linux-x64 "$STAGING/deploy/bin/health-monitor"
+          # Binaries (from CI artifacts — never built in CD)
+          cp "artifacts/openclaw-$TARGET" "$STAGING/deploy/bin/openclaw"
+          cp "artifacts/discord-router-$TARGET" "$STAGING/deploy/bin/discord-router"
+          cp "artifacts/health-monitor-$TARGET" "$STAGING/deploy/bin/health-monitor"
           cp infrastructure/scripts/openclawctl "$STAGING/deploy/bin/openclawctl"
           chmod +x "$STAGING/deploy/bin/"*
-
-          # Extensions (fallback for non-embedded plugins)
-          if [ -d dist/extensions ]; then
-            cp -r dist/extensions/* "$STAGING/deploy/extensions/" 2>/dev/null || true
-          fi
 
           # Docker compose files
           cp infrastructure/docker/discord-router.yml "$STAGING/deploy/docker/"
           cp infrastructure/docker/agent.yml "$STAGING/deploy/docker/"
           cp infrastructure/docker/whisper.yml "$STAGING/deploy/docker/"
 
-          # Workspace templates
-          if [ -d dist/docs/reference/templates ]; then
-            cp -r dist/docs/reference/templates "$STAGING/deploy/docs/reference/"
+          # Workspace templates (static repo files, not build artifacts)
+          if [ -d docs/reference/templates ]; then
+            mkdir -p "$STAGING/deploy/docs/reference"
+            cp -r docs/reference/templates "$STAGING/deploy/docs/reference/"
           fi
 
           # Deploy scripts
@@ -106,7 +99,7 @@ jobs:
           SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key"
           WIN_SSH="ssh $SSH_OPTS -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
 
-          # Ensure C:\tmp exists on Windows (explicitly use powershell)
+          # Ensure C:\tmp exists on Windows
           $WIN_SSH "powershell.exe -NoProfile -Command \"New-Item -ItemType Directory -Force -Path C:\tmp | Out-Null\""
 
           # Upload tarball to Windows host

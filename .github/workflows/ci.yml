@@ -648,3 +648,99 @@ jobs:
       - name: Run Android ${{ matrix.task }}
         working-directory: apps/android
         run: ${{ matrix.command }}
+
+  check-targets:
+    name: Validate COMPILE_TARGETS
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
+    outputs:
+      targets: ${{ steps.parse.outputs.targets }}
+    steps:
+      - name: Parse and validate
+        id: parse
+        run: |
+          TARGETS='${{ vars.COMPILE_TARGETS }}'
+          if [ -z "$TARGETS" ]; then
+            echo "::error::COMPILE_TARGETS repository variable is not set. Configure it as a JSON array, e.g. [\"linux-x64\"]"
+            exit 1
+          fi
+          echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
+
+  compile:
+    name: Compile (${{ matrix.target }})
+    needs: [checks, check-targets]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.check-targets.outputs.targets) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Build
+        run: pnpm build
+
+      - name: Compile binaries
+        run: node scripts/compile.mjs --target ${{ matrix.target }} --skip-build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: |
+            dist/openclaw-${{ matrix.target }}
+            dist/discord-router-${{ matrix.target }}
+            dist/health-monitor-${{ matrix.target }}
+          retention-days: 90
