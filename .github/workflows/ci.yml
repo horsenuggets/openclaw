@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: [main, release]
   pull_request:
+    branches: [main, release]
 
 jobs:
   install-check:
@@ -274,7 +276,7 @@ jobs:
         run: ${{ matrix.command }}
 
   checks-macos:
-    if: github.event_name == 'pull_request'
+    if: false # Disabled — not a required check; macOS runners cost 10x and this check adds no required gate
     runs-on: macos-latest
     strategy:
       fail-fast: false
