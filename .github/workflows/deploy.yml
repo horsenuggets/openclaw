@@ -7,8 +7,8 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
-      run_id:
-        description: CI run ID to download artifacts from
+      pr_number:
+        description: PR number whose artifacts to deploy (e.g. 42)
         required: true
 
 jobs:
@@ -33,16 +33,52 @@ jobs:
       - name: Checkout (deploy scripts and docker files)
         uses: actions/checkout@v4
 
-      - name: Download compiled artifacts
+      - name: Resolve PR number and artifact run ID
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
         run: |
-          RUN_ID="${{ github.event.workflow_run.id || inputs.run_id }}"
-          echo "Downloading binaries-$DEPLOY_PLATFORM from CI run $RUN_ID"
-          mkdir -p artifacts/
-          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "binaries-$DEPLOY_PLATFORM" --dir artifacts/
-          ls -la artifacts/
+          if [ -n "${{ inputs.pr_number }}" ]; then
+            PR_NUMBER="${{ inputs.pr_number }}"
+          else
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+            PR_NUMBER=""
+            for attempt in 1 2 3 4 5; do
+              PR_NUMBER=$(gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT_SHA/pulls" \
+                --jq '.[0].number' 2>/dev/null || true)
+              [ -n "$PR_NUMBER" ] && break
+              SLEEP=$((2 ** (attempt - 1)))
+              echo "Commit not yet indexed, retrying in ${SLEEP}s (attempt $attempt/5)..."
+              sleep "$SLEEP"
+            done
+          fi
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::error::Could not determine PR number"
+            exit 1
+          fi
+          PADDED_PR=$(printf '%04d' "$PR_NUMBER")
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "PADDED_PR=$PADDED_PR" >> "$GITHUB_ENV"
+          echo "Resolved PR #$PR_NUMBER (padded: $PADDED_PR)"
+
+          ARTIFACT_RUN_ID=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts?name=pr-${PADDED_PR}-openclaw-${DEPLOY_PLATFORM}&per_page=1" \
+            --jq '.artifacts[0].workflow_run.id')
+          if [ -z "$ARTIFACT_RUN_ID" ] || [ "$ARTIFACT_RUN_ID" = "null" ]; then
+            echo "::error::No artifacts found for pr-${PADDED_PR}-openclaw-${DEPLOY_PLATFORM}"
+            exit 1
+          fi
+          echo "ARTIFACT_RUN_ID=$ARTIFACT_RUN_ID" >> "$GITHUB_ENV"
+          echo "Artifact run ID: $ARTIFACT_RUN_ID"
+
+      - name: Download compiled artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pr-${{ env.PADDED_PR }}-*-${{ vars.DEPLOY_PLATFORM }}
+          run-id: ${{ env.ARTIFACT_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts/
+          merge-multiple: true
 
       - name: Assemble deployment tarball
         env:
