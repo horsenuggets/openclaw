@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: [main, release]
   pull_request:
+    branches: [main, release]
 
 jobs:
   install-check:
@@ -274,7 +276,7 @@ jobs:
         run: ${{ matrix.command }}
 
   checks-macos:
-    if: github.event_name == 'pull_request'
+    if: false # Disabled — not a required check; macOS runners cost 10x and this check adds no required gate
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -653,7 +655,7 @@ jobs:
     name: Compile
     needs: [checks]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
+    if: github.event_name == 'pull_request'
     steps:
       - name: Validate DEPLOY_PLATFORM
         env:
@@ -724,13 +726,34 @@ jobs:
       - name: Compile binaries
         run: node scripts/compile.mjs --target ${{ vars.DEPLOY_PLATFORM }} --skip-build
 
-      - name: Upload artifacts
-        if: github.ref == 'refs/heads/release'
+      - name: Set padded PR number
+        if: github.base_ref == 'release'
+        shell: bash
+        run: echo "PADDED_PR=$(printf '%04d' '${{ github.event.pull_request.number }}')" >> "$GITHUB_ENV"
+
+      - name: Upload openclaw binary
+        if: github.base_ref == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ vars.DEPLOY_PLATFORM }}
-          path: |
-            dist/openclaw-${{ vars.DEPLOY_PLATFORM }}
-            dist/discord-router-${{ vars.DEPLOY_PLATFORM }}
-            dist/health-monitor-${{ vars.DEPLOY_PLATFORM }}
+          name: pr-${{ env.PADDED_PR }}-openclaw-${{ vars.DEPLOY_PLATFORM }}
+          path: dist/openclaw-${{ vars.DEPLOY_PLATFORM }}
+          overwrite: true
+          retention-days: 90
+
+      - name: Upload discord-router binary
+        if: github.base_ref == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ env.PADDED_PR }}-discord-router-${{ vars.DEPLOY_PLATFORM }}
+          path: dist/discord-router-${{ vars.DEPLOY_PLATFORM }}
+          overwrite: true
+          retention-days: 90
+
+      - name: Upload health-monitor binary
+        if: github.base_ref == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ env.PADDED_PR }}-health-monitor-${{ vars.DEPLOY_PLATFORM }}
+          path: dist/health-monitor-${{ vars.DEPLOY_PLATFORM }}
+          overwrite: true
           retention-days: 90
