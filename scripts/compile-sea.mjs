@@ -37,7 +37,21 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(__dirname, '..')
+
+// Find the package root that has node_modules. When running from a git worktree,
+// node_modules live in the main repo root rather than the worktree directory.
+function findPackageRoot(startDir) {
+  let dir = startDir
+  while (true) {
+    if (existsSync(join(dir, 'node_modules')) && existsSync(join(dir, 'package.json'))) {
+      return dir
+    }
+    const parent = join(dir, '..')
+    if (parent === dir) return startDir
+    dir = parent
+  }
+}
+const ROOT = findPackageRoot(join(__dirname, '..'))
 
 // Pin to a specific Node.js version for reproducible binaries.
 // Override with NODE_SEA_VERSION=22.x.x to use a different version.
@@ -104,6 +118,8 @@ const EXTERNAL_MODULES = [
   'electron',
   '@xenova/*',
   'onnxruntime-node',
+  '@napi-rs/canvas',
+  '@napi-rs/canvas-*',
 ]
 
 // Extensions that fail to load as embedded (legacy export patterns, import issues).
@@ -266,7 +282,9 @@ if (!skipBuild) {
     ].join('\n') + '\n',
   )
 
-  // Step 4: Generate binary-entry.js.
+  // Step 4: Generate standard binary-entry.js (for Bun --compile) and SEA-specific entry.
+  // The SEA entry avoids top-level await (not supported in CJS bundle output) by
+  // wrapping dynamic imports in an async IIFE.
   const wrapperEntry = join(ROOT, 'dist/binary-entry.js')
   writeFileSync(
     wrapperEntry,
@@ -281,7 +299,23 @@ if (!skipBuild) {
       `await import("./entry.js");`,
     ].join('\n') + '\n',
   )
-  console.log('Generated dist/binary-entry.js')
+
+  const seaWrapperEntry = join(ROOT, 'dist/binary-sea-entry.js')
+  writeFileSync(
+    seaWrapperEntry,
+    [
+      `import "./binary-setup-env.js";`,
+      `import * as pluginSdk from "./plugin-sdk/index.js";`,
+      `globalThis.__OPENCLAW_PLUGIN_SDK__ = pluginSdk;`,
+      ``,
+      `// Wrap dynamic imports in async IIFE for CJS bundling compatibility.`,
+      `;(async () => {`,
+      `  try { await import("./binary-embedded-plugins.js"); } catch (e) { console.error("[embedded-plugins] failed to load:", e?.message ?? e); }`,
+      `  await import("./entry.js");`,
+      `})();`,
+    ].join('\n') + '\n',
+  )
+  console.log('Generated dist/binary-entry.js and dist/binary-sea-entry.js')
 
   // Step 5: Create chromium-bidi shims for playwright-core.
   {
@@ -420,27 +454,53 @@ if (!skipBuild) {
 
   console.log()
 
-  // Step 9: Bundle each binary entry to CJS using Bun.
-  // Unlike `bun build --compile`, this uses the LOCAL Bun to bundle (no cross-compilation
-  // binary download). The resulting CJS files are then SEA-injected into Node.js binaries.
-  const externals = EXTERNAL_MODULES.map((m) => `--external ${m}`).join(' ')
+  // Step 9: Bundle each binary entry to CJS using esbuild.
+  // esbuild is used instead of `bun build --format=cjs` because:
+  //   - esbuild correctly handles glob external patterns (@node-llama-cpp/*)
+  //   - esbuild doesn't analyze external module internals (avoids TLA parse errors)
+  //   - bun CJS mode has issues with node:sqlite and native module externals
+  // esbuild is available as a transitive dependency in the pnpm store (via tsdown).
+  const esbuildBin = (() => {
+    const pnpmDir = join(ROOT, 'node_modules/.pnpm')
+    if (existsSync(pnpmDir)) {
+      const entries = readdirSync(pnpmDir).filter((d) => d.startsWith('esbuild@'))
+      for (const entry of entries) {
+        const bin = join(pnpmDir, entry, 'node_modules/esbuild/bin/esbuild')
+        if (existsSync(bin)) return bin
+      }
+    }
+    return null // fall back to npx
+  })()
+
+  const runEsbuild = (args) => {
+    const cmd = esbuildBin ? `"${esbuildBin}" ${args}` : `npx --yes esbuild ${args}`
+    execSync(cmd, { stdio: 'inherit', cwd: ROOT })
+  }
+
+  // esbuild uses --external:module syntax (with colon, supports glob patterns)
+  const esbuildExternals = EXTERNAL_MODULES.map((m) => `--external:${m}`).join(' ')
+
+  // Polyfill import.meta.url for CJS output. The dist files are ESM (tsdown output) and use
+  // import.meta.url for createRequire/fileURLToPath calls. esbuild sets import_meta = {} in
+  // CJS mode, making .url undefined. The banner defines a global shim and --define:import.meta
+  // replaces all import.meta references with it.
+  const importMetaBanner =
+    `--banner:js='const __cjsImportMeta={url:require("url").pathToFileURL(__filename).href};'`
+  const importMetaDefine = `--define:import.meta=__cjsImportMeta`
 
   console.log('Bundling openclaw to CJS...')
-  execSync(
-    `bun build dist/binary-entry.js --format=cjs ${externals} --outfile dist/openclaw-bundle.cjs`,
-    { stdio: 'inherit', cwd: ROOT },
+  runEsbuild(
+    `dist/binary-sea-entry.js --bundle --platform=node --format=cjs ${esbuildExternals} ${importMetaBanner} ${importMetaDefine} --outfile=dist/openclaw-bundle.cjs`,
   )
 
   console.log('Bundling discord-router to CJS...')
-  execSync(
-    `bun build src/discord-router/entry.ts --format=cjs --outfile dist/discord-router-bundle.cjs`,
-    { stdio: 'inherit', cwd: ROOT },
+  runEsbuild(
+    `src/discord-router/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/discord-router-bundle.cjs`,
   )
 
   console.log('Bundling health-monitor to CJS...')
-  execSync(
-    `bun build discord-health-monitor/entry.ts --format=cjs --outfile dist/health-monitor-bundle.cjs`,
-    { stdio: 'inherit', cwd: ROOT },
+  runEsbuild(
+    `discord-health-monitor/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/health-monitor-bundle.cjs`,
   )
 
   console.log()

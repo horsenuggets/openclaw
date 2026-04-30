@@ -24,4 +24,7 @@ const runtime = {
 };
 
 console.log(`Starting Discord router with ${config.instances.size} instance(s)...`);
-await startRouter(config, runtime);
+startRouter(config, runtime).catch((err: unknown) => {
+  console.error("Router error:", err);
+  process.exit(1);
+});
