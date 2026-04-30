@@ -147,16 +147,16 @@ jobs:
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # Pin the OpenClaw WSL host key to prevent MITM
+          # Pin the gateway host key to prevent MITM
           echo "[${DEPLOY_HOST}]:10022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF+I2Iw5QbneeTpiRiQPWOsKB+LgzV7felLqhtXOanO2" >> ~/.ssh/known_hosts
 
-          WSL_SSH="ssh -o ConnectTimeout=10 -i ~/.ssh/deploy_key -p 10022 openclaw@${DEPLOY_HOST}"
+          REMOTE_SSH="ssh -o ConnectTimeout=10 -i ~/.ssh/deploy_key -p 10022 openclaw@${DEPLOY_HOST}"
 
           # Test connectivity
-          $WSL_SSH "echo 'SSH connection OK'"
+          $REMOTE_SSH "echo 'SSH connection OK'"
 
-          # Verify required tools and directories exist in the OpenClaw WSL
-          $WSL_SSH bash -c '
+          # Verify required tools and directories exist on the gateway host
+          $REMOTE_SSH bash -c '
             set -e
             echo "Checking deploy environment..."
             command -v docker >/dev/null && echo "OK: docker available" || { echo "FAIL: docker not found"; exit 1; }
