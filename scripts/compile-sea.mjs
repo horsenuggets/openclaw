@@ -197,11 +197,13 @@ function removeMacOSSignature(binaryPath) {
       // Not signed, or already unsigned — continue.
     }
   } else {
-    // Cross-compiling on Linux: try rcodesign (cargo install apple-codesign).
+    // Cross-compiling on non-macOS: try rcodesign to ad-hoc sign (replaces developer
+    // certificate with an unsigned signature so postject can modify the binary).
+    // Install via: cargo install apple-codesign
     try {
       execSync(`rcodesign sign "${binaryPath}"`, { stdio: "pipe" });
-    } catch {
-      console.warn(`    Note: rcodesign not found — macOS binary will be unsigned.`);
+    } catch (e) {
+      console.warn(`    Note: could not remove macOS signature: ${e.message}`);
       console.warn(`    Users may need: xattr -d com.apple.quarantine ./openclaw-macos-arm64`);
     }
   }
@@ -319,7 +321,10 @@ if (!skipBuild) {
       `;(async () => {`,
       `  try { await import("./binary-embedded-plugins.js"); } catch (e) { console.error("[embedded-plugins] failed to load:", e?.message ?? e); }`,
       `  await import("./entry.js");`,
-      `})();`,
+      `})().catch((e) => {`,
+      `  console.error("[binary-sea-entry] failed to start:", e);`,
+      `  process.exit(1);`,
+      `});`,
     ].join("\n") + "\n",
   );
   console.log("Generated dist/binary-entry.js and dist/binary-sea-entry.js");
