@@ -87,15 +87,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Pin the OpenClaw WSL host key to prevent MITM
+          echo "[${DEPLOY_HOST}]:10022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF+I2Iw5QbneeTpiRiQPWOsKB+LgzV7felLqhtXOanO2" >> ~/.ssh/known_hosts
 
-          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key"
+          WSL_SSH="ssh -o ConnectTimeout=30 -i ~/.ssh/deploy_key -p 10022 openclaw@${DEPLOY_HOST}"
 
-          # Upload tarball directly to OpenClaw WSL (port 10022)
-          scp $SSH_OPTS -P 10022 /tmp/openclaw-deployment.tar.gz "openclaw@${DEPLOY_HOST}:/tmp/openclaw-deployment.tar.gz"
+          # Upload tarball directly to OpenClaw WSL
+          scp -o ConnectTimeout=30 -i ~/.ssh/deploy_key -P 10022 \
+            /tmp/openclaw-deployment.tar.gz "openclaw@${DEPLOY_HOST}:/tmp/openclaw-deployment.tar.gz"
 
           # Extract and run setup in WSL
-          ssh $SSH_OPTS -p 10022 "openclaw@${DEPLOY_HOST}" \
-            "rm -rf /tmp/openclaw-deployment && mkdir -p /tmp/openclaw-deployment && cd /tmp/openclaw-deployment && tar xzf /tmp/openclaw-deployment.tar.gz && bash setup.sh && rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz"
+          $WSL_SSH "rm -rf /tmp/openclaw-deployment && mkdir -p /tmp/openclaw-deployment && cd /tmp/openclaw-deployment && tar xzf /tmp/openclaw-deployment.tar.gz && bash setup.sh && rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz"
 
           rm -f ~/.ssh/deploy_key
 
@@ -107,9 +109,9 @@ jobs:
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          echo "[${DEPLOY_HOST}]:10022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF+I2Iw5QbneeTpiRiQPWOsKB+LgzV7felLqhtXOanO2" >> ~/.ssh/known_hosts
 
           sleep 15
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key \
-            -p 10022 "openclaw@${DEPLOY_HOST}" "docker ps -a"
+          ssh -o ConnectTimeout=30 -i ~/.ssh/deploy_key -p 10022 "openclaw@${DEPLOY_HOST}" "docker ps -a"
 
           rm -f ~/.ssh/deploy_key
