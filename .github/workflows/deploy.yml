@@ -37,9 +37,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
         run: |
-          if [ -n "${{ inputs.pr_number }}" ]; then
-            PR_NUMBER="${{ inputs.pr_number }}"
+          if [ -n "$INPUT_PR_NUMBER" ]; then
+            PR_NUMBER="$INPUT_PR_NUMBER"
           else
             COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
             PR_NUMBER=""
