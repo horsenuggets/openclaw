@@ -114,6 +114,4 @@ jobs:
           sleep 15
           ssh -o ConnectTimeout=30 -i ~/.ssh/deploy_key -p 10022 "openclaw@${DEPLOY_HOST}" "docker ps -a"
 
-
-
           rm -f ~/.ssh/deploy_key
