@@ -156,12 +156,12 @@ jobs:
           $WSL_SSH "echo 'SSH connection OK'"
 
           # Verify required tools and directories exist in the OpenClaw WSL
-          $WSL_SSH 'bash -s' <<'REMOTE'
+          $WSL_SSH bash -c '
             set -e
             echo "Checking deploy environment..."
             command -v docker >/dev/null && echo "OK: docker available" || { echo "FAIL: docker not found"; exit 1; }
             [ -d ~/.openclaw-instances ] && echo "OK: instances dir exists" || { echo "FAIL: instances dir missing"; exit 1; }
             echo "Deploy environment verified."
-REMOTE
+          '
 
           rm -f ~/.ssh/deploy_key
