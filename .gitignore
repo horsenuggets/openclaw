@@ -94,3 +94,4 @@ memory/
 .watchdog/
 .pm2-ecosystem.json
 .claude/scheduled_tasks.lock
+.sea-cache/
