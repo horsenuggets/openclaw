@@ -728,6 +728,7 @@ jobs:
 
       - name: Set padded PR number
         if: github.base_ref == 'release'
+        shell: bash
         run: echo "PADDED_PR=$(printf '%04d' '${{ github.event.pull_request.number }}')" >> "$GITHUB_ENV"
 
       - name: Upload openclaw binary
