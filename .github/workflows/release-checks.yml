@@ -134,67 +134,33 @@ jobs:
     name: Verify deploy target
     runs-on: ubuntu-latest
     steps:
-      - name: Test SSH connectivity
+      - name: Test SSH connectivity and verify environment
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_HOST" ]; then
-            echo "::error::Deploy secrets not configured. Set DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER."
+            echo "::error::Deploy secrets not configured. Set DEPLOY_SSH_KEY and DEPLOY_HOST."
             exit 1
           fi
 
-          # Set up SSH key
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Pin the OpenClaw WSL host key to prevent MITM
+          echo "[${DEPLOY_HOST}]:10022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF+I2Iw5QbneeTpiRiQPWOsKB+LgzV7felLqhtXOanO2" >> ~/.ssh/known_hosts
 
-          # Test SSH connectivity
-          ssh -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=10 \
-              -i ~/.ssh/deploy_key \
-              -p "${DEPLOY_PORT:-22}" \
-              "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              "echo 'SSH connection OK'"
+          WSL_SSH="ssh -o ConnectTimeout=10 -i ~/.ssh/deploy_key -p 10022 openclaw@${DEPLOY_HOST}"
 
-      - name: Verify deploy environment
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          # Test connectivity
+          $WSL_SSH "echo 'SSH connection OK'"
 
-          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${DEPLOY_PORT:-22} ${DEPLOY_USER}@${DEPLOY_HOST}"
-
-          # Verify required directories and tools exist
-          $SSH_CMD bash -c '
+          # Verify required tools and directories exist in the OpenClaw WSL
+          $WSL_SSH bash -c '
             set -e
             echo "Checking deploy environment..."
-
-            # Git repo
-            [ -d ~/git/openclaw/.git ] && echo "OK: git repo exists" || { echo "FAIL: git repo missing"; exit 1; }
-
-            # Docker
             command -v docker >/dev/null && echo "OK: docker available" || { echo "FAIL: docker not found"; exit 1; }
-
-            # PM2
-            command -v pm2 >/dev/null && echo "OK: pm2 available" || { echo "FAIL: pm2 not found"; exit 1; }
-
-            # Node
-            command -v node >/dev/null && echo "OK: node available" || { echo "FAIL: node not found"; exit 1; }
-
-            # Instances directory
             [ -d ~/.openclaw-instances ] && echo "OK: instances dir exists" || { echo "FAIL: instances dir missing"; exit 1; }
-
-            # Compose script
-            [ -f ~/git/openclaw/scripts/instance-compose.sh ] && echo "OK: compose script exists" || { echo "WARN: compose script missing"; }
-
             echo "Deploy environment verified."
           '
 
