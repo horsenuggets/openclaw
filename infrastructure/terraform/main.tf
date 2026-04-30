@@ -97,7 +97,7 @@ resource "github_repository_ruleset" "main" {
       dismiss_stale_reviews_on_push   = true
     }
 
-    # Automatically request Copilot code review on every PR
+    # Automatically request Copilot code review on every non-draft PR
     copilot_code_review {
       review_on_push             = true
       review_draft_pull_requests = false
@@ -135,7 +135,7 @@ resource "github_repository_ruleset" "release" {
       dismiss_stale_reviews_on_push   = true
     }
 
-    # Automatically request Copilot code review on every PR
+    # Automatically request Copilot code review on every non-draft PR
     copilot_code_review {
       review_on_push             = true
       review_draft_pull_requests = false
