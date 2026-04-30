@@ -21,7 +21,7 @@
  * Node version: NODE_SEA_VERSION env var (default: current process version)
  */
 
-import { execSync } from 'child_process'
+import { execSync } from "child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -32,173 +32,177 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
-} from 'fs'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
+} from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Find the package root that has node_modules. When running from a git worktree,
 // node_modules live in the main repo root rather than the worktree directory.
 function findPackageRoot(startDir) {
-  let dir = startDir
+  let dir = startDir;
   while (true) {
-    if (existsSync(join(dir, 'node_modules')) && existsSync(join(dir, 'package.json'))) {
-      return dir
+    if (existsSync(join(dir, "node_modules")) && existsSync(join(dir, "package.json"))) {
+      return dir;
     }
-    const parent = join(dir, '..')
-    if (parent === dir) return startDir
-    dir = parent
+    const parent = join(dir, "..");
+    if (parent === dir) {
+      return startDir;
+    }
+    dir = parent;
   }
 }
-const ROOT = findPackageRoot(join(__dirname, '..'))
+const ROOT = findPackageRoot(join(__dirname, ".."));
 
 // Pin to a specific Node.js version for reproducible binaries.
 // Override with NODE_SEA_VERSION=22.x.x to use a different version.
-const NODE_VERSION = process.env.NODE_SEA_VERSION ?? process.versions.node
+const NODE_VERSION = process.env.NODE_SEA_VERSION ?? process.versions.node;
 
 // Cache directory for downloaded Node.js binaries.
-const CACHE_DIR = join(ROOT, '.sea-cache')
+const CACHE_DIR = join(ROOT, ".sea-cache");
 
 // SEA sentinel fuse required by the postject injection API.
-const SEA_FUSE = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
+const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
 
 const TARGETS = [
   {
-    name: 'linux-x64',
+    name: "linux-x64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz`,
-    type: 'tgz',
+    type: "tgz",
     binaryPath: `node-v${NODE_VERSION}-linux-x64/bin/node`,
-    ext: '',
+    ext: "",
   },
   {
-    name: 'linux-arm64',
+    name: "linux-arm64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz`,
-    type: 'tgz',
+    type: "tgz",
     binaryPath: `node-v${NODE_VERSION}-linux-arm64/bin/node`,
-    ext: '',
+    ext: "",
   },
   {
-    name: 'macos-arm64',
+    name: "macos-arm64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz`,
-    type: 'tgz',
+    type: "tgz",
     binaryPath: `node-v${NODE_VERSION}-darwin-arm64/bin/node`,
-    ext: '',
+    ext: "",
     macho: true,
   },
   {
-    name: 'macos-x64',
+    name: "macos-x64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-x64.tar.gz`,
-    type: 'tgz',
+    type: "tgz",
     binaryPath: `node-v${NODE_VERSION}-darwin-x64/bin/node`,
-    ext: '',
+    ext: "",
     macho: true,
   },
   {
-    name: 'windows-x64',
+    name: "windows-x64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/win-x64/node.exe`,
-    type: 'exe',
-    ext: '.exe',
+    type: "exe",
+    ext: ".exe",
   },
   {
-    name: 'windows-arm64',
+    name: "windows-arm64",
     url: `https://nodejs.org/dist/v${NODE_VERSION}/win-arm64/node.exe`,
-    type: 'exe',
-    ext: '.exe',
+    type: "exe",
+    ext: ".exe",
   },
-]
+];
 
 // Native addons and platform-specific packages that cannot be embedded.
 const EXTERNAL_MODULES = [
-  'sharp',
-  '@img/sharp-*',
-  'node-llama-cpp',
-  '@node-llama-cpp/*',
-  'playwright',
-  'electron',
-  '@xenova/*',
-  'onnxruntime-node',
-  '@napi-rs/canvas',
-  '@napi-rs/canvas-*',
-]
+  "sharp",
+  "@img/sharp-*",
+  "node-llama-cpp",
+  "@node-llama-cpp/*",
+  "playwright",
+  "electron",
+  "@xenova/*",
+  "onnxruntime-node",
+  "@napi-rs/canvas",
+  "@napi-rs/canvas-*",
+];
 
 // Extensions that fail to load as embedded (legacy export patterns, import issues).
-const EMBEDDED_SKIP = new Set(['lobster', 'open-prose'])
+const EMBEDDED_SKIP = new Set(["lobster", "open-prose"]);
 
 // --- Argument parsing ---
 
-const args = process.argv.slice(2)
-const targetArg = args.indexOf('--target')
-const selectedTarget = targetArg !== -1 ? args[targetArg + 1] : undefined
-const skipBuild = args.includes('--skip-build')
+const args = process.argv.slice(2);
+const targetArg = args.indexOf("--target");
+const selectedTarget = targetArg !== -1 ? args[targetArg + 1] : undefined;
+const skipBuild = args.includes("--skip-build");
 
 if (selectedTarget && !TARGETS.find((t) => t.name === selectedTarget)) {
-  console.error(`Unknown target: ${selectedTarget}`)
-  console.error(`Valid targets: ${TARGETS.map((t) => t.name).join(', ')}`)
-  process.exit(1)
+  console.error(`Unknown target: ${selectedTarget}`);
+  console.error(`Valid targets: ${TARGETS.map((t) => t.name).join(", ")}`);
+  process.exit(1);
 }
 
-const targets = selectedTarget ? TARGETS.filter((t) => t.name === selectedTarget) : TARGETS
+const targets = selectedTarget ? TARGETS.filter((t) => t.name === selectedTarget) : TARGETS;
 
 // --- Helper: download with redirect following ---
 // Uses curl for reliable downloads (handles redirects, partial failures, etc.)
 
 function download(url, dest) {
-  execSync(`curl -fL --progress-bar -o "${dest}" "${url}"`, { stdio: 'inherit' })
+  execSync(`curl -fL --progress-bar -o "${dest}" "${url}"`, { stdio: "inherit" });
 }
 
 // --- Helper: get (and cache) the Node.js binary for a target ---
 
 function getNodeBinary(target) {
-  mkdirSync(CACHE_DIR, { recursive: true })
+  mkdirSync(CACHE_DIR, { recursive: true });
 
-  const cacheKey = `node-${NODE_VERSION}-${target.name}${target.ext}`
-  const cachedBinary = join(CACHE_DIR, cacheKey)
+  const cacheKey = `node-${NODE_VERSION}-${target.name}${target.ext}`;
+  const cachedBinary = join(CACHE_DIR, cacheKey);
 
   if (existsSync(cachedBinary)) {
-    console.log(`    Using cached: ${cacheKey}`)
-    return cachedBinary
+    console.log(`    Using cached: ${cacheKey}`);
+    return cachedBinary;
   }
 
-  console.log(`    Downloading Node.js ${NODE_VERSION} for ${target.name}...`)
-  console.log(`    ${target.url}`)
+  console.log(`    Downloading Node.js ${NODE_VERSION} for ${target.name}...`);
+  console.log(`    ${target.url}`);
 
-  if (target.type === 'exe') {
+  if (target.type === "exe") {
     // Windows: direct .exe download, no extraction needed.
-    download(target.url, cachedBinary)
+    download(target.url, cachedBinary);
   } else {
     // Linux/macOS: tar.gz, extract just the node binary.
-    const archivePath = join(CACHE_DIR, `node-${NODE_VERSION}-${target.name}.tar.gz`)
+    const archivePath = join(CACHE_DIR, `node-${NODE_VERSION}-${target.name}.tar.gz`);
     if (!existsSync(archivePath)) {
-      download(target.url, archivePath)
+      download(target.url, archivePath);
     }
-    const extractDir = join(CACHE_DIR, `extract-${target.name}`)
-    mkdirSync(extractDir, { recursive: true })
-    execSync(`tar xzf "${archivePath}" -C "${extractDir}" "${target.binaryPath}"`, { stdio: 'pipe' })
-    copyFileSync(join(extractDir, target.binaryPath), cachedBinary)
-    chmodSync(cachedBinary, 0o755)
-    execSync(`rm -rf "${extractDir}"`, { stdio: 'pipe' })
+    const extractDir = join(CACHE_DIR, `extract-${target.name}`);
+    mkdirSync(extractDir, { recursive: true });
+    execSync(`tar xzf "${archivePath}" -C "${extractDir}" "${target.binaryPath}"`, {
+      stdio: "pipe",
+    });
+    copyFileSync(join(extractDir, target.binaryPath), cachedBinary);
+    chmodSync(cachedBinary, 0o755);
+    execSync(`rm -rf "${extractDir}"`, { stdio: "pipe" });
   }
 
-  return cachedBinary
+  return cachedBinary;
 }
 
 // --- Helper: remove macOS codesignature before SEA injection ---
 
 function removeMacOSSignature(binaryPath) {
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     try {
-      execSync(`codesign --remove-signature "${binaryPath}"`, { stdio: 'pipe' })
+      execSync(`codesign --remove-signature "${binaryPath}"`, { stdio: "pipe" });
     } catch {
       // Not signed, or already unsigned — continue.
     }
   } else {
     // Cross-compiling on Linux: try rcodesign (cargo install apple-codesign).
     try {
-      execSync(`rcodesign sign "${binaryPath}"`, { stdio: 'pipe' })
+      execSync(`rcodesign sign "${binaryPath}"`, { stdio: "pipe" });
     } catch {
-      console.warn(`    Note: rcodesign not found — macOS binary will be unsigned.`)
-      console.warn(`    Users may need: xattr -d com.apple.quarantine ./openclaw-macos-arm64`)
+      console.warn(`    Note: rcodesign not found — macOS binary will be unsigned.`);
+      console.warn(`    Users may need: xattr -d com.apple.quarantine ./openclaw-macos-arm64`);
     }
   }
 }
@@ -206,11 +210,11 @@ function removeMacOSSignature(binaryPath) {
 // --- Helper: re-sign macOS binary after SEA injection ---
 
 function resignMacOS(binaryPath) {
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     try {
-      execSync(`codesign --sign - "${binaryPath}"`, { stdio: 'pipe' })
+      execSync(`codesign --sign - "${binaryPath}"`, { stdio: "pipe" });
     } catch (e) {
-      console.warn(`    Warning: could not re-sign macOS binary: ${e.message}`)
+      console.warn(`    Warning: could not re-sign macOS binary: ${e.message}`);
     }
   }
   // On Linux: binary stays unsigned (acceptable for CI artifacts).
@@ -220,8 +224,8 @@ function resignMacOS(binaryPath) {
 // Main
 // ============================================================
 
-console.log(`Node SEA compile — Node.js v${NODE_VERSION}`)
-console.log(`Targets: ${targets.map((t) => t.name).join(', ')}\n`)
+console.log(`Node SEA compile — Node.js v${NODE_VERSION}`);
+console.log(`Targets: ${targets.map((t) => t.name).join(", ")}\n`);
 
 // -------------------------------------------------------
 // Phase 1: Prep pipeline (mirrors compile.mjs steps 1–7)
@@ -229,42 +233,45 @@ console.log(`Targets: ${targets.map((t) => t.name).join(', ')}\n`)
 
 if (!skipBuild) {
   // Step 1: Build with tsdown.
-  console.log('Building with tsdown (pnpm build)...')
-  execSync('pnpm build', { stdio: 'inherit', cwd: ROOT })
-  console.log()
+  console.log("Building with tsdown (pnpm build)...");
+  execSync("pnpm build", { stdio: "inherit", cwd: ROOT });
+  console.log();
 
-  if (!existsSync(join(ROOT, 'dist/entry.js'))) {
-    console.error('Build failed: dist/entry.js not found')
-    process.exit(1)
+  if (!existsSync(join(ROOT, "dist/entry.js"))) {
+    console.error("Build failed: dist/entry.js not found");
+    process.exit(1);
   }
 
-  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'))
+  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
 
   // Step 2: Replace __OPENCLAW_VERSION__ in all dist chunks.
   {
     function walkJsFiles(dir) {
-      const results = []
+      const results = [];
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = join(dir, entry.name)
-        if (entry.isDirectory()) results.push(...walkJsFiles(full))
-        else if (entry.name.endsWith('.js')) results.push(full)
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          results.push(...walkJsFiles(full));
+        } else if (entry.name.endsWith(".js")) {
+          results.push(full);
+        }
       }
-      return results
+      return results;
     }
-    let replaced = 0
-    for (const filePath of walkJsFiles(join(ROOT, 'dist'))) {
-      let content = readFileSync(filePath, 'utf-8')
-      if (content.includes('__OPENCLAW_VERSION__')) {
-        content = content.replace(/__OPENCLAW_VERSION__/g, JSON.stringify(pkg.version))
-        writeFileSync(filePath, content)
-        replaced++
+    let replaced = 0;
+    for (const filePath of walkJsFiles(join(ROOT, "dist"))) {
+      let content = readFileSync(filePath, "utf-8");
+      if (content.includes("__OPENCLAW_VERSION__")) {
+        content = content.replace(/__OPENCLAW_VERSION__/g, JSON.stringify(pkg.version));
+        writeFileSync(filePath, content);
+        replaced++;
       }
     }
-    console.log(`Replaced __OPENCLAW_VERSION__ in ${replaced} chunk(s)`)
+    console.log(`Replaced __OPENCLAW_VERSION__ in ${replaced} chunk(s)`);
   }
 
   // Step 3: Generate binary-setup-env.js.
-  const setupEntry = join(ROOT, 'dist/binary-setup-env.js')
+  const setupEntry = join(ROOT, "dist/binary-setup-env.js");
   writeFileSync(
     setupEntry,
     [
@@ -279,13 +286,13 @@ if (!skipBuild) {
       `  writeFileSync(pkgPath, ${JSON.stringify(JSON.stringify({ name: pkg.name, version: pkg.version }))});`,
       `}`,
       `process.env.PI_PACKAGE_DIR = pkgDir;`,
-    ].join('\n') + '\n',
-  )
+    ].join("\n") + "\n",
+  );
 
   // Step 4: Generate standard binary-entry.js (for Bun --compile) and SEA-specific entry.
   // The SEA entry avoids top-level await (not supported in CJS bundle output) by
   // wrapping dynamic imports in an async IIFE.
-  const wrapperEntry = join(ROOT, 'dist/binary-entry.js')
+  const wrapperEntry = join(ROOT, "dist/binary-entry.js");
   writeFileSync(
     wrapperEntry,
     [
@@ -297,10 +304,10 @@ if (!skipBuild) {
       `try { await import("./binary-embedded-plugins.js"); } catch (e) { console.error("[embedded-plugins] failed to load:", e?.message ?? e); }`,
       ``,
       `await import("./entry.js");`,
-    ].join('\n') + '\n',
-  )
+    ].join("\n") + "\n",
+  );
 
-  const seaWrapperEntry = join(ROOT, 'dist/binary-sea-entry.js')
+  const seaWrapperEntry = join(ROOT, "dist/binary-sea-entry.js");
   writeFileSync(
     seaWrapperEntry,
     [
@@ -313,118 +320,120 @@ if (!skipBuild) {
       `  try { await import("./binary-embedded-plugins.js"); } catch (e) { console.error("[embedded-plugins] failed to load:", e?.message ?? e); }`,
       `  await import("./entry.js");`,
       `})();`,
-    ].join('\n') + '\n',
-  )
-  console.log('Generated dist/binary-entry.js and dist/binary-sea-entry.js')
+    ].join("\n") + "\n",
+  );
+  console.log("Generated dist/binary-entry.js and dist/binary-sea-entry.js");
 
   // Step 5: Create chromium-bidi shims for playwright-core.
   {
-    const pwCoreDirs = readdirSync(join(ROOT, 'node_modules/.pnpm'))
-      .filter((d) => d.startsWith('playwright-core@'))
-      .map((d) => `node_modules/.pnpm/${d}/node_modules`)
-    const pwDir = pwCoreDirs[0]
+    const pwCoreDirs = readdirSync(join(ROOT, "node_modules/.pnpm"))
+      .filter((d) => d.startsWith("playwright-core@"))
+      .map((d) => `node_modules/.pnpm/${d}/node_modules`);
+    const pwDir = pwCoreDirs[0];
     if (!pwDir) {
-      console.log('playwright-core not found, skipping chromium-bidi shims')
+      console.log("playwright-core not found, skipping chromium-bidi shims");
     } else {
       const shimPaths = [
         `${pwDir}/chromium-bidi/package.json`,
         `${pwDir}/chromium-bidi/index.js`,
         `${pwDir}/chromium-bidi/lib/cjs/bidiMapper/BidiMapper.js`,
         `${pwDir}/chromium-bidi/lib/cjs/cdp/CdpConnection.js`,
-      ]
+      ];
       for (const p of shimPaths) {
-        const dir = p.substring(0, p.lastIndexOf('/'))
+        const dir = p.substring(0, p.lastIndexOf("/"));
         if (!existsSync(join(ROOT, dir))) {
-          execSync(`mkdir -p "${join(ROOT, dir)}"`, { stdio: 'pipe' })
+          execSync(`mkdir -p "${join(ROOT, dir)}"`, { stdio: "pipe" });
         }
       }
       if (!existsSync(join(ROOT, `${pwDir}/chromium-bidi/index.js`))) {
         writeFileSync(
           join(ROOT, `${pwDir}/chromium-bidi/package.json`),
           '{"name":"chromium-bidi","version":"0.0.0-shim","main":"index.js"}\n',
-        )
-        writeFileSync(join(ROOT, `${pwDir}/chromium-bidi/index.js`), 'module.exports = {};\n')
+        );
+        writeFileSync(join(ROOT, `${pwDir}/chromium-bidi/index.js`), "module.exports = {};\n");
         writeFileSync(
           join(ROOT, `${pwDir}/chromium-bidi/lib/cjs/bidiMapper/BidiMapper.js`),
-          'module.exports = {};\n',
-        )
+          "module.exports = {};\n",
+        );
         writeFileSync(
           join(ROOT, `${pwDir}/chromium-bidi/lib/cjs/cdp/CdpConnection.js`),
-          'module.exports = {};\n',
-        )
-        console.log('Created chromium-bidi shims')
+          "module.exports = {};\n",
+        );
+        console.log("Created chromium-bidi shims");
       }
     }
   }
 
   // Step 6: Copy and pre-compile extensions.
-  if (existsSync(join(ROOT, 'extensions'))) {
-    console.log('\nCopying extensions...')
-    if (existsSync(join(ROOT, 'dist/extensions'))) {
-      const tmpDir = `${process.env.TMPDIR ?? '/tmp'}/openclaw-ext-cleanup-${Date.now()}`
-      execSync(`mv "${join(ROOT, 'dist/extensions')}" "${tmpDir}" && rm -rf "${tmpDir}" &`, {
-        stdio: 'inherit',
+  if (existsSync(join(ROOT, "extensions"))) {
+    console.log("\nCopying extensions...");
+    if (existsSync(join(ROOT, "dist/extensions"))) {
+      const tmpDir = `${process.env.TMPDIR ?? "/tmp"}/openclaw-ext-cleanup-${Date.now()}`;
+      execSync(`mv "${join(ROOT, "dist/extensions")}" "${tmpDir}" && rm -rf "${tmpDir}" &`, {
+        stdio: "inherit",
         shell: true,
-      })
+      });
     }
     execSync('rsync -a --exclude="node_modules" --exclude=".builds" extensions/ dist/extensions/', {
-      stdio: 'inherit',
+      stdio: "inherit",
       cwd: ROOT,
-    })
-    console.log('  Pre-compiling extensions...')
-    let compiledCount = 0
-    let failedCount = 0
-    for (const extDir of readdirSync(join(ROOT, 'dist/extensions'))) {
-      const extPath = join(ROOT, `dist/extensions/${extDir}`)
-      const indexTs = join(extPath, 'index.ts')
-      if (!existsSync(indexTs)) continue
+    });
+    console.log("  Pre-compiling extensions...");
+    let compiledCount = 0;
+    let failedCount = 0;
+    for (const extDir of readdirSync(join(ROOT, "dist/extensions"))) {
+      const extPath = join(ROOT, `dist/extensions/${extDir}`);
+      const indexTs = join(extPath, "index.ts");
+      if (!existsSync(indexTs)) {
+        continue;
+      }
       try {
         execSync(
           `bun build "${indexTs}" --outdir "${extPath}" --target node --external openclaw --external "openclaw/*"`,
-          { stdio: 'pipe', cwd: ROOT },
-        )
-        const pkgPath = join(extPath, 'package.json')
+          { stdio: "pipe", cwd: ROOT },
+        );
+        const pkgPath = join(extPath, "package.json");
         if (existsSync(pkgPath)) {
-          let content = readFileSync(pkgPath, 'utf-8')
-          content = content.replace(/\.\/index\.ts/g, './index.js')
-          content = content.replace(/\.\/src\//g, './src/')
-          writeFileSync(pkgPath, content)
+          let content = readFileSync(pkgPath, "utf-8");
+          content = content.replace(/\.\/index\.ts/g, "./index.js");
+          content = content.replace(/\.\/src\//g, "./src/");
+          writeFileSync(pkgPath, content);
         }
-        compiledCount++
+        compiledCount++;
       } catch {
-        console.log(`    Warning: failed to pre-compile ${extDir}`)
-        failedCount++
+        console.log(`    Warning: failed to pre-compile ${extDir}`);
+        failedCount++;
       }
     }
-    console.log(`  Extensions: ${compiledCount} compiled, ${failedCount} failed`)
+    console.log(`  Extensions: ${compiledCount} compiled, ${failedCount} failed`);
 
     // Create openclaw/plugin-sdk shim for extensions.
-    const shimPkgDir = join(ROOT, 'dist/extensions/node_modules/openclaw')
-    const shimSdkDir = join(shimPkgDir, 'plugin-sdk')
-    execSync(`mkdir -p "${shimSdkDir}"`, { stdio: 'pipe' })
+    const shimPkgDir = join(ROOT, "dist/extensions/node_modules/openclaw");
+    const shimSdkDir = join(shimPkgDir, "plugin-sdk");
+    execSync(`mkdir -p "${shimSdkDir}"`, { stdio: "pipe" });
     writeFileSync(
-      join(shimPkgDir, 'package.json'),
+      join(shimPkgDir, "package.json"),
       '{"name":"openclaw","exports":{"./plugin-sdk":"./plugin-sdk/index.js"}}\n',
-    )
+    );
     writeFileSync(
-      join(shimSdkDir, 'index.js'),
-      'module.exports = globalThis.__OPENCLAW_PLUGIN_SDK__;\n',
-    )
-    console.log('  Created openclaw/plugin-sdk shim in extensions/node_modules/')
+      join(shimSdkDir, "index.js"),
+      "module.exports = globalThis.__OPENCLAW_PLUGIN_SDK__;\n",
+    );
+    console.log("  Created openclaw/plugin-sdk shim in extensions/node_modules/");
 
     // Step 7: Generate binary-embedded-plugins.js.
-    const embeddedImports = []
-    const embeddedRegistrations = []
-    for (const extDir of readdirSync(join(ROOT, 'dist/extensions')).toSorted()) {
-      const indexJs = join(ROOT, `dist/extensions/${extDir}/index.js`)
-      if (!existsSync(indexJs) || extDir === 'node_modules' || EMBEDDED_SKIP.has(extDir)) {
-        continue
+    const embeddedImports = [];
+    const embeddedRegistrations = [];
+    for (const extDir of readdirSync(join(ROOT, "dist/extensions")).toSorted()) {
+      const indexJs = join(ROOT, `dist/extensions/${extDir}/index.js`);
+      if (!existsSync(indexJs) || extDir === "node_modules" || EMBEDDED_SKIP.has(extDir)) {
+        continue;
       }
-      const varName = `ext_${extDir.replace(/[^a-zA-Z0-9]/g, '_')}`
-      embeddedImports.push(`import ${varName} from "./extensions/${extDir}/index.js";`)
-      embeddedRegistrations.push(`  ["${extDir}", ${varName}],`)
+      const varName = `ext_${extDir.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      embeddedImports.push(`import ${varName} from "./extensions/${extDir}/index.js";`);
+      embeddedRegistrations.push(`  ["${extDir}", ${varName}],`);
     }
-    const embeddedEntry = join(ROOT, 'dist/binary-embedded-plugins.js')
+    const embeddedEntry = join(ROOT, "dist/binary-embedded-plugins.js");
     writeFileSync(
       embeddedEntry,
       [
@@ -435,24 +444,27 @@ if (!skipBuild) {
         ...embeddedRegistrations,
         `]);`,
         ``,
-      ].join('\n'),
-    )
+      ].join("\n"),
+    );
     console.log(
       `  Generated dist/binary-embedded-plugins.js (${embeddedRegistrations.length} extensions)`,
-    )
+    );
   }
 
   // Step 8: Copy workspace templates.
-  if (existsSync(join(ROOT, 'docs/reference/templates'))) {
-    console.log('\nCopying workspace templates...')
-    execSync('mkdir -p dist/docs/reference && cp -r docs/reference/templates dist/docs/reference/', {
-      stdio: 'inherit',
-      cwd: ROOT,
-    })
-    console.log('  Copied docs/reference/templates/')
+  if (existsSync(join(ROOT, "docs/reference/templates"))) {
+    console.log("\nCopying workspace templates...");
+    execSync(
+      "mkdir -p dist/docs/reference && cp -r docs/reference/templates dist/docs/reference/",
+      {
+        stdio: "inherit",
+        cwd: ROOT,
+      },
+    );
+    console.log("  Copied docs/reference/templates/");
   }
 
-  console.log()
+  console.log();
 
   // Step 9: Bundle each binary entry to CJS using esbuild.
   // esbuild is used instead of `bun build --format=cjs` because:
@@ -461,149 +473,158 @@ if (!skipBuild) {
   //   - bun CJS mode has issues with node:sqlite and native module externals
   // esbuild is available as a transitive dependency in the pnpm store (via tsdown).
   const esbuildBin = (() => {
-    const pnpmDir = join(ROOT, 'node_modules/.pnpm')
+    const pnpmDir = join(ROOT, "node_modules/.pnpm");
     if (existsSync(pnpmDir)) {
-      const entries = readdirSync(pnpmDir).filter((d) => d.startsWith('esbuild@'))
+      const entries = readdirSync(pnpmDir).filter((d) => d.startsWith("esbuild@"));
       for (const entry of entries) {
-        const bin = join(pnpmDir, entry, 'node_modules/esbuild/bin/esbuild')
-        if (existsSync(bin)) return bin
+        const bin = join(pnpmDir, entry, "node_modules/esbuild/bin/esbuild");
+        if (existsSync(bin)) {
+          return bin;
+        }
       }
     }
-    return null // fall back to npx
-  })()
+    return null; // fall back to npx
+  })();
 
   const runEsbuild = (args) => {
-    const cmd = esbuildBin ? `"${esbuildBin}" ${args}` : `npx --yes esbuild ${args}`
-    execSync(cmd, { stdio: 'inherit', cwd: ROOT })
-  }
+    const cmd = esbuildBin ? `"${esbuildBin}" ${args}` : `npx --yes esbuild ${args}`;
+    execSync(cmd, { stdio: "inherit", cwd: ROOT });
+  };
 
   // esbuild uses --external:module syntax (with colon, supports glob patterns)
-  const esbuildExternals = EXTERNAL_MODULES.map((m) => `--external:${m}`).join(' ')
+  const esbuildExternals = EXTERNAL_MODULES.map((m) => `--external:${m}`).join(" ");
 
   // Polyfill import.meta.url for CJS output. The dist files are ESM (tsdown output) and use
   // import.meta.url for createRequire/fileURLToPath calls. esbuild sets import_meta = {} in
   // CJS mode, making .url undefined. The banner defines a global shim and --define:import.meta
   // replaces all import.meta references with it.
-  const importMetaBanner =
-    `--banner:js='const __cjsImportMeta={url:require("url").pathToFileURL(__filename).href};'`
-  const importMetaDefine = `--define:import.meta=__cjsImportMeta`
+  const importMetaBanner = `--banner:js='const __cjsImportMeta={url:require("url").pathToFileURL(__filename).href};'`;
+  const importMetaDefine = `--define:import.meta=__cjsImportMeta`;
 
-  console.log('Bundling openclaw to CJS...')
+  console.log("Bundling openclaw to CJS...");
   runEsbuild(
     `dist/binary-sea-entry.js --bundle --platform=node --format=cjs ${esbuildExternals} ${importMetaBanner} ${importMetaDefine} --outfile=dist/openclaw-bundle.cjs`,
-  )
+  );
 
-  console.log('Bundling discord-router to CJS...')
+  console.log("Bundling discord-router to CJS...");
   runEsbuild(
     `src/discord-router/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/discord-router-bundle.cjs`,
-  )
+  );
 
-  console.log('Bundling health-monitor to CJS...')
+  console.log("Bundling health-monitor to CJS...");
   runEsbuild(
     `discord-health-monitor/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/health-monitor-bundle.cjs`,
-  )
+  );
 
-  console.log()
+  console.log();
 }
 
 // Verify bundles exist.
-for (const name of ['openclaw-bundle', 'discord-router-bundle', 'health-monitor-bundle']) {
+for (const name of ["openclaw-bundle", "discord-router-bundle", "health-monitor-bundle"]) {
   if (!existsSync(join(ROOT, `dist/${name}.cjs`))) {
-    console.error(`Bundle not found: dist/${name}.cjs (run without --skip-build or re-run prep)`)
-    process.exit(1)
+    console.error(`Bundle not found: dist/${name}.cjs (run without --skip-build or re-run prep)`);
+    process.exit(1);
   }
 }
 
 // Step 10: Generate SEA blobs for each binary (platform-independent; generated once).
-console.log('Generating SEA blobs...')
+console.log("Generating SEA blobs...");
 
 const BINARIES = [
-  { name: 'openclaw', bundle: 'dist/openclaw-bundle.cjs', blob: 'dist/openclaw-sea.blob' },
+  { name: "openclaw", bundle: "dist/openclaw-bundle.cjs", blob: "dist/openclaw-sea.blob" },
   {
-    name: 'discord-router',
-    bundle: 'dist/discord-router-bundle.cjs',
-    blob: 'dist/discord-router-sea.blob',
+    name: "discord-router",
+    bundle: "dist/discord-router-bundle.cjs",
+    blob: "dist/discord-router-sea.blob",
   },
   {
-    name: 'health-monitor',
-    bundle: 'dist/health-monitor-bundle.cjs',
-    blob: 'dist/health-monitor-sea.blob',
+    name: "health-monitor",
+    bundle: "dist/health-monitor-bundle.cjs",
+    blob: "dist/health-monitor-sea.blob",
   },
-]
+];
 
 for (const bin of BINARIES) {
-  console.log(`  ${bin.name}...`)
+  console.log(`  ${bin.name}...`);
   const seaConfig = {
     main: bin.bundle,
     output: bin.blob,
     disableExperimentalSEAWarning: true,
-  }
-  const seaConfigPath = join(ROOT, `sea-config-${bin.name}.json`)
-  writeFileSync(seaConfigPath, JSON.stringify(seaConfig, null, 2))
-  execSync(`node --experimental-sea-config "${seaConfigPath}"`, { stdio: 'inherit', cwd: ROOT })
-  unlinkSync(seaConfigPath)
+  };
+  const seaConfigPath = join(ROOT, `sea-config-${bin.name}.json`);
+  writeFileSync(seaConfigPath, JSON.stringify(seaConfig, null, 2));
+  execSync(`node --experimental-sea-config "${seaConfigPath}"`, { stdio: "inherit", cwd: ROOT });
+  unlinkSync(seaConfigPath);
 
   if (!existsSync(join(ROOT, bin.blob))) {
-    console.error(`SEA blob generation failed: ${bin.blob} not found`)
-    process.exit(1)
+    console.error(`SEA blob generation failed: ${bin.blob} not found`);
+    process.exit(1);
   }
-  const blobSize = statSync(join(ROOT, bin.blob)).size
-  console.log(`  ${bin.blob}: ${(blobSize / 1024 / 1024).toFixed(1)} MB`)
+  const blobSize = statSync(join(ROOT, bin.blob)).size;
+  console.log(`  ${bin.blob}: ${(blobSize / 1024 / 1024).toFixed(1)} MB`);
 }
 
-console.log()
+console.log();
 
 // Step 11: Inject blobs into each target's Node.js binary.
-console.log(`Injecting into ${targets.length} target(s)...`)
+console.log(`Injecting into ${targets.length} target(s)...`);
 
 for (const target of targets) {
-  console.log(`\n  ${target.name}`)
+  console.log(`\n  ${target.name}`);
 
   try {
-    const nodeBinary = getNodeBinary(target)
+    const nodeBinary = getNodeBinary(target);
 
     for (const bin of BINARIES) {
-      const outfile = join(ROOT, `dist/${bin.name}-${target.name}${target.ext}`)
-      console.log(`    -> dist/${bin.name}-${target.name}${target.ext}`)
+      const outfile = join(ROOT, `dist/${bin.name}-${target.name}${target.ext}`);
+      console.log(`    -> dist/${bin.name}-${target.name}${target.ext}`);
 
       // Copy Node binary to output path (postject modifies in place).
-      copyFileSync(nodeBinary, outfile)
-      if (!target.ext) chmodSync(outfile, 0o755)
+      copyFileSync(nodeBinary, outfile);
+      if (!target.ext) {
+        chmodSync(outfile, 0o755);
+      }
 
       // macOS: remove existing codesignature before injection.
-      if (target.macho) removeMacOSSignature(outfile)
+      if (target.macho) {
+        removeMacOSSignature(outfile);
+      }
 
       // Inject the SEA blob.
-      const machoFlag = target.macho ? '--macho-segment-name NODE_SEA' : ''
+      const machoFlag = target.macho ? "--macho-segment-name NODE_SEA" : "";
       execSync(
         `npx --yes postject "${outfile}" NODE_SEA_BLOB "${join(ROOT, bin.blob)}" --sentinel-fuse ${SEA_FUSE} ${machoFlag}`.trim(),
-        { stdio: 'inherit', cwd: ROOT },
-      )
+        { stdio: "inherit", cwd: ROOT },
+      );
 
       // macOS: re-sign with ad-hoc signature after injection.
-      if (target.macho) resignMacOS(outfile)
+      if (target.macho) {
+        resignMacOS(outfile);
+      }
 
-      const size = statSync(outfile).size
-      console.log(`    OK: ${(size / 1024 / 1024).toFixed(1)} MB`)
+      const size = statSync(outfile).size;
+      console.log(`    OK: ${(size / 1024 / 1024).toFixed(1)} MB`);
     }
   } catch (err) {
-    console.error(`  Failed: ${err.message}`)
-    process.exit(1)
+    console.error(`  Failed: ${err.message}`);
+    process.exit(1);
   }
 }
 
 // Clean up intermediate blobs.
 for (const bin of BINARIES) {
-  try { unlinkSync(join(ROOT, bin.blob)) } catch {}
+  try {
+    unlinkSync(join(ROOT, bin.blob));
+  } catch {}
 }
 
-console.log('\nSEA compilation complete.')
+console.log("\nSEA compilation complete.");
 for (const target of targets) {
   for (const bin of BINARIES) {
-    const outfile = `dist/${bin.name}-${target.name}${target.ext}`
+    const outfile = `dist/${bin.name}-${target.name}${target.ext}`;
     if (existsSync(join(ROOT, outfile))) {
-      const size = statSync(join(ROOT, outfile)).size
-      console.log(`  ${outfile} (${(size / 1024 / 1024).toFixed(1)} MB)`)
+      const size = statSync(join(ROOT, outfile)).size;
+      console.log(`  ${outfile} (${(size / 1024 / 1024).toFixed(1)} MB)`);
     }
   }
 }
