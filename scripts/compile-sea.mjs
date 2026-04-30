@@ -25,7 +25,6 @@ import { execSync } from 'child_process'
 import {
   chmodSync,
   copyFileSync,
-  createWriteStream,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -34,7 +33,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'fs'
-import https from 'https'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -126,51 +124,16 @@ if (selectedTarget && !TARGETS.find((t) => t.name === selectedTarget)) {
 
 const targets = selectedTarget ? TARGETS.filter((t) => t.name === selectedTarget) : TARGETS
 
-// --- Helper: download with redirect following and progress output ---
+// --- Helper: download with redirect following ---
+// Uses curl for reliable downloads (handles redirects, partial failures, etc.)
 
 function download(url, dest) {
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(dest)
-    const request = (u) => {
-      https
-        .get(u, (res) => {
-          if (res.statusCode === 301 || res.statusCode === 302) {
-            file.close()
-            return request(res.headers.location)
-          }
-          if (res.statusCode !== 200) {
-            file.close()
-            try { unlinkSync(dest) } catch {}
-            return reject(new Error(`HTTP ${res.statusCode} from ${u}`))
-          }
-          const total = parseInt(res.headers['content-length'] ?? '0', 10)
-          let received = 0
-          res.on('data', (chunk) => {
-            received += chunk.length
-            if (total) {
-              const pct = ((received / total) * 100).toFixed(0).padStart(3)
-              process.stdout.write(`\r    ${pct}% (${(received / 1024 / 1024).toFixed(1)} MB)    `)
-            }
-          })
-          res.pipe(file)
-          file.on('finish', () => {
-            process.stdout.write('\n')
-            file.close(resolve)
-          })
-        })
-        .on('error', (err) => {
-          file.close()
-          try { unlinkSync(dest) } catch {}
-          reject(err)
-        })
-    }
-    request(url)
-  })
+  execSync(`curl -fL --progress-bar -o "${dest}" "${url}"`, { stdio: 'inherit' })
 }
 
 // --- Helper: get (and cache) the Node.js binary for a target ---
 
-async function getNodeBinary(target) {
+function getNodeBinary(target) {
   mkdirSync(CACHE_DIR, { recursive: true })
 
   const cacheKey = `node-${NODE_VERSION}-${target.name}${target.ext}`
@@ -186,12 +149,12 @@ async function getNodeBinary(target) {
 
   if (target.type === 'exe') {
     // Windows: direct .exe download, no extraction needed.
-    await download(target.url, cachedBinary)
+    download(target.url, cachedBinary)
   } else {
     // Linux/macOS: tar.gz, extract just the node binary.
     const archivePath = join(CACHE_DIR, `node-${NODE_VERSION}-${target.name}.tar.gz`)
     if (!existsSync(archivePath)) {
-      await download(target.url, archivePath)
+      download(target.url, archivePath)
     }
     const extractDir = join(CACHE_DIR, `extract-${target.name}`)
     mkdirSync(extractDir, { recursive: true })
@@ -537,7 +500,7 @@ for (const target of targets) {
   console.log(`\n  ${target.name}`)
 
   try {
-    const nodeBinary = await getNodeBinary(target)
+    const nodeBinary = getNodeBinary(target)
 
     for (const bin of BINARIES) {
       const outfile = join(ROOT, `dist/${bin.name}-${target.name}${target.ext}`)
