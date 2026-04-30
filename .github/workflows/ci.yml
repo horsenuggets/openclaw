@@ -655,7 +655,7 @@ jobs:
     name: Compile
     needs: [checks]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
+    if: github.ref == 'refs/heads/release' || github.base_ref == 'release'
     steps:
       - name: Validate DEPLOY_PLATFORM
         env:
