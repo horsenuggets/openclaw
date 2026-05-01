@@ -480,8 +480,12 @@ export function startOAuthCallbackServer(opts: {
     res.end("not found");
   });
 
-  server.listen(CALLBACK_PORT, "0.0.0.0", () => {
-    runtime.log(`[oauth] callback server listening on port ${CALLBACK_PORT}`);
+  const oauthHost = process.env.OPENCLAW_OAUTH_HOST || "127.0.0.1";
+  server.on("error", (err) => {
+    runtime.error(`[oauth] callback server error: ${String(err)}`);
+  });
+  server.listen(CALLBACK_PORT, oauthHost, () => {
+    runtime.log(`[oauth] callback server listening on ${oauthHost}:${CALLBACK_PORT}`);
   });
 
   function requestAuth(params: { discordUserId: string; email: string }) {
