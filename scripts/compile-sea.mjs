@@ -11,7 +11,7 @@
  *   node scripts/compile-sea.mjs --target linux-x64     # Build one platform
  *   node scripts/compile-sea.mjs --skip-build           # Skip tsdown + bundle steps
  *
- * Requirements: Node.js 22+, pnpm
+ * Requirements: Node.js 22+, pnpm, curl, tar, rsync (postject and esbuild fetched via npx if not found)
  * Node version: NODE_SEA_VERSION env var (default: current process version)
  */
 
@@ -413,8 +413,9 @@ if (!skipBuild) {
           writeFileSync(pkgPath, content);
         }
         compiledCount++;
-      } catch {
-        console.log(`    Warning: failed to pre-compile ${extDir}`);
+      } catch (err) {
+        const stderr = err?.stderr?.toString().trim() || "";
+        console.log(`    Warning: failed to pre-compile ${extDir}${stderr ? `: ${stderr}` : ""}`);
         failedCount++;
       }
     }
