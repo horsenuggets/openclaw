@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# OpenClaw distro-specific boot script.
-# Called by wsl-boot.sh after Docker is ready.
+# OpenClaw boot script.
+# Shipped inside the deploy tarball. Installed to ~/boot.sh on the remote host.
 # Starts per-channel agent containers and the discord router.
 set -euo pipefail
 
