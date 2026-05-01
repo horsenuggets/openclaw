@@ -384,7 +384,9 @@ if (!skipBuild) {
       if (existsSync(pnpmDir)) {
         for (const entry of readdirSync(pnpmDir).filter((d) => d.startsWith("esbuild@"))) {
           const bin = join(pnpmDir, entry, "node_modules/esbuild/bin/esbuild");
-          if (existsSync(bin)) { return bin; }
+          if (existsSync(bin)) {
+            return bin;
+          }
         }
       }
       return null;
