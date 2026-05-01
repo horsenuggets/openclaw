@@ -23,7 +23,7 @@ ensure_sshd() {
   local attempt=1
   while ! systemctl is-active --quiet ssh; do
     log "sshd not running (attempt ${attempt}), starting... retrying in ${delay}s"
-    sudo systemctl start ssh 2>&1 | tee -a "$LOG" || true
+    sudo -n systemctl start ssh >> "$LOG" 2>&1 || log "sudo systemctl start ssh failed (check sudo permissions)"
     sleep "$delay"
     delay=$(( delay * 2 < max_delay ? delay * 2 : max_delay ))
     attempt=$(( attempt + 1 ))
