@@ -480,7 +480,7 @@ export function startOAuthCallbackServer(opts: {
     res.end("not found");
   });
 
-  server.listen(CALLBACK_PORT, "0.0.0.0", () => {
+  server.listen(CALLBACK_PORT, process.env.OPENCLAW_OAUTH_HOST ?? "127.0.0.1", () => {
     runtime.log(`[oauth] callback server listening on port ${CALLBACK_PORT}`);
   });
 
