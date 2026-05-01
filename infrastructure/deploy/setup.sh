@@ -19,19 +19,18 @@ mkdir -p ~/logs/whisper
 
 # 3. Replace deploy directory (preserve models and locally-compiled tools)
 echo "[3/7] Installing new deployment..."
+PRESERVE_DIR=$(mktemp -d)
 for dir in models bin/gog bin/whisper-server; do
   if [ -e "$HOME/deploy/$dir" ]; then
-    mkdir -p /tmp/deploy-preserve/$(dirname "$dir")
-    cp -a "$HOME/deploy/$dir" "/tmp/deploy-preserve/$dir"
+    mkdir -p "$PRESERVE_DIR/$(dirname "$dir")"
+    cp -a "$HOME/deploy/$dir" "$PRESERVE_DIR/$dir"
   fi
 done
 rm -rf ~/deploy
 mv deploy ~/deploy
 # Restore persistent data
-if [ -d /tmp/deploy-preserve ]; then
-  cp -a /tmp/deploy-preserve/* ~/deploy/ 2>/dev/null || true
-  rm -rf /tmp/deploy-preserve
-fi
+cp -a "$PRESERVE_DIR"/. ~/deploy/ 2>/dev/null || true
+rm -rf "$PRESERVE_DIR"
 chmod +x ~/deploy/bin/*
 
 # 4. Install .env (always overwrite — source of truth is the tarball)
