@@ -22,8 +22,13 @@ ensure_sshd() {
   local max_delay=60
   local attempt=1
   while ! systemctl is-active --quiet ssh; do
-    log "sshd not running (attempt ${attempt}), starting... retrying in ${delay}s"
+    log "sshd not running (attempt ${attempt}), starting..."
+    # Reset any start-limit-hit state so systemd will actually attempt a start.
+    sudo -n systemctl reset-failed ssh >> "$LOG" 2>&1 || true
     sudo -n systemctl start ssh >> "$LOG" 2>&1 || log "sudo systemctl start ssh failed (check sudo permissions)"
+    # Re-check immediately; only sleep if sshd is still not up.
+    systemctl is-active --quiet ssh && break
+    log "Still not running, retrying in ${delay}s"
     sleep "$delay"
     delay=$(( delay * 2 < max_delay ? delay * 2 : max_delay ))
     attempt=$(( attempt + 1 ))
