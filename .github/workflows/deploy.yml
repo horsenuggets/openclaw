@@ -110,7 +110,8 @@ jobs:
           # Deploy scripts
           cp infrastructure/deploy/setup.sh "$STAGING/"
           cp infrastructure/deploy/boot.sh "$STAGING/"
-          chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh"
+          cp infrastructure/deploy/keepalive.sh "$STAGING/"
+          chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh" "$STAGING/keepalive.sh"
 
           tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
           rm -rf "$STAGING"
