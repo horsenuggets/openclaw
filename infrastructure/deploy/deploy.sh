@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Deploy OpenClaw to the production WSL instance.
+# Deploy OpenClaw to the production host.
 #
-# Compiles the binary, assembles a deploy tarball, ships it to
+# Compiles the binaries, assembles a deploy tarball, ships it to
 # the remote host, and runs setup.sh to install + restart.
 #
 # Usage:
@@ -57,9 +57,18 @@ cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/scripts/openclawctl" "$STAGING/deploy/bin/openclawctl"
 chmod +x "$STAGING/deploy/bin/openclawctl"
 
-# Setup + boot scripts
+# Environment variables (local .env or CI-generated)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  cp "$PROJECT_ROOT/.env" "$STAGING/.env"
+else
+  echo "Error: No .env file found at $PROJECT_ROOT/.env"
+  exit 1
+fi
+
+# Setup + boot + keepalive scripts
 cp "$SCRIPT_DIR/setup.sh" "$STAGING/"
 cp "$SCRIPT_DIR/boot.sh" "$STAGING/"
+cp "$SCRIPT_DIR/keepalive.sh" "$STAGING/"
 
 # Create tarball (preserves permissions)
 tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
