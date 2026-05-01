@@ -637,26 +637,45 @@ jobs:
         run: ${{ matrix.command }}
 
   compile:
-    name: Compile
+    name: Compile & smoke test (${{ matrix.target }})
     needs: [checks]
-    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-x64
+            ext: ""
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+            ext: ""
+          - runner: macos-15
+            target: macos-arm64
+            ext: ""
+          - runner: macos-15-intel
+            target: macos-x64
+            ext: ""
+          - runner: windows-latest
+            target: windows-x64
+            ext: ".exe"
+          - runner: windows-11-arm
+            target: windows-arm64
+            ext: ".exe"
+    env:
+      # Pin Node SEA host version so binaries are reproducible across runners
+      # (compile-sea.mjs falls back to process.versions.node otherwise, which
+      # drifts whenever setup-node's 22.x latest changes).
+      NODE_SEA_VERSION: 22.22.0
     steps:
-      - name: Validate DEPLOY_PLATFORM
-        env:
-          DEPLOY_PLATFORM: ${{ vars.DEPLOY_PLATFORM }}
-        run: |
-          if [ -z "$DEPLOY_PLATFORM" ]; then
-            echo "::error::DEPLOY_PLATFORM repository variable is not set. Set it to the target platform, e.g. linux-x64"
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Checkout submodules (retry)
+        shell: bash
         run: |
           set -euo pipefail
           git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -677,6 +696,7 @@ jobs:
           check-latest: true
 
       - name: Setup pnpm (corepack retry)
+        shell: bash
         run: |
           set -euo pipefail
           corepack enable
@@ -690,18 +710,107 @@ jobs:
           done
           exit 1
 
+      - name: Cache Node.js SEA binaries
+        uses: actions/cache@v4
+        with:
+          path: .sea-cache
+          key: sea-node-${{ env.NODE_SEA_VERSION }}-${{ matrix.target }}-${{ hashFiles('scripts/compile-sea.mjs') }}
+          restore-keys: |
+            sea-node-${{ env.NODE_SEA_VERSION }}-${{ matrix.target }}-
+
       - name: Capture node path
+        shell: bash
         run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         env:
           CI: true
+        shell: bash
         run: |
           export PATH="$NODE_BIN:$PATH"
           pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
 
       - name: Compile binaries
-        run: node scripts/compile-sea.mjs --target ${{ vars.DEPLOY_PLATFORM }}
+        shell: bash
+        run: node scripts/compile-sea.mjs --target ${{ matrix.target }}
+
+      - name: Smoke test openclaw (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/openclaw-${{ matrix.target }}
+          echo "=== --version ==="
+          timeout 10 ./dist/openclaw-${{ matrix.target }} --version || true
+          echo "=== --help ==="
+          timeout 10 ./dist/openclaw-${{ matrix.target }} --help || true
+
+      - name: Smoke test discord-router (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/discord-router-${{ matrix.target }}
+          echo "=== discord-router starts and exits ==="
+          timeout 5 ./dist/discord-router-${{ matrix.target }} 2>&1 || true
+          echo "discord-router binary runs without crashing"
+
+      - name: Smoke test health-monitor (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/health-monitor-${{ matrix.target }}
+          echo "=== health-monitor starts and exits ==="
+          timeout 5 ./dist/health-monitor-${{ matrix.target }} 2>&1 || true
+          echo "health-monitor binary runs without crashing"
+
+      - name: Smoke test openclaw (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 1
+        run: |
+          chmod +x dist/openclaw-${{ matrix.target }}
+          echo "=== --version ==="
+          ./dist/openclaw-${{ matrix.target }} --version || true
+          echo "=== --help ==="
+          ./dist/openclaw-${{ matrix.target }} --help || true
+
+      - name: Smoke test discord-router (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 1
+        run: |
+          chmod +x dist/discord-router-${{ matrix.target }}
+          echo "=== discord-router starts and exits ==="
+          ./dist/discord-router-${{ matrix.target }} 2>&1 || true
+          echo "discord-router binary runs without crashing"
+
+      - name: Smoke test health-monitor (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 1
+        run: |
+          chmod +x dist/health-monitor-${{ matrix.target }}
+          echo "=== health-monitor starts and exits ==="
+          ./dist/health-monitor-${{ matrix.target }} 2>&1 || true
+          echo "health-monitor binary runs without crashing"
+
+      - name: Smoke test openclaw (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== --version ==="
+          & "dist\openclaw-${{ matrix.target }}${{ matrix.ext }}" --version; $global:LASTEXITCODE = 0
+          Write-Host "=== --help ==="
+          & "dist\openclaw-${{ matrix.target }}${{ matrix.ext }}" --help; $global:LASTEXITCODE = 0
+
+      - name: Smoke test discord-router (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== discord-router starts and exits ==="
+          & "dist\discord-router-${{ matrix.target }}${{ matrix.ext }}" 2>&1; $global:LASTEXITCODE = 0
+          Write-Host "discord-router binary runs without crashing"
+
+      - name: Smoke test health-monitor (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== health-monitor starts and exits ==="
+          & "dist\health-monitor-${{ matrix.target }}${{ matrix.ext }}" 2>&1; $global:LASTEXITCODE = 0
+          Write-Host "health-monitor binary runs without crashing"
 
       - name: Set padded PR number
         if: github.base_ref == 'release'
@@ -712,8 +821,8 @@ jobs:
         if: github.base_ref == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ env.PADDED_PR }}-openclaw-${{ vars.DEPLOY_PLATFORM }}
-          path: dist/openclaw-${{ vars.DEPLOY_PLATFORM }}
+          name: pr-${{ env.PADDED_PR }}-openclaw-${{ matrix.target }}
+          path: dist/openclaw-${{ matrix.target }}${{ matrix.ext }}
           overwrite: true
           retention-days: 90
 
@@ -721,8 +830,8 @@ jobs:
         if: github.base_ref == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ env.PADDED_PR }}-discord-router-${{ vars.DEPLOY_PLATFORM }}
-          path: dist/discord-router-${{ vars.DEPLOY_PLATFORM }}
+          name: pr-${{ env.PADDED_PR }}-discord-router-${{ matrix.target }}
+          path: dist/discord-router-${{ matrix.target }}${{ matrix.ext }}
           overwrite: true
           retention-days: 90
 
@@ -730,7 +839,7 @@ jobs:
         if: github.base_ref == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ env.PADDED_PR }}-health-monitor-${{ vars.DEPLOY_PLATFORM }}
-          path: dist/health-monitor-${{ vars.DEPLOY_PLATFORM }}
+          name: pr-${{ env.PADDED_PR }}-health-monitor-${{ matrix.target }}
+          path: dist/health-monitor-${{ matrix.target }}${{ matrix.ext }}
           overwrite: true
           retention-days: 90

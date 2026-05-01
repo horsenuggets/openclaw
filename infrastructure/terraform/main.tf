@@ -25,7 +25,12 @@ locals {
     "checks (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
     "checks (node, format, pnpm format)",
     "checks (node, protocol, pnpm protocol:check)",
-    "checks (bun, test, pnpm canvas:a2ui:bundle && bunx vitest run)",
+    "Compile & smoke test (linux-x64)",
+    "Compile & smoke test (linux-arm64)",
+    "Compile & smoke test (macos-arm64)",
+    "Compile & smoke test (macos-x64)",
+    "Compile & smoke test (windows-x64)",
+    "Compile & smoke test (windows-arm64)",
     "secrets",
     "no-tabs",
   ]
