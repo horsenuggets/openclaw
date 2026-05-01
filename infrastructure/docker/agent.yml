@@ -25,4 +25,4 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["openclaw", "gateway", "--bind", "lan", "--port", "${OPENCLAW_CHANNEL_PORT}"]
+    command: ["openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]
