@@ -2,22 +2,16 @@
 /**
  * compile-sea.mjs — Compile OpenClaw using Node.js SEA (Single Executable Application).
  *
- * Alternative to compile.mjs (which uses Bun compile). Downloads the target platform's
- * Node.js binary from nodejs.org and injects the JS bundle as a SEA blob. Enables true
- * cross-compilation from a single Linux host — no per-platform Bun download required,
- * which eliminates the windows-arm64 cross-compilation flakiness.
- *
- * The prep pipeline (tsdown build, wrapper generation, extension embedding) still requires
- * Bun locally (same as compile.mjs). The difference is that the final cross-compilation
- * step downloads reliable Node.js binaries from nodejs.org instead of Bun's cross-compile
- * targets. Three binaries are produced: openclaw, discord-router, health-monitor.
+ * Downloads the target platform's Node.js binary from nodejs.org and injects the JS bundle
+ * as a SEA blob. Enables true cross-compilation from a single Linux host. Three binaries
+ * are produced: openclaw, discord-router, health-monitor.
  *
  * Usage:
  *   node scripts/compile-sea.mjs                        # Build all platforms
  *   node scripts/compile-sea.mjs --target linux-x64     # Build one platform
  *   node scripts/compile-sea.mjs --skip-build           # Skip tsdown + bundle steps
  *
- * Requirements: Node.js 22+, Bun (for prep pipeline), pnpm
+ * Requirements: Node.js 22+, pnpm, curl, tar, rsync (postject and esbuild fetched via npx if not found)
  * Node version: NODE_SEA_VERSION env var (default: current process version)
  */
 
@@ -291,7 +285,7 @@ if (!skipBuild) {
     ].join("\n") + "\n",
   );
 
-  // Step 4: Generate standard binary-entry.js (for Bun --compile) and SEA-specific entry.
+  // Step 4: Generate standard binary-entry.js and SEA-specific entry.
   // The SEA entry avoids top-level await (not supported in CJS bundle output) by
   // wrapping dynamic imports in an async IIFE.
   const wrapperEntry = join(ROOT, "dist/binary-entry.js");
@@ -384,6 +378,20 @@ if (!skipBuild) {
       cwd: ROOT,
     });
     console.log("  Pre-compiling extensions...");
+    // Locate esbuild binary from the pnpm store (available as a transitive dependency).
+    const extEsbuildBin = (() => {
+      const pnpmDir = join(ROOT, "node_modules/.pnpm");
+      if (existsSync(pnpmDir)) {
+        for (const entry of readdirSync(pnpmDir).filter((d) => d.startsWith("esbuild@"))) {
+          const bin = join(pnpmDir, entry, "node_modules/esbuild/bin/esbuild");
+          if (existsSync(bin)) {
+            return bin;
+          }
+        }
+      }
+      return null;
+    })();
+    const extEsbuild = extEsbuildBin ? `"${extEsbuildBin}"` : `npx --yes esbuild`;
     let compiledCount = 0;
     let failedCount = 0;
     for (const extDir of readdirSync(join(ROOT, "dist/extensions"))) {
@@ -394,7 +402,7 @@ if (!skipBuild) {
       }
       try {
         execSync(
-          `bun build "${indexTs}" --outdir "${extPath}" --target node --external openclaw --external "openclaw/*"`,
+          `${extEsbuild} "${indexTs}" --bundle --outdir="${extPath}" --platform=node --format=esm --external:openclaw --external:"openclaw/*"`,
           { stdio: "pipe", cwd: ROOT },
         );
         const pkgPath = join(extPath, "package.json");
@@ -405,8 +413,9 @@ if (!skipBuild) {
           writeFileSync(pkgPath, content);
         }
         compiledCount++;
-      } catch {
-        console.log(`    Warning: failed to pre-compile ${extDir}`);
+      } catch (err) {
+        const stderr = err?.stderr?.toString().trim() || "";
+        console.log(`    Warning: failed to pre-compile ${extDir}${stderr ? `: ${stderr}` : ""}`);
         failedCount++;
       }
     }
@@ -472,10 +481,8 @@ if (!skipBuild) {
   console.log();
 
   // Step 9: Bundle each binary entry to CJS using esbuild.
-  // esbuild is used instead of `bun build --format=cjs` because:
-  //   - esbuild correctly handles glob external patterns (@node-llama-cpp/*)
-  //   - esbuild doesn't analyze external module internals (avoids TLA parse errors)
-  //   - bun CJS mode has issues with node:sqlite and native module externals
+  // esbuild correctly handles glob external patterns (@node-llama-cpp/*) and doesn't
+  // analyze external module internals, which avoids TLA parse errors.
   // esbuild is available as a transitive dependency in the pnpm store (via tsdown).
   const esbuildBin = (() => {
     const pnpmDir = join(ROOT, "node_modules/.pnpm");
