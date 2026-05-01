@@ -4,7 +4,7 @@
 #
 # Run on distro startup to start services and keep the host alive.
 # Register in the Windows Task Scheduler:
-#   wsl.exe -d OpenClaw -- bash /home/openclaw/keepalive.sh
+#   wsl.exe -d OpenClaw -u openclaw -- bash /home/openclaw/keepalive.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -13,7 +13,7 @@ LOG="$SCRIPT_DIR/logs/keepalive.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
-# Wait for Docker to be ready (systemd starts it; this just waits)
+# Wait for Docker to become ready; this loop only checks availability.
 DOCKER_TIMEOUT=120
 DOCKER_ELAPSED=0
 while ! docker info >/dev/null 2>&1; do
@@ -30,7 +30,7 @@ done
 if [ -f "$SCRIPT_DIR/boot.sh" ]; then
   log "Running boot.sh..."
   if ! bash "$SCRIPT_DIR/boot.sh" >> "$LOG" 2>&1; then
-    log "boot.sh failed; continuing to watchdog loop."
+    log "boot.sh failed; continuing to keepalive loop."
   fi
 fi
 
