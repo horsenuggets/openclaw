@@ -690,6 +690,11 @@ jobs:
           done
           exit 1
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Capture node path
         run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
 
@@ -700,11 +705,8 @@ jobs:
           export PATH="$NODE_BIN:$PATH"
           pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
 
-      - name: Build
-        run: pnpm build
-
       - name: Compile binaries
-        run: node scripts/compile-sea.mjs --target ${{ vars.DEPLOY_PLATFORM }} --skip-build
+        run: node scripts/compile-sea.mjs --target ${{ vars.DEPLOY_PLATFORM }}
 
       - name: Set padded PR number
         if: github.base_ref == 'release'
