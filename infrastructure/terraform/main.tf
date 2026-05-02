@@ -17,7 +17,10 @@ provider "github" {
 locals {
   repo_name = "openclaw"
 
-  # CI checks required for both main and release
+  # CI checks required for every PR. Cross-platform compile matrix is
+  # intentionally disabled to conserve CI minutes — only linux-arm64
+  # (cheapest runner) is built until we decide whether to keep Node SEA
+  # or migrate back to Bun.
   required_checks = [
     "install-check",
     "checks (node, tsgo, pnpm tsgo)",
@@ -25,12 +28,13 @@ locals {
     "checks (node, test, pnpm canvas:a2ui:bundle && pnpm test)",
     "checks (node, format, pnpm format)",
     "checks (node, protocol, pnpm protocol:check)",
-    "checks (bun, test, pnpm canvas:a2ui:bundle && bunx vitest run)",
+    "Compile & smoke test (linux-arm64)",
     "secrets",
     "no-tabs",
   ]
 
-  # Additional checks required only for release PRs
+  # Additional checks required only for release PRs (release-specific
+  # validators).
   release_checks = concat(local.required_checks, [
     "Validate PR title",
     "Verify diff matches main",
