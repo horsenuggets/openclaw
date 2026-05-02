@@ -644,10 +644,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Gate the full multi-platform matrix to release-targeted PRs to
-        # conserve CI minutes (macOS is 10x, Windows is 2x). PRs targeting
-        # main only build linux-x64 as a quick smoke check.
-        include: ${{ fromJSON(github.base_ref == 'release' && '[{"runner":"ubuntu-24.04","target":"linux-x64","ext":""},{"runner":"ubuntu-24.04-arm","target":"linux-arm64","ext":""},{"runner":"macos-15","target":"macos-arm64","ext":""},{"runner":"macos-15-intel","target":"macos-x64","ext":""},{"runner":"windows-latest","target":"windows-x64","ext":".exe"},{"runner":"windows-11-arm","target":"windows-arm64","ext":".exe"}]' || '[{"runner":"ubuntu-24.04","target":"linux-x64","ext":""}]') }}
+        # Only build linux-arm64 to keep CI minute usage minimal. Linux ARM
+        # is the cheapest runner ($0.005/wall-min). The full multi-platform
+        # matrix is intentionally disabled on both main and release until we
+        # decide whether to keep Node SEA or migrate back to Bun.
+        include:
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+            ext: ""
     env:
       # Pin Node SEA host version so binaries are reproducible across runners
       # (compile-sea.mjs falls back to process.versions.node otherwise, which
