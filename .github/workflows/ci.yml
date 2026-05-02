@@ -81,8 +81,23 @@ jobs:
             task: lint
             command: pnpm build && pnpm lint
           - runtime: node
-            task: test
-            command: pnpm canvas:a2ui:bundle && pnpm test
+            task: test:extensions
+            command: pnpm canvas:a2ui:bundle && pnpm test:extensions
+          - runtime: node
+            task: test:gateway
+            command: pnpm canvas:a2ui:bundle && pnpm test:gateway
+          - runtime: node
+            task: test:unit (1/4)
+            command: pnpm canvas:a2ui:bundle && pnpm test:unit --shard 1/4
+          - runtime: node
+            task: test:unit (2/4)
+            command: pnpm canvas:a2ui:bundle && pnpm test:unit --shard 2/4
+          - runtime: node
+            task: test:unit (3/4)
+            command: pnpm canvas:a2ui:bundle && pnpm test:unit --shard 3/4
+          - runtime: node
+            task: test:unit (4/4)
+            command: pnpm canvas:a2ui:bundle && pnpm test:unit --shard 4/4
           - runtime: node
             task: protocol
             command: pnpm protocol:check
@@ -147,6 +162,24 @@ jobs:
           node -v
           pnpm -v
           pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true || pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Cache A2UI bundle
+        # Cheap key: only the bundle script + rolldown config + lockfile.
+        # bundle-a2ui.sh recomputes its own content hash of vendor/a2ui and
+        # the CanvasA2UI app on every run and rebuilds if the on-disk hash
+        # is stale, so a cache hit with stale sources still produces the
+        # correct output (it'll just rebuild). This avoids walking large
+        # source trees twice (once here, once inside the bundle script).
+        if: startsWith(matrix.task, 'test')
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/canvas-host/a2ui/a2ui.bundle.js
+            src/canvas-host/a2ui/a2ui.bundle.js.map
+            src/canvas-host/a2ui/.bundle.hash
+          key: a2ui-${{ runner.os }}-${{ hashFiles('scripts/bundle-a2ui.sh', 'apps/shared/OpenClawKit/Tools/CanvasA2UI/rolldown.config.mjs', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            a2ui-${{ runner.os }}-
 
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         run: ${{ matrix.command }}

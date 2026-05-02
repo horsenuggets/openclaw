@@ -17,7 +17,7 @@ export default defineConfig({
   },
   test: {
     testTimeout: isCI ? 300_000 : 120_000,
-    hookTimeout: isWindows ? 180_000 : 120_000,
+    hookTimeout: isCI ? 300_000 : isWindows ? 180_000 : 120_000,
     pool: "forks",
     maxWorkers: isCI ? ciWorkers : localWorkers,
     include: [
