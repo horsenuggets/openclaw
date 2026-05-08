@@ -65,10 +65,9 @@ else
   exit 1
 fi
 
-# Setup + boot + keepalive scripts
+# Setup + boot scripts (wsl-prod owns the keepalive watchdog now)
 cp "$SCRIPT_DIR/setup.sh" "$STAGING/"
 cp "$SCRIPT_DIR/boot.sh" "$STAGING/"
-cp "$SCRIPT_DIR/keepalive.sh" "$STAGING/"
 
 # Create tarball (preserves permissions)
 tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
