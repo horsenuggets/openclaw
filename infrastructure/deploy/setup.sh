@@ -9,16 +9,16 @@ set -euo pipefail
 echo "=== OpenClaw Setup ==="
 
 # 1. Stop all containers
-echo "[1/7] Stopping containers..."
+echo "[1/6] Stopping containers..."
 docker ps -a -q | xargs -r docker stop
 docker ps -a -q | xargs -r docker rm
 
 # 2. Create data and log directories
-echo "[2/7] Creating data directories..."
+echo "[2/6] Creating data directories..."
 mkdir -p ~/logs/whisper
 
 # 3. Replace deploy directory (preserve models and locally-compiled tools)
-echo "[3/7] Installing new deployment..."
+echo "[3/6] Installing new deployment..."
 PRESERVE_DIR=$(mktemp -d)
 for dir in models bin/gog bin/whisper-server; do
   if [ -e "$HOME/deploy/$dir" ]; then
@@ -34,21 +34,18 @@ rm -rf "$PRESERVE_DIR"
 chmod +x ~/deploy/bin/*
 
 # 4. Install .env (always overwrite — source of truth is the tarball)
-echo "[4/7] Installing .env..."
+echo "[4/6] Installing .env..."
 cp .env ~/.env
 
-# 5. Install boot script
-echo "[5/7] Installing boot script..."
+# 5. Install boot script. The wsl-prod scheduled task on the Windows host
+# runs /usr/local/bin/wsl-boot.sh, which invokes ~/boot.sh as the deploy
+# user once Docker is ready - we don't need a per-app keepalive shim.
+echo "[5/6] Installing boot script..."
 cp boot.sh ~/boot.sh
 chmod +x ~/boot.sh
 
-# 6. Install keepalive script
-echo "[6/7] Installing keepalive script..."
-cp keepalive.sh ~/keepalive.sh
-chmod +x ~/keepalive.sh
-
-# 7. Start containers
-echo "[7/7] Starting containers..."
+# 6. Start containers
+echo "[6/6] Starting containers..."
 bash ~/boot.sh
 
 echo ""

@@ -107,11 +107,10 @@ jobs:
             cp -r docs/reference/templates "$STAGING/deploy/docs/reference/"
           fi
 
-          # Deploy scripts
+          # Deploy scripts (wsl-prod owns the keepalive watchdog now)
           cp infrastructure/deploy/setup.sh "$STAGING/"
           cp infrastructure/deploy/boot.sh "$STAGING/"
-          cp infrastructure/deploy/keepalive.sh "$STAGING/"
-          chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh" "$STAGING/keepalive.sh"
+          chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh"
 
           tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
           rm -rf "$STAGING"
