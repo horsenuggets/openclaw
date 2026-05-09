@@ -5,7 +5,7 @@
 #   scripts/compile-whisper.sh                         # native build (current platform)
 #   scripts/compile-whisper.sh --target linux-x64      # single target via Docker
 #   scripts/compile-whisper.sh --all                   # all supported targets
-#   scripts/compile-whisper.sh --on-remote             # compile linux targets on MSI (fastest)
+#   scripts/compile-whisper.sh --on-remote             # compile linux targets on remote host (fastest)
 #
 # Supported targets: linux-x64, linux-arm64, darwin-x64, darwin-arm64
 # Windows not yet supported (needs MSVC).
@@ -79,12 +79,12 @@ compile_macos_cross() {
 }
 
 compile_on_remote() {
-  echo "Compiling linux targets on remote (msi-openclaw)..."
+  echo "Compiling linux targets on remote (<openclaw-host>)..."
   cd "$PROJECT_ROOT"
   tar czf /tmp/whisper-src.tar.gz --exclude='.git' --exclude='build*' whisper/
-  scp -C /tmp/whisper-src.tar.gz msi-openclaw:/tmp/whisper-src.tar.gz
+  scp -C /tmp/whisper-src.tar.gz <openclaw-host>:/tmp/whisper-src.tar.gz
 
-  ssh msi-openclaw "
+  ssh <openclaw-host> "
     cd /tmp && tar xzf whisper-src.tar.gz 2>/dev/null
     echo 'Compiling linux-x64...'
     docker run --rm -v /tmp/whisper:/src -w /src ubuntu:24.04 bash -c '
@@ -96,7 +96,7 @@ compile_on_remote() {
     ls -lh /tmp/whisper-server-linux-x64
   "
 
-  scp msi-openclaw:/tmp/whisper-server-linux-x64 "$DIST_DIR/whisper-server-linux-x64"
+  scp <openclaw-host>:/tmp/whisper-server-linux-x64 "$DIST_DIR/whisper-server-linux-x64"
   echo "  -> dist/whisper-server-linux-x64"
 }
 
