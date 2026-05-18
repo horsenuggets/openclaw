@@ -106,12 +106,6 @@ resource "github_repository_ruleset" "main" {
       dismiss_stale_reviews_on_push   = true
     }
 
-    # Automatically request Copilot code review on every non-draft PR
-    copilot_code_review {
-      review_on_push             = true
-      review_draft_pull_requests = false
-    }
-
     required_status_checks {
       dynamic "required_check" {
         for_each = local.required_checks
@@ -142,12 +136,6 @@ resource "github_repository_ruleset" "release" {
     pull_request {
       required_approving_review_count = 0
       dismiss_stale_reviews_on_push   = true
-    }
-
-    # Automatically request Copilot code review on every non-draft PR
-    copilot_code_review {
-      review_on_push             = true
-      review_draft_pull_requests = false
     }
 
     required_status_checks {
