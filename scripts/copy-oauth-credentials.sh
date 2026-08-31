@@ -130,6 +130,13 @@ def ensure_secure_dir(path):
         parts.append(cur)
         cur = os.path.dirname(cur)
     for p in parts:
+        # Reject symlinks anywhere in the chain — chmod/stat follow
+        # symlinks, so a symlinked <instance>/agents (etc.) could redirect
+        # permission changes and secret writes outside the intended tree.
+        if os.path.islink(p):
+            raise RuntimeError(
+                f"Refusing to write secrets: {p} is a symlink"
+            )
         os.chmod(p, 0o700)
         mode = os.stat(p).st_mode & 0o777
         if mode & 0o077:
