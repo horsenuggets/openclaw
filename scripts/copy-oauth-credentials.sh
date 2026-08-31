@@ -30,7 +30,7 @@ if [ -z "$CREDS" ]; then
 fi
 
 echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
-printf '%s' "$CREDS" | ssh "$HOST" 'mkdir -p ~/.claude && umask 077 && tmp=~/.claude/.credentials.json.tmp && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" ~/.claude/.credentials.json'
+printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p ~/.claude && chmod 700 ~/.claude && tmp=~/.claude/.credentials.json.tmp && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" ~/.claude/.credentials.json'
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 ssh "$HOST" 'python3 -' <<'REMOTE'
