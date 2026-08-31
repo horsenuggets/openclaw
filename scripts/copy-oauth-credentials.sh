@@ -42,14 +42,15 @@ echo "Updating auth profiles (main + every per-channel instance) ..."
 # OPENCLAW_INSTANCES_DIR (e.g. non-default instance roots). Forward it
 # base64-encoded so arbitrary path contents (spaces, quotes) can't affect
 # how the remote shell parses the ssh command line.
-REMOTE_ENV=""
+REMOTE_CMD="python3 -"
 if [ -n "${OPENCLAW_INSTANCES_DIR:-}" ]; then
-  REMOTE_ENV="OPENCLAW_INSTANCES_DIR_B64=$(printf '%s' "$OPENCLAW_INSTANCES_DIR" | base64 | tr -d '\n')"
+  REMOTE_ENV_B64=$(printf '%s' "$OPENCLAW_INSTANCES_DIR" | base64 | tr -d '\n')
+  # Use `env` explicitly rather than inline `VAR=val cmd` syntax — ssh runs
+  # this string via the remote user's login shell, which may not be POSIX
+  # (e.g. fish), and `env` works the same across all of them.
+  REMOTE_CMD="env OPENCLAW_INSTANCES_DIR_B64=$REMOTE_ENV_B64 python3 -"
 fi
-# Use `env` explicitly rather than inline `VAR=val cmd` syntax — ssh runs
-# this string via the remote user's login shell, which may not be POSIX
-# (e.g. fish), and `env` works the same across all of them.
-ssh "$HOST" "env ${REMOTE_ENV} python3 -" <<'REMOTE'
+ssh "$HOST" "$REMOTE_CMD" <<'REMOTE'
 import base64
 import errno
 import json
