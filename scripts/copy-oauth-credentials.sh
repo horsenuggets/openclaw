@@ -8,15 +8,19 @@
 #      claude-cli credential blob).
 #   2. ~/.openclaw/agents/main/agent/auth-profiles.json (the main agent
 #      profile, kept for single-tenant deploys and CLI use).
-#   3. Every ~/.openclaw-instances/<digits>/agents/main/agent/auth-profiles.json
+#   3. Every <instances-root>/<digits>/agents/main/agent/auth-profiles.json
 #      it finds (each per-channel agent container mounts its own instance
 #      dir; without this fanout, only freshly-created instances would pick
-#      up the new tokens).
+#      up the new tokens). <instances-root> is $OPENCLAW_INSTANCES_DIR on
+#      the deploy host if set (matching src/discord-router/config.ts),
+#      else ~/.openclaw-instances.
 #
 # The gateway picks the new tokens up on the next refresh attempt — no
 # container restart needed.
 #
 # Usage: OPENCLAW_DEPLOY_HOST=msi-openclaw scripts/copy-oauth-credentials.sh
+#        Set OPENCLAW_INSTANCES_DIR locally to forward a non-default
+#        instances root to the deploy host's fanout step.
 set -euo pipefail
 
 HOST="${OPENCLAW_DEPLOY_HOST:?Set OPENCLAW_DEPLOY_HOST}"
@@ -33,7 +37,14 @@ echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
 printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp="$HOME/.claude/.credentials.json.tmp" && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
-ssh "$HOST" 'python3 -' <<'REMOTE'
+# Mirror src/discord-router/config.ts's instancesDir override so this script
+# fans out to the same directory the router actually scans on hosts that set
+# OPENCLAW_INSTANCES_DIR (e.g. non-default instance roots).
+REMOTE_ENV=""
+if [ -n "${OPENCLAW_INSTANCES_DIR:-}" ]; then
+  REMOTE_ENV="OPENCLAW_INSTANCES_DIR=$(printf '%q' "$OPENCLAW_INSTANCES_DIR") "
+fi
+ssh "$HOST" "${REMOTE_ENV}python3 -" <<'REMOTE'
 import errno
 import json
 import os
@@ -58,12 +69,11 @@ LOCK_FACTOR = 2
 def acquire_lock(target_path):
     # proper-lockfile defaults to `realpath: true`, so the running agent
     # locks `realpath(auth_path) + ".lock"`. Match that or we might grab
-    # a different lock file than the agent and race with it. Fall back
-    # to the raw path if the target does not exist yet.
-    try:
-        resolved = os.path.realpath(target_path)
-    except OSError:
-        resolved = target_path
+    # a different lock file than the agent and race with it. os.path.realpath
+    # does not require the path to exist — it resolves whatever symlinked
+    # ancestors do exist and leaves the rest as-is — so this is safe to call
+    # unconditionally, even before auth_path has been created.
+    resolved = os.path.realpath(target_path)
     lock_path = resolved + ".lock"
     for attempt in range(LOCK_RETRIES + 1):
         try:
@@ -176,7 +186,9 @@ targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 # secrets into obviously invalid or dangling numeric dirs.
 DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
 
-instances_root = os.path.join(home, ".openclaw-instances")
+instances_root = os.environ.get("OPENCLAW_INSTANCES_DIR") or os.path.join(
+    home, ".openclaw-instances"
+)
 if os.path.isdir(instances_root):
     # Mirror the router's Dirent.isDirectory() check
     # (src/discord-router/config.ts) — do NOT follow symlinks, otherwise
