@@ -69,8 +69,7 @@ def acquire_lock(target_path):
                 if age_ms > LOCK_STALE_MS:
                     try:
                         os.rmdir(lock_path)
-                        os.mkdir(lock_path)
-                        return lock_path
+                        continue
                     except OSError:
                         pass
             except OSError:
@@ -86,7 +85,6 @@ def acquire_lock(target_path):
                 LOCK_MIN_TIMEOUT_MS * (LOCK_FACTOR ** attempt) * rand_factor,
             )
             time.sleep(backoff_ms / 1000.0)
-    raise RuntimeError(f"Could not acquire lock {lock_path}")
 
 def release_lock(lock_path):
     try:
