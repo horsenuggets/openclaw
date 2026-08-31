@@ -106,8 +106,24 @@ profile = {
     "scopes": creds.get("scopes", []),
 }
 
+def ensure_secure_dir(path):
+    # Credential-adjacent dirs must be 0700; makedirs uses the remote
+    # umask (often 022 → 0755) which would leak filenames/metadata to
+    # other local users.
+    os.makedirs(path, exist_ok=True)
+    parts = []
+    cur = path
+    while cur and cur != home and cur != "/":
+        parts.append(cur)
+        cur = os.path.dirname(cur)
+    for p in parts:
+        try:
+            os.chmod(p, 0o700)
+        except OSError:
+            pass
+
 def update_store(auth_path):
-    os.makedirs(os.path.dirname(auth_path), exist_ok=True)
+    ensure_secure_dir(os.path.dirname(auth_path))
     lock_path = acquire_lock(auth_path)
     try:
         store = {"version": 1, "profiles": {}}
@@ -124,6 +140,7 @@ def update_store(auth_path):
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             json.dump(store, f, indent=2)
+            f.write("\n")
         os.replace(tmp, auth_path)
     finally:
         release_lock(lock_path)
