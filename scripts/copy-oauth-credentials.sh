@@ -72,10 +72,11 @@ def acquire_lock(target_path):
                         os.mkdir(lock_path)
                         return lock_path
                     except OSError as inner_exc:
-                        if inner_exc.errno != errno.EEXIST:
+                        if inner_exc.errno not in (errno.EEXIST, errno.ENOENT):
                             raise
-            except OSError:
-                pass
+            except OSError as stat_exc:
+                if stat_exc.errno != errno.ENOENT:
+                    raise
             if attempt >= LOCK_RETRIES:
                 raise RuntimeError(
                     f"Timed out acquiring auth-profiles lock at {lock_path}"
@@ -110,7 +111,7 @@ def ensure_secure_dir(path):
     # Credential-adjacent dirs must be 0700; makedirs uses the remote
     # umask (often 022 → 0755) which would leak filenames/metadata to
     # other local users.
-    os.makedirs(path, exist_ok=True)
+    os.makedirs(path, mode=0o700, exist_ok=True)
     parts = []
     cur = path
     while cur and cur != home and cur != "/":
