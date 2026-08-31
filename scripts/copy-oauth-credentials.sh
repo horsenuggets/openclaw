@@ -71,8 +71,9 @@ def acquire_lock(target_path):
                         os.rmdir(lock_path)
                         os.mkdir(lock_path)
                         return lock_path
-                    except OSError:
-                        pass
+                    except OSError as inner_exc:
+                        if inner_exc.errno != errno.EEXIST:
+                            raise
             except OSError:
                 pass
             if attempt >= LOCK_RETRIES:
@@ -86,7 +87,6 @@ def acquire_lock(target_path):
                 LOCK_MIN_TIMEOUT_MS * (LOCK_FACTOR ** attempt) * rand_factor,
             )
             time.sleep(backoff_ms / 1000.0)
-    raise RuntimeError(f"Timed out acquiring auth-profiles lock at {lock_path}")
 
 def release_lock(lock_path):
     try:
