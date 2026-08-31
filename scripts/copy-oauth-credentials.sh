@@ -55,11 +55,11 @@ def update_store(auth_path):
     os.makedirs(os.path.dirname(auth_path), exist_ok=True)
     store = {"version": 1, "profiles": {}}
     if os.path.exists(auth_path):
-        try:
-            with open(auth_path) as f:
-                store = json.load(f)
-        except json.JSONDecodeError:
-            pass
+        # Fail loudly on corrupted JSON rather than silently overwriting;
+        # this file holds multiple profiles + metadata (order, lastGood,
+        # usageStats) and resetting it would wipe unrelated state.
+        with open(auth_path) as f:
+            store = json.load(f)
     store.setdefault("profiles", {})
     store["profiles"]["anthropic-subscription:default"] = profile
     tmp = auth_path + ".tmp"
@@ -77,12 +77,19 @@ DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
 
 instances_root = os.path.join(home, ".openclaw-instances")
 if os.path.isdir(instances_root):
-    for entry in sorted(os.listdir(instances_root)):
-        entry_path = os.path.join(instances_root, entry)
-        if not DISCORD_ID_RE.match(entry) or not os.path.isdir(entry_path):
+    # Mirror the router's Dirent.isDirectory() check
+    # (src/discord-router/config.ts) — do NOT follow symlinks, otherwise
+    # this could fan secrets into a symlinked numeric dir the router
+    # itself would refuse to load.
+    with os.scandir(instances_root) as it:
+        entries = sorted(it, key=lambda e: e.name)
+    for entry in entries:
+        if not DISCORD_ID_RE.match(entry.name):
+            continue
+        if not entry.is_dir(follow_symlinks=False):
             continue
         targets.append(os.path.join(
-            entry_path, "agents/main/agent/auth-profiles.json"
+            entry.path, "agents/main/agent/auth-profiles.json"
         ))
 
 for path in targets:
