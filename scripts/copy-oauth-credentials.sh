@@ -69,7 +69,8 @@ def acquire_lock(target_path):
                 if age_ms > LOCK_STALE_MS:
                     try:
                         os.rmdir(lock_path)
-                        continue
+                        os.mkdir(lock_path)
+                        return lock_path
                     except OSError:
                         pass
             except OSError:
@@ -78,11 +79,13 @@ def acquire_lock(target_path):
                 raise RuntimeError(
                     f"Timed out acquiring auth-profiles lock at {lock_path}"
                 )
+            # Match npm `retry` (randomize: true) exponential backoff formula
+            rand_factor = 1.0 + random.random()
             backoff_ms = min(
                 LOCK_MAX_TIMEOUT_MS,
-                LOCK_MIN_TIMEOUT_MS * (LOCK_FACTOR ** attempt),
+                LOCK_MIN_TIMEOUT_MS * (LOCK_FACTOR ** attempt) * rand_factor,
             )
-            time.sleep(random.uniform(LOCK_MIN_TIMEOUT_MS, backoff_ms) / 1000)
+            time.sleep(backoff_ms / 1000.0)
     raise RuntimeError(f"Could not acquire lock {lock_path}")
 
 def release_lock(lock_path):
