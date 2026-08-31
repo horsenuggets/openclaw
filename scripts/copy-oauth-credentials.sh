@@ -34,11 +34,60 @@ printf '%s' "$CREDS" | ssh "$HOST" 'mkdir -p ~/.claude && umask 077 && tmp=~/.cl
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 ssh "$HOST" 'python3 -' <<'REMOTE'
+import errno
 import json
 import os
+import random
 import re
+import time
 
 home = os.path.expanduser("~")
+
+# Match `proper-lockfile` semantics used by
+# src/agents/auth-profiles/store.ts so this fanout coordinates with any
+# concurrent agent refresh. proper-lockfile creates `<file>.lock` as a
+# directory (mkdir is atomic on POSIX), touches its mtime to signal
+# liveness, and treats a lock as stale after `stale` ms.
+LOCK_STALE_MS = 30_000
+LOCK_RETRIES = 10
+LOCK_MIN_TIMEOUT_MS = 100
+LOCK_MAX_TIMEOUT_MS = 10_000
+LOCK_FACTOR = 2
+
+def acquire_lock(target_path):
+    lock_path = target_path + ".lock"
+    for attempt in range(LOCK_RETRIES + 1):
+        try:
+            os.mkdir(lock_path)
+            return lock_path
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+            # Reap stale lock (proper-lockfile checks dir mtime).
+            try:
+                age_ms = (time.time() - os.stat(lock_path).st_mtime) * 1000
+                if age_ms > LOCK_STALE_MS:
+                    os.rmdir(lock_path)
+                    continue
+            except FileNotFoundError:
+                continue
+            if attempt == LOCK_RETRIES:
+                raise RuntimeError(
+                    f"Timed out acquiring auth-profiles lock at {lock_path}"
+                )
+            backoff_ms = min(
+                LOCK_MAX_TIMEOUT_MS,
+                LOCK_MIN_TIMEOUT_MS * (LOCK_FACTOR ** attempt),
+            )
+            time.sleep(random.uniform(0, backoff_ms) / 1000)
+    raise RuntimeError(f"Could not acquire lock {lock_path}")
+
+def release_lock(lock_path):
+    try:
+        os.rmdir(lock_path)
+    except OSError:
+        pass
+
 with open(os.path.join(home, ".claude/.credentials.json")) as f:
     creds = json.load(f)["claudeAiOauth"]
 
@@ -53,20 +102,25 @@ profile = {
 
 def update_store(auth_path):
     os.makedirs(os.path.dirname(auth_path), exist_ok=True)
-    store = {"version": 1, "profiles": {}}
-    if os.path.exists(auth_path):
-        # Fail loudly on corrupted JSON rather than silently overwriting;
-        # this file holds multiple profiles + metadata (order, lastGood,
-        # usageStats) and resetting it would wipe unrelated state.
-        with open(auth_path) as f:
-            store = json.load(f)
-    store.setdefault("profiles", {})
-    store["profiles"]["anthropic-subscription:default"] = profile
-    tmp = auth_path + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(store, f, indent=2)
-    os.replace(tmp, auth_path)
+    lock_path = acquire_lock(auth_path)
+    try:
+        store = {"version": 1, "profiles": {}}
+        if os.path.exists(auth_path):
+            # Fail loudly on corrupted JSON rather than silently
+            # overwriting; this file holds multiple profiles + metadata
+            # (order, lastGood, usageStats) and resetting it would wipe
+            # unrelated state.
+            with open(auth_path) as f:
+                store = json.load(f)
+        store.setdefault("profiles", {})
+        store["profiles"]["anthropic-subscription:default"] = profile
+        tmp = auth_path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(store, f, indent=2)
+        os.replace(tmp, auth_path)
+    finally:
+        release_lock(lock_path)
 
 targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 
