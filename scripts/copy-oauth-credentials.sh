@@ -111,7 +111,9 @@ profile = {
 def ensure_secure_dir(path):
     # Credential-adjacent dirs must be 0700; makedirs uses the remote
     # umask (often 022 → 0755) which would leak filenames/metadata to
-    # other local users.
+    # other local users. All targets live under $HOME so chmod is expected
+    # to succeed; fail loudly if the mode is not tight after chmod rather
+    # than silently writing tokens into a still-permissive dir.
     os.makedirs(path, mode=0o700, exist_ok=True)
     parts = []
     cur = path
@@ -119,10 +121,12 @@ def ensure_secure_dir(path):
         parts.append(cur)
         cur = os.path.dirname(cur)
     for p in parts:
-        try:
-            os.chmod(p, 0o700)
-        except OSError:
-            pass
+        os.chmod(p, 0o700)
+        mode = os.stat(p).st_mode & 0o777
+        if mode & 0o077:
+            raise RuntimeError(
+                f"Refusing to write secrets: {p} is mode {oct(mode)}"
+            )
 
 def update_store(auth_path):
     ensure_secure_dir(os.path.dirname(auth_path))
