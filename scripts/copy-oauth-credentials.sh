@@ -92,8 +92,9 @@ def acquire_lock(target_path):
 def release_lock(lock_path):
     try:
         os.rmdir(lock_path)
-    except OSError:
-        pass
+    except OSError as exc:
+        if exc.errno != errno.ENOENT:
+            raise
 
 with open(os.path.join(home, ".claude/.credentials.json")) as f:
     creds = json.load(f)["claudeAiOauth"]
