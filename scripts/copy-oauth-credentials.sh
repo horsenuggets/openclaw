@@ -46,8 +46,9 @@ home = os.path.expanduser("~")
 # Match `proper-lockfile` semantics used by
 # src/agents/auth-profiles/store.ts so this fanout coordinates with any
 # concurrent agent refresh. proper-lockfile creates `<file>.lock` as a
-# directory (mkdir is atomic on POSIX), touches its mtime to signal
-# liveness, and treats a lock as stale after `stale` ms.
+# directory (mkdir is atomic on POSIX) and treats a lock as stale after
+# `stale` ms based on the dir's mtime. Our critical section is short and
+# synchronous, so we do not bother refreshing the mtime while held.
 LOCK_STALE_MS = 30_000
 LOCK_RETRIES = 10
 LOCK_MIN_TIMEOUT_MS = 100
