@@ -30,7 +30,7 @@ if [ -z "$CREDS" ]; then
 fi
 
 echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
-printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p ~/.claude && chmod 700 ~/.claude && tmp=~/.claude/.credentials.json.tmp && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" ~/.claude/.credentials.json'
+printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp="$HOME/.claude/.credentials.json.tmp" && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 ssh "$HOST" 'python3 -' <<'REMOTE'
@@ -154,9 +154,11 @@ def update_store(auth_path):
 
 targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 
-# Per-channel dirs are named after the Discord snowflake channel ID; mirror
-# the router's validation (src/discord-router/config.ts) so we don't fan
-# secrets out into unrelated/stale numeric directories.
+# Per-channel dirs are named after the Discord snowflake channel ID.
+# The router (src/discord-router/config.ts) applies additional filtering
+# (e.g., must have a port assignment) that we do not replicate here; we
+# only mirror its ID-regex + no-symlink safety checks to avoid fanning
+# secrets into obviously invalid or dangling numeric dirs.
 DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
 
 instances_root = os.path.join(home, ".openclaw-instances")
