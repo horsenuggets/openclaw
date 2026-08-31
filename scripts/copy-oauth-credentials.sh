@@ -67,9 +67,12 @@ def acquire_lock(target_path):
             try:
                 age_ms = (time.time() - os.stat(lock_path).st_mtime) * 1000
                 if age_ms > LOCK_STALE_MS:
-                    os.rmdir(lock_path)
-                    continue
-            except FileNotFoundError:
+                    try:
+                        os.rmdir(lock_path)
+                        continue
+                    except OSError:
+                        pass
+            except OSError:
                 continue
             if attempt == LOCK_RETRIES:
                 raise RuntimeError(
