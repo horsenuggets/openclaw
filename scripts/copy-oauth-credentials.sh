@@ -56,7 +56,15 @@ LOCK_MAX_TIMEOUT_MS = 10_000
 LOCK_FACTOR = 2
 
 def acquire_lock(target_path):
-    lock_path = target_path + ".lock"
+    # proper-lockfile defaults to `realpath: true`, so the running agent
+    # locks `realpath(auth_path) + ".lock"`. Match that or we might grab
+    # a different lock file than the agent and race with it. Fall back
+    # to the raw path if the target does not exist yet.
+    try:
+        resolved = os.path.realpath(target_path)
+    except OSError:
+        resolved = target_path
+    lock_path = resolved + ".lock"
     for attempt in range(LOCK_RETRIES + 1):
         try:
             os.mkdir(lock_path)
