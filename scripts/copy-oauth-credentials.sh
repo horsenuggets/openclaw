@@ -44,9 +44,12 @@ echo "Updating auth profiles (main + every per-channel instance) ..."
 # how the remote shell parses the ssh command line.
 REMOTE_ENV=""
 if [ -n "${OPENCLAW_INSTANCES_DIR:-}" ]; then
-  REMOTE_ENV="OPENCLAW_INSTANCES_DIR_B64=$(printf '%s' "$OPENCLAW_INSTANCES_DIR" | base64 | tr -d '\n') "
+  REMOTE_ENV="OPENCLAW_INSTANCES_DIR_B64=$(printf '%s' "$OPENCLAW_INSTANCES_DIR" | base64 | tr -d '\n')"
 fi
-ssh "$HOST" "${REMOTE_ENV}python3 -" <<'REMOTE'
+# Use `env` explicitly rather than inline `VAR=val cmd` syntax — ssh runs
+# this string via the remote user's login shell, which may not be POSIX
+# (e.g. fish), and `env` works the same across all of them.
+ssh "$HOST" "env ${REMOTE_ENV} python3 -" <<'REMOTE'
 import base64
 import errno
 import json
