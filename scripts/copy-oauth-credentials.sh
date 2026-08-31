@@ -39,12 +39,15 @@ printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p "$HOME/.claude" && chm
 echo "Updating auth profiles (main + every per-channel instance) ..."
 # Mirror src/discord-router/config.ts's instancesDir override so this script
 # fans out to the same directory the router actually scans on hosts that set
-# OPENCLAW_INSTANCES_DIR (e.g. non-default instance roots).
+# OPENCLAW_INSTANCES_DIR (e.g. non-default instance roots). Forward it
+# base64-encoded so arbitrary path contents (spaces, quotes) can't affect
+# how the remote shell parses the ssh command line.
 REMOTE_ENV=""
 if [ -n "${OPENCLAW_INSTANCES_DIR:-}" ]; then
-  REMOTE_ENV="OPENCLAW_INSTANCES_DIR=$(printf '%q' "$OPENCLAW_INSTANCES_DIR") "
+  REMOTE_ENV="OPENCLAW_INSTANCES_DIR_B64=$(printf '%s' "$OPENCLAW_INSTANCES_DIR" | base64 | tr -d '\n') "
 fi
 ssh "$HOST" "${REMOTE_ENV}python3 -" <<'REMOTE'
+import base64
 import errno
 import json
 import os
@@ -186,8 +189,11 @@ targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 # secrets into obviously invalid or dangling numeric dirs.
 DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
 
-instances_root = os.environ.get("OPENCLAW_INSTANCES_DIR") or os.path.join(
-    home, ".openclaw-instances"
+instances_root_b64 = os.environ.get("OPENCLAW_INSTANCES_DIR_B64")
+instances_root = (
+    base64.b64decode(instances_root_b64).decode()
+    if instances_root_b64
+    else os.path.join(home, ".openclaw-instances")
 )
 if os.path.isdir(instances_root):
     # Mirror the router's Dirent.isDirectory() check
