@@ -30,13 +30,13 @@ if [ -z "$CREDS" ]; then
 fi
 
 echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
-printf '%s' "$CREDS" | ssh "$HOST" 'mkdir -p ~/.claude && cat > ~/.claude/.credentials.json && chmod 600 ~/.claude/.credentials.json'
+printf '%s' "$CREDS" | ssh "$HOST" 'mkdir -p ~/.claude && umask 077 && tmp=~/.claude/.credentials.json.tmp && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" ~/.claude/.credentials.json'
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 ssh "$HOST" 'python3 -' <<'REMOTE'
 import json
 import os
-import sys
+import re
 
 home = os.path.expanduser("~")
 with open(os.path.join(home, ".claude/.credentials.json")) as f:
@@ -63,27 +63,33 @@ def update_store(auth_path):
     store.setdefault("profiles", {})
     store["profiles"]["anthropic-subscription:default"] = profile
     tmp = auth_path + ".tmp"
-    with open(tmp, "w") as f:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump(store, f, indent=2)
-    os.chmod(tmp, 0o600)
     os.replace(tmp, auth_path)
 
 targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 
+# Per-channel dirs are named after the Discord snowflake channel ID; mirror
+# the router's validation (src/discord-router/config.ts) so we don't fan
+# secrets out into unrelated/stale numeric directories.
+DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
+
 instances_root = os.path.join(home, ".openclaw-instances")
 if os.path.isdir(instances_root):
     for entry in sorted(os.listdir(instances_root)):
-        # Per-channel dirs are named after numeric Discord channel IDs.
-        if not entry.isdigit():
+        entry_path = os.path.join(instances_root, entry)
+        if not DISCORD_ID_RE.match(entry) or not os.path.isdir(entry_path):
             continue
         targets.append(os.path.join(
-            instances_root, entry, "agents/main/agent/auth-profiles.json"
+            entry_path, "agents/main/agent/auth-profiles.json"
         ))
 
 for path in targets:
-    update_store(path)
     label = path.replace(home + "/", "")
-    print(f"  updated {label}")
+    print(f"BEGIN {label}")
+    update_store(path)
+    print(f"END {label}")
 
 print(f"\nToken expires: {creds['expiresAt']} "
       f"({len(targets)} profile file(s) updated)")
