@@ -141,37 +141,44 @@ profile = {
 
 def ensure_secure_dir(path):
     # Credential-adjacent dirs must be 0700; makedirs uses the remote
-    # umask (often 022 → 0755) which would leak filenames/metadata to
-    # other local users. All targets live under $HOME so chmod is expected
-    # to succeed; fail loudly if the mode is not tight after chmod rather
-    # than silently writing tokens into a still-permissive dir.
+    # umask (often 022 → 0755) which would leak filenames/metadata. We
+    # tighten every dir under $HOME up to (but not including) $HOME
+    # itself — mutating $HOME's mode is disruptive on hosts that keep it
+    # 0755 for shared read access. When the target is outside $HOME
+    # (operator-set OPENCLAW_INSTANCES_DIR pointing at e.g.
+    # /var/lib/openclaw) we don't chmod system dirs, but we still
+    # reject symlinks in *every* intermediate component so a symlinked
+    # <instance>/agents → /tmp can't redirect the write outside the
+    # intended tree.
     os.makedirs(path, mode=0o700, exist_ok=True)
-    parts = []
-    cur = path
-    # Only walk upward while we stay under $HOME. If the target lives
-    # outside $HOME (e.g. an operator-set OPENCLAW_INSTANCES_DIR pointing
-    # at /var/lib/openclaw), we must not chmod system directories; in that
-    # case we only enforce permissions + symlink checks on the leaf we
-    # actually write into.
-    # Stop *before* $HOME — tightening $HOME to 0700 as a side effect of a
-    # credential refresh is disruptive on hosts that intentionally keep it
-    # 0755 for shared read access. If the target is outside $HOME entirely
-    # (operator-set OPENCLAW_INSTANCES_DIR pointing at, say, /var/lib/...)
-    # we only enforce the leaf.
+
     home_prefix = home.rstrip("/") + "/"
-    while cur and cur != "/" and cur != home and cur.startswith(home_prefix):
-        parts.append(cur)
-        cur = os.path.dirname(cur)
-    if not parts:
-        parts = [path]
-    for p in parts:
-        # Reject symlinks anywhere in the chain — chmod/stat follow
-        # symlinks, so a symlinked <instance>/agents (etc.) could redirect
-        # permission changes and secret writes outside the intended tree.
+
+    # Walk the full path from root down and reject any symlink component.
+    # chmod/stat follow symlinks, so this must happen before we touch modes.
+    all_parts = []
+    cur = path
+    while cur and cur != "/":
+        all_parts.append(cur)
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    for p in all_parts:
         if os.path.islink(p):
             raise RuntimeError(
                 f"Refusing to write secrets: {p} is a symlink"
             )
+
+    # Chmod only the parts under $HOME (or the leaf if the whole tree
+    # lives outside $HOME).
+    chmod_parts = [
+        p for p in all_parts
+        if p != home and p.startswith(home_prefix)
+    ]
+    if not chmod_parts:
+        chmod_parts = [path]
+    for p in chmod_parts:
         os.chmod(p, 0o700)
         mode = os.stat(p).st_mode & 0o777
         if mode & 0o077:
