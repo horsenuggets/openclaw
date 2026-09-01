@@ -224,7 +224,12 @@ def update_store(auth_path):
             except BaseException:
                 os.close(fd)
                 raise
-            with os.fdopen(fd, "w") as f:
+            try:
+                f = os.fdopen(fd, "w")
+            except BaseException:
+                os.close(fd)
+                raise
+            with f:
                 json.dump(store, f, indent=2)
                 f.write("\n")
             os.replace(tmp, auth_path)
