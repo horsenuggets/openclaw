@@ -219,8 +219,12 @@ def update_store(auth_path):
                 prefix=os.path.basename(auth_path) + ".tmp.",
                 dir=os.path.dirname(auth_path),
             )
+            try:
+                os.fchmod(fd, 0o600)
+            except BaseException:
+                os.close(fd)
+                raise
             with os.fdopen(fd, "w") as f:
-                os.fchmod(f.fileno(), 0o600)
                 json.dump(store, f, indent=2)
                 f.write("\n")
             os.replace(tmp, auth_path)
