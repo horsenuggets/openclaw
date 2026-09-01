@@ -153,11 +153,14 @@ def ensure_secure_dir(path):
     # at /var/lib/openclaw), we must not chmod system directories; in that
     # case we only enforce permissions + symlink checks on the leaf we
     # actually write into.
+    # Stop *before* $HOME — tightening $HOME to 0700 as a side effect of a
+    # credential refresh is disruptive on hosts that intentionally keep it
+    # 0755 for shared read access. If the target is outside $HOME entirely
+    # (operator-set OPENCLAW_INSTANCES_DIR pointing at, say, /var/lib/...)
+    # we only enforce the leaf.
     home_prefix = home.rstrip("/") + "/"
-    while cur and cur != "/" and (cur == home or cur.startswith(home_prefix)):
+    while cur and cur != "/" and cur != home and cur.startswith(home_prefix):
         parts.append(cur)
-        if cur == home:
-            break
         cur = os.path.dirname(cur)
     if not parts:
         parts = [path]
@@ -177,6 +180,15 @@ def ensure_secure_dir(path):
             )
 
 def update_store(auth_path):
+    # Refuse to write through a symlinked auth store: acquire_lock() locks
+    # realpath(auth_path) (matching proper-lockfile) but os.replace(tmp,
+    # auth_path) would replace the symlink itself, so the running agent
+    # would keep reading the old target and our coordination would silently
+    # break.
+    if os.path.islink(auth_path):
+        raise RuntimeError(
+            f"Refusing to update {auth_path}: path is a symlink"
+        )
     ensure_secure_dir(os.path.dirname(auth_path))
     lock_path = acquire_lock(auth_path)
     try:
