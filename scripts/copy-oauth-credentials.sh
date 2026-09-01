@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copy OAuth credentials from Mac Keychain to the OpenClaw WSL host.
+# Copy OAuth credentials from macOS Keychain to the OpenClaw deploy host.
 #
 # This pushes the freshly-refreshed Claude Code OAuth tokens (access +
 # refresh + expiry) from the local macOS Keychain to:
