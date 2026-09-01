@@ -63,6 +63,7 @@ import json
 import os
 import random
 import re
+import tempfile
 import time
 
 home = os.path.expanduser("~")
@@ -212,16 +213,24 @@ def update_store(auth_path):
                 store = json.load(f)
         store.setdefault("profiles", {})
         store["profiles"]["anthropic-subscription:default"] = profile
-        tmp = auth_path + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        # A leftover .tmp from a crashed prior run keeps its old mode across
-        # O_TRUNC, so force 0600 explicitly rather than relying on the
-        # open() mode argument (which only applies on creation).
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump(store, f, indent=2)
-            f.write("\n")
-        os.replace(tmp, auth_path)
+        tmp = None
+        try:
+            fd, tmp = tempfile.mkstemp(
+                prefix=os.path.basename(auth_path) + ".tmp.",
+                dir=os.path.dirname(auth_path),
+            )
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(store, f, indent=2)
+                f.write("\n")
+            os.replace(tmp, auth_path)
+            tmp = None
+        finally:
+            if tmp is not None:
+                try:
+                    os.unlink(tmp)
+                except FileNotFoundError:
+                    pass
     finally:
         release_lock(lock_path)
 
