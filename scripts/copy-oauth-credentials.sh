@@ -154,10 +154,11 @@ def ensure_secure_dir(path):
     # intended tree.
     home_prefix = home.rstrip("/") + "/"
 
-    # Walk the full path from root down and reject any existing symlink
-    # component *before* calling os.makedirs — makedirs follows symlinks,
-    # so a symlinked <instance>/agents → /tmp would let it create
-    # directories outside the intended tree before any later check runs.
+    # Collect every path component (walking upward from the leaf) and
+    # reject any existing symlink *before* calling os.makedirs — makedirs
+    # follows symlinks, so a symlinked <instance>/agents → /tmp would let
+    # it create directories outside the intended tree before any later
+    # check runs.
     all_parts = []
     cur = path
     while cur and cur != "/":
