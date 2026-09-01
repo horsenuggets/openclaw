@@ -34,7 +34,12 @@ if [ -z "$CREDS" ]; then
 fi
 
 echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
-printf '%s' "$CREDS" | ssh "$HOST" 'umask 077 && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp="$HOME/.claude/.credentials.json.tmp" && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'
+# Wrap in `sh -lc` so the snippet always runs under a POSIX shell — the
+# remote login shell may be fish or another non-POSIX shell that does not
+# accept `&&`/`VAR=val` assignments. Also refuse to write through a
+# symlinked ~/.claude, which could redirect the credentials blob outside
+# the home directory.
+printf '%s' "$CREDS" | ssh "$HOST" 'sh -lc '\''umask 077 && if [ -L "$HOME/.claude" ]; then echo "Refusing to write: $HOME/.claude is a symlink" >&2; exit 1; fi && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp="$HOME/.claude/.credentials.json.tmp" && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'\'''
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 # Mirror src/discord-router/config.ts's instancesDir override so this script
@@ -143,9 +148,19 @@ def ensure_secure_dir(path):
     os.makedirs(path, mode=0o700, exist_ok=True)
     parts = []
     cur = path
-    while cur and cur != home and cur != "/":
+    # Only walk upward while we stay under $HOME. If the target lives
+    # outside $HOME (e.g. an operator-set OPENCLAW_INSTANCES_DIR pointing
+    # at /var/lib/openclaw), we must not chmod system directories; in that
+    # case we only enforce permissions + symlink checks on the leaf we
+    # actually write into.
+    home_prefix = home.rstrip("/") + "/"
+    while cur and cur != "/" and (cur == home or cur.startswith(home_prefix)):
         parts.append(cur)
+        if cur == home:
+            break
         cur = os.path.dirname(cur)
+    if not parts:
+        parts = [path]
     for p in parts:
         # Reject symlinks anywhere in the chain — chmod/stat follow
         # symlinks, so a symlinked <instance>/agents (etc.) could redirect
