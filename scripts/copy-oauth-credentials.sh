@@ -173,14 +173,22 @@ def ensure_secure_dir(path):
                 f"Refusing to write secrets: {p} is a symlink"
             )
 
+    # Determine which components we're about to create so we can chmod
+    # exactly those (they were subject to the remote umask). We must
+    # not chmod pre-existing operator-owned dirs (e.g. $HOME itself, or
+    # the parent of OPENCLAW_INSTANCES_DIR like /var/lib) because
+    # tightening them can break shared-access setups.
+    to_create = [p for p in all_parts if not os.path.exists(p)]
     os.makedirs(path, mode=0o700, exist_ok=True)
 
-    # Chmod only the parts under $HOME (or the leaf if the whole tree
-    # lives outside $HOME).
-    chmod_parts = [
-        p for p in all_parts
-        if p != home and p.startswith(home_prefix)
-    ]
+    chmod_parts = to_create
+    # Also always tighten dirs *under* $HOME that we didn't create — the
+    # existing behavior — so a pre-existing but sloppily-permissioned
+    # ~/.openclaw/agents doesn't leak filenames. Never touch $HOME
+    # itself or anything above it.
+    for p in all_parts:
+        if p != home and p.startswith(home_prefix) and p not in chmod_parts:
+            chmod_parts.append(p)
     if not chmod_parts:
         chmod_parts = [path]
     for p in chmod_parts:
