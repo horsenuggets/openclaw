@@ -38,8 +38,9 @@ echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
 # remote login shell may be fish or another non-POSIX shell that does not
 # accept `&&`/`VAR=val` assignments. Also refuse to write through a
 # symlinked ~/.claude, which could redirect the credentials blob outside
-# the home directory.
-printf '%s' "$CREDS" | ssh "$HOST" 'sh -lc '\''umask 077 && if [ -L "$HOME/.claude" ]; then echo "Refusing to write: $HOME/.claude is a symlink" >&2; exit 1; fi && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp="$HOME/.claude/.credentials.json.tmp" && cat > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'\'''
+# the home directory. Use `mktemp` so a pre-planted symlink at a
+# predictable temp path can't hijack the credentials write.
+printf '%s' "$CREDS" | ssh "$HOST" 'sh -lc '\''umask 077 && if [ -L "$HOME/.claude" ]; then echo "Refusing to write: $HOME/.claude is a symlink" >&2; exit 1; fi && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp=$(mktemp "$HOME/.claude/.credentials.json.XXXXXX") && chmod 600 "$tmp" && cat > "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'\'''
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
 # Mirror src/discord-router/config.ts's instancesDir override so this script
@@ -150,12 +151,12 @@ def ensure_secure_dir(path):
     # reject symlinks in *every* intermediate component so a symlinked
     # <instance>/agents → /tmp can't redirect the write outside the
     # intended tree.
-    os.makedirs(path, mode=0o700, exist_ok=True)
-
     home_prefix = home.rstrip("/") + "/"
 
-    # Walk the full path from root down and reject any symlink component.
-    # chmod/stat follow symlinks, so this must happen before we touch modes.
+    # Walk the full path from root down and reject any existing symlink
+    # component *before* calling os.makedirs — makedirs follows symlinks,
+    # so a symlinked <instance>/agents → /tmp would let it create
+    # directories outside the intended tree before any later check runs.
     all_parts = []
     cur = path
     while cur and cur != "/":
@@ -165,10 +166,12 @@ def ensure_secure_dir(path):
             break
         cur = parent
     for p in all_parts:
-        if os.path.islink(p):
+        if os.path.lexists(p) and os.path.islink(p):
             raise RuntimeError(
                 f"Refusing to write secrets: {p} is a symlink"
             )
+
+    os.makedirs(path, mode=0o700, exist_ok=True)
 
     # Chmod only the parts under $HOME (or the leaf if the whole tree
     # lives outside $HOME).
