@@ -285,8 +285,12 @@ if os.path.isdir(instances_root):
             entry.path, "agents/main/agent/auth-profiles.json"
         ))
 
+home_prefix = home.rstrip("/") + "/"
 for path in targets:
-    label = path.replace(home + "/", "")
+    # Only strip a *leading* $HOME/ prefix; str.replace would also
+    # eat later occurrences if instances_root lives outside $HOME but
+    # happens to contain the home path as a substring.
+    label = path[len(home_prefix):] if path.startswith(home_prefix) else path
     print(f"BEGIN {label}")
     update_store(path)
     print(f"END {label}")
