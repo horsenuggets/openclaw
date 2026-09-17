@@ -640,11 +640,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           ws.close();
           break;
         case 9:
-          // Invalid session. Drop the session so the reconnect re-identifies
-          // instead of resuming, then close and let the "close" handler
-          // schedule the single reconnect.
-          runtime.log(`[router] invalid session, re-identifying (attempt #${attempt})`);
-          sessionId = undefined;
+          // Invalid session. Discord's `d` indicates whether the session is
+          // still resumable. Preserve resumable sessions; otherwise drop
+          // session/sequence so the reconnect re-identifies from scratch.
+          if (d === false) {
+            sessionId = undefined;
+            lastSequence = null;
+          }
+          runtime.log(
+            `[router] invalid session (resumable=${d === true}), reconnecting (attempt #${attempt})`,
+          );
           ws.close();
           break;
       }

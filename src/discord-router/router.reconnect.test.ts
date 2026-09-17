@@ -54,8 +54,8 @@ class FakeWebSocket {
   }
 
   // Drive a gateway INVALID SESSION (op 9).
-  invalidSession(): void {
-    this.emit("message", Buffer.from(JSON.stringify({ op: 9, d: false })));
+  invalidSession(canResume = false): void {
+    this.emit("message", Buffer.from(JSON.stringify({ op: 9, d: canResume })));
   }
 
   identifyCount(): number {
@@ -66,6 +66,30 @@ class FakeWebSocket {
         return false;
       }
     }).length;
+  }
+
+  resumeCount(): number {
+    return this.sent.filter((raw) => {
+      try {
+        return JSON.parse(String(raw)).op === 6;
+      } catch {
+        return false;
+      }
+    }).length;
+  }
+
+  ready(sessionId = "session-1", resumeGatewayUrl = "wss://gateway.discord.gg"): void {
+    this.emit(
+      "message",
+      Buffer.from(
+        JSON.stringify({
+          op: 0,
+          t: "READY",
+          s: 1,
+          d: { session_id: sessionId, resume_gateway_url: resumeGatewayUrl, user: { id: "bot-1" } },
+        }),
+      ),
+    );
   }
 }
 
@@ -191,6 +215,27 @@ describe("discord router reconnect", () => {
       // Cap is 30s.
       expect(delay).toBeLessThanOrEqual(30_000);
     }
+  });
+
+  it("preserves resumable invalid sessions and resumes instead of re-identifying", async () => {
+    void startRouter(makeConfig(), runtime);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeWebSocket.instances[0];
+    first.emit("open");
+    first.hello();
+    expect(first.identifyCount()).toBe(1);
+    first.ready();
+    first.invalidSession(true);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    const second = FakeWebSocket.instances[1];
+    second.emit("open");
+    second.hello();
+    expect(second.resumeCount()).toBe(1);
+    expect(second.identifyCount()).toBe(0);
   });
 
   it("ignores stale closes without stopping the current heartbeat", async () => {
