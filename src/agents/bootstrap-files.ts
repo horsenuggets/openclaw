@@ -4,6 +4,7 @@ import { applyBootstrapHookOverrides } from "./bootstrap-hooks.js";
 import { buildBootstrapContextFiles, resolveBootstrapMaxChars } from "./pi-embedded-helpers.js";
 import {
   filterBootstrapFilesForSession,
+  filterBootstrapOnboardingFile,
   loadWorkspaceBootstrapFiles,
   type WorkspaceBootstrapFile,
 } from "./workspace.js";
@@ -26,9 +27,15 @@ export async function resolveBootstrapFilesForRun(params: {
   agentId?: string;
 }): Promise<WorkspaceBootstrapFile[]> {
   const sessionKey = params.sessionKey ?? params.sessionId;
-  const bootstrapFiles = filterBootstrapFilesForSession(
-    await loadWorkspaceBootstrapFiles(params.workspaceDir),
-    sessionKey,
+  // Suppress a stale BOOTSTRAP.md when the deployment owns onboarding
+  // (skipBootstrapFile). This covers already-provisioned workspaces where the
+  // file was written before the flag existed and is never deleted on disk.
+  const bootstrapFiles = filterBootstrapOnboardingFile(
+    filterBootstrapFilesForSession(
+      await loadWorkspaceBootstrapFiles(params.workspaceDir),
+      sessionKey,
+    ),
+    params.config?.agents?.defaults?.skipBootstrapFile,
   );
   return applyBootstrapHookOverrides({
     files: bootstrapFiles,

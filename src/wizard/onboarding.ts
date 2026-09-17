@@ -440,6 +440,7 @@ export async function runOnboardingWizard(
   logConfigUpdated(runtime);
   await ensureWorkspaceAndSessions(workspaceDir, runtime, {
     skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
+    skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
   });
 
   if (opts.skipSkills) {

@@ -13,7 +13,9 @@ import {
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_USER_FILENAME,
   ensureAgentWorkspace,
+  filterBootstrapOnboardingFile,
   loadWorkspaceBootstrapFiles,
+  type WorkspaceBootstrapFile,
 } from "./workspace.js";
 
 async function exists(filePath: string): Promise<boolean> {
@@ -100,5 +102,22 @@ describe("ensureAgentWorkspace bootstrap seeding", () => {
       expect(await exists(path.join(tempDir, name))).toBe(true);
     }
     expect(await exists(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME))).toBe(false);
+  });
+});
+
+describe("filterBootstrapOnboardingFile", () => {
+  const files: WorkspaceBootstrapFile[] = [
+    { name: DEFAULT_AGENTS_FILENAME, path: "AGENTS.md", missing: false },
+    { name: DEFAULT_BOOTSTRAP_FILENAME, path: "BOOTSTRAP.md", missing: false },
+  ];
+
+  it("drops a stale BOOTSTRAP.md when the flag is set", () => {
+    const result = filterBootstrapOnboardingFile(files, true);
+    expect(result.map((f) => f.name)).toEqual([DEFAULT_AGENTS_FILENAME]);
+  });
+
+  it("keeps BOOTSTRAP.md when the flag is unset", () => {
+    const result = filterBootstrapOnboardingFile(files, false);
+    expect(result.map((f) => f.name)).toContain(DEFAULT_BOOTSTRAP_FILENAME);
   });
 });

@@ -66,6 +66,7 @@ export async function setupCommand(
   const ws = await ensureAgentWorkspace({
     dir: workspace,
     ensureBootstrapFiles: !next.agents?.defaults?.skipBootstrap,
+    skipBootstrapOnboardingFile: next.agents?.defaults?.skipBootstrapFile,
   });
   runtime.log(`Workspace OK: ${shortenHomePath(ws.dir)}`);
 

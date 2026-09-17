@@ -307,3 +307,18 @@ export function filterBootstrapFilesForSession(
   }
   return files.filter((file) => SUBAGENT_BOOTSTRAP_ALLOWLIST.has(file.name));
 }
+
+/**
+ * Drop BOOTSTRAP.md from a loaded bootstrap-file set when the onboarding file is
+ * being skipped. This suppresses a stale BOOTSTRAP.md on already-provisioned
+ * workspaces (the file is never deleted, only omitted from what gets injected).
+ */
+export function filterBootstrapOnboardingFile(
+  files: WorkspaceBootstrapFile[],
+  skipBootstrapOnboardingFile?: boolean,
+): WorkspaceBootstrapFile[] {
+  if (!skipBootstrapOnboardingFile) {
+    return files;
+  }
+  return files.filter((file) => file.name !== DEFAULT_BOOTSTRAP_FILENAME);
+}

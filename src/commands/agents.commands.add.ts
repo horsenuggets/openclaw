@@ -134,6 +134,7 @@ export async function agentsAddCommand(
     const quietRuntime = opts.json ? createQuietRuntime(runtime) : runtime;
     await ensureWorkspaceAndSessions(workspaceDir, quietRuntime, {
       skipBootstrap: Boolean(bindingResult.config.agents?.defaults?.skipBootstrap),
+      skipBootstrapFile: Boolean(bindingResult.config.agents?.defaults?.skipBootstrapFile),
       agentId,
     });
 
@@ -344,6 +345,7 @@ export async function agentsAddCommand(
     logConfigUpdated(runtime);
     await ensureWorkspaceAndSessions(workspaceDir, runtime, {
       skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
+      skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
       agentId,
     });
 
