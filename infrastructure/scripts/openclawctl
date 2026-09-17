@@ -360,6 +360,41 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             index += 1
         return None
 
+    def find_root_object_bounds(text: str):
+        limit = len(text)
+        start = skip_ws_comments(text, 0, limit)
+        while start < limit and text[start] != "{":
+            start += 1
+            start = skip_ws_comments(text, start, limit)
+        if start >= limit or text[start] != "{":
+            return None
+        end = find_matching_brace(text, start, limit)
+        if end is None:
+            return None
+        return start, end
+
+    def insert_object_property(text: str, object_start: int, object_end: int, snippet: str) -> str:
+        content_start = skip_ws_comments(text, object_start + 1, object_end)
+        first_line_end = text.find("\n", content_start, object_end)
+        if first_line_end == -1:
+            first_line_end = object_end
+
+        if content_start < object_end and text[content_start:first_line_end].strip():
+            insert = f"{snippet} "
+            insert_at = content_start
+        else:
+            line_start = text.rfind(
+                "\n", 0, content_start if content_start < object_end else object_start
+            ) + 1
+            indent_match = re.match(
+                r"[ \t]*",
+                text[line_start : content_start if content_start < object_end else object_start],
+            )
+            indent = indent_match.group(0) if indent_match else ""
+            insert = f"\n{indent}  {snippet}"
+            insert_at = content_start if content_start < object_end else object_start + 1
+        return text[:insert_at] + insert + text[insert_at:]
+
     def object_has_property(text: str, object_start: int, object_end: int, property_name: str) -> bool:
         index = object_start + 1
         depth = 0
@@ -440,6 +475,32 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             return None
         return defaults_start, defaults_end
 
+    def ensure_agents_defaults_object(text: str) -> str:
+        if find_agents_defaults_bounds(text) is not None:
+            return text
+
+        root_bounds = find_root_object_bounds(text)
+        if root_bounds is None:
+            return text
+        root_start, root_end = root_bounds
+
+        agents_start = find_object_property_start(text, "agents", root_start, root_end + 1)
+        if agents_start is None:
+            return insert_object_property(
+                text, root_start, root_end, '"agents": { "defaults": { "skipBootstrapFile": true } },'
+            )
+
+        agents_end = find_matching_brace(text, agents_start, root_end + 1)
+        if agents_end is None:
+            return text
+
+        defaults_start = find_direct_object_property_start(text, agents_start, agents_end, "defaults")
+        if defaults_start is None:
+            return insert_object_property(
+                text, agents_start, agents_end, '"defaults": { "skipBootstrapFile": true },'
+            )
+        return text
+
     def replace_prefixed_string_property(
         text: str, object_start: int, object_end: int, property_name: str
     ) -> str:
@@ -495,7 +556,7 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             insert_at = content_start if content_start < defaults_end else defaults_start + 1
         return text[:insert_at] + insert + text[insert_at:]
 
-    patched = raw_text
+    patched = ensure_agents_defaults_object(raw_text)
     bounds = find_agents_defaults_bounds(patched)
     if bounds is None:
         return patched

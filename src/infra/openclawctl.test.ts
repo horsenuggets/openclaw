@@ -294,6 +294,53 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain('"skipBootstrapFile": true');
   });
 
+  it("adds agents.defaults with skipBootstrapFile in a JSON5 config missing agents", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      ["{", '  "ui": { "theme": "dark" },', "  // valid JSON5 forces fallback", "}", ""].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain('"ui": { "theme": "dark" },');
+    expect(raw).toContain("// valid JSON5 forces fallback");
+    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true } },');
+  });
+
+  it("adds defaults with skipBootstrapFile in a JSON5 agents object missing defaults", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      [
+        "{",
+        "  // valid JSON5 forces fallback",
+        '  "agents": { "persona": "dm-owner", },',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true }, "persona": "dm-owner", },');
+    expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
+  });
+
   it("fails sanitize-configs when a config cannot be written", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
