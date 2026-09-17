@@ -190,39 +190,62 @@ else:
 PY
 }
 
-cmd_repair_configs() {
+sanitize_channel_config_if_present() {
+  local channelId="$1"
+  local configPath="$INSTANCES_DIR/$channelId/openclaw.json"
+  if [ ! -f "$configPath" ]; then
+    echo "missing"
+    return 0
+  fi
+  sanitize_config_file "$configPath"
+}
+
+repair_existing_configs() {
+  local restart_changed="${1:-false}"
   local repaired=0
   local restarted=0
   local unchanged=0
+  local missing=0
 
   for dir in "$INSTANCES_DIR"/*/; do
     [ -d "$dir" ] || continue
     local channelId
     channelId=$(basename "$dir")
-    local configPath="${dir}openclaw.json"
-    [ -f "$configPath" ] || continue
 
     local outcome
-    outcome=$(sanitize_config_file "$configPath")
+    outcome=$(sanitize_channel_config_if_present "$channelId")
     if [ "$outcome" = "changed" ]; then
       repaired=$((repaired + 1))
       echo "Repaired config for $channelId"
-      local port
-      port=$(get_port "$channelId")
-      if [ -n "$port" ]; then
-        echo "Restarting container for $channelId on port $port..."
-        stop_container "$channelId"
-        start_container "$channelId" "$port"
-        restarted=$((restarted + 1))
-      else
-        echo "Config repaired for $channelId; no registered port, skipped restart."
+      if [ "$restart_changed" = "true" ]; then
+        local port
+        port=$(get_port "$channelId")
+        if [ -n "$port" ]; then
+          echo "Restarting container for $channelId on port $port..."
+          stop_container "$channelId"
+          start_container "$channelId" "$port"
+          restarted=$((restarted + 1))
+        else
+          echo "Config repaired for $channelId; no registered port, skipped restart."
+        fi
       fi
+    elif [ "$outcome" = "missing" ]; then
+      missing=$((missing + 1))
+      echo "Skipped config repair for $channelId; openclaw.json is missing."
     else
       unchanged=$((unchanged + 1))
     fi
   done
 
-  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged"
+  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing"
+}
+
+cmd_sanitize_configs() {
+  repair_existing_configs false
+}
+
+cmd_repair_configs() {
+  repair_existing_configs true
 }
 
 # --- Discord API helpers ---
@@ -284,6 +307,11 @@ except Exception as e:
 start_container() {
   local channelId="$1"
   local port="$2"
+  local outcome
+  outcome=$(sanitize_channel_config_if_present "$channelId")
+  if [ "$outcome" = "changed" ]; then
+    echo "Sanitized config for $channelId before start."
+  fi
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
     docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d
 }
@@ -450,6 +478,7 @@ case "${1:-}" in
   restart)     cmd_restart "${2:-}" ;;
   list)        cmd_list ;;
   reconcile)   cmd_reconcile ;;
+  sanitize-configs) cmd_sanitize_configs ;;
   repair-configs) cmd_repair_configs ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
@@ -461,6 +490,7 @@ case "${1:-}" in
     echo "  restart <channelId>     Restart a channel's container"
     echo "  list                    List all registered channels and ports"
     echo "  reconcile               Sync ports.json with instance directories"
+    echo "  sanitize-configs        Rewrite stale copied configs without restarting containers"
     echo "  repair-configs          Rewrite stale copied configs and restart changed channels"
     ;;
 esac

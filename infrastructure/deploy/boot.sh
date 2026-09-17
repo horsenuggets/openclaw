@@ -15,6 +15,9 @@ fi
 # Reconcile ports.json with actual instance directories on boot
 ~/deploy/bin/openclawctl reconcile
 
+# Repair any stale copied configs before starting instances.
+~/deploy/bin/openclawctl sanitize-configs
+
 # Read port assignments into a temp file to avoid subshell issues with pipes
 ASSIGNMENTS=$(python3 -c "
 import json
