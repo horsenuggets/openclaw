@@ -512,11 +512,13 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             return text
         root_start, root_end = root_bounds
 
-        agents_start = find_object_property_start(text, "agents", root_start, root_end + 1)
+        agents_start = find_direct_object_property_start(text, root_start, root_end, "agents")
         if agents_start is None:
             return insert_object_property(
                 text, root_start, root_end, '"agents": { "defaults": { "skipBootstrapFile": true } },'
             )
+        if text[agents_start] != "{":
+            return text
 
         agents_end = find_matching_brace(text, agents_start, root_end + 1)
         if agents_end is None:

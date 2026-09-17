@@ -315,6 +315,33 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true } },');
   });
 
+  it("adds a root agents block instead of patching a nested agents object", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      [
+        "{",
+        "  // valid JSON5 forces fallback",
+        '  "ui": { "agents": { "note": "nested only" } },',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain('"ui": { "agents": { "note": "nested only" } },');
+    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true } },');
+    expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
+  });
+
   it("adds defaults with skipBootstrapFile in a JSON5 agents object missing defaults", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
