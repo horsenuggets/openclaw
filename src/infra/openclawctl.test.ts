@@ -359,6 +359,8 @@ describe("openclawctl provisioning", () => {
     expect(raw.indexOf("// keep this comment with the root object")).toBeLessThan(
       raw.indexOf('"agents": { "defaults": { "skipBootstrapFile": true } },'),
     );
+    expect(raw).toContain('// keep this comment with the root object\n  "agents":');
+    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true } },\n}');
   });
 
   it("keeps leading JSON5 comments and multiline properties valid when inserting agents", () => {
