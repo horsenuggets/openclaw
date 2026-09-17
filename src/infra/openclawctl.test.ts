@@ -121,7 +121,7 @@ describe("openclawctl provisioning", () => {
       configPath,
       [
         "{",
-        '  "ui": { "defaults": { "theme": "dark" } },',
+        '  "ui": { "defaults": { "skipBootstrapFile": false, "theme": "dark" } },',
         "  // agent defaults",
         '  "agents": {',
         '    "defaults": { /* keep JSON5 layout */ "workspace": "/home/node/.openclaw/workspaces/123", },',
@@ -143,9 +143,10 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain("/root/.openclaw/workspaces/123");
     expect(raw).not.toContain("/home/node");
     expect(raw).toContain("// agent defaults");
+    expect(raw).toContain('"skipBootstrapFile": false');
     expect(raw).toContain('"skipBootstrapFile": true,');
-    expect((raw.match(/skipBootstrapFile/g) ?? []).length).toBe(1);
-    expect(raw.indexOf('"skipBootstrapFile"')).toBeGreaterThan(raw.indexOf('"agents"'));
+    expect((raw.match(/skipBootstrapFile/g) ?? []).length).toBe(2);
+    expect(raw.lastIndexOf('"skipBootstrapFile": true,')).toBeGreaterThan(raw.indexOf('"agents"'));
   });
 
   it("preserves legacy container data for a repaired stopped container", () => {
