@@ -656,22 +656,13 @@ preserve_legacy_container_data() {
 
   local legacy_dir="/home/node/.openclaw"
   set +e
-  docker export "$container" | python3 -c '
-import sys, tarfile
-
-prefix = sys.argv[1].lstrip("/")
-with tarfile.open(fileobj=sys.stdin.buffer, mode="r|*") as archive:
-    for member in archive:
-        name = member.name.lstrip("./")
-        if name == prefix or name.startswith(prefix + "/"):
-            sys.exit(0)
-sys.exit(1)
-' "$legacy_dir"
+  docker export "$container" | tar -tf - 2>/dev/null | grep -Eq '^(\./)?home/node/\.openclaw(/.*)?$'
   local pipe_status=("${PIPESTATUS[@]}")
   local export_status="${pipe_status[0]:-1}"
-  local probe_status="${pipe_status[1]:-1}"
+  local list_status="${pipe_status[1]:-1}"
+  local probe_status="${pipe_status[2]:-1}"
   set -e
-  if [ "$export_status" -ne 0 ] || [ "$probe_status" -gt 1 ]; then
+  if [ "$export_status" -ne 0 ] || [ "$list_status" -ne 0 ] || [ "$probe_status" -gt 1 ]; then
     echo "Error: failed to inspect legacy data in container for $channelId." >&2
     return 1
   fi
