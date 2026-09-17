@@ -519,8 +519,9 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
-        // Legacy source exists in the container, so the source-existence check passes.
-        'if [ "$1" = "exec" ]; then exit 0; fi',
+        // Simulate a stopped container: docker cp still works, but docker exec
+        // would fail and must not be used as the legacy-path probe.
+        'if [ "$1" = "exec" ]; then exit 7; fi',
         'if [ "$1" = "cp" ]; then',
         '  dest="${@: -1}"',
         '  mkdir -p "$dest/memory"',
@@ -548,6 +549,7 @@ describe("openclawctl provisioning", () => {
     );
     const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
     expect(dockerLog).toContain("container inspect agents.channel-123");
+    expect(dockerLog).not.toContain("exec agents.channel-123");
     expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
   });
 
@@ -624,10 +626,13 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
-        // Legacy source does NOT exist in the container.
-        'if [ "$1" = "exec" ]; then exit 1; fi',
-        // cp must never be reached; fail loudly if it is.
-        'if [ "$1" = "cp" ]; then exit 3; fi',
+        'if [ "$1" = "exec" ]; then exit 7; fi',
+        // Legacy source does NOT exist in the container. Docker reports that as
+        // a missing source path, which should be treated as a no-op success.
+        'if [ "$1" = "cp" ]; then',
+        '  echo "Error response from daemon: Could not find the file /home/node/.openclaw in container agents.channel-123" >&2',
+        "  exit 1",
+        "fi",
         "exit 0",
         "",
       ].join("\n"),
@@ -646,11 +651,13 @@ describe("openclawctl provisioning", () => {
       },
     );
 
-    // No legacy data to preserve => success (errored=0), and cp never attempted.
+    // No legacy data to preserve => success (errored=0) even though docker cp is
+    // used as the stopped-container-safe probe/copy step.
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("errored=0");
     const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
-    expect(dockerLog).not.toContain("cp agents.channel-123");
+    expect(dockerLog).not.toContain("exec agents.channel-123");
+    expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
   });
 
   it("preserves legacy container data during sanitize-configs without restarting", () => {
