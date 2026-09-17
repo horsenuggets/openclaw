@@ -311,6 +311,9 @@ start_container() {
   outcome=$(sanitize_channel_config_if_present "$channelId")
   if [ "$outcome" = "changed" ]; then
     echo "Sanitized config for $channelId before start."
+  elif [ "$outcome" = "missing" ]; then
+    echo "Error: Missing config for $channelId at $INSTANCES_DIR/$channelId/openclaw.json" >&2
+    return 1
   fi
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
     docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d

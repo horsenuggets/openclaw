@@ -123,6 +123,31 @@ describe("openclawctl provisioning", () => {
     expect(fs.readFileSync(path.join(home, "docker.log"), "utf-8")).toContain("compose -f");
   });
 
+  it("fails restart when the registered channel config is missing", () => {
+    const home = makeTempHome();
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      ["#!/usr/bin/env bash", 'echo "$*" >> "$HOME/docker.log"', "exit 0", ""].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "restart", "123"], {
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Error: Missing config for 123");
+    expect(fs.readFileSync(path.join(home, "docker.log"), "utf-8")).not.toContain("compose -f");
+  });
+
   it("boot sanitizes configs before starting registered instances", () => {
     const home = makeTempHome();
     writeFile(
