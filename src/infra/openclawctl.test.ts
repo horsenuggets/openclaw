@@ -115,7 +115,8 @@ describe("openclawctl provisioning", () => {
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
     // OpenClaw parses config as JSON5, so a config may legally contain comments
     // and trailing commas. The sanitizer must not crash on these (strict JSON
-    // would); it should still repair the stale /home/node path via text edit.
+    // would); it should still repair the stale /home/node path and add the
+    // bootstrap-file suppression without stripping JSON5 syntax.
     writeFile(
       configPath,
       [
@@ -143,6 +144,67 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain("/root/.openclaw/workspaces/123");
     expect(raw).not.toContain("/home/node");
     expect(raw).toContain("// agent defaults");
+    expect(raw).toContain('"skipBootstrapFile": true,');
+  });
+
+  it("preserves legacy container data for a repaired stopped container", () => {
+    const home = makeTempHome();
+    const instanceDir = path.join(home, ".openclaw-instances", "123");
+    const configPath = path.join(instanceDir, "openclaw.json");
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    writeFile(
+      configPath,
+      `${JSON.stringify(
+        {
+          agents: {
+            defaults: {
+              workspace: "/home/node/.openclaw/workspaces/123",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "cp" ]; then',
+        '  dest="${@: -1}"',
+        '  mkdir -p "$dest/memory"',
+        '  printf "legacy memory\\n" > "$dest/MEMORY.md"',
+        "  exit 0",
+        "fi",
+        'if [ "$1" = "exec" ]; then exit 1; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "repair-configs"], {
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Preserved legacy data for 123.");
+    expect(fs.readFileSync(path.join(instanceDir, "MEMORY.md"), "utf-8")).toContain(
+      "legacy memory",
+    );
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).toContain("container inspect agents.channel-123");
+    expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
+    expect(dockerLog).not.toContain("exec agents.channel-123");
   });
 
   it("sanitizes a registered channel config before restart", () => {

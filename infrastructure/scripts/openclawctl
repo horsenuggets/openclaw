@@ -209,11 +209,26 @@ if cfg is not None:
     sys.exit(0)
 
 # JSON5 fallback: preserve the original (comments/commas) and only patch what we
-# must, via string edits. Do not attempt to add skipBootstrapFile textually — the
-# stale in-container path is the correctness-critical fix; skipBootstrapFile is
-# also enforced at load time by the agent, so a non-strict config still gets it.
+# must, via string edits.
+def add_skip_bootstrap_file_flag(raw_text: str) -> str:
+    if re.search(r'(?m)\bskipBootstrapFile\b\s*:', raw_text):
+        return raw_text
+
+    match = re.search(
+        r'(?m)^([ \t]*["\']?defaults["\']?\s*:\s*\{[ \t]*(?://[^\n]*)?)$',
+        raw_text,
+    )
+    if not match:
+        return raw_text
+
+    indent_match = re.match(r"[ \t]*", match.group(1))
+    indent = indent_match.group(0) if indent_match else ""
+    insert = f'\n{indent}  "skipBootstrapFile": true,'
+    return raw_text[: match.end(1)] + insert + raw_text[match.end(1) :]
+
 try:
     patched = raw.replace("/home/node/", "/root/")
+    patched = add_skip_bootstrap_file_flag(patched)
     if patched != raw:
         with open(path, "w") as f:
             f.write(patched)
@@ -245,8 +260,9 @@ preserve_legacy_container_data() {
   local destDir="$2"
   local container="agents.channel-$channelId"
 
-  # Only if the container is running and actually has the legacy path.
-  if ! docker exec "$container" test -d /home/node/.openclaw 2>/dev/null; then
+  # docker cp works for stopped containers too; only skip when the container
+  # itself no longer exists.
+  if ! docker container inspect "$container" >/dev/null 2>&1; then
     return 0
   fi
 
