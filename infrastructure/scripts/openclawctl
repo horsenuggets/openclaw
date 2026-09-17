@@ -380,7 +380,14 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             first_line_end = object_end
 
         if content_start < object_end and text[content_start:first_line_end].strip():
-            insert = f"{snippet} "
+            prefix = text[object_start + 1 : content_start]
+            if "\n" in prefix:
+                line_start = text.rfind("\n", 0, content_start) + 1
+                indent_match = re.match(r"[ \t]*", text[line_start:content_start])
+                indent = indent_match.group(0) if indent_match else ""
+                insert = f"{snippet}\n{indent}"
+            else:
+                insert = f"{snippet} "
             insert_at = content_start
         else:
             line_start = text.rfind(

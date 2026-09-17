@@ -361,6 +361,31 @@ describe("openclawctl provisioning", () => {
     );
   });
 
+  it("keeps leading JSON5 comments and multiline properties valid when inserting agents", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      [
+        "{",
+        "  // keep this root comment",
+        '  "ui": { "theme": "dark" },',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain("// keep this root comment\n  \"agents\":");
+    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true } },\n  "ui":');
+  });
+
   it("fails sanitize-configs when a config cannot be written", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
