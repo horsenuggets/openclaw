@@ -215,9 +215,9 @@ if cfg is not None:
         print("unchanged")
     sys.exit(0)
 
-# JSON5 fallback: preserve the original (comments/commas) and only patch what we
-# must, via string edits.
-def add_skip_bootstrap_file_flag(raw_text: str) -> str:
+# JSON5 fallback: preserve the original (comments/commas) and only patch the
+# specific agents.defaults fields we care about, via string edits.
+def patch_agents_defaults_json5(raw_text: str) -> str:
     def skip_ws_comments(text: str, index: int, limit: int) -> int:
         while index < limit:
             if text[index].isspace():
@@ -424,59 +424,108 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
             index += 1
         return None
 
-    limit = len(raw_text)
-    agents_start = find_object_property_start(raw_text, "agents", 0, limit)
-    if agents_start is None:
-        return raw_text
+    def find_agents_defaults_bounds(text: str):
+        limit = len(text)
+        agents_start = find_object_property_start(text, "agents", 0, limit)
+        if agents_start is None:
+            return None
+        agents_end = find_matching_brace(text, agents_start, limit)
+        if agents_end is None:
+            return None
+        defaults_start = find_direct_object_property_start(text, agents_start, agents_end, "defaults")
+        if defaults_start is None or text[defaults_start] != "{":
+            return None
+        defaults_end = find_matching_brace(text, defaults_start, agents_end + 1)
+        if defaults_end is None:
+            return None
+        return defaults_start, defaults_end
 
-    agents_end = find_matching_brace(raw_text, agents_start, limit)
-    if agents_end is None:
-        return raw_text
+    def replace_prefixed_string_property(
+        text: str, object_start: int, object_end: int, property_name: str
+    ) -> str:
+        value_start = find_direct_object_property_start(text, object_start, object_end, property_name)
+        if value_start is None or value_start >= object_end or text[value_start] not in ("'", '"'):
+            return text
+        value_end = skip_string(text, value_start, object_end)
+        if value_end <= value_start + 1:
+            return text
+        value = text[value_start + 1 : value_end - 1]
+        if not value.startswith("/home/node/"):
+            return text
+        replacement = "/root/" + value[len("/home/node/") :]
+        return text[: value_start + 1] + replacement + text[value_end - 1 :]
 
-    defaults_value_start = find_direct_object_property_start(raw_text, agents_start, agents_end, "defaults")
-    if defaults_value_start is None or raw_text[defaults_value_start] != "{":
-        return raw_text
-    defaults_start = defaults_value_start
+    def force_skip_bootstrap_file_flag(text: str) -> str:
+        bounds = find_agents_defaults_bounds(text)
+        if bounds is None:
+            return text
+        defaults_start, defaults_end = bounds
 
-    defaults_end = find_matching_brace(raw_text, defaults_start, agents_end + 1)
-    if defaults_end is None:
-        return raw_text
-
-    skip_value_start = find_direct_object_property_start(
-        raw_text, defaults_start, defaults_end, "skipBootstrapFile"
-    )
-    if skip_value_start is not None:
-        value_start = skip_ws_comments(raw_text, skip_value_start, defaults_end)
-        if raw_text.startswith("false", value_start):
-            value_end = value_start + len("false")
-            if value_end >= defaults_end or not (
-                raw_text[value_end].isalnum() or raw_text[value_end] in "_$"
-            ):
-                return raw_text[:value_start] + "true" + raw_text[value_end:]
-        return raw_text
-
-    content_start = skip_ws_comments(raw_text, defaults_start + 1, defaults_end)
-    first_line_end = raw_text.find("\n", content_start, defaults_end)
-    if first_line_end == -1:
-        first_line_end = defaults_end
-
-    if content_start < defaults_end and raw_text[content_start:first_line_end].strip():
-        insert = '"skipBootstrapFile": true, '
-        insert_at = content_start
-    else:
-        line_start = raw_text.rfind("\n", 0, content_start if content_start < defaults_end else defaults_start) + 1
-        indent_match = re.match(
-            r"[ \t]*",
-            raw_text[line_start : content_start if content_start < defaults_end else defaults_start],
+        skip_value_start = find_direct_object_property_start(
+            text, defaults_start, defaults_end, "skipBootstrapFile"
         )
-        indent = indent_match.group(0) if indent_match else ""
-        insert = f'\n{indent}  "skipBootstrapFile": true,'
-        insert_at = content_start if content_start < defaults_end else defaults_start + 1
-    return raw_text[:insert_at] + insert + raw_text[insert_at:]
+        if skip_value_start is not None:
+            value_start = skip_ws_comments(text, skip_value_start, defaults_end)
+            if text.startswith("false", value_start):
+                value_end = value_start + len("false")
+                if value_end >= defaults_end or not (
+                    text[value_end].isalnum() or text[value_end] in "_$"
+                ):
+                    return text[:value_start] + "true" + text[value_end:]
+            return text
+
+        content_start = skip_ws_comments(text, defaults_start + 1, defaults_end)
+        first_line_end = text.find("\n", content_start, defaults_end)
+        if first_line_end == -1:
+            first_line_end = defaults_end
+
+        if content_start < defaults_end and text[content_start:first_line_end].strip():
+            insert = '"skipBootstrapFile": true, '
+            insert_at = content_start
+        else:
+            line_start = text.rfind(
+                "\n", 0, content_start if content_start < defaults_end else defaults_start
+            ) + 1
+            indent_match = re.match(
+                r"[ \t]*",
+                text[line_start : content_start if content_start < defaults_end else defaults_start],
+            )
+            indent = indent_match.group(0) if indent_match else ""
+            insert = f'\n{indent}  "skipBootstrapFile": true,'
+            insert_at = content_start if content_start < defaults_end else defaults_start + 1
+        return text[:insert_at] + insert + text[insert_at:]
+
+    patched = raw_text
+    bounds = find_agents_defaults_bounds(patched)
+    if bounds is None:
+        return patched
+    defaults_start, defaults_end = bounds
+    patched = replace_prefixed_string_property(patched, defaults_start, defaults_end, "workspace")
+
+    bounds = find_agents_defaults_bounds(patched)
+    if bounds is None:
+        return patched
+    defaults_start, defaults_end = bounds
+    memory_search_start = find_direct_object_property_start(
+        patched, defaults_start, defaults_end, "memorySearch"
+    )
+    if memory_search_start is not None and patched[memory_search_start] == "{":
+        memory_search_end = find_matching_brace(patched, memory_search_start, defaults_end + 1)
+        if memory_search_end is not None:
+            local_start = find_direct_object_property_start(
+                patched, memory_search_start, memory_search_end, "local"
+            )
+            if local_start is not None and patched[local_start] == "{":
+                local_end = find_matching_brace(patched, local_start, memory_search_end + 1)
+                if local_end is not None:
+                    patched = replace_prefixed_string_property(
+                        patched, local_start, local_end, "modelCacheDir"
+                    )
+
+    return force_skip_bootstrap_file_flag(patched)
 
 try:
-    patched = raw.replace("/home/node/", "/root/")
-    patched = add_skip_bootstrap_file_flag(patched)
+    patched = patch_agents_defaults_json5(raw)
     if patched != raw:
         with open(path, "w") as f:
             f.write(patched)
@@ -532,6 +581,7 @@ preserve_legacy_container_data() {
 repair_existing_configs() {
   local restart_changed="${1:-false}"
   local fail_on_missing="${2:-false}"
+  local preserve_changed="${3:-false}"
   local repaired=0
   local restarted=0
   local unchanged=0
@@ -549,13 +599,14 @@ repair_existing_configs() {
     if [ "$outcome" = "changed" ]; then
       repaired=$((repaired + 1))
       echo "Repaired config for $channelId"
+      local port=""
+      port=$(get_port "$channelId")
+      if [ -n "$port" ] && { [ "$preserve_changed" = "true" ] || [ "$restart_changed" = "true" ]; }; then
+        preserve_legacy_container_data "$channelId" "$dir"
+      fi
       if [ "$restart_changed" = "true" ]; then
-        local port
-        port=$(get_port "$channelId")
         if [ -n "$port" ]; then
           echo "Restarting container for $channelId on port $port..."
-          # Rescue any data written to the old in-container path before docker rm.
-          preserve_legacy_container_data "$channelId" "$dir"
           stop_container "$channelId"
           start_container "$channelId" "$port"
           restarted=$((restarted + 1))
@@ -594,7 +645,19 @@ repair_existing_configs() {
 }
 
 cmd_sanitize_configs() {
-  repair_existing_configs false true
+  local preserve_changed="false"
+  case "${1:-}" in
+    "")
+      ;;
+    --preserve-legacy-data)
+      preserve_changed="true"
+      ;;
+    *)
+      echo "Usage: openclawctl sanitize-configs [--preserve-legacy-data]" >&2
+      return 1
+      ;;
+  esac
+  repair_existing_configs false true "$preserve_changed"
 }
 
 cmd_repair_configs() {
@@ -859,7 +922,7 @@ case "${1:-}" in
   restart)     cmd_restart "${2:-}" ;;
   list)        cmd_list ;;
   reconcile)   cmd_reconcile ;;
-  sanitize-configs) cmd_sanitize_configs ;;
+  sanitize-configs) cmd_sanitize_configs "${2:-}" ;;
   repair-configs) cmd_repair_configs ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
@@ -871,7 +934,7 @@ case "${1:-}" in
     echo "  restart <channelId>     Restart a channel's container"
     echo "  list                    List all registered channels and ports"
     echo "  reconcile               Sync ports.json with instance directories"
-    echo "  sanitize-configs        Rewrite stale copied configs without restarting containers"
+    echo "  sanitize-configs [--preserve-legacy-data]  Rewrite stale copied configs without restarting containers"
     echo "  repair-configs          Rewrite stale copied configs and restart changed channels"
     ;;
 esac

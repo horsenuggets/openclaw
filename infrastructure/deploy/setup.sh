@@ -8,17 +8,23 @@ set -euo pipefail
 
 echo "=== OpenClaw Setup ==="
 
-# 1. Stop all containers
-echo "[1/6] Stopping containers..."
+# 1. Create data and log directories
+echo "[1/7] Creating data directories..."
+mkdir -p ~/logs/whisper
+
+# 2. Preserve any legacy in-container workspace/memory before we remove old
+# containers. Use the incoming openclawctl from the extracted deploy bundle so
+# the latest repair logic runs even while the previous install is still live.
+echo "[2/7] Preserving legacy agent data..."
+bash deploy/bin/openclawctl sanitize-configs --preserve-legacy-data
+
+# 3. Stop all containers
+echo "[3/7] Stopping containers..."
 docker ps -a -q | xargs -r docker stop
 docker ps -a -q | xargs -r docker rm
 
-# 2. Create data and log directories
-echo "[2/6] Creating data directories..."
-mkdir -p ~/logs/whisper
-
-# 3. Replace deploy directory (preserve models and locally-compiled tools)
-echo "[3/6] Installing new deployment..."
+# 4. Replace deploy directory (preserve models and locally-compiled tools)
+echo "[4/7] Installing new deployment..."
 PRESERVE_DIR=$(mktemp -d)
 for dir in models bin/gog bin/whisper-server; do
   if [ -e "$HOME/deploy/$dir" ]; then
@@ -33,19 +39,19 @@ cp -a "$PRESERVE_DIR"/. ~/deploy/ 2>/dev/null || true
 rm -rf "$PRESERVE_DIR"
 chmod +x ~/deploy/bin/*
 
-# 4. Install .env (always overwrite — source of truth is the tarball)
-echo "[4/6] Installing .env..."
+# 5. Install .env (always overwrite — source of truth is the tarball)
+echo "[5/7] Installing .env..."
 cp .env ~/.env
 
-# 5. Install boot script. The wsl-prod scheduled task on the Windows host
+# 6. Install boot script. The wsl-prod scheduled task on the Windows host
 # runs /usr/local/bin/wsl-boot.sh, which invokes ~/boot.sh as the deploy
 # user once Docker is ready - we don't need a per-app keepalive shim.
-echo "[5/6] Installing boot script..."
+echo "[6/7] Installing boot script..."
 cp boot.sh ~/boot.sh
 chmod +x ~/boot.sh
 
-# 6. Start containers
-echo "[6/6] Starting containers..."
+# 7. Start containers
+echo "[7/7] Starting containers..."
 bash ~/boot.sh
 
 echo ""

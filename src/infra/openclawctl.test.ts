@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const repoRoot = process.cwd();
 const openclawctlPath = path.join(repoRoot, "infrastructure/scripts/openclawctl");
 const bootScriptPath = path.join(repoRoot, "infrastructure/deploy/boot.sh");
+const setupScriptPath = path.join(repoRoot, "infrastructure/deploy/setup.sh");
 
 const tempDirs: string[] = [];
 
@@ -258,6 +259,41 @@ describe("openclawctl provisioning", () => {
     expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
   });
 
+  it("repairs only agents.defaults path fields in JSON5 fallback", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      [
+        "{",
+        '  "note": "/home/node/leave-me-alone",',
+        '  "channels": { "discord": { "prompt": "example /home/node/path" } },',
+        "  // valid JSON5 forces fallback",
+        '  "agents": {',
+        '    "defaults": {',
+        '      "workspace": "/home/node/.openclaw/workspaces/123",',
+        '      "memorySearch": { "local": { "modelCacheDir": "/home/node/.openclaw/models", }, },',
+        "    },",
+        "  },",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain('"note": "/home/node/leave-me-alone"');
+    expect(raw).toContain('"prompt": "example /home/node/path"');
+    expect(raw).toContain('"workspace": "/root/.openclaw/workspaces/123"');
+    expect(raw).toContain('"modelCacheDir": "/root/.openclaw/models"');
+    expect(raw).toContain('"skipBootstrapFile": true');
+  });
+
   it("fails sanitize-configs when a config cannot be written", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
@@ -351,6 +387,68 @@ describe("openclawctl provisioning", () => {
     expect(dockerLog).toContain("container inspect agents.channel-123");
     expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
     expect(dockerLog).not.toContain("exec agents.channel-123");
+  });
+
+  it("preserves legacy container data during sanitize-configs without restarting", () => {
+    const home = makeTempHome();
+    const instanceDir = path.join(home, ".openclaw-instances", "123");
+    const configPath = path.join(instanceDir, "openclaw.json");
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    writeFile(
+      configPath,
+      `${JSON.stringify(
+        {
+          agents: {
+            defaults: {
+              workspace: "/home/node/.openclaw/workspaces/123",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "cp" ]; then',
+        '  dest="${@: -1}"',
+        '  printf "legacy memory\\n" > "$dest/MEMORY.md"',
+        "  exit 0",
+        "fi",
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(
+      "bash",
+      [openclawctlPath, "sanitize-configs", "--preserve-legacy-data"],
+      {
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          HOME: home,
+          PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+
+    expect(result.status).toBe(0);
+    expect(fs.readFileSync(path.join(instanceDir, "MEMORY.md"), "utf-8")).toContain(
+      "legacy memory",
+    );
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).toContain("container inspect agents.channel-123");
+    expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
+    expect(dockerLog).not.toContain("stop agents.channel-123");
+    expect(dockerLog).not.toContain("compose -f");
   });
 
   it("sanitizes a registered channel config before restart", () => {
@@ -471,5 +569,62 @@ describe("openclawctl provisioning", () => {
       ["reconcile", "sanitize-configs"],
     );
     expect(fs.readFileSync(path.join(home, "docker.log"), "utf-8")).toContain("agents-123");
+  });
+
+  it("setup preserves legacy data before removing containers", () => {
+    const home = makeTempHome();
+    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-setup-test-"));
+    tempDirs.push(stagingDir);
+    writeFile(path.join(stagingDir, ".env"), "TEST=1\n");
+    writeFile(
+      path.join(stagingDir, "boot.sh"),
+      '#!/usr/bin/env bash\necho "boot" >> "$HOME/boot.log"\n',
+    );
+    writeExecutable(
+      path.join(stagingDir, "deploy", "bin", "openclawctl"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "openclawctl $*" >> "$HOME/operations.log"',
+        'echo "$*" >> "$HOME/openclawctl.log"',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    writeFile(path.join(stagingDir, "deploy", "docker", "agent.yml"), "services: {}\n");
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "docker $*" >> "$HOME/operations.log"',
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "ps" ]; then echo "cid123"; exit 0; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [setupScriptPath], {
+      cwd: stagingDir,
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(fs.readFileSync(path.join(home, "openclawctl.log"), "utf-8")).toContain(
+      "sanitize-configs --preserve-legacy-data",
+    );
+    const operationsLog = fs.readFileSync(path.join(home, "operations.log"), "utf-8");
+    expect(operationsLog).toContain("openclawctl sanitize-configs --preserve-legacy-data");
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).toContain("stop cid123");
+    expect(dockerLog).toContain("rm cid123");
+    expect(
+      operationsLog.indexOf("openclawctl sanitize-configs --preserve-legacy-data"),
+    ).toBeLessThan(operationsLog.indexOf("docker stop cid123"));
+    expect(fs.readFileSync(path.join(home, "boot.log"), "utf-8")).toContain("boot");
   });
 });
