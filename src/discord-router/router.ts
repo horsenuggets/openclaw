@@ -245,15 +245,74 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   let resumeGatewayUrl: string | undefined;
   let shuttingDown = false;
 
+  // Observability for the gateway reconnect path. `connectionSeq` counts how
+  // many sockets we have opened; `liveSockets` counts how many are currently
+  // open. If a single disconnect ever pushes `liveSockets` above 1, we are
+  // running concurrent gateway connections and will trip Discord's IDENTIFY
+  // rate limit.
+  let connectionSeq = 0;
+  let liveSockets = 0;
+
+  // Reconnect is owned by a single scheduler: the authoritative socket's
+  // "close" handler. op 7 / op 9 only close the socket, and the close path
+  // funnels through `scheduleReconnect`, which is idempotent: if a reconnect
+  // is already pending it does nothing. This prevents the double-schedule
+  // that used to open two concurrent sockets per disconnect and spiral past
+  // Discord's IDENTIFY rate limit.
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconnectAttempts = 0;
+  // The socket the router currently considers authoritative. Events from any
+  // earlier socket (e.g. a lingering close after we already moved on) are
+  // ignored so a stale socket can't drive reconnect logic.
+  let currentWs: WebSocket | undefined;
+
+  function scheduleReconnect(resume: boolean, reason: string) {
+    if (shuttingDown) {
+      return;
+    }
+    if (reconnectTimer) {
+      runtime.log(`[router] reconnect already pending, ignoring (reason=${reason})`);
+      return;
+    }
+    // Jittered exponential backoff. Discord allows one IDENTIFY per 5s, so the
+    // base is floored at 5s and jitter is added *on top* (never subtracted) so
+    // the delay can never dip below 5s. The final value is clamped to 30s.
+    const base = Math.min(30_000, 5_000 * 2 ** reconnectAttempts);
+    const jitter = Math.floor(Math.random() * 5_000);
+    const delay = Math.min(30_000, base + jitter);
+    reconnectAttempts += 1;
+    runtime.log(`[router] scheduling reconnect (reason=${reason}, resume=${resume}) in ${delay}ms`);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      // Re-check in case SIGINT/SIGTERM arrived while the timer was pending;
+      // we must not open a fresh socket after shutdown has begun.
+      if (shuttingDown) {
+        return;
+      }
+      connect(resume);
+    }, delay);
+  }
+
   function connect(resume = false) {
+    connectionSeq += 1;
+    liveSockets += 1;
+    const attempt = connectionSeq;
+    runtime.log(
+      `[router] connect() attempt #${attempt} (resume=${resume}, liveSockets=${liveSockets})`,
+    );
     const url = resume && resumeGatewayUrl ? resumeGatewayUrl : gatewayUrl;
     const ws = new WebSocket(`${url}/?v=10&encoding=json`);
+    currentWs = ws;
 
     ws.on("open", () => {
       runtime.log(`[router] WebSocket connected to ${url}`);
     });
 
     ws.on("message", (raw: Buffer) => {
+      // Ignore anything arriving on a socket we've already superseded.
+      if (ws !== currentWs) {
+        return;
+      }
       const payload = JSON.parse(raw.toString());
       const { op, d, s, t } = payload;
 
@@ -310,6 +369,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           break;
         case 0: {
           // Dispatch
+          // Both READY (fresh identify) and RESUMED (successful resume) mean the
+          // connection is healthy again — reset backoff so the next disconnect
+          // retries promptly rather than inheriting a long stale delay. RESUMED
+          // does not carry session fields, so only READY (re)initializes them.
+          if (t === "READY" || t === "RESUMED") {
+            reconnectAttempts = 0;
+          }
           if (t === "READY") {
             sessionId = d.session_id;
             resumeGatewayUrl = d.resume_gateway_url;
@@ -569,23 +635,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           break;
         }
         case 7:
-          // Reconnect requested
-          runtime.log("[router] reconnect requested by Discord");
+          // Reconnect requested. Just close; the "close" handler owns the
+          // single reconnect. sessionId stays set so it resumes.
+          runtime.log(`[router] reconnect requested by Discord (attempt #${attempt})`);
           ws.close();
-          setTimeout(() => connect(true), 1000);
           break;
         case 9:
-          // Invalid session
-          runtime.log("[router] invalid session, re-identifying");
-          sessionId = undefined;
+          // Invalid session. Discord's `d` indicates whether the session is
+          // still resumable. Preserve resumable sessions; otherwise drop
+          // session/sequence so the reconnect re-identifies from scratch.
+          if (d === false) {
+            sessionId = undefined;
+            lastSequence = null;
+          }
+          runtime.log(
+            `[router] invalid session (resumable=${d === true}), reconnecting (attempt #${attempt})`,
+          );
           ws.close();
-          setTimeout(() => connect(false), 5000);
           break;
       }
     });
 
     ws.on("close", (code: number) => {
-      runtime.log(`[router] WebSocket closed (${code})`);
+      liveSockets = Math.max(0, liveSockets - 1);
+      runtime.log(
+        `[router] WebSocket closed (${code}) (attempt #${attempt}, liveSockets=${liveSockets})`,
+      );
+      // Ignore a close from a socket we've already superseded — only the
+      // authoritative socket may drive reconnection. Guarding *before* the
+      // heartbeat cleanup is essential: `heartbeatInterval` is shared and owned
+      // by the current socket, so a late close from a stale socket must not
+      // clear it or the live connection would silently stop heartbeating.
+      if (ws !== currentWs) {
+        return;
+      }
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = undefined;
@@ -593,12 +676,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       // Always reconnect — Discord sends 1000/1001 for routine reconnects.
       // Only process exit (SIGINT/SIGTERM) should stop the router.
       if (!shuttingDown) {
-        const delay = code === 4004 ? 0 : 5000; // 4004 = auth failed, don't retry
         if (code === 4004) {
           runtime.error("[router] authentication failed (4004), not reconnecting");
           return;
         }
-        setTimeout(() => connect(!!sessionId), delay);
+        // Resume when we still hold a session (routine reconnect / op 7);
+        // re-identify when op 9 cleared it.
+        scheduleReconnect(!!sessionId, `close-${code}`);
       }
     });
 
@@ -611,8 +695,30 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   // Keep running until process exit
   await new Promise<void>((resolve) => {
+    let shutdownStarted = false;
     const shutdown = () => {
+      if (shutdownStarted) {
+        return;
+      }
+      shutdownStarted = true;
       shuttingDown = true;
+      // Cancel any pending reconnect so we don't open a socket post-shutdown.
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = undefined;
+      }
+      if (currentWs) {
+        currentWs.close();
+      }
+      oauth.server.close((err) => {
+        if (err) {
+          runtime.error(`[router] failed to close oauth callback server: ${String(err)}`);
+        }
+      });
       // Lifecycle messages ("Shutting down") handled by health-monitor sidecar.
       resolve();
     };
