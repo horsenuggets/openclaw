@@ -857,6 +857,17 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# Undo a partially-created channel registration (port + freshly-created instance
+# dir) so a failed add-dm/add-channel does not block retries by leaving the
+# channel "already registered". Only used on the create path, where the instance
+# dir was made in this same command.
+rollback_new_channel() {
+  local channelId="$1"
+  echo "Rolling back registration for $channelId..." >&2
+  free_port "$channelId"
+  rm -rf "$INSTANCES_DIR/$channelId" 2>/dev/null || true
+}
+
 # --- Commands ---
 
 cmd_add_dm() {
@@ -892,15 +903,17 @@ cmd_add_dm() {
   # cannot produce a config, roll back the port assignment and instance dir so we
   # don't leave a half-registered channel that blocks retries.
   if ! provision_config "$channelId"; then
-    echo "Rolling back registration for $channelId..." >&2
-    free_port "$channelId"
-    rmdir "$INSTANCES_DIR/$channelId" 2>/dev/null || true
+    rollback_new_channel "$channelId"
     exit 1
   fi
 
-  # Start container
+  # Start container. If it fails (e.g. the config could not be sanitized), roll
+  # back the freshly created registration so retries are not blocked.
   echo "Starting container agents.channel-$channelId on port $port..."
-  start_container "$channelId" "$port"
+  if ! start_container "$channelId" "$port"; then
+    rollback_new_channel "$channelId"
+    exit 1
+  fi
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -928,14 +941,15 @@ cmd_add_channel() {
   # Copy + sanitize openclaw.json from an existing instance. Roll back on failure
   # so a channel that cannot be provisioned does not leave a stale port.
   if ! provision_config "$channelId"; then
-    echo "Rolling back registration for $channelId..." >&2
-    free_port "$channelId"
-    rmdir "$INSTANCES_DIR/$channelId" 2>/dev/null || true
+    rollback_new_channel "$channelId"
     exit 1
   fi
 
   echo "Starting container agents.channel-$channelId on port $port..."
-  start_container "$channelId" "$port"
+  if ! start_container "$channelId" "$port"; then
+    rollback_new_channel "$channelId"
+    exit 1
+  fi
   echo "Done. Channel $channelId is now registered."
 }
 

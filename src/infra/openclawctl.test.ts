@@ -72,6 +72,52 @@ describe("openclawctl provisioning", () => {
     }
   });
 
+  it("rolls back the registration when container start fails", () => {
+    const home = makeTempHome();
+    // A template config exists to copy from, so provisioning succeeds...
+    writeFile(
+      path.join(home, ".openclaw-instances", "template", "openclaw.json"),
+      `${JSON.stringify(
+        { agents: { defaults: { workspace: "/root/.openclaw/workspaces/template" } } },
+        null,
+        2,
+      )}\n`,
+    );
+    // ...but `docker compose up` fails, so start_container returns non-zero.
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "compose" ]; then exit 1; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "add-channel", "999"], {
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Rolling back registration for 999");
+    // The freshly created instance dir (with its copied config) must be removed.
+    expect(fs.existsSync(path.join(home, ".openclaw-instances", "999"))).toBe(false);
+    // The port assignment must be released so a retry is not blocked.
+    const portsPath = path.join(home, ".openclaw-instances", "ports.json");
+    if (fs.existsSync(portsPath)) {
+      const ports = JSON.parse(fs.readFileSync(portsPath, "utf-8")) as {
+        assignments: Record<string, number>;
+      };
+      expect(ports.assignments["999"]).toBeUndefined();
+    }
+  });
+
   it("sanitizes existing copied configs without restarting containers", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
@@ -364,17 +410,16 @@ describe("openclawctl provisioning", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Repaired config for 123");
     const raw = fs.readFileSync(configPath, "utf-8");
-    expect(raw).toContain('"agents": { "defaults": { "skipBootstrapFile": true }, "persona": "dm-owner", },');
+    expect(raw).toContain(
+      '"agents": { "defaults": { "skipBootstrapFile": true }, "persona": "dm-owner", },',
+    );
     expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
   });
 
   it("keeps leading JSON5 comments ahead of an inserted agents block", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
-    writeFile(
-      configPath,
-      ["{", "  // keep this comment with the root object", "}", ""].join("\n"),
-    );
+    writeFile(configPath, ["{", "  // keep this comment with the root object", "}", ""].join("\n"));
 
     const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
       encoding: "utf-8",
