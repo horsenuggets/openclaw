@@ -78,6 +78,20 @@ describe("openclawctl provisioning", () => {
     expect(config.agents.defaults.skipBootstrapFile).toBe(true);
   });
 
+  it("fails sanitize-configs when an existing instance is missing openclaw.json", () => {
+    const home = makeTempHome();
+    fs.mkdirSync(path.join(home, ".openclaw-instances", "123"), { recursive: true });
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("missing=1");
+    expect(result.stderr).toContain("missing openclaw.json for 1 instance");
+  });
+
   it("sanitizes a registered channel config before restart", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");

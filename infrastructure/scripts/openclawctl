@@ -202,6 +202,7 @@ sanitize_channel_config_if_present() {
 
 repair_existing_configs() {
   local restart_changed="${1:-false}"
+  local fail_on_missing="${2:-false}"
   local repaired=0
   local restarted=0
   local unchanged=0
@@ -238,14 +239,18 @@ repair_existing_configs() {
   done
 
   echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing"
+  if [ "$fail_on_missing" = "true" ] && [ "$missing" -gt 0 ]; then
+    echo "Error: missing openclaw.json for $missing instance(s)." >&2
+    return 1
+  fi
 }
 
 cmd_sanitize_configs() {
-  repair_existing_configs false
+  repair_existing_configs false true
 }
 
 cmd_repair_configs() {
-  repair_existing_configs true
+  repair_existing_configs true false
 }
 
 # --- Discord API helpers ---
