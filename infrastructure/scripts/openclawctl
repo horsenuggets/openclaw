@@ -340,6 +340,42 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
             index += 1
         return False
 
+    def find_direct_object_property_start(text: str, object_start: int, object_end: int, property_name: str):
+        index = object_start + 1
+        depth = 0
+        while index < object_end:
+            index = skip_ws_comments(text, index, object_end)
+            if index >= object_end:
+                return None
+            if text[index] in ("'", '"'):
+                name, next_index = parse_property_name(text, index, object_end)
+                colon = skip_ws_comments(text, next_index, object_end)
+                if colon < object_end and text[colon] == ":":
+                    value_start = skip_ws_comments(text, colon + 1, object_end)
+                    if depth == 0 and name == property_name and value_start < object_end:
+                        return value_start
+                    index = value_start
+                    continue
+                index = next_index
+                continue
+            if text[index].isalpha() or text[index] in "_$":
+                name, next_index = parse_property_name(text, index, object_end)
+                colon = skip_ws_comments(text, next_index, object_end)
+                if colon < object_end and text[colon] == ":":
+                    value_start = skip_ws_comments(text, colon + 1, object_end)
+                    if depth == 0 and name == property_name and value_start < object_end:
+                        return value_start
+                    index = value_start
+                    continue
+                index = next_index
+                continue
+            if text[index] in "{[":
+                depth += 1
+            elif text[index] in "}]":
+                depth = max(0, depth - 1)
+            index += 1
+        return None
+
     limit = len(raw_text)
     agents_start = find_object_property_start(raw_text, "agents", 0, limit)
     if agents_start is None:
@@ -349,9 +385,10 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if agents_end is None:
         return raw_text
 
-    defaults_start = find_object_property_start(raw_text, "defaults", agents_start + 1, agents_end)
-    if defaults_start is None:
+    defaults_value_start = find_direct_object_property_start(raw_text, agents_start, agents_end, "defaults")
+    if defaults_value_start is None or raw_text[defaults_value_start] != "{":
         return raw_text
+    defaults_start = defaults_value_start
 
     defaults_end = find_matching_brace(raw_text, defaults_start, agents_end + 1)
     if defaults_end is None:
