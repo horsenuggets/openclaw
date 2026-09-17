@@ -440,13 +440,7 @@ describe("openclawctl provisioning", () => {
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
     writeFile(
       configPath,
-      [
-        "{",
-        "  // keep this root comment",
-        '  "ui": { "theme": "dark" },',
-        "}",
-        "",
-      ].join("\n"),
+      ["{", "  // keep this root comment", '  "ui": { "theme": "dark" },', "}", ""].join("\n"),
     );
 
     const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
@@ -457,7 +451,9 @@ describe("openclawctl provisioning", () => {
     expect(result.status).toBe(0);
     const raw = fs.readFileSync(configPath, "utf-8");
     expect(raw).toContain('// keep this root comment\n  "ui":');
-    expect(raw).toContain('"ui": { "theme": "dark" },\n  "agents": { "defaults": { "skipBootstrapFile": true } },');
+    expect(raw).toContain(
+      '"ui": { "theme": "dark" },\n  "agents": { "defaults": { "skipBootstrapFile": true } },',
+    );
   });
 
   it("fails sanitize-configs when a config cannot be written", () => {
