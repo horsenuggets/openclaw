@@ -312,8 +312,8 @@ export async function runConfigureWizard(
           },
         };
         await ensureWorkspaceAndSessions(workspaceDir, runtime, {
-          skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
-          skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
+          skipBootstrap: nextConfig.agents?.defaults?.skipBootstrap,
+          skipBootstrapFile: nextConfig.agents?.defaults?.skipBootstrapFile,
         });
       }
 
@@ -434,8 +434,8 @@ export async function runConfigureWizard(
             },
           };
           await ensureWorkspaceAndSessions(workspaceDir, runtime, {
-            skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
-            skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
+            skipBootstrap: nextConfig.agents?.defaults?.skipBootstrap,
+            skipBootstrapFile: nextConfig.agents?.defaults?.skipBootstrapFile,
           });
           await persistConfig();
         }

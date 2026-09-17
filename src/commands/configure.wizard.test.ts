@@ -174,7 +174,7 @@ describe("runConfigureWizard", () => {
       "/tmp/new-workspace",
       expect.anything(),
       expect.objectContaining({
-        skipBootstrap: false,
+        skipBootstrap: undefined,
         skipBootstrapFile: true,
       }),
     );
