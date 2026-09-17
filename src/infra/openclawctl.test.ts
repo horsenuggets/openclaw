@@ -110,6 +110,41 @@ describe("openclawctl provisioning", () => {
     expect(result.stderr).toContain("missing openclaw.json for 1 registered instance");
   });
 
+  it("repairs a JSON5 config (comments/trailing commas) without aborting", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    // OpenClaw parses config as JSON5, so a config may legally contain comments
+    // and trailing commas. The sanitizer must not crash on these (strict JSON
+    // would); it should still repair the stale /home/node path via text edit.
+    writeFile(
+      configPath,
+      [
+        "{",
+        "  // agent defaults",
+        '  "agents": {',
+        '    "defaults": {',
+        '      "workspace": "/home/node/.openclaw/workspaces/123",',
+        "    },",
+        "  },",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    // Stale path repaired, and JSON5 syntax (comment) preserved.
+    expect(raw).toContain("/root/.openclaw/workspaces/123");
+    expect(raw).not.toContain("/home/node");
+    expect(raw).toContain("// agent defaults");
+  });
+
   it("sanitizes a registered channel config before restart", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
