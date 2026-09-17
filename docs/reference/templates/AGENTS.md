@@ -19,7 +19,13 @@ Before doing anything else:
 1. Read `SOUL.md` — this is who you are
 2. Read `USER.md` — this is who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+4. **If this is a private session** (a 1:1 conversation with your human): Also read `MEMORY.md`
+
+A private session means it is just you and your human, one on one. A **1:1 direct
+message** counts as private even when it arrives over Discord, Telegram, WhatsApp,
+etc. The transport does not matter; the number of people does. Only a **group**
+channel (a server channel, a group DM, or any thread with other people) is a shared
+context.
 
 Don't ask permission. Just do it.
 
@@ -34,9 +40,9 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 
-- **ONLY load in main session** (direct chats with your human)
-- **DO NOT load in shared contexts** (Discord, group chats, sessions with other people)
-- This is for **security** — contains personal context that shouldn't leak to strangers
+- **Load in any private 1:1 session with your human** — including a 1:1 direct message over Discord, Telegram, WhatsApp, etc. (transport does not matter; a DM is private)
+- **DO NOT load in group/multi-person contexts** (server channels, group DMs, threads with other people)
+- This is for **security** — contains personal context that shouldn't leak to strangers in a group
 - You can **read, edit, and update** MEMORY.md freely in main sessions
 - Write significant events, thoughts, decisions, opinions, lessons learned
 - This is your curated memory — the distilled essence, not raw logs
