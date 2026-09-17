@@ -162,4 +162,34 @@ describe("discord router reconnect", () => {
     // 1 initial + 5 reconnects = 6 total sockets, never doubling.
     expect(FakeWebSocket.instances).toHaveLength(6);
   });
+
+  it("never schedules a reconnect below Discord's 5s IDENTIFY floor", async () => {
+    void startRouter(makeConfig(), runtime);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Drive a few reject cycles and capture every scheduled backoff delay.
+    for (let round = 0; round < 4; round++) {
+      const ws = FakeWebSocket.instances.find((s) => !s.closed);
+      expect(ws).toBeDefined();
+      ws!.emit("open");
+      ws!.hello();
+      ws!.invalidSession();
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+
+    const delays = logs
+      .filter((l) => l.includes("scheduling reconnect"))
+      .map((l) => {
+        const match = l.match(/in (\d+)ms/);
+        return match ? Number(match[1]) : Number.NaN;
+      });
+
+    expect(delays.length).toBeGreaterThan(0);
+    for (const delay of delays) {
+      // Floor is 5s (Discord allows one IDENTIFY per 5s); jitter is additive.
+      expect(delay).toBeGreaterThanOrEqual(5_000);
+      // Cap is 30s.
+      expect(delay).toBeLessThanOrEqual(30_000);
+    }
+  });
 });
