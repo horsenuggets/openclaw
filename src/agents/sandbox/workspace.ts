@@ -16,6 +16,7 @@ export async function ensureSandboxWorkspace(
   workspaceDir: string,
   seedFrom?: string,
   skipBootstrap?: boolean,
+  skipBootstrapFile?: boolean,
 ) {
   await fs.mkdir(workspaceDir, { recursive: true });
   if (seedFrom) {
@@ -26,8 +27,10 @@ export async function ensureSandboxWorkspace(
       DEFAULT_TOOLS_FILENAME,
       DEFAULT_IDENTITY_FILENAME,
       DEFAULT_USER_FILENAME,
-      DEFAULT_BOOTSTRAP_FILENAME,
       DEFAULT_HEARTBEAT_FILENAME,
+      // Only seed BOOTSTRAP.md when not skipping the onboarding file, so a
+      // sandbox never inherits a stale bootstrap from the seed workspace.
+      ...(skipBootstrapFile ? [] : [DEFAULT_BOOTSTRAP_FILENAME]),
     ];
     for (const name of files) {
       const src = path.join(seed, name);
@@ -47,5 +50,6 @@ export async function ensureSandboxWorkspace(
   await ensureAgentWorkspace({
     dir: workspaceDir,
     ensureBootstrapFiles: !skipBootstrap,
+    skipBootstrapOnboardingFile: skipBootstrapFile,
   });
 }

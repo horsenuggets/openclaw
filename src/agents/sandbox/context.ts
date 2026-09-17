@@ -49,6 +49,7 @@ export async function resolveSandboxContext(params: {
       sandboxWorkspaceDir,
       agentWorkspaceDir,
       params.config?.agents?.defaults?.skipBootstrap,
+      params.config?.agents?.defaults?.skipBootstrapFile,
     );
     if (cfg.workspaceAccess !== "rw") {
       try {
@@ -131,6 +132,7 @@ export async function ensureSandboxWorkspaceForSession(params: {
       sandboxWorkspaceDir,
       agentWorkspaceDir,
       params.config?.agents?.defaults?.skipBootstrap,
+      params.config?.agents?.defaults?.skipBootstrapFile,
     );
     if (cfg.workspaceAccess !== "rw") {
       try {
