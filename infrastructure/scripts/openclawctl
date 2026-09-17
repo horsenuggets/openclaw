@@ -204,8 +204,12 @@ if cfg is not None:
 
     normalized = json.dumps(cfg, indent=2) + "\n"
     if normalized != raw:
-        with open(path, "w") as f:
-            f.write(normalized)
+        try:
+            with open(path, "w") as f:
+                f.write(normalized)
+        except OSError:
+            print("error")
+            sys.exit(0)
         print("changed")
     else:
         print("unchanged")
@@ -261,19 +265,59 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
             return text[index:end], end
         return None, index
 
+    def skip_value(text: str, index: int, limit: int) -> int:
+        # Advance past a JSON5 value (string, object, array, or primitive) so the
+        # property scan never descends into a value's contents (e.g. a string
+        # literal that itself contains "agents: {").
+        if index >= limit:
+            return limit
+        ch = text[index]
+        if ch in ("'", '"'):
+            return skip_string(text, index, limit)
+        if ch in "{[":
+            close = "}" if ch == "{" else "]"
+            depth = 0
+            while index < limit:
+                c = text[index]
+                if text.startswith("//", index) or text.startswith("/*", index):
+                    index = skip_ws_comments(text, index, limit)
+                    continue
+                if c in ("'", '"'):
+                    index = skip_string(text, index, limit)
+                    continue
+                if c == ch:
+                    depth += 1
+                elif c == close:
+                    depth -= 1
+                    if depth == 0:
+                        return index + 1
+                index += 1
+            return limit
+        # Primitive: run to the next comma or closing brace/bracket at this level.
+        while index < limit and text[index] not in ",}]":
+            index += 1
+        return index
+
     def find_object_property_start(text: str, property_name: str, start: int, limit: int):
+        # Depth-0, string/comment-aware scan for a top-level object property whose
+        # value is an object. Skips over each value so text inside strings/arrays
+        # cannot be mistaken for a property name.
         index = start
+        # Enter the enclosing object body if we start on its opening brace.
+        while index < limit and text[index] != "{":
+            index = skip_ws_comments(text, index, limit)
+            if index < limit and text[index] != "{":
+                index += 1
+        if index < limit and text[index] == "{":
+            index += 1
         while index < limit:
             index = skip_ws_comments(text, index, limit)
-            if index >= limit:
+            if index >= limit or text[index] == "}":
                 return None
-            if text[index] in ("'", '"'):
-                name, next_index = parse_property_name(text, index, limit)
-            else:
-                name, next_index = parse_property_name(text, index, limit)
-                if name is None:
-                    index += 1
-                    continue
+            name, next_index = parse_property_name(text, index, limit)
+            if name is None:
+                index += 1
+                continue
             colon = skip_ws_comments(text, next_index, limit)
             if colon >= limit or text[colon] != ":":
                 index = next_index
@@ -281,7 +325,11 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
             value_start = skip_ws_comments(text, colon + 1, limit)
             if name == property_name and value_start < limit and text[value_start] == "{":
                 return value_start
-            index = value_start
+            # Skip the whole value, then any trailing comma, before continuing.
+            index = skip_value(text, value_start, limit)
+            index = skip_ws_comments(text, index, limit)
+            if index < limit and text[index] == ",":
+                index += 1
         return None
 
     def find_matching_brace(text: str, start: int, limit: int):
@@ -489,6 +537,7 @@ repair_existing_configs() {
   local unchanged=0
   local missing=0
   local missing_unregistered=0
+  local errored=0
 
   for dir in "$INSTANCES_DIR"/*/; do
     [ -d "$dir" ] || continue
@@ -522,14 +571,24 @@ repair_existing_configs() {
         missing_unregistered=$((missing_unregistered + 1))
         echo "Skipped config repair for unregistered directory $channelId; openclaw.json is missing."
       fi
+    elif [ "$outcome" = "error" ]; then
+      # A read/write failure must not be silently counted as "unchanged" — that
+      # would let boot start an unrepaired stale config.
+      errored=$((errored + 1))
+      echo "Error: failed to sanitize config for $channelId." >&2
     else
       unchanged=$((unchanged + 1))
     fi
   done
 
-  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing missingUnregistered=$missing_unregistered"
-  if [ "$fail_on_missing" = "true" ] && [ "$missing" -gt 0 ]; then
-    echo "Error: missing openclaw.json for $missing registered instance(s)." >&2
+  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing missingUnregistered=$missing_unregistered errored=$errored"
+  if [ "$fail_on_missing" = "true" ] && { [ "$missing" -gt 0 ] || [ "$errored" -gt 0 ]; }; then
+    if [ "$missing" -gt 0 ]; then
+      echo "Error: missing openclaw.json for $missing registered instance(s)." >&2
+    fi
+    if [ "$errored" -gt 0 ]; then
+      echo "Error: failed to sanitize $errored config(s)." >&2
+    fi
     return 1
   fi
 }

@@ -222,6 +222,77 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain("/root/.openclaw/workspaces/123");
   });
 
+  it("ignores an agents-like token inside a string value in JSON5 fallback", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    // A preceding string value literally containing "agents: {" must not fool the
+    // top-level property scan into corrupting the string or missing the real
+    // agents.defaults object.
+    writeFile(
+      configPath,
+      [
+        "{",
+        '  "description": "mentions agents: { defaults: fake }", // JSON5 comment',
+        '  "agents": {',
+        '    "defaults": { "workspace": "/home/node/.openclaw/workspaces/123", },',
+        "  },",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    // The decoy string is untouched, the real path is repaired, and the flag is
+    // inserted into the real agents.defaults object.
+    expect(raw).toContain('"description": "mentions agents: { defaults: fake }"');
+    expect(raw).not.toContain("/home/node");
+    expect(raw).toContain("/root/.openclaw/workspaces/123");
+    expect(raw).toContain('"skipBootstrapFile": true');
+    expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
+  });
+
+  it("fails sanitize-configs when a config cannot be written", () => {
+    const home = makeTempHome();
+    const instanceDir = path.join(home, ".openclaw-instances", "123");
+    const configPath = path.join(instanceDir, "openclaw.json");
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    writeFile(
+      configPath,
+      `${JSON.stringify(
+        { agents: { defaults: { workspace: "/home/node/.openclaw/workspaces/123" } } },
+        null,
+        2,
+      )}\n`,
+    );
+    // Make the config unwritable so the sanitizer emits "error" (a write failure
+    // must not be silently counted as "unchanged" and allowed to boot stale).
+    fs.chmodSync(configPath, 0o444);
+    fs.chmodSync(instanceDir, 0o555);
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    // Restore perms so afterEach cleanup can remove the temp dir.
+    fs.chmodSync(instanceDir, 0o755);
+    fs.chmodSync(configPath, 0o644);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("errored=1");
+    expect(result.stderr).toContain("failed to sanitize");
+  });
+
   it("preserves legacy container data for a repaired stopped container", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
