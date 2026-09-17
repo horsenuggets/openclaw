@@ -146,47 +146,82 @@ provision_config() {
     return 0
   fi
 
-  sanitize_config_file "$dest" >/dev/null
-  echo "Sanitized config for $channelId"
+  # Sanitize best-effort. A parse "error" must not abort provisioning (that would
+  # leave an orphaned port assignment); the copied config is still a valid app
+  # config, so we keep it and warn.
+  local outcome
+  outcome=$(sanitize_config_file "$dest")
+  if [ "$outcome" = "error" ]; then
+    echo "Warning: could not sanitize $dest; using copied config as-is." >&2
+  else
+    echo "Sanitized config for $channelId ($outcome)"
+  fi
 }
 
+# Repair a config file in place. Prints one of: changed | unchanged | error.
+# OpenClaw parses config as JSON5 (comments, trailing commas allowed), so a strict
+# json.loads would reject valid configs. We try strict JSON first (clean rewrite),
+# and fall back to targeted textual edits that preserve JSON5 syntax. On any
+# unexpected failure we print "error" and leave the file untouched so callers can
+# decide how to proceed instead of aborting mid-provision.
 sanitize_config_file() {
   local configPath="$1"
   python3 - "$configPath" <<'PY'
-import json, sys
+import json, re, sys
 
 path = sys.argv[1]
-with open(path) as f:
-    raw = f.read()
+try:
+    with open(path) as f:
+        raw = f.read()
+except OSError:
+    print("error")
+    sys.exit(0)
 
-cfg = json.loads(raw)
-defaults = cfg.setdefault("agents", {}).setdefault("defaults", {})
+# Fast path: strict JSON parses cleanly, so rewrite it normalized.
+try:
+    cfg = json.loads(raw)
+except ValueError:
+    cfg = None
 
-# Repair stale /home/node in-container paths to the actual mount target.
-ws = defaults.get("workspace")
-if isinstance(ws, str) and ws.startswith("/home/node/"):
-    defaults["workspace"] = ws.replace("/home/node/", "/root/", 1)
+if cfg is not None:
+    defaults = cfg.setdefault("agents", {}).setdefault("defaults", {})
 
-cache = (
-    defaults.get("memorySearch", {})
-    .get("local", {})
-    .get("modelCacheDir")
-)
-if isinstance(cache, str) and cache.startswith("/home/node/"):
-    defaults["memorySearch"]["local"]["modelCacheDir"] = cache.replace(
-        "/home/node/", "/root/", 1
-    )
+    ws = defaults.get("workspace")
+    if isinstance(ws, str) and ws.startswith("/home/node/"):
+        defaults["workspace"] = ws.replace("/home/node/", "/root/", 1)
 
-# Router owns onboarding; never inherit/keep a stale BOOTSTRAP.md.
-defaults["skipBootstrapFile"] = True
+    cache = defaults.get("memorySearch", {}).get("local", {}).get("modelCacheDir")
+    if isinstance(cache, str) and cache.startswith("/home/node/"):
+        defaults["memorySearch"]["local"]["modelCacheDir"] = cache.replace(
+            "/home/node/", "/root/", 1
+        )
 
-normalized = json.dumps(cfg, indent=2) + "\n"
-if normalized != raw:
-    with open(path, "w") as f:
-        f.write(normalized)
-    print("changed")
-else:
-    print("unchanged")
+    # Router owns onboarding; never inherit/keep a stale BOOTSTRAP.md.
+    defaults["skipBootstrapFile"] = True
+
+    normalized = json.dumps(cfg, indent=2) + "\n"
+    if normalized != raw:
+        with open(path, "w") as f:
+            f.write(normalized)
+        print("changed")
+    else:
+        print("unchanged")
+    sys.exit(0)
+
+# JSON5 fallback: preserve the original (comments/commas) and only patch what we
+# must, via string edits. Do not attempt to add skipBootstrapFile textually — the
+# stale in-container path is the correctness-critical fix; skipBootstrapFile is
+# also enforced at load time by the agent, so a non-strict config still gets it.
+try:
+    patched = raw.replace("/home/node/", "/root/")
+    if patched != raw:
+        with open(path, "w") as f:
+            f.write(patched)
+        print("changed")
+    else:
+        print("unchanged")
+except OSError:
+    print("error")
 PY
 }
 
@@ -198,6 +233,36 @@ sanitize_channel_config_if_present() {
     return 0
   fi
   sanitize_config_file "$configPath"
+}
+
+# Before removing a container whose old config pointed at /home/node/.openclaw,
+# rescue any workspace/memory it wrote to that path. Older configs used an
+# unmounted in-container path, so that data lives only in the container's writable
+# layer and would be lost on `docker rm`. Copy it into the mounted instance dir
+# (which maps to /root/.openclaw) so the repaired container keeps the memory.
+preserve_legacy_container_data() {
+  local channelId="$1"
+  local destDir="$2"
+  local container="agents.channel-$channelId"
+
+  # Only if the container is running and actually has the legacy path.
+  if ! docker exec "$container" test -d /home/node/.openclaw 2>/dev/null; then
+    return 0
+  fi
+
+  echo "Preserving legacy /home/node/.openclaw data for $channelId..."
+  # Copy contents (not the dir itself) into the mounted instance dir, without
+  # clobbering files that already exist there.
+  local tmp
+  tmp=$(mktemp -d)
+  if docker cp "$container:/home/node/.openclaw/." "$tmp/" 2>/dev/null; then
+    # cp -Rn: never overwrite existing mounted files (mounted config wins).
+    cp -Rn "$tmp/." "$destDir/" 2>/dev/null || true
+    echo "Preserved legacy data for $channelId."
+  else
+    echo "Warning: failed to copy legacy data for $channelId; continuing." >&2
+  fi
+  rm -rf "$tmp"
 }
 
 repair_existing_configs() {
@@ -224,6 +289,8 @@ repair_existing_configs() {
         port=$(get_port "$channelId")
         if [ -n "$port" ]; then
           echo "Restarting container for $channelId on port $port..."
+          # Rescue any data written to the old in-container path before docker rm.
+          preserve_legacy_container_data "$channelId" "$dir"
           stop_container "$channelId"
           start_container "$channelId" "$port"
           restarted=$((restarted + 1))
