@@ -655,16 +655,38 @@ preserve_legacy_container_data() {
   fi
 
   local legacy_dir="/home/node/.openclaw"
+  set +e
+  docker export "$container" | python3 -c '
+import sys, tarfile
+
+prefix = sys.argv[1].lstrip("/")
+with tarfile.open(fileobj=sys.stdin.buffer, mode="r|*") as archive:
+    for member in archive:
+        name = member.name.lstrip("./")
+        if name == prefix or name.startswith(prefix + "/"):
+            sys.exit(0)
+sys.exit(1)
+' "$legacy_dir"
+  local pipe_status=("${PIPESTATUS[@]}")
+  local export_status="${pipe_status[0]:-1}"
+  local probe_status="${pipe_status[1]:-1}"
+  set -e
+  if [ "$export_status" -ne 0 ] || [ "$probe_status" -gt 1 ]; then
+    echo "Error: failed to inspect legacy data in container for $channelId." >&2
+    return 1
+  fi
+  if [ "$probe_status" -eq 1 ]; then
+    return 0
+  fi
+
   echo "Preserving legacy $legacy_dir data for $channelId..."
   # Copy contents (not the dir itself) into the mounted instance dir, without
-  # clobbering files that already exist there. `docker cp` works for stopped
-  # containers too, so probe/copy in one step and treat a missing source as a
-  # no-op success rather than reaching for `docker exec` (which would fail on a
-  # stopped container and skip preservation entirely).
-  local tmp cp_err rc=0
+  # clobbering files that already exist there. Probe with docker export first so
+  # missing-source detection works for stopped containers without parsing
+  # localized `docker cp` error strings; only copy when the legacy tree exists.
+  local tmp rc=0
   tmp=$(mktemp -d)
-  cp_err="$tmp/docker-cp.err"
-  if docker cp "$container:$legacy_dir/." "$tmp/" 2>"$cp_err"; then
+  if docker cp "$container:$legacy_dir/." "$tmp/" 2>/dev/null; then
     # cp -Rn: never overwrite existing mounted files (mounted config wins).
     if cp -Rn "$tmp/." "$destDir/" 2>/dev/null; then
       echo "Preserved legacy data for $channelId."
@@ -673,16 +695,8 @@ preserve_legacy_container_data() {
       rc=1
     fi
   else
-    # Most repaired configs (e.g. ones that merely gained skipBootstrapFile, or
-    # already pointed at /root) have no legacy tree. Docker reports that as a
-    # missing source path, which we treat as a successful no-op.
-    local cp_err_text
-    cp_err_text=$(tr '[:upper:]' '[:lower:]' < "$cp_err")
-    if [[ "$cp_err_text" != *"could not find the file"* ]] &&
-       [[ "$cp_err_text" != *"no such file or directory"* ]]; then
-      echo "Error: failed to copy legacy data out of container for $channelId." >&2
-      rc=1
-    fi
+    echo "Error: failed to copy legacy data out of container for $channelId." >&2
+    rc=1
   fi
   rm -rf "$tmp"
   return "$rc"

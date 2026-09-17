@@ -519,9 +519,18 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
-        // Simulate a stopped container: docker cp still works, but docker exec
-        // would fail and must not be used as the legacy-path probe.
+        // Simulate a stopped container: docker export/cp still work, but docker
+        // exec would fail and must not be used as the legacy-path probe.
         'if [ "$1" = "exec" ]; then exit 7; fi',
+        'if [ "$1" = "export" ]; then',
+        '  tmpdir="$(mktemp -d)"',
+        '  mkdir -p "$tmpdir/home/node/.openclaw"',
+        '  printf "legacy memory\\n" > "$tmpdir/home/node/.openclaw/MEMORY.md"',
+        '  tar -C "$tmpdir" -cf - home',
+        '  rc=$?',
+        '  rm -rf "$tmpdir"',
+        "  exit $rc",
+        "fi",
         'if [ "$1" = "cp" ]; then',
         '  dest="${@: -1}"',
         '  mkdir -p "$dest/memory"',
@@ -577,6 +586,15 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "export" ]; then',
+        '  tmpdir="$(mktemp -d)"',
+        '  mkdir -p "$tmpdir/home/node/.openclaw"',
+        '  printf "legacy memory\\n" > "$tmpdir/home/node/.openclaw/MEMORY.md"',
+        '  tar -C "$tmpdir" -cf - home',
+        '  rc=$?',
+        '  rm -rf "$tmpdir"',
+        "  exit $rc",
+        "fi",
         'if [ "$1" = "cp" ]; then exit 1; fi',
         "exit 0",
         "",
@@ -627,12 +645,17 @@ describe("openclawctl provisioning", () => {
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
         'if [ "$1" = "exec" ]; then exit 7; fi',
-        // Legacy source does NOT exist in the container. Docker reports that as
-        // a missing source path, which should be treated as a no-op success.
-        'if [ "$1" = "cp" ]; then',
-        '  echo "Error response from daemon: Could not find the file /home/node/.openclaw in container agents.channel-123" >&2',
-        "  exit 1",
+        // Legacy source does NOT exist in the container. The export manifest
+        // omits /home/node/.openclaw, so preservation must no-op without cp.
+        'if [ "$1" = "export" ]; then',
+        '  tmpdir="$(mktemp -d)"',
+        '  mkdir -p "$tmpdir/root/.openclaw"',
+        '  tar -C "$tmpdir" -cf - root',
+        '  rc=$?',
+        '  rm -rf "$tmpdir"',
+        "  exit $rc",
         "fi",
+        'if [ "$1" = "cp" ]; then exit 3; fi',
         "exit 0",
         "",
       ].join("\n"),
@@ -651,13 +674,14 @@ describe("openclawctl provisioning", () => {
       },
     );
 
-    // No legacy data to preserve => success (errored=0) even though docker cp is
-    // used as the stopped-container-safe probe/copy step.
+    // No legacy data to preserve => success (errored=0), and docker cp is never
+    // reached because the export manifest shows no /home/node/.openclaw tree.
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("errored=0");
     const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
     expect(dockerLog).not.toContain("exec agents.channel-123");
-    expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
+    expect(dockerLog).toContain("export agents.channel-123");
+    expect(dockerLog).not.toContain("cp agents.channel-123:/home/node/.openclaw/. ");
   });
 
   it("preserves legacy container data during sanitize-configs without restarting", () => {
@@ -688,6 +712,15 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "export" ]; then',
+        '  tmpdir="$(mktemp -d)"',
+        '  mkdir -p "$tmpdir/home/node/.openclaw"',
+        '  printf "legacy memory\\n" > "$tmpdir/home/node/.openclaw/MEMORY.md"',
+        '  tar -C "$tmpdir" -cf - home',
+        '  rc=$?',
+        '  rm -rf "$tmpdir"',
+        "  exit $rc",
+        "fi",
         'if [ "$1" = "cp" ]; then',
         '  dest="${@: -1}"',
         '  printf "legacy memory\\n" > "$dest/MEMORY.md"',
@@ -749,6 +782,15 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "export" ]; then',
+        '  tmpdir="$(mktemp -d)"',
+        '  mkdir -p "$tmpdir/home/node/.openclaw"',
+        '  printf "legacy memory\\n" > "$tmpdir/home/node/.openclaw/MEMORY.md"',
+        '  tar -C "$tmpdir" -cf - home',
+        '  rc=$?',
+        '  rm -rf "$tmpdir"',
+        "  exit $rc",
+        "fi",
         'if [ "$1" = "cp" ]; then exit 0; fi',
         "exit 0",
         "",
