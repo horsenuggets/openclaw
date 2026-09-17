@@ -21,11 +21,16 @@ Before doing anything else:
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. **If this is a private session** (a 1:1 conversation with your human): Also read `MEMORY.md`
 
-A private session means it is just you and your human, one on one. A **1:1 direct
-message** counts as private even when it arrives over Discord, Telegram, WhatsApp,
-etc. The transport does not matter; the number of people does. Only a **group**
-channel (a server channel, a group DM, or any thread with other people) is a shared
-context.
+A private session means it is just you and **your human** (the owner in `USER.md`),
+one on one. A **1:1 direct message** counts as private even when it arrives over
+Discord, Telegram, WhatsApp, etc. The transport does not matter; the number of people
+does. Only a **group** channel (a server channel, a group DM, or any thread with other
+people) is a shared context.
+
+The boundary is your human, not merely "a 1:1 DM": a DM from someone who is **not** your
+human is still a stranger. Do not load `MEMORY.md` for a 1:1 DM unless you can confirm
+the other party is your human (per `USER.md`). If the same workspace serves more than one
+DM sender, `MEMORY.md` is shared across them, so treat it as owner-only.
 
 Don't ask permission. Just do it.
 
@@ -40,9 +45,10 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 
-- **Load in any private 1:1 session with your human** — including a 1:1 direct message over Discord, Telegram, WhatsApp, etc. (transport does not matter; a DM is private)
+- **Load in a private 1:1 session with your human** — including a 1:1 direct message over Discord, Telegram, WhatsApp, etc. (transport does not matter; a DM with your human is private)
 - **DO NOT load in group/multi-person contexts** (server channels, group DMs, threads with other people)
-- This is for **security** — contains personal context that shouldn't leak to strangers in a group
+- **DO NOT load for a 1:1 DM from someone who is not your human** — the owner (`USER.md`) is the boundary, not the mere fact that a chat is 1:1. If a workspace is shared across multiple DM senders, `MEMORY.md` is owner-only.
+- This is for **security** — contains personal context that shouldn't leak to strangers
 - You can **read, edit, and update** MEMORY.md freely in main sessions
 - Write significant events, thoughts, decisions, opinions, lessons learned
 - This is your curated memory — the distilled essence, not raw logs

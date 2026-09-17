@@ -118,6 +118,68 @@ else:
 "
 }
 
+# --- Config provisioning ---
+
+# Copy an existing instance's openclaw.json into a new channel dir and sanitize
+# it so inherited configs pick up required fixes. Historically instances were
+# provisioned with in-container paths under /home/node (a leftover from an older
+# container that ran as the `node` user); the container now mounts to
+# /root/.openclaw, so a stale /home/node path silently breaks workspace/memory
+# loading. We also force skipBootstrapFile so router-managed instances (which own
+# onboarding) never inherit or keep a stale BOOTSTRAP.md. Keep these paths in sync
+# with the mount target in agent.yml.
+provision_config() {
+  local channelId="$1"
+  local dest="$INSTANCES_DIR/$channelId/openclaw.json"
+
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}openclaw.json" ]; then
+      cp "${dir}openclaw.json" "$dest"
+      echo "Copied config from $(basename "$dir")"
+      break
+    fi
+  done
+
+  if [ ! -f "$dest" ]; then
+    echo "Warning: no existing instance config to copy; skipping config provisioning." >&2
+    return 0
+  fi
+
+  python3 - "$dest" <<'PY'
+import json, sys
+
+path = sys.argv[1]
+with open(path) as f:
+    cfg = json.load(f)
+
+defaults = cfg.setdefault("agents", {}).setdefault("defaults", {})
+
+# Repair stale /home/node in-container paths to the actual mount target.
+ws = defaults.get("workspace")
+if isinstance(ws, str) and ws.startswith("/home/node/"):
+    defaults["workspace"] = ws.replace("/home/node/", "/root/", 1)
+
+cache = (
+    defaults.get("memorySearch", {})
+    .get("local", {})
+    .get("modelCacheDir")
+)
+if isinstance(cache, str) and cache.startswith("/home/node/"):
+    defaults["memorySearch"]["local"]["modelCacheDir"] = cache.replace(
+        "/home/node/", "/root/", 1
+    )
+
+# Router owns onboarding; never inherit/keep a stale BOOTSTRAP.md.
+defaults["skipBootstrapFile"] = True
+
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+  echo "Sanitized config for $channelId"
+}
+
 # --- Discord API helpers ---
 
 get_discord_token() {
@@ -218,15 +280,8 @@ cmd_add_dm() {
   # Create instance directory
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Copy + sanitize openclaw.json from an existing instance if available
+  provision_config "$channelId"
 
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
@@ -255,15 +310,8 @@ cmd_add_channel() {
 
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Copy + sanitize openclaw.json from an existing instance if available
+  provision_config "$channelId"
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
