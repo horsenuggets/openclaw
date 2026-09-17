@@ -394,7 +394,17 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if defaults_end is None:
         return raw_text
 
-    if object_has_property(raw_text, defaults_start, defaults_end, "skipBootstrapFile"):
+    skip_value_start = find_direct_object_property_start(
+        raw_text, defaults_start, defaults_end, "skipBootstrapFile"
+    )
+    if skip_value_start is not None:
+        value_start = skip_ws_comments(raw_text, skip_value_start, defaults_end)
+        if raw_text.startswith("false", value_start):
+            value_end = value_start + len("false")
+            if value_end >= defaults_end or not (
+                raw_text[value_end].isalnum() or raw_text[value_end] in "_$"
+            ):
+                return raw_text[:value_start] + "true" + raw_text[value_end:]
         return raw_text
 
     content_start = skip_ws_comments(raw_text, defaults_start + 1, defaults_end)
@@ -722,7 +732,19 @@ cmd_restart() {
     exit 1
   fi
 
+  # Sanitize before stopping so we can detect stale /home/node configs and rescue
+  # legacy data from the old container writable layer before docker rm.
+  local outcome
+  outcome=$(sanitize_channel_config_if_present "$channelId")
+  if [ "$outcome" = "missing" ]; then
+    echo "Error: Missing config for $channelId at $INSTANCES_DIR/$channelId/openclaw.json" >&2
+    exit 1
+  fi
+
   echo "Restarting container for channel $channelId on port $port..."
+  if [ "$outcome" = "changed" ]; then
+    preserve_legacy_container_data "$channelId" "$INSTANCES_DIR/$channelId"
+  fi
   stop_container "$channelId"
   start_container "$channelId" "$port"
   echo "Done."

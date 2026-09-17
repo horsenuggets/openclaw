@@ -192,6 +192,36 @@ describe("openclawctl provisioning", () => {
     expect(raw.lastIndexOf('"skipBootstrapFile": true,')).toBeGreaterThan(raw.indexOf('"agents"'));
   });
 
+  it("forces agents.defaults.skipBootstrapFile to true in JSON5 fallback", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      [
+        "{",
+        "  // valid JSON5 (comment + trailing comma) forces fallback path",
+        '  "agents": {',
+        '    "defaults": { "skipBootstrapFile": false, "workspace": "/home/node/.openclaw/workspaces/123", },',
+        "  },",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Repaired config for 123");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw).toContain('"skipBootstrapFile": true');
+    expect(raw).not.toContain('"skipBootstrapFile": false');
+    expect(raw).not.toContain("/home/node");
+    expect(raw).toContain("/root/.openclaw/workspaces/123");
+  });
+
   it("preserves legacy container data for a repaired stopped container", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
@@ -275,7 +305,14 @@ describe("openclawctl provisioning", () => {
     );
     writeExecutable(
       path.join(home, "bin", "docker"),
-      ["#!/usr/bin/env bash", 'echo "$*" >> "$HOME/docker.log"', "exit 0", ""].join("\n"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "cp" ]; then exit 0; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
     );
 
     const result = spawnSync("bash", [openclawctlPath, "restart", "123"], {
@@ -288,13 +325,20 @@ describe("openclawctl provisioning", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Sanitized config for 123 before start.");
+    expect(result.stdout).toContain("Preserving legacy /home/node/.openclaw data for 123...");
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8")) as {
       agents: { defaults: { workspace: string; skipBootstrapFile: boolean } };
     };
     expect(config.agents.defaults.workspace).toBe("/root/.openclaw/workspaces/123");
     expect(config.agents.defaults.skipBootstrapFile).toBe(true);
-    expect(fs.readFileSync(path.join(home, "docker.log"), "utf-8")).toContain("compose -f");
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).toContain("container inspect agents.channel-123");
+    expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
+    expect(dockerLog).toContain("stop agents.channel-123");
+    expect(dockerLog).toContain("compose -f");
+    expect(dockerLog.indexOf("cp agents.channel-123:/home/node/.openclaw/. ")).toBeLessThan(
+      dockerLog.indexOf("stop agents.channel-123"),
+    );
   });
 
   it("fails restart when the registered channel config is missing", () => {
@@ -319,7 +363,10 @@ describe("openclawctl provisioning", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Error: Missing config for 123");
-    expect(fs.readFileSync(path.join(home, "docker.log"), "utf-8")).not.toContain("compose -f");
+    const dockerLogPath = path.join(home, "docker.log");
+    if (fs.existsSync(dockerLogPath)) {
+      expect(fs.readFileSync(dockerLogPath, "utf-8")).not.toContain("compose -f");
+    }
   });
 
   it("boot sanitizes configs before starting registered instances", () => {
