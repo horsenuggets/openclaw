@@ -144,6 +144,7 @@ describe("openclawctl provisioning", () => {
     expect(raw).not.toContain("/home/node");
     expect(raw).toContain("// agent defaults");
     expect(raw).toContain('"skipBootstrapFile": false');
+    expect(raw).toContain('"defaults": { "skipBootstrapFile": true, /* keep JSON5 layout;');
     expect(raw).toContain('"skipBootstrapFile": true,');
     expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(2);
     expect(raw.lastIndexOf('"skipBootstrapFile": true,')).toBeGreaterThan(raw.indexOf('"agents"'));
