@@ -214,37 +214,122 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if re.search(r'(?m)\bskipBootstrapFile\b\s*:', raw_text):
         return raw_text
 
-    match = re.search(r'["\']?defaults["\']?\s*:', raw_text)
-    if not match:
-        return raw_text
+    def skip_ws_comments(text: str, index: int, limit: int) -> int:
+        while index < limit:
+            if text[index].isspace():
+                index += 1
+                continue
+            if text.startswith("//", index):
+                newline = text.find("\n", index, limit)
+                if newline == -1:
+                    return limit
+                index = newline + 1
+                continue
+            if text.startswith("/*", index):
+                comment_end = text.find("*/", index + 2, limit)
+                if comment_end == -1:
+                    return limit
+                index = comment_end + 2
+                continue
+            break
+        return index
 
-    index = match.end()
-    while index < len(raw_text):
-        if raw_text[index].isspace():
+    def skip_string(text: str, index: int, limit: int) -> int:
+        quote = text[index]
+        index += 1
+        while index < limit:
+            ch = text[index]
+            if ch == "\\":
+                index += 2
+                continue
+            if ch == quote:
+                return index + 1
             index += 1
-            continue
-        if raw_text.startswith("//", index):
-            newline = raw_text.find("\n", index)
-            if newline == -1:
-                return raw_text
-            index = newline + 1
-            continue
-        if raw_text.startswith("/*", index):
-            comment_end = raw_text.find("*/", index + 2)
-            if comment_end == -1:
-                return raw_text
-            index = comment_end + 2
-            continue
-        break
+        return limit
 
-    if index >= len(raw_text) or raw_text[index] != "{":
+    def parse_property_name(text: str, index: int, limit: int):
+        if index >= limit:
+            return None, index
+        ch = text[index]
+        if ch in ("'", '"'):
+            end = skip_string(text, index, limit)
+            return text[index + 1 : end - 1], end
+        if ch.isalpha() or ch in "_$":
+            end = index + 1
+            while end < limit and (text[end].isalnum() or text[end] in "_$"):
+                end += 1
+            return text[index:end], end
+        return None, index
+
+    def find_object_property_start(text: str, property_name: str, start: int, limit: int):
+        index = start
+        while index < limit:
+            index = skip_ws_comments(text, index, limit)
+            if index >= limit:
+                return None
+            if text[index] in ("'", '"'):
+                name, next_index = parse_property_name(text, index, limit)
+            else:
+                name, next_index = parse_property_name(text, index, limit)
+                if name is None:
+                    index += 1
+                    continue
+            colon = skip_ws_comments(text, next_index, limit)
+            if colon >= limit or text[colon] != ":":
+                index = next_index
+                continue
+            value_start = skip_ws_comments(text, colon + 1, limit)
+            if name == property_name and value_start < limit and text[value_start] == "{":
+                return value_start
+            index = value_start
+        return None
+
+    def find_matching_brace(text: str, start: int, limit: int):
+        depth = 0
+        index = start
+        while index < limit:
+            if text.startswith("//", index):
+                newline = text.find("\n", index, limit)
+                if newline == -1:
+                    return None
+                index = newline + 1
+                continue
+            if text.startswith("/*", index):
+                comment_end = text.find("*/", index + 2, limit)
+                if comment_end == -1:
+                    return None
+                index = comment_end + 2
+                continue
+            if text[index] in ("'", '"'):
+                index = skip_string(text, index, limit)
+                continue
+            if text[index] == "{":
+                depth += 1
+            elif text[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return index
+            index += 1
+        return None
+
+    limit = len(raw_text)
+    agents_start = find_object_property_start(raw_text, "agents", 0, limit)
+    if agents_start is None:
         return raw_text
 
-    line_start = raw_text.rfind("\n", 0, index) + 1
-    indent_match = re.match(r"[ \t]*", raw_text[line_start:index])
+    agents_end = find_matching_brace(raw_text, agents_start, limit)
+    if agents_end is None:
+        return raw_text
+
+    defaults_start = find_object_property_start(raw_text, "defaults", agents_start + 1, agents_end)
+    if defaults_start is None:
+        return raw_text
+
+    line_start = raw_text.rfind("\n", 0, defaults_start) + 1
+    indent_match = re.match(r"[ \t]*", raw_text[line_start:defaults_start])
     indent = indent_match.group(0) if indent_match else ""
     insert = f'\n{indent}  "skipBootstrapFile": true,'
-    return raw_text[: index + 1] + insert + raw_text[index + 1 :]
+    return raw_text[: defaults_start + 1] + insert + raw_text[defaults_start + 1 :]
 
 try:
     patched = raw.replace("/home/node/", "/root/")
