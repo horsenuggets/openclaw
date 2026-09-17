@@ -565,17 +565,25 @@ preserve_legacy_container_data() {
 
   echo "Preserving legacy /home/node/.openclaw data for $channelId..."
   # Copy contents (not the dir itself) into the mounted instance dir, without
-  # clobbering files that already exist there.
-  local tmp
+  # clobbering files that already exist there. Returns non-zero if either the
+  # docker cp or the local copy fails, so callers can abort the destructive
+  # container removal rather than losing the only copy of the legacy data.
+  local tmp rc=0
   tmp=$(mktemp -d)
   if docker cp "$container:/home/node/.openclaw/." "$tmp/" 2>/dev/null; then
     # cp -Rn: never overwrite existing mounted files (mounted config wins).
-    cp -Rn "$tmp/." "$destDir/" 2>/dev/null || true
-    echo "Preserved legacy data for $channelId."
+    if cp -Rn "$tmp/." "$destDir/" 2>/dev/null; then
+      echo "Preserved legacy data for $channelId."
+    else
+      echo "Error: failed to copy legacy data into $destDir for $channelId." >&2
+      rc=1
+    fi
   else
-    echo "Warning: failed to copy legacy data for $channelId; continuing." >&2
+    echo "Error: failed to copy legacy data out of container for $channelId." >&2
+    rc=1
   fi
   rm -rf "$tmp"
+  return "$rc"
 }
 
 repair_existing_configs() {
@@ -601,11 +609,18 @@ repair_existing_configs() {
       echo "Repaired config for $channelId"
       local port=""
       port=$(get_port "$channelId")
+      local preserve_ok="true"
       if [ -n "$port" ] && { [ "$preserve_changed" = "true" ] || [ "$restart_changed" = "true" ]; }; then
-        preserve_legacy_container_data "$channelId" "$dir"
+        if ! preserve_legacy_container_data "$channelId" "$dir"; then
+          preserve_ok="false"
+          errored=$((errored + 1))
+        fi
       fi
       if [ "$restart_changed" = "true" ]; then
-        if [ -n "$port" ]; then
+        if [ "$preserve_ok" != "true" ]; then
+          # Do not destroy the container while its legacy data is unrecovered.
+          echo "Error: skipping restart for $channelId; legacy data was not preserved." >&2
+        elif [ -n "$port" ]; then
           echo "Restarting container for $channelId on port $port..."
           stop_container "$channelId"
           start_container "$channelId" "$port"
@@ -633,13 +648,18 @@ repair_existing_configs() {
   done
 
   echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing missingUnregistered=$missing_unregistered errored=$errored"
-  if [ "$fail_on_missing" = "true" ] && { [ "$missing" -gt 0 ] || [ "$errored" -gt 0 ]; }; then
-    if [ "$missing" -gt 0 ]; then
-      echo "Error: missing openclaw.json for $missing registered instance(s)." >&2
-    fi
-    if [ "$errored" -gt 0 ]; then
-      echo "Error: failed to sanitize $errored config(s)." >&2
-    fi
+  # Any error is fatal (so automation never treats an incomplete migration as
+  # success); missing registered configs are fatal only for the boot path.
+  local failed="false"
+  if [ "$errored" -gt 0 ]; then
+    echo "Error: $errored config(s) failed to sanitize or preserve legacy data." >&2
+    failed="true"
+  fi
+  if [ "$fail_on_missing" = "true" ] && [ "$missing" -gt 0 ]; then
+    echo "Error: missing openclaw.json for $missing registered instance(s)." >&2
+    failed="true"
+  fi
+  if [ "$failed" = "true" ]; then
     return 1
   fi
 }
@@ -729,6 +749,11 @@ start_container() {
     echo "Sanitized config for $channelId before start."
   elif [ "$outcome" = "missing" ]; then
     echo "Error: Missing config for $channelId at $INSTANCES_DIR/$channelId/openclaw.json" >&2
+    return 1
+  elif [ "$outcome" = "error" ]; then
+    # Refuse to launch with a config we could not repair (it may still point at
+    # the stale /home/node path).
+    echo "Error: Could not sanitize config for $channelId; refusing to start." >&2
     return 1
   fi
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
@@ -861,11 +886,20 @@ cmd_restart() {
   if [ "$outcome" = "missing" ]; then
     echo "Error: Missing config for $channelId at $INSTANCES_DIR/$channelId/openclaw.json" >&2
     exit 1
+  elif [ "$outcome" = "error" ]; then
+    # Refuse to stop/remove the container with an unrepaired config; that would
+    # both restart stale and risk discarding legacy data.
+    echo "Error: Could not sanitize config for $channelId; refusing to restart." >&2
+    exit 1
   fi
 
   echo "Restarting container for channel $channelId on port $port..."
   if [ "$outcome" = "changed" ]; then
-    preserve_legacy_container_data "$channelId" "$INSTANCES_DIR/$channelId"
+    if ! preserve_legacy_container_data "$channelId" "$INSTANCES_DIR/$channelId"; then
+      # Do not destroy the container while its legacy data is unrecovered.
+      echo "Error: legacy data not preserved for $channelId; aborting restart." >&2
+      exit 1
+    fi
   fi
   stop_container "$channelId"
   start_container "$channelId" "$port"

@@ -389,6 +389,54 @@ describe("openclawctl provisioning", () => {
     expect(dockerLog).not.toContain("exec agents.channel-123");
   });
 
+  it("aborts restart (does not remove the container) when legacy data copy fails", () => {
+    const home = makeTempHome();
+    const instanceDir = path.join(home, ".openclaw-instances", "123");
+    const configPath = path.join(instanceDir, "openclaw.json");
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    writeFile(
+      configPath,
+      `${JSON.stringify(
+        { agents: { defaults: { workspace: "/home/node/.openclaw/workspaces/123" } } },
+        null,
+        2,
+      )}\n`,
+    );
+    // docker: container exists, but `docker cp` fails. Preservation must fail and
+    // the container must NOT be stopped/removed (its legacy data is the only copy).
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        'if [ "$1" = "cp" ]; then exit 1; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "repair-configs"], {
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    // repair-configs must report failure (errored) and never remove the container.
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("errored=1");
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).not.toContain("stop agents.channel-123");
+    expect(dockerLog).not.toContain("rm agents.channel-123");
+    expect(dockerLog).not.toContain("compose -f");
+  });
+
   it("preserves legacy container data during sanitize-configs without restarting", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");
