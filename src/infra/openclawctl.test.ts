@@ -341,6 +341,26 @@ describe("openclawctl provisioning", () => {
     expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(1);
   });
 
+  it("keeps leading JSON5 comments ahead of an inserted agents block", () => {
+    const home = makeTempHome();
+    const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
+    writeFile(
+      configPath,
+      ["{", "  // keep this comment with the root object", "}", ""].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
+    expect(result.status).toBe(0);
+    const raw = fs.readFileSync(configPath, "utf-8");
+    expect(raw.indexOf("// keep this comment with the root object")).toBeLessThan(
+      raw.indexOf('"agents": { "defaults": { "skipBootstrapFile": true } },'),
+    );
+  });
+
   it("fails sanitize-configs when a config cannot be written", () => {
     const home = makeTempHome();
     const instanceDir = path.join(home, ".openclaw-instances", "123");

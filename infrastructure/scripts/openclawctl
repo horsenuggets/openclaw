@@ -392,7 +392,7 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
             )
             indent = indent_match.group(0) if indent_match else ""
             insert = f"\n{indent}  {snippet}"
-            insert_at = content_start if content_start < object_end else object_start + 1
+            insert_at = content_start
         return text[:insert_at] + insert + text[insert_at:]
 
     def object_has_property(text: str, object_start: int, object_end: int, property_name: str) -> bool:
