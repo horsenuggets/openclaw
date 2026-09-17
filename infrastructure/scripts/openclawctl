@@ -214,17 +214,37 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if re.search(r'(?m)\bskipBootstrapFile\b\s*:', raw_text):
         return raw_text
 
-    match = re.search(
-        r'(?m)^([ \t]*["\']?defaults["\']?\s*:\s*\{[ \t]*(?://[^\n]*)?)$',
-        raw_text,
-    )
+    match = re.search(r'["\']?defaults["\']?\s*:', raw_text)
     if not match:
         return raw_text
 
-    indent_match = re.match(r"[ \t]*", match.group(1))
+    index = match.end()
+    while index < len(raw_text):
+        if raw_text[index].isspace():
+            index += 1
+            continue
+        if raw_text.startswith("//", index):
+            newline = raw_text.find("\n", index)
+            if newline == -1:
+                return raw_text
+            index = newline + 1
+            continue
+        if raw_text.startswith("/*", index):
+            comment_end = raw_text.find("*/", index + 2)
+            if comment_end == -1:
+                return raw_text
+            index = comment_end + 2
+            continue
+        break
+
+    if index >= len(raw_text) or raw_text[index] != "{":
+        return raw_text
+
+    line_start = raw_text.rfind("\n", 0, index) + 1
+    indent_match = re.match(r"[ \t]*", raw_text[line_start:index])
     indent = indent_match.group(0) if indent_match else ""
     insert = f'\n{indent}  "skipBootstrapFile": true,'
-    return raw_text[: match.end(1)] + insert + raw_text[match.end(1) :]
+    return raw_text[: index + 1] + insert + raw_text[index + 1 :]
 
 try:
     patched = raw.replace("/home/node/", "/root/")
