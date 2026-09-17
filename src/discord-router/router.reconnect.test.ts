@@ -58,6 +58,11 @@ class FakeWebSocket {
     this.emit("message", Buffer.from(JSON.stringify({ op: 9, d: canResume })));
   }
 
+  // Drive a gateway RECONNECT request (op 7).
+  reconnectRequest(): void {
+    this.emit("message", Buffer.from(JSON.stringify({ op: 7, d: null })));
+  }
+
   identifyCount(): number {
     return this.sent.filter((raw) => {
       try {
@@ -263,6 +268,36 @@ describe("discord router reconnect", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(FakeWebSocket.instances).toHaveLength(2);
 
+    const second = FakeWebSocket.instances[1];
+    second.emit("open");
+    second.hello();
+    expect(second.resumeCount()).toBe(1);
+    expect(second.identifyCount()).toBe(0);
+  });
+
+  it("op 7 reconnect request opens exactly one replacement socket that resumes", async () => {
+    void startTestRouter();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeWebSocket.instances[0];
+    first.emit("open");
+    first.hello();
+    expect(first.identifyCount()).toBe(1);
+    // Establish a session so the op 7 reconnect is resumable.
+    first.ready();
+
+    // Discord asks us to reconnect. A correct implementation schedules exactly
+    // one reconnect (only the close handler); the original bug scheduled two.
+    first.reconnectRequest();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // Exactly one replacement socket, never doubling.
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const scheduleLogs = logs.filter((l) => l.includes("scheduling reconnect"));
+    expect(scheduleLogs).toHaveLength(1);
+
+    // The replacement resumes (op 6) rather than re-identifying (op 2), since
+    // op 7 preserves the session.
     const second = FakeWebSocket.instances[1];
     second.emit("open");
     second.hello();
