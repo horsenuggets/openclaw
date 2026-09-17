@@ -519,13 +519,14 @@ describe("openclawctl provisioning", () => {
         "#!/usr/bin/env bash",
         'echo "$*" >> "$HOME/docker.log"',
         'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        // Legacy source exists in the container, so the source-existence check passes.
+        'if [ "$1" = "exec" ]; then exit 0; fi',
         'if [ "$1" = "cp" ]; then',
         '  dest="${@: -1}"',
         '  mkdir -p "$dest/memory"',
         '  printf "legacy memory\\n" > "$dest/MEMORY.md"',
         "  exit 0",
         "fi",
-        'if [ "$1" = "exec" ]; then exit 1; fi',
         "exit 0",
         "",
       ].join("\n"),
@@ -548,7 +549,6 @@ describe("openclawctl provisioning", () => {
     const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
     expect(dockerLog).toContain("container inspect agents.channel-123");
     expect(dockerLog).toContain("cp agents.channel-123:/home/node/.openclaw/. ");
-    expect(dockerLog).not.toContain("exec agents.channel-123");
   });
 
   it("aborts restart (does not remove the container) when legacy data copy fails", () => {
@@ -597,6 +597,60 @@ describe("openclawctl provisioning", () => {
     expect(dockerLog).not.toContain("stop agents.channel-123");
     expect(dockerLog).not.toContain("rm agents.channel-123");
     expect(dockerLog).not.toContain("compose -f");
+  });
+
+  it("treats a missing legacy source as a successful no-op during preservation", () => {
+    const home = makeTempHome();
+    const instanceDir = path.join(home, ".openclaw-instances", "123");
+    const configPath = path.join(instanceDir, "openclaw.json");
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+    // Config only gains skipBootstrapFile (already on /root): there is no
+    // /home/node tree in the container, so preservation must be a no-op success,
+    // not an error that aborts the migration.
+    writeFile(
+      configPath,
+      `${JSON.stringify(
+        { agents: { defaults: { workspace: "/root/.openclaw/workspaces/123" } } },
+        null,
+        2,
+      )}\n`,
+    );
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      [
+        "#!/usr/bin/env bash",
+        'echo "$*" >> "$HOME/docker.log"',
+        'if [ "$1" = "container" ] && [ "$2" = "inspect" ]; then exit 0; fi',
+        // Legacy source does NOT exist in the container.
+        'if [ "$1" = "exec" ]; then exit 1; fi',
+        // cp must never be reached; fail loudly if it is.
+        'if [ "$1" = "cp" ]; then exit 3; fi',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(
+      "bash",
+      [openclawctlPath, "sanitize-configs", "--preserve-legacy-data"],
+      {
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          HOME: home,
+          PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+
+    // No legacy data to preserve => success (errored=0), and cp never attempted.
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("errored=0");
+    const dockerLog = fs.readFileSync(path.join(home, "docker.log"), "utf-8");
+    expect(dockerLog).not.toContain("cp agents.channel-123");
   });
 
   it("preserves legacy container data during sanitize-configs without restarting", () => {

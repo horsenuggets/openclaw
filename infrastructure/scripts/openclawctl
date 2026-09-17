@@ -654,14 +654,23 @@ preserve_legacy_container_data() {
     return 0
   fi
 
-  echo "Preserving legacy /home/node/.openclaw data for $channelId..."
+  # Only preserve when the legacy path actually exists in the container. Most
+  # repaired configs (e.g. ones that merely gained skipBootstrapFile, or already
+  # pointed at /root) have no /home/node tree, and a missing source is a success
+  # no-op — not an error that should abort the migration.
+  local legacy_dir="/home/node/.openclaw"
+  if ! docker exec "$container" test -d "$legacy_dir" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Preserving legacy $legacy_dir data for $channelId..."
   # Copy contents (not the dir itself) into the mounted instance dir, without
-  # clobbering files that already exist there. Returns non-zero if either the
-  # docker cp or the local copy fails, so callers can abort the destructive
+  # clobbering files that already exist there. Returns non-zero only when the
+  # source exists but the copy fails, so callers can abort the destructive
   # container removal rather than losing the only copy of the legacy data.
   local tmp rc=0
   tmp=$(mktemp -d)
-  if docker cp "$container:/home/node/.openclaw/." "$tmp/" 2>/dev/null; then
+  if docker cp "$container:$legacy_dir/." "$tmp/" 2>/dev/null; then
     # cp -Rn: never overwrite existing mounted files (mounted config wins).
     if cp -Rn "$tmp/." "$destDir/" 2>/dev/null; then
       echo "Preserved legacy data for $channelId."
