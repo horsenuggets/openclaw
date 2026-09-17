@@ -103,7 +103,10 @@ const oauthServerClose = vi.fn((callback?: (err?: Error) => void) => callback?.(
 vi.mock("./oauth-callback.js", () => ({
   startOAuthCallbackServer: () => ({
     server: { close: oauthServerClose },
-    requestAuth: () => ({ authUrl: "http://example.test", waitForCode: () => Promise.resolve("code") }),
+    requestAuth: () => ({
+      authUrl: "http://example.test",
+      waitForCode: () => Promise.resolve("code"),
+    }),
   }),
 }));
 
