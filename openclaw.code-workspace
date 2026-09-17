@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit"
+      }
+    },
+    "biome.enabled": false,
+    "js/ts.tsdk.path": "node_modules/typescript/lib"
+  },
+  "extensions": {
+    "recommendations": [
+      "oxc.oxc-vscode"
+    ],
+    "unwantedRecommendations": [
+      "biomejs.biome"
+    ]
+  }
+}
