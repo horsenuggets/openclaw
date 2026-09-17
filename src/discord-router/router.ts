@@ -245,15 +245,66 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   let resumeGatewayUrl: string | undefined;
   let shuttingDown = false;
 
+  // Observability for the gateway reconnect path. `connectionSeq` counts how
+  // many sockets we have opened; `liveSockets` counts how many are currently
+  // open. If a single disconnect ever pushes `liveSockets` above 1, we are
+  // running concurrent gateway connections and will trip Discord's IDENTIFY
+  // rate limit.
+  let connectionSeq = 0;
+  let liveSockets = 0;
+
+  // Reconnect is owned by a single scheduler. Every disconnect path (op 7,
+  // op 9, and the socket "close" event) funnels through `scheduleReconnect`,
+  // which is idempotent: if a reconnect is already pending it does nothing.
+  // This prevents the double-schedule that used to open two concurrent
+  // sockets per disconnect and spiral past Discord's IDENTIFY rate limit.
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconnectAttempts = 0;
+  // The socket the router currently considers authoritative. Events from any
+  // earlier socket (e.g. a lingering close after we already moved on) are
+  // ignored so a stale socket can't drive reconnect logic.
+  let currentWs: WebSocket | undefined;
+
+  function scheduleReconnect(resume: boolean, reason: string) {
+    if (shuttingDown) {
+      return;
+    }
+    if (reconnectTimer) {
+      runtime.log(`[router] reconnect already pending, ignoring (reason=${reason})`);
+      return;
+    }
+    // Jittered exponential backoff, capped at 30s. Discord allows one IDENTIFY
+    // per 5s, so we never dip below that floor.
+    const base = Math.min(30_000, 5_000 * 2 ** reconnectAttempts);
+    const delay = base / 2 + Math.floor(Math.random() * (base / 2));
+    reconnectAttempts += 1;
+    runtime.log(`[router] scheduling reconnect (reason=${reason}, resume=${resume}) in ${delay}ms`);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      connect(resume);
+    }, delay);
+  }
+
   function connect(resume = false) {
+    connectionSeq += 1;
+    liveSockets += 1;
+    const attempt = connectionSeq;
+    runtime.log(
+      `[router] connect() attempt #${attempt} (resume=${resume}, liveSockets=${liveSockets})`,
+    );
     const url = resume && resumeGatewayUrl ? resumeGatewayUrl : gatewayUrl;
     const ws = new WebSocket(`${url}/?v=10&encoding=json`);
+    currentWs = ws;
 
     ws.on("open", () => {
       runtime.log(`[router] WebSocket connected to ${url}`);
     });
 
     ws.on("message", (raw: Buffer) => {
+      // Ignore anything arriving on a socket we've already superseded.
+      if (ws !== currentWs) {
+        return;
+      }
       const payload = JSON.parse(raw.toString());
       const { op, d, s, t } = payload;
 
@@ -313,6 +364,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           if (t === "READY") {
             sessionId = d.session_id;
             resumeGatewayUrl = d.resume_gateway_url;
+            // Successful connection — reset backoff so the next disconnect
+            // retries promptly rather than inheriting a long stale delay.
+            reconnectAttempts = 0;
             const botUser = d.user;
             runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
 
@@ -569,36 +623,46 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           break;
         }
         case 7:
-          // Reconnect requested
-          runtime.log("[router] reconnect requested by Discord");
+          // Reconnect requested. Just close; the "close" handler owns the
+          // single reconnect. sessionId stays set so it resumes.
+          runtime.log(`[router] reconnect requested by Discord (attempt #${attempt})`);
           ws.close();
-          setTimeout(() => connect(true), 1000);
           break;
         case 9:
-          // Invalid session
-          runtime.log("[router] invalid session, re-identifying");
+          // Invalid session. Drop the session so the reconnect re-identifies
+          // instead of resuming, then close and let the "close" handler
+          // schedule the single reconnect.
+          runtime.log(`[router] invalid session, re-identifying (attempt #${attempt})`);
           sessionId = undefined;
           ws.close();
-          setTimeout(() => connect(false), 5000);
           break;
       }
     });
 
     ws.on("close", (code: number) => {
-      runtime.log(`[router] WebSocket closed (${code})`);
+      liveSockets = Math.max(0, liveSockets - 1);
+      runtime.log(
+        `[router] WebSocket closed (${code}) (attempt #${attempt}, liveSockets=${liveSockets})`,
+      );
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = undefined;
       }
+      // Ignore a close from a socket we've already superseded — only the
+      // authoritative socket may drive reconnection.
+      if (ws !== currentWs) {
+        return;
+      }
       // Always reconnect — Discord sends 1000/1001 for routine reconnects.
       // Only process exit (SIGINT/SIGTERM) should stop the router.
       if (!shuttingDown) {
-        const delay = code === 4004 ? 0 : 5000; // 4004 = auth failed, don't retry
         if (code === 4004) {
           runtime.error("[router] authentication failed (4004), not reconnecting");
           return;
         }
-        setTimeout(() => connect(!!sessionId), delay);
+        // Resume when we still hold a session (routine reconnect / op 7);
+        // re-identify when op 9 cleared it.
+        scheduleReconnect(!!sessionId, `close-${code}`);
       }
     });
 

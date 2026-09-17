@@ -31,6 +31,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Discord router: fix a reconnect storm where every gateway disconnect scheduled two reconnects (op 7/op 9 handlers plus the socket `close` handler), opening concurrent sockets that tripped Discord's 1-IDENTIFY-per-5s limit and doubled the live-socket count each cycle until the bot appeared offline. Reconnects now funnel through a single idempotent `scheduleReconnect` owned by the `close` handler, with jittered exponential backoff (5s floor, 30s cap), a stale-socket guard, and `liveSockets`/`connectionSeq` observability counters.
 - Agents (Windows): resolve `claude.cmd` via PATH, parse the npm shim to extract its Node entry point (e.g. `node_modules\@anthropic-ai\claude-code\cli.js`), and spawn `node.exe` directly with the script. Avoids `shell: true` and never routes through `cmd.exe`, so streaming CLI runs no longer fail with `spawn claude ENOENT` or hit cmd.exe's 8191-character "The command line is too long" limit when passing a large system prompt as argv.
 - Compaction: remove orphaned `tool_result` messages during history pruning to prevent session corruption from aborted tool calls. (#9868, fixes #9769, #9724, #9672)
 - Telegram: pass `parentPeer` for forum topic binding inheritance so group-level bindings apply to all topics within the group. (#9789, fixes #9545, #9351)
