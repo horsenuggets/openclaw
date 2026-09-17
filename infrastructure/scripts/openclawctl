@@ -374,6 +374,21 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
         return start, end
 
     def insert_object_property(text: str, object_start: int, object_end: int, snippet: str) -> str:
+        def find_after_first_property() -> int:
+            index = skip_ws_comments(text, object_start + 1, object_end)
+            name, next_index = parse_property_name(text, index, object_end)
+            if name is None:
+                return content_start
+            colon = skip_ws_comments(text, next_index, object_end)
+            if colon >= object_end or text[colon] != ":":
+                return content_start
+            value_start = skip_ws_comments(text, colon + 1, object_end)
+            value_end = skip_value(text, value_start, object_end)
+            after_value = skip_ws_comments(text, value_end, object_end)
+            if after_value < object_end and text[after_value] == ",":
+                return after_value + 1
+            return value_end
+
         content_start = skip_ws_comments(text, object_start + 1, object_end)
         first_line_end = text.find("\n", content_start, object_end)
         if first_line_end == -1:
@@ -385,14 +400,21 @@ def patch_agents_defaults_json5(raw_text: str) -> str:
         property_indent = close_indent + "  "
 
         if content_start < object_end and text[content_start:first_line_end].strip():
-            if "\n" in prefix:
+            if "//" in prefix or "/*" in prefix:
+                line_start = text.rfind("\n", 0, content_start) + 1
+                indent_match = re.match(r"[ \t]*", text[line_start:content_start])
+                indent = indent_match.group(0) if indent_match else property_indent
+                insert = f"\n{indent}{snippet}"
+                insert_at = find_after_first_property()
+            elif "\n" in prefix:
                 line_start = text.rfind("\n", 0, content_start) + 1
                 indent_match = re.match(r"[ \t]*", text[line_start:content_start])
                 indent = indent_match.group(0) if indent_match else property_indent
                 insert = f"{snippet}\n{indent}"
+                insert_at = content_start
             else:
                 insert = f"{snippet} "
-            insert_at = content_start
+                insert_at = content_start
         else:
             if "\n" in prefix:
                 insert = f"{property_indent}{snippet}\n{close_indent}"
