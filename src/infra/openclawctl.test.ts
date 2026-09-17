@@ -78,7 +78,7 @@ describe("openclawctl provisioning", () => {
     expect(config.agents.defaults.skipBootstrapFile).toBe(true);
   });
 
-  it("fails sanitize-configs when an existing instance is missing openclaw.json", () => {
+  it("ignores unregistered instance dirs that are missing openclaw.json", () => {
     const home = makeTempHome();
     fs.mkdirSync(path.join(home, ".openclaw-instances", "123"), { recursive: true });
 
@@ -87,9 +87,27 @@ describe("openclawctl provisioning", () => {
       env: { ...process.env, HOME: home },
     });
 
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("missing=0");
+    expect(result.stdout).toContain("missingUnregistered=1");
+  });
+
+  it("fails sanitize-configs when a registered instance is missing openclaw.json", () => {
+    const home = makeTempHome();
+    fs.mkdirSync(path.join(home, ".openclaw-instances", "123"), { recursive: true });
+    writeFile(
+      path.join(home, ".openclaw-instances", "ports.json"),
+      `${JSON.stringify({ basePort: 18789, assignments: { "123": 18789 } }, null, 2)}\n`,
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "sanitize-configs"], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: home },
+    });
+
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("missing=1");
-    expect(result.stderr).toContain("missing openclaw.json for 1 instance");
+    expect(result.stderr).toContain("missing openclaw.json for 1 registered instance");
   });
 
   it("sanitizes a registered channel config before restart", () => {

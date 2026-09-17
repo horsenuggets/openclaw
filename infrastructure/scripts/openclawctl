@@ -207,6 +207,7 @@ repair_existing_configs() {
   local restarted=0
   local unchanged=0
   local missing=0
+  local missing_unregistered=0
 
   for dir in "$INSTANCES_DIR"/*/; do
     [ -d "$dir" ] || continue
@@ -231,16 +232,21 @@ repair_existing_configs() {
         fi
       fi
     elif [ "$outcome" = "missing" ]; then
-      missing=$((missing + 1))
-      echo "Skipped config repair for $channelId; openclaw.json is missing."
+      if [ -n "$(get_port "$channelId")" ]; then
+        missing=$((missing + 1))
+        echo "Missing config for registered channel $channelId."
+      else
+        missing_unregistered=$((missing_unregistered + 1))
+        echo "Skipped config repair for unregistered directory $channelId; openclaw.json is missing."
+      fi
     else
       unchanged=$((unchanged + 1))
     fi
   done
 
-  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing"
+  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged missing=$missing missingUnregistered=$missing_unregistered"
   if [ "$fail_on_missing" = "true" ] && [ "$missing" -gt 0 ]; then
-    echo "Error: missing openclaw.json for $missing instance(s)." >&2
+    echo "Error: missing openclaw.json for $missing registered instance(s)." >&2
     return 1
   fi
 }
