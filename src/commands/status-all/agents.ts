@@ -1,18 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import type { OpenClawConfig } from "../../config/config.js";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
+import { hasBootstrapOnboardingFile } from "../../agents/workspace.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import { listAgentsForGateway } from "../../gateway/session-utils.js";
-
-async function fileExists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function getAgentLocalStatuses(cfg: OpenClawConfig) {
   const agentList = listAgentsForGateway(cfg);
@@ -28,7 +18,9 @@ export async function getAgentLocalStatuses(cfg: OpenClawConfig) {
         }
       })();
       const bootstrapPending =
-        workspaceDir != null ? await fileExists(path.join(workspaceDir, "BOOTSTRAP.md")) : null;
+        workspaceDir != null
+          ? await hasBootstrapOnboardingFile(workspaceDir, cfg.agents?.defaults?.skipBootstrapFile)
+          : null;
       const sessionsPath = resolveStorePath(cfg.session?.store, {
         agentId: agent.id,
       });

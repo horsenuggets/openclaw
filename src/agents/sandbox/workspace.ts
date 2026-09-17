@@ -15,8 +15,10 @@ import {
 export async function ensureSandboxWorkspace(
   workspaceDir: string,
   seedFrom?: string,
-  skipBootstrap?: boolean,
-  skipBootstrapFile?: boolean,
+  options?: {
+    skipBootstrap?: boolean;
+    skipBootstrapOnboardingFile?: boolean;
+  },
 ) {
   await fs.mkdir(workspaceDir, { recursive: true });
   if (seedFrom) {
@@ -30,8 +32,10 @@ export async function ensureSandboxWorkspace(
       DEFAULT_HEARTBEAT_FILENAME,
       // Only seed BOOTSTRAP.md when not skipping the onboarding file, so a
       // sandbox never inherits a stale bootstrap from the seed workspace.
-      ...(skipBootstrapFile ? [] : [DEFAULT_BOOTSTRAP_FILENAME]),
     ];
+    if (!options?.skipBootstrapOnboardingFile) {
+      files.push(DEFAULT_BOOTSTRAP_FILENAME);
+    }
     for (const name of files) {
       const src = path.join(seed, name);
       const dest = path.join(workspaceDir, name);
@@ -49,7 +53,7 @@ export async function ensureSandboxWorkspace(
   }
   await ensureAgentWorkspace({
     dir: workspaceDir,
-    ensureBootstrapFiles: !skipBootstrap,
-    skipBootstrapOnboardingFile: skipBootstrapFile,
+    ensureBootstrapFiles: !options?.skipBootstrap,
+    skipBootstrapOnboardingFile: options?.skipBootstrapOnboardingFile,
   });
 }

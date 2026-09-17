@@ -103,7 +103,8 @@ These are the standard files OpenClaw expects inside the workspace:
 
 - `MEMORY.md` (optional)
   - Curated long-term memory.
-  - Only load in the main, private session (not shared/group contexts).
+  - Only load in a private 1:1 session with your human (the owner in `USER.md`), including a private DM over Discord/Telegram/WhatsApp.
+  - Never load it in group/shared contexts, or for a 1:1 DM from someone other than your human.
 
 See [Memory](/concepts/memory) for the workflow and automatic memory flush.
 

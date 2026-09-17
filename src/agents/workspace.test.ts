@@ -14,6 +14,7 @@ import {
   DEFAULT_USER_FILENAME,
   ensureAgentWorkspace,
   filterBootstrapOnboardingFile,
+  hasBootstrapOnboardingFile,
   loadWorkspaceBootstrapFiles,
   type WorkspaceBootstrapFile,
 } from "./workspace.js";
@@ -119,5 +120,19 @@ describe("filterBootstrapOnboardingFile", () => {
   it("keeps BOOTSTRAP.md when the flag is unset", () => {
     const result = filterBootstrapOnboardingFile(files, false);
     expect(result.map((f) => f.name)).toContain(DEFAULT_BOOTSTRAP_FILENAME);
+  });
+});
+
+describe("hasBootstrapOnboardingFile", () => {
+  it("treats BOOTSTRAP.md as absent when the flag is set", async () => {
+    const tempDir = await makeTempWorkspace("openclaw-workspace-");
+    await writeWorkspaceFile({
+      dir: tempDir,
+      name: DEFAULT_BOOTSTRAP_FILENAME,
+      content: "stale bootstrap",
+    });
+
+    expect(await hasBootstrapOnboardingFile(tempDir, true)).toBe(false);
+    expect(await hasBootstrapOnboardingFile(tempDir, false)).toBe(true);
   });
 });

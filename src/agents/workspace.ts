@@ -322,3 +322,22 @@ export function filterBootstrapOnboardingFile(
   }
   return files.filter((file) => file.name !== DEFAULT_BOOTSTRAP_FILENAME);
 }
+
+/**
+ * Treat BOOTSTRAP.md as absent when the deployment owns onboarding, even if a
+ * stale file still exists on disk from older provisioning.
+ */
+export async function hasBootstrapOnboardingFile(
+  dir: string,
+  skipBootstrapOnboardingFile?: boolean,
+): Promise<boolean> {
+  if (skipBootstrapOnboardingFile) {
+    return false;
+  }
+  try {
+    await fs.access(path.join(resolveUserPath(dir), DEFAULT_BOOTSTRAP_FILENAME));
+    return true;
+  } catch {
+    return false;
+  }
+}

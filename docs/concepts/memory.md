@@ -22,7 +22,8 @@ The default workspace layout uses two memory layers:
   - Read today + yesterday at session start.
 - `MEMORY.md` (optional)
   - Curated long-term memory.
-  - **Only load in the main, private session** (never in group contexts).
+  - **Only load in a private 1:1 session with your human** (the owner in `USER.md`), including private DMs over Discord/Telegram/WhatsApp.
+  - **Never load it in group contexts or for a 1:1 DM from someone other than your human.**
 
 These files live under the workspace (`agents.defaults.workspace`, default
 `~/clawd`). See [Agent workspace](/concepts/agent-workspace) for the full layout.

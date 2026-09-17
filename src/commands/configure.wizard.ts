@@ -311,7 +311,10 @@ export async function runConfigureWizard(
             },
           },
         };
-        await ensureWorkspaceAndSessions(workspaceDir, runtime);
+        await ensureWorkspaceAndSessions(workspaceDir, runtime, {
+          skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
+          skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
+        });
       }
 
       if (selected.includes("model")) {
@@ -430,7 +433,10 @@ export async function runConfigureWizard(
               },
             },
           };
-          await ensureWorkspaceAndSessions(workspaceDir, runtime);
+          await ensureWorkspaceAndSessions(workspaceDir, runtime, {
+            skipBootstrap: Boolean(nextConfig.agents?.defaults?.skipBootstrap),
+            skipBootstrapFile: Boolean(nextConfig.agents?.defaults?.skipBootstrapFile),
+          });
           await persistConfig();
         }
 

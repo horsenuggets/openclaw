@@ -1,6 +1,5 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
+import { hasBootstrapOnboardingFile } from "../agents/workspace.js";
 import { loadConfig } from "../config/config.js";
 import { loadSessionStore, resolveStorePath } from "../config/sessions.js";
 import { listAgentsForGateway } from "../gateway/session-utils.js";
@@ -15,15 +14,6 @@ export type AgentLocalStatus = {
   lastUpdatedAt: number | null;
   lastActiveAgeMs: number | null;
 };
-
-async function fileExists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function getAgentLocalStatuses(): Promise<{
   defaultId: string;
@@ -46,8 +36,10 @@ export async function getAgentLocalStatuses(): Promise<{
       }
     })();
 
-    const bootstrapPath = workspaceDir != null ? path.join(workspaceDir, "BOOTSTRAP.md") : null;
-    const bootstrapPending = bootstrapPath != null ? await fileExists(bootstrapPath) : null;
+    const bootstrapPending =
+      workspaceDir != null
+        ? await hasBootstrapOnboardingFile(workspaceDir, cfg.agents?.defaults?.skipBootstrapFile)
+        : null;
 
     const sessionsPath = resolveStorePath(cfg.session?.store, { agentId });
     const store = (() => {

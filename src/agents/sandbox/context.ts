@@ -45,12 +45,10 @@ export async function resolveSandboxContext(params: {
     cfg.scope === "shared" ? workspaceRoot : resolveSandboxWorkspaceDir(workspaceRoot, scopeKey);
   const workspaceDir = cfg.workspaceAccess === "rw" ? agentWorkspaceDir : sandboxWorkspaceDir;
   if (workspaceDir === sandboxWorkspaceDir) {
-    await ensureSandboxWorkspace(
-      sandboxWorkspaceDir,
-      agentWorkspaceDir,
-      params.config?.agents?.defaults?.skipBootstrap,
-      params.config?.agents?.defaults?.skipBootstrapFile,
-    );
+    await ensureSandboxWorkspace(sandboxWorkspaceDir, agentWorkspaceDir, {
+      skipBootstrap: params.config?.agents?.defaults?.skipBootstrap,
+      skipBootstrapOnboardingFile: params.config?.agents?.defaults?.skipBootstrapFile,
+    });
     if (cfg.workspaceAccess !== "rw") {
       try {
         await syncSkillsToWorkspace({
@@ -128,12 +126,10 @@ export async function ensureSandboxWorkspaceForSession(params: {
     cfg.scope === "shared" ? workspaceRoot : resolveSandboxWorkspaceDir(workspaceRoot, scopeKey);
   const workspaceDir = cfg.workspaceAccess === "rw" ? agentWorkspaceDir : sandboxWorkspaceDir;
   if (workspaceDir === sandboxWorkspaceDir) {
-    await ensureSandboxWorkspace(
-      sandboxWorkspaceDir,
-      agentWorkspaceDir,
-      params.config?.agents?.defaults?.skipBootstrap,
-      params.config?.agents?.defaults?.skipBootstrapFile,
-    );
+    await ensureSandboxWorkspace(sandboxWorkspaceDir, agentWorkspaceDir, {
+      skipBootstrap: params.config?.agents?.defaults?.skipBootstrap,
+      skipBootstrapOnboardingFile: params.config?.agents?.defaults?.skipBootstrapFile,
+    });
     if (cfg.workspaceAccess !== "rw") {
       try {
         await syncSkillsToWorkspace({

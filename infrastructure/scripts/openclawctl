@@ -146,13 +146,20 @@ provision_config() {
     return 0
   fi
 
-  python3 - "$dest" <<'PY'
+  sanitize_config_file "$dest" >/dev/null
+  echo "Sanitized config for $channelId"
+}
+
+sanitize_config_file() {
+  local configPath="$1"
+  python3 - "$configPath" <<'PY'
 import json, sys
 
 path = sys.argv[1]
 with open(path) as f:
-    cfg = json.load(f)
+    raw = f.read()
 
+cfg = json.loads(raw)
 defaults = cfg.setdefault("agents", {}).setdefault("defaults", {})
 
 # Repair stale /home/node in-container paths to the actual mount target.
@@ -173,11 +180,49 @@ if isinstance(cache, str) and cache.startswith("/home/node/"):
 # Router owns onboarding; never inherit/keep a stale BOOTSTRAP.md.
 defaults["skipBootstrapFile"] = True
 
-with open(path, "w") as f:
-    json.dump(cfg, f, indent=2)
-    f.write("\n")
+normalized = json.dumps(cfg, indent=2) + "\n"
+if normalized != raw:
+    with open(path, "w") as f:
+        f.write(normalized)
+    print("changed")
+else:
+    print("unchanged")
 PY
-  echo "Sanitized config for $channelId"
+}
+
+cmd_repair_configs() {
+  local repaired=0
+  local restarted=0
+  local unchanged=0
+
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    local channelId
+    channelId=$(basename "$dir")
+    local configPath="${dir}openclaw.json"
+    [ -f "$configPath" ] || continue
+
+    local outcome
+    outcome=$(sanitize_config_file "$configPath")
+    if [ "$outcome" = "changed" ]; then
+      repaired=$((repaired + 1))
+      echo "Repaired config for $channelId"
+      local port
+      port=$(get_port "$channelId")
+      if [ -n "$port" ]; then
+        echo "Restarting container for $channelId on port $port..."
+        stop_container "$channelId"
+        start_container "$channelId" "$port"
+        restarted=$((restarted + 1))
+      else
+        echo "Config repaired for $channelId; no registered port, skipped restart."
+      fi
+    else
+      unchanged=$((unchanged + 1))
+    fi
+  done
+
+  echo "Done. repaired=$repaired restarted=$restarted unchanged=$unchanged"
 }
 
 # --- Discord API helpers ---
@@ -405,6 +450,7 @@ case "${1:-}" in
   restart)     cmd_restart "${2:-}" ;;
   list)        cmd_list ;;
   reconcile)   cmd_reconcile ;;
+  repair-configs) cmd_repair_configs ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -415,5 +461,6 @@ case "${1:-}" in
     echo "  restart <channelId>     Restart a channel's container"
     echo "  list                    List all registered channels and ports"
     echo "  reconcile               Sync ports.json with instance directories"
+    echo "  repair-configs          Rewrite stale copied configs and restart changed channels"
     ;;
 esac

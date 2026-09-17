@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   waitForGatewayReachable: vi.fn(),
   resolveControlUiLinks: vi.fn(),
   summarizeExistingConfig: vi.fn(),
+  ensureWorkspaceAndSessions: vi.fn(),
 }));
 
 vi.mock("@clack/prompts", () => ({
@@ -50,7 +51,7 @@ vi.mock("../terminal/note.js", () => ({
 vi.mock("./onboard-helpers.js", () => ({
   DEFAULT_WORKSPACE: "~/.openclaw/workspace",
   applyWizardMetadata: (cfg: OpenClawConfig) => cfg,
-  ensureWorkspaceAndSessions: vi.fn(),
+  ensureWorkspaceAndSessions: mocks.ensureWorkspaceAndSessions,
   guardCancel: <T>(value: T) => value,
   printWizardHeader: mocks.printWizardHeader,
   probeGatewayReachable: mocks.probeGatewayReachable,
@@ -130,6 +131,51 @@ describe("runConfigureWizard", () => {
     expect(mocks.writeConfigFile).toHaveBeenCalledWith(
       expect.objectContaining({
         gateway: expect.objectContaining({ mode: "local" }),
+      }),
+    );
+  });
+
+  it("passes skipBootstrapFile through workspace setup", async () => {
+    mocks.readConfigFileSnapshot.mockResolvedValueOnce({
+      exists: true,
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/original-workspace",
+            skipBootstrapFile: true,
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackSelect.mockResolvedValue("local");
+    mocks.clackText.mockResolvedValue("/tmp/new-workspace");
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValue(false);
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["workspace"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(mocks.ensureWorkspaceAndSessions).toHaveBeenCalledWith(
+      "/tmp/new-workspace",
+      expect.anything(),
+      expect.objectContaining({
+        skipBootstrap: false,
+        skipBootstrapFile: true,
       }),
     );
   });
