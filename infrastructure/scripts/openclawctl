@@ -397,18 +397,24 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if object_has_property(raw_text, defaults_start, defaults_end, "skipBootstrapFile"):
         return raw_text
 
-    first_line_end = raw_text.find("\n", defaults_start + 1, defaults_end)
+    content_start = skip_ws_comments(raw_text, defaults_start + 1, defaults_end)
+    first_line_end = raw_text.find("\n", content_start, defaults_end)
     if first_line_end == -1:
         first_line_end = defaults_end
 
-    if raw_text[defaults_start + 1 : first_line_end].strip():
-        insert = ' "skipBootstrapFile": true,'
+    if content_start < defaults_end and raw_text[content_start:first_line_end].strip():
+        insert = '"skipBootstrapFile": true, '
+        insert_at = content_start
     else:
-        line_start = raw_text.rfind("\n", 0, defaults_start) + 1
-        indent_match = re.match(r"[ \t]*", raw_text[line_start:defaults_start])
+        line_start = raw_text.rfind("\n", 0, content_start if content_start < defaults_end else defaults_start) + 1
+        indent_match = re.match(
+            r"[ \t]*",
+            raw_text[line_start : content_start if content_start < defaults_end else defaults_start],
+        )
         indent = indent_match.group(0) if indent_match else ""
         insert = f'\n{indent}  "skipBootstrapFile": true,'
-    return raw_text[: defaults_start + 1] + insert + raw_text[defaults_start + 1 :]
+        insert_at = content_start if content_start < defaults_end else defaults_start + 1
+    return raw_text[:insert_at] + insert + raw_text[insert_at:]
 
 try:
     patched = raw.replace("/home/node/", "/root/")
