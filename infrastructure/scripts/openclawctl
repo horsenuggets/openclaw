@@ -142,8 +142,11 @@ provision_config() {
   done
 
   if [ ! -f "$dest" ]; then
-    echo "Warning: no existing instance config to copy; skipping config provisioning." >&2
-    return 0
+    # No template to copy: the new channel cannot start without a config. Signal
+    # failure so the caller can roll back the port assignment / instance dir it
+    # created, rather than leaving an orphaned port that makes retries no-op.
+    echo "Error: no existing instance config to copy; cannot provision $channelId." >&2
+    return 1
   fi
 
   # Sanitize best-effort. A parse "error" must not abort provisioning (that would
@@ -594,8 +597,15 @@ cmd_add_dm() {
   # Create instance directory
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy + sanitize openclaw.json from an existing instance if available
-  provision_config "$channelId"
+  # Copy + sanitize openclaw.json from an existing instance. If provisioning
+  # cannot produce a config, roll back the port assignment and instance dir so we
+  # don't leave a half-registered channel that blocks retries.
+  if ! provision_config "$channelId"; then
+    echo "Rolling back registration for $channelId..." >&2
+    free_port "$channelId"
+    rmdir "$INSTANCES_DIR/$channelId" 2>/dev/null || true
+    exit 1
+  fi
 
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
@@ -624,8 +634,14 @@ cmd_add_channel() {
 
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy + sanitize openclaw.json from an existing instance if available
-  provision_config "$channelId"
+  # Copy + sanitize openclaw.json from an existing instance. Roll back on failure
+  # so a channel that cannot be provisioned does not leave a stale port.
+  if ! provision_config "$channelId"; then
+    echo "Rolling back registration for $channelId..." >&2
+    free_port "$channelId"
+    rmdir "$INSTANCES_DIR/$channelId" 2>/dev/null || true
+    exit 1
+  fi
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"

@@ -33,6 +33,44 @@ afterEach(() => {
 });
 
 describe("openclawctl provisioning", () => {
+  it("rolls back the port assignment when no template config exists", () => {
+    const home = makeTempHome();
+    // A docker stub so any accidental container start is observable (it must not
+    // be reached: provisioning fails before start_container).
+    writeExecutable(
+      path.join(home, "bin", "docker"),
+      ["#!/usr/bin/env bash", 'echo "$*" >> "$HOME/docker.log"', "exit 0", ""].join("\n"),
+    );
+
+    const result = spawnSync("bash", [openclawctlPath, "add-channel", "999"], {
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        PATH: `${path.join(home, "bin")}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    // Provisioning cannot produce a config, so the command must fail and roll back.
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Rolling back registration for 999");
+    // Port assignment must be released so a retry is not blocked as "already registered".
+    const portsPath = path.join(home, ".openclaw-instances", "ports.json");
+    if (fs.existsSync(portsPath)) {
+      const ports = JSON.parse(fs.readFileSync(portsPath, "utf-8")) as {
+        assignments: Record<string, number>;
+      };
+      expect(ports.assignments["999"]).toBeUndefined();
+    }
+    // The empty instance directory must be removed.
+    expect(fs.existsSync(path.join(home, ".openclaw-instances", "999"))).toBe(false);
+    // Container start must never have been attempted.
+    const dockerLogPath = path.join(home, "docker.log");
+    if (fs.existsSync(dockerLogPath)) {
+      expect(fs.readFileSync(dockerLogPath, "utf-8")).not.toContain("compose -f");
+    }
+  });
+
   it("sanitizes existing copied configs without restarting containers", () => {
     const home = makeTempHome();
     const configPath = path.join(home, ".openclaw-instances", "123", "openclaw.json");
