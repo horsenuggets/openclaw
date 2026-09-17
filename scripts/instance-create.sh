@@ -56,7 +56,11 @@ mkdir -p "$INSTANCE_DIR/agents/main/agent"
 mkdir -p "$INSTANCE_DIR/agents/main/sessions"
 mkdir -p "$INSTANCE_DIR/memory/models"
 
-# Write config
+# Write config.
+# NOTE: in-container paths below must match the mount target in
+# infrastructure/docker/agent.yml, which binds the instance dir to
+# /root/.openclaw. If that mount ever changes, update these paths too —
+# a mismatch silently breaks workspace/memory loading for the agent.
 python3 -c "
 import json
 
@@ -77,7 +81,7 @@ cfg = {
             'model': {
                 'primary': 'anthropic-subscription/claude-sonnet-4-6'
             },
-            'workspace': '/home/node/.openclaw/workspace',
+            'workspace': '/root/.openclaw/workspace',
             'compaction': {
                 'mode': 'safeguard',
                 'maxHistoryShare': 0.3
@@ -96,7 +100,7 @@ cfg = {
             'memorySearch': {
                 'provider': 'local',
                 'local': {
-                    'modelCacheDir': '/home/node/.openclaw/memory/models'
+                    'modelCacheDir': '/root/.openclaw/memory/models'
                 }
             }
         }
