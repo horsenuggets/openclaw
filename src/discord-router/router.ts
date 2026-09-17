@@ -695,13 +695,30 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   // Keep running until process exit
   await new Promise<void>((resolve) => {
+    let shutdownStarted = false;
     const shutdown = () => {
+      if (shutdownStarted) {
+        return;
+      }
+      shutdownStarted = true;
       shuttingDown = true;
       // Cancel any pending reconnect so we don't open a socket post-shutdown.
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = undefined;
       }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = undefined;
+      }
+      if (currentWs) {
+        currentWs.close();
+      }
+      oauth.server.close((err) => {
+        if (err) {
+          runtime.error(`[router] failed to close oauth callback server: ${String(err)}`);
+        }
+      });
       // Lifecycle messages ("Shutting down") handled by health-monitor sidecar.
       resolve();
     };

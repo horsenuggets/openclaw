@@ -99,8 +99,12 @@ class FakeWebSocket {
 }
 
 vi.mock("ws", () => ({ default: FakeWebSocket }));
+const oauthServerClose = vi.fn((callback?: (err?: Error) => void) => callback?.());
 vi.mock("./oauth-callback.js", () => ({
-  startOAuthCallbackServer: () => ({ close: () => {} }),
+  startOAuthCallbackServer: () => ({
+    server: { close: oauthServerClose },
+    requestAuth: () => ({ authUrl: "http://example.test", waitForCode: () => Promise.resolve("code") }),
+  }),
 }));
 
 const { startRouter } = await import("./router.js");
@@ -134,6 +138,7 @@ describe("discord router reconnect", () => {
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
+    oauthServerClose.mockClear();
     logs = [];
     startedRouters = [];
     signalHandlers = new Map();
@@ -342,5 +347,23 @@ describe("discord router reconnect", () => {
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it("shutdown closes the active socket, heartbeat, and oauth callback server", async () => {
+    const routerPromise = startTestRouter();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeWebSocket.instances[0];
+    first.emit("open");
+    first.hello(100);
+    const beforeShutdownHeartbeats = first.sent.length;
+
+    invokeRouterShutdown();
+    await routerPromise;
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(first.closed).toBe(true);
+    expect(first.sent.length).toBe(beforeShutdownHeartbeats);
+    expect(oauthServerClose).toHaveBeenCalledTimes(1);
   });
 });
