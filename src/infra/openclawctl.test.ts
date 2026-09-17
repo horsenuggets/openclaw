@@ -124,7 +124,7 @@ describe("openclawctl provisioning", () => {
         '  "ui": { "defaults": { "skipBootstrapFile": false, "theme": "dark" } },',
         "  // agent defaults",
         '  "agents": {',
-        '    "defaults": { /* keep JSON5 layout */ "workspace": "/home/node/.openclaw/workspaces/123", },',
+        '    "defaults": { /* keep JSON5 layout; skipBootstrapFile still missing here */ "workspace": "/home/node/.openclaw/workspaces/123", },',
         "  },",
         "}",
         "",
@@ -145,7 +145,7 @@ describe("openclawctl provisioning", () => {
     expect(raw).toContain("// agent defaults");
     expect(raw).toContain('"skipBootstrapFile": false');
     expect(raw).toContain('"skipBootstrapFile": true,');
-    expect((raw.match(/skipBootstrapFile/g) ?? []).length).toBe(2);
+    expect((raw.match(/"skipBootstrapFile"\s*:/g) ?? []).length).toBe(2);
     expect(raw.lastIndexOf('"skipBootstrapFile": true,')).toBeGreaterThan(raw.indexOf('"agents"'));
   });
 

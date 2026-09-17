@@ -309,6 +309,34 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
             index += 1
         return None
 
+    def object_has_property(text: str, object_start: int, object_end: int, property_name: str) -> bool:
+        index = object_start + 1
+        depth = 0
+        while index < object_end:
+            index = skip_ws_comments(text, index, object_end)
+            if index >= object_end:
+                return False
+            if text[index] in ("'", '"'):
+                name, next_index = parse_property_name(text, index, object_end)
+                colon = skip_ws_comments(text, next_index, object_end)
+                if depth == 0 and name == property_name and colon < object_end and text[colon] == ":":
+                    return True
+                index = next_index
+                continue
+            if text[index].isalpha() or text[index] in "_$":
+                name, next_index = parse_property_name(text, index, object_end)
+                colon = skip_ws_comments(text, next_index, object_end)
+                if depth == 0 and name == property_name and colon < object_end and text[colon] == ":":
+                    return True
+                index = next_index
+                continue
+            if text[index] in "{[":
+                depth += 1
+            elif text[index] in "}]":
+                depth = max(0, depth - 1)
+            index += 1
+        return False
+
     limit = len(raw_text)
     agents_start = find_object_property_start(raw_text, "agents", 0, limit)
     if agents_start is None:
@@ -326,7 +354,7 @@ def add_skip_bootstrap_file_flag(raw_text: str) -> str:
     if defaults_end is None:
         return raw_text
 
-    if re.search(r'(?m)\bskipBootstrapFile\b\s*:', raw_text[defaults_start:defaults_end]):
+    if object_has_property(raw_text, defaults_start, defaults_end, "skipBootstrapFile"):
         return raw_text
 
     line_start = raw_text.rfind("\n", 0, defaults_start) + 1
