@@ -657,12 +657,7 @@ preserve_legacy_container_data() {
   local legacy_dir="/home/node/.openclaw"
   local tmp rc=0
   tmp=$(mktemp -d)
-  if ! docker export "$container" > "$tmp/container.tar"; then
-    echo "Error: failed to inspect legacy data in container for $channelId." >&2
-    rm -rf "$tmp"
-    return 1
-  fi
-  if ! tar -tf "$tmp/container.tar" > "$tmp/container-files.txt" 2>/dev/null; then
+  if ! docker export "$container" | tar -tf - > "$tmp/container-files.txt" 2>/dev/null; then
     echo "Error: failed to inspect legacy data in container for $channelId." >&2
     rm -rf "$tmp"
     return 1
