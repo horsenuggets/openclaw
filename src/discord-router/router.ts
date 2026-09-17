@@ -253,11 +253,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   let connectionSeq = 0;
   let liveSockets = 0;
 
-  // Reconnect is owned by a single scheduler. Every disconnect path (op 7,
-  // op 9, and the socket "close" event) funnels through `scheduleReconnect`,
-  // which is idempotent: if a reconnect is already pending it does nothing.
-  // This prevents the double-schedule that used to open two concurrent
-  // sockets per disconnect and spiral past Discord's IDENTIFY rate limit.
+  // Reconnect is owned by a single scheduler: the authoritative socket's
+  // "close" handler. op 7 / op 9 only close the socket, and the close path
+  // funnels through `scheduleReconnect`, which is idempotent: if a reconnect
+  // is already pending it does nothing. This prevents the double-schedule
+  // that used to open two concurrent sockets per disconnect and spiral past
+  // Discord's IDENTIFY rate limit.
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let reconnectAttempts = 0;
   // The socket the router currently considers authoritative. Events from any
