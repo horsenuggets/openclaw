@@ -192,4 +192,43 @@ describe("discord router reconnect", () => {
       expect(delay).toBeLessThanOrEqual(30_000);
     }
   });
+
+  it("ignores stale closes without stopping the current heartbeat", async () => {
+    void startRouter(makeConfig(), runtime);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeWebSocket.instances[0];
+    first.emit("open");
+    first.hello(100);
+    first.invalidSession();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const second = FakeWebSocket.instances[1];
+    second.emit("open");
+    second.hello(100);
+
+    const before = second.sent.length;
+    first.emit("close", 1000);
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(second.sent.length).toBeGreaterThan(before);
+  });
+
+  it("does not reconnect after shutdown begins", async () => {
+    const routerPromise = startRouter(makeConfig(), runtime);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeWebSocket.instances[0];
+    first.emit("open");
+    first.hello();
+    first.invalidSession();
+
+    await vi.advanceTimersByTimeAsync(0);
+    process.emit("SIGTERM");
+    await routerPromise;
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
 });
