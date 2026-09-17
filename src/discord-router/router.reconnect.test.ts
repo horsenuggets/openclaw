@@ -112,10 +112,26 @@ function makeConfig(): RouterConfig {
 describe("discord router reconnect", () => {
   let logs: string[];
   let runtime: { log: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
+  let startedRouters: Promise<void>[];
+  let signalHandlers: Map<"SIGINT" | "SIGTERM", () => void>;
+
+  const invokeRouterShutdown = () => {
+    signalHandlers.get("SIGTERM")?.();
+    signalHandlers.get("SIGINT")?.();
+    signalHandlers.clear();
+  };
+
+  const startTestRouter = () => {
+    const routerPromise = startRouter(makeConfig(), runtime);
+    startedRouters.push(routerPromise);
+    return routerPromise;
+  };
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
     logs = [];
+    startedRouters = [];
+    signalHandlers = new Map();
     runtime = {
       log: (...args) => logs.push(args.join(" ")),
       error: (...args) => logs.push(args.join(" ")),
@@ -126,16 +142,32 @@ describe("discord router reconnect", () => {
       "fetch",
       vi.fn(async () => ({ json: async () => ({ id: "app-123" }) })) as unknown as typeof fetch,
     );
+    const realProcessOnce = process.once.bind(process);
+    vi.spyOn(process, "once").mockImplementation(((event: string, listener: () => void) => {
+      if (event === "SIGINT" || event === "SIGTERM") {
+        signalHandlers.set(event, listener);
+        return process;
+      }
+      return realProcessOnce(event as never, listener as never);
+    }) as typeof process.once);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (startedRouters.length > 0) {
+      await vi.advanceTimersByTimeAsync(0);
+      invokeRouterShutdown();
+    }
+    // Wait for each started router to run its shutdown path so process.once
+    // listeners are consumed between tests instead of accumulating.
+    await Promise.allSettled(startedRouters);
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    startedRouters = [];
   });
 
   it("spawns exactly one new socket per invalid session", async () => {
-    void startRouter(makeConfig(), runtime);
+    void startTestRouter();
 
     // Let the top-of-function awaits (fetch app id, register commands) settle
     // so the first connect() runs and creates socket #0.
@@ -162,7 +194,7 @@ describe("discord router reconnect", () => {
   });
 
   it("never runs two sockets concurrently across repeated invalid sessions", async () => {
-    void startRouter(makeConfig(), runtime);
+    void startTestRouter();
     await vi.advanceTimersByTimeAsync(0);
 
     const openSocketCount = () => FakeWebSocket.instances.filter((ws) => !ws.closed).length;
@@ -188,7 +220,7 @@ describe("discord router reconnect", () => {
   });
 
   it("never schedules a reconnect below Discord's 5s IDENTIFY floor", async () => {
-    void startRouter(makeConfig(), runtime);
+    void startTestRouter();
     await vi.advanceTimersByTimeAsync(0);
 
     // Drive a few reject cycles and capture every scheduled backoff delay.
@@ -218,7 +250,7 @@ describe("discord router reconnect", () => {
   });
 
   it("preserves resumable invalid sessions and resumes instead of re-identifying", async () => {
-    void startRouter(makeConfig(), runtime);
+    void startTestRouter();
     await vi.advanceTimersByTimeAsync(0);
 
     const first = FakeWebSocket.instances[0];
@@ -239,7 +271,7 @@ describe("discord router reconnect", () => {
   });
 
   it("ignores stale closes without stopping the current heartbeat", async () => {
-    void startRouter(makeConfig(), runtime);
+    void startTestRouter();
     await vi.advanceTimersByTimeAsync(0);
 
     const first = FakeWebSocket.instances[0];
@@ -261,7 +293,7 @@ describe("discord router reconnect", () => {
   });
 
   it("does not reconnect after shutdown begins", async () => {
-    const routerPromise = startRouter(makeConfig(), runtime);
+    const routerPromise = startTestRouter();
     await vi.advanceTimersByTimeAsync(0);
 
     const first = FakeWebSocket.instances[0];
@@ -270,7 +302,7 @@ describe("discord router reconnect", () => {
     first.invalidSession();
 
     await vi.advanceTimersByTimeAsync(0);
-    process.emit("SIGTERM");
+    invokeRouterShutdown();
     await routerPromise;
     await vi.advanceTimersByTimeAsync(30_000);
 
