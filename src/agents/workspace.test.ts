@@ -1,10 +1,38 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace.js";
 import {
+  DEFAULT_AGENTS_FILENAME,
+  DEFAULT_BOOTSTRAP_FILENAME,
+  DEFAULT_HEARTBEAT_FILENAME,
+  DEFAULT_IDENTITY_FILENAME,
   DEFAULT_MEMORY_ALT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
+  DEFAULT_SOUL_FILENAME,
+  DEFAULT_TOOLS_FILENAME,
+  DEFAULT_USER_FILENAME,
+  ensureAgentWorkspace,
   loadWorkspaceBootstrapFiles,
 } from "./workspace.js";
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const OTHER_STARTER_FILES = [
+  DEFAULT_AGENTS_FILENAME,
+  DEFAULT_SOUL_FILENAME,
+  DEFAULT_TOOLS_FILENAME,
+  DEFAULT_IDENTITY_FILENAME,
+  DEFAULT_USER_FILENAME,
+  DEFAULT_HEARTBEAT_FILENAME,
+];
 
 describe("loadWorkspaceBootstrapFiles", () => {
   it("includes MEMORY.md when present", async () => {
@@ -44,5 +72,33 @@ describe("loadWorkspaceBootstrapFiles", () => {
     );
 
     expect(memoryEntries).toHaveLength(0);
+  });
+});
+
+describe("ensureAgentWorkspace bootstrap seeding", () => {
+  it("seeds BOOTSTRAP.md on a brand-new workspace by default", async () => {
+    const tempDir = await makeTempWorkspace("openclaw-workspace-");
+
+    await ensureAgentWorkspace({ dir: tempDir, ensureBootstrapFiles: true });
+
+    for (const name of OTHER_STARTER_FILES) {
+      expect(await exists(path.join(tempDir, name))).toBe(true);
+    }
+    expect(await exists(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME))).toBe(true);
+  });
+
+  it("seeds all starter files except BOOTSTRAP.md when skipBootstrapOnboardingFile is set", async () => {
+    const tempDir = await makeTempWorkspace("openclaw-workspace-");
+
+    await ensureAgentWorkspace({
+      dir: tempDir,
+      ensureBootstrapFiles: true,
+      skipBootstrapOnboardingFile: true,
+    });
+
+    for (const name of OTHER_STARTER_FILES) {
+      expect(await exists(path.join(tempDir, name))).toBe(true);
+    }
+    expect(await exists(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME))).toBe(false);
   });
 });

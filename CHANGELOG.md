@@ -6,6 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Agents/Discord: fix agents losing memory in 1:1 DMs. Point instance provisioning at the container mount path (`/root/.openclaw`) so workspace/memory files are found; teach the workspace instructions to load `MEMORY.md` in any private 1:1 DM regardless of transport (not just web); and add `agents.defaults.skipBootstrapFile` to seed all starter files except a stale `BOOTSTRAP.md` for router-managed instances that own onboarding.
 - Agents: bump pi-mono packages to 0.52.5. (#9949) Thanks @gumadeiras.
 - Models: default Anthropic model to `anthropic/claude-opus-4-6`. (#9853) Thanks @TinyTb.
 - Models/Onboarding: refresh provider defaults, update OpenAI/OpenAI Codex wizard defaults, and harden model allowlist initialization for first-time configs with matching docs/tests. (#9911) Thanks @gumadeiras.

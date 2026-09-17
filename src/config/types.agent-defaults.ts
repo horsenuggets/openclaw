@@ -106,6 +106,12 @@ export type AgentDefaultsConfig = {
   repoRoot?: string;
   /** Skip bootstrap (BOOTSTRAP.md creation, etc.) for pre-configured deployments. */
   skipBootstrap?: boolean;
+  /**
+   * Seed all starter files except BOOTSTRAP.md. Use for deployments that own
+   * their onboarding flow (e.g. the Discord router) so completed instances
+   * never keep a stale BOOTSTRAP.md claiming the workspace is empty.
+   */
+  skipBootstrapFile?: boolean;
   /** Max chars for injected bootstrap files before truncation (default: 20000). */
   bootstrapMaxChars?: number;
   /** Optional IANA timezone for the user (used in system prompt; defaults to host timezone). */

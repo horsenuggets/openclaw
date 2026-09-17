@@ -82,6 +82,9 @@ cfg = {
                 'primary': 'anthropic-subscription/claude-sonnet-4-6'
             },
             'workspace': '/root/.openclaw/workspace',
+            # Router owns onboarding, so skip only BOOTSTRAP.md (keep other
+            # starter files) to avoid a stale "fresh workspace" bootstrap file.
+            'skipBootstrapFile': True,
             'compaction': {
                 'mode': 'safeguard',
                 'maxHistoryShare': 0.3

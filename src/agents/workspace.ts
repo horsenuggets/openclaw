@@ -125,6 +125,12 @@ async function ensureGitRepo(dir: string, isBrandNewWorkspace: boolean) {
 export async function ensureAgentWorkspace(params?: {
   dir?: string;
   ensureBootstrapFiles?: boolean;
+  /**
+   * Seed every starter file except BOOTSTRAP.md. Use for deployments that own
+   * their own onboarding flow (e.g. the Discord router) so completed instances
+   * never keep a stale bootstrap file claiming the workspace is empty.
+   */
+  skipBootstrapOnboardingFile?: boolean;
 }): Promise<{
   dir: string;
   agentsPath?: string;
@@ -180,7 +186,7 @@ export async function ensureAgentWorkspace(params?: {
   await writeFileIfMissing(identityPath, identityTemplate);
   await writeFileIfMissing(userPath, userTemplate);
   await writeFileIfMissing(heartbeatPath, heartbeatTemplate);
-  if (isBrandNewWorkspace) {
+  if (isBrandNewWorkspace && !params?.skipBootstrapOnboardingFile) {
     await writeFileIfMissing(bootstrapPath, bootstrapTemplate);
   }
   await ensureGitRepo(dir, isBrandNewWorkspace);

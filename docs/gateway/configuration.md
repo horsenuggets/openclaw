@@ -1462,6 +1462,19 @@ Use this for pre-seeded deployments where your workspace files come from a repo.
 }
 ```
 
+### `agents.defaults.skipBootstrapFile`
+
+Seeds every workspace starter file except `BOOTSTRAP.md`. Use this for deployments that
+run their own onboarding flow (for example the Discord router), so completed instances
+never keep a stale `BOOTSTRAP.md` that claims the workspace is empty. Unlike
+`skipBootstrap`, the other starter files (`AGENTS.md`, `SOUL.md`, etc.) are still created.
+
+```json5
+{
+  agents: { defaults: { skipBootstrapFile: true } },
+}
+```
+
 ### `agents.defaults.bootstrapMaxChars`
 
 Max characters of each workspace bootstrap file injected into the system prompt
