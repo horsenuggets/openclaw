@@ -1,11 +1,10 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { GatewayBonjourBeacon } from "../infra/bonjour-discovery.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
+import { DEFAULT_GATEWAY_PORT, DEFAULT_GATEWAY_URL } from "../config/paths.js";
 import { discoverGatewayBeacons } from "../infra/bonjour-discovery.js";
 import { resolveWideAreaDiscoveryDomain } from "../infra/widearea-dns.js";
 import { detectBinary } from "./onboard-helpers.js";
-
-const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789";
 
 function pickHost(beacon: GatewayBonjourBeacon): string | undefined {
   return beacon.tailnetDns || beacon.lanHost || beacon.host;
@@ -13,7 +12,7 @@ function pickHost(beacon: GatewayBonjourBeacon): string | undefined {
 
 function buildLabel(beacon: GatewayBonjourBeacon): string {
   const host = pickHost(beacon);
-  const port = beacon.gatewayPort ?? beacon.port ?? 18789;
+  const port = beacon.gatewayPort ?? beacon.port ?? DEFAULT_GATEWAY_PORT;
   const title = beacon.displayName ?? beacon.instanceName;
   const hint = host ? `${host}:${port}` : "host unknown";
   return `${title} (${hint})`;
@@ -80,7 +79,7 @@ export async function promptRemoteGatewayConfig(
 
   if (selectedBeacon) {
     const host = pickHost(selectedBeacon);
-    const port = selectedBeacon.gatewayPort ?? 18789;
+    const port = selectedBeacon.gatewayPort ?? DEFAULT_GATEWAY_PORT;
     if (host) {
       const mode = await prompter.select({
         message: "Connection method",
