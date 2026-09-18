@@ -6,6 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord/Agents: load personal memory in 1:1 DMs regardless of transport, and fix per-instance workspace/memory paths so provisioned agents stop losing memory. (#38)
 - Agents: bump pi-mono packages to 0.52.5. (#9949) Thanks @gumadeiras.
 - Models: default Anthropic model to `anthropic/claude-opus-4-6`. (#9853) Thanks @TinyTb.
 - Models/Onboarding: refresh provider defaults, update OpenAI/OpenAI Codex wizard defaults, and harden model allowlist initialization for first-time configs with matching docs/tests. (#9911) Thanks @gumadeiras.
