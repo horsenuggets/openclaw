@@ -178,15 +178,7 @@ with open('$INSTANCE_DIR/openclaw.json', 'w') as f:
     json.dump(cfg, f, indent=2)
 "
 
-# Count existing instances to compute port offset
-EXISTING=$(ls -d "$INSTANCES_DIR"/[0-9]* 2>/dev/null | wc -l)
-HOST_PORT=$((18789 + (EXISTING - 1) * 2))
-
 echo ""
 echo "Instance created: $INSTANCE_DIR"
 echo "  Discord user ID: $DISCORD_USER_ID"
 echo "  Gateway token:   $GATEWAY_TOKEN"
-echo "  Host port:       $HOST_PORT"
-echo ""
-echo "Run 'scripts/instance-compose.sh' to regenerate the compose file."
-echo "Then 'scripts/instance-compose.sh --up $DISCORD_USER_ID' to start the container."
