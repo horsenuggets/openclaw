@@ -5,117 +5,82 @@
 set -euo pipefail
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
-PORTS_FILE="$INSTANCES_DIR/ports.json"
 AGENT_YML="$HOME/deploy/docker/agent.yml"
+# Lowest port to hand out. Mirrors DEFAULT_GATEWAY_PORT in src/config/paths.ts
+# (a shell script cannot import the TypeScript constant).
+BASE_PORT=18789
+# Per-instance port file, relative to each instance directory. Mirrors
+# PORT_FILENAME in src/discord-router/config.ts.
+PORT_FILENAME=".port"
 
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
 
-# --- Port registry helpers ---
+# --- Port helpers ---
+#
+# Each instance owns its port as a plain-integer dotfile inside its own
+# directory ($INSTANCES_DIR/<channelId>/.port). There is no central registry,
+# so a port cannot drift from its instance and removing the directory removes
+# the port. Allocation scans the dotfiles to find what is taken.
 
-ensure_ports_file() {
-  if [ ! -f "$PORTS_FILE" ]; then
-    echo '{"basePort": 18789, "assignments": {}}' > "$PORTS_FILE"
-  fi
-}
-
-# Atomic write: write to temp file, then rename (prevents corruption)
-write_ports_file() {
-  local content="$1"
-  local tmp="${PORTS_FILE}.tmp.$$"
-  echo "$content" > "$tmp"
-  mv "$tmp" "$PORTS_FILE"
+port_file() {
+  echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
 }
 
 get_port() {
-  local channelId="$1"
-  python3 -c "
-import json
-ports = json.load(open('$PORTS_FILE'))
-print(ports.get('assignments', {}).get('$channelId', ''))
-"
+  local file
+  file=$(port_file "$1")
+  [ -f "$file" ] && cat "$file" || echo ""
+}
+
+# Collect every port currently claimed by an instance dotfile.
+used_ports() {
+  local f p
+  for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
+    [ -f "$f" ] || continue
+    p=$(cat "$f")
+    [ -n "$p" ] && echo "$p"
+  done
 }
 
 allocate_port() {
-  python3 -c "
-import json
-ports = json.load(open('$PORTS_FILE'))
-used = set(ports.get('assignments', {}).values())
-port = ports.get('basePort', 18789)
-while port in used:
-    port += 1
-print(port)
-"
+  local used port
+  used=$(used_ports)
+  port=$BASE_PORT
+  while echo "$used" | grep -qx "$port"; do
+    port=$((port + 1))
+  done
+  echo "$port"
 }
 
+# Write a port to an instance's dotfile (atomic), refusing to reuse a port
+# already claimed by a different instance.
 assign_port() {
   local channelId="$1"
   local port="$2"
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-# Check for port conflict
-used = ports.get('assignments', {})
-for cid, p in used.items():
-    if p == $port and cid != '$channelId':
-        print(f'ERROR: port $port already assigned to {cid}', flush=True)
-        exit(1)
-ports.setdefault('assignments', {})['$channelId'] = $port
-tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-with open(tmp, 'w') as f:
-    json.dump(ports, f, indent=2)
-    f.write('\n')
-os.rename(tmp, '$PORTS_FILE')
-"
+  local f p
+  for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
+    [ -f "$f" ] || continue
+    local owner
+    owner=$(basename "$(dirname "$f")")
+    [ "$owner" = "$channelId" ] && continue
+    p=$(cat "$f")
+    if [ "$p" = "$port" ]; then
+      echo "ERROR: port $port already assigned to $owner" >&2
+      return 1
+    fi
+  done
+  local dst tmp
+  dst=$(port_file "$channelId")
+  mkdir -p "$(dirname "$dst")"
+  tmp="${dst}.tmp.$$"
+  echo "$port" > "$tmp"
+  mv "$tmp" "$dst"
 }
 
+# Deregister a channel by removing its port dotfile (instance data is kept).
 free_port() {
-  local channelId="$1"
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-ports.get('assignments', {}).pop('$channelId', None)
-tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-with open(tmp, 'w') as f:
-    json.dump(ports, f, indent=2)
-    f.write('\n')
-os.rename(tmp, '$PORTS_FILE')
-"
-}
-
-# Reconcile ports.json with actual instance directories.
-# Removes stale entries (dirs that don't exist), warns about dirs without ports.
-reconcile_ports() {
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-assignments = ports.get('assignments', {})
-instances_dir = '$INSTANCES_DIR'
-changed = False
-
-# Remove entries whose instance directories no longer exist
-stale = [cid for cid in assignments if not os.path.isdir(os.path.join(instances_dir, cid))]
-for cid in stale:
-    print(f'  Removing stale entry: {cid} (port {assignments[cid]})')
-    del assignments[cid]
-    changed = True
-
-# Warn about dirs without port assignments
-import re
-for entry in sorted(os.listdir(instances_dir)):
-    if re.match(r'^\d{17,20}$', entry) and entry not in assignments:
-        print(f'  Warning: {entry} has no port assignment')
-
-if changed:
-    tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-    with open(tmp, 'w') as f:
-        json.dump(ports, f, indent=2)
-        f.write('\n')
-    os.rename(tmp, '$PORTS_FILE')
-    print('  Ports file updated.')
-else:
-    print('  No changes needed.')
-"
+  rm -f "$(port_file "$1")"
 }
 
 # --- Discord API helpers ---
@@ -308,12 +273,25 @@ cmd_restart() {
 }
 
 cmd_list() {
-  ensure_ports_file
-  python3 -c "
-import json, subprocess
-ports = json.load(open('$PORTS_FILE'))
-assignments = ports.get('assignments', {})
-base = ports.get('basePort', 18789)
+  BASE_PORT="$BASE_PORT" PORT_FILENAME="$PORT_FILENAME" python3 -c "
+import os, re, subprocess
+instances_dir = '$INSTANCES_DIR'
+base = int(os.environ['BASE_PORT'])
+port_filename = os.environ['PORT_FILENAME']
+
+# Discover ports from each instance's dotfile.
+assignments = {}
+for entry in sorted(os.listdir(instances_dir)):
+    if not re.match(r'^\d{17,20}\$', entry):
+        continue
+    pf = os.path.join(instances_dir, entry, port_filename)
+    if not os.path.isfile(pf):
+        print(f'  Warning: {entry} has no port assignment')
+        continue
+    try:
+        assignments[entry] = int(open(pf).read().strip())
+    except ValueError:
+        print(f'  Warning: {entry} has an invalid .port file')
 
 print('Registered channels:')
 print()
@@ -340,15 +318,7 @@ print(f'Next port: {max_port + 1 if not gaps else min(gaps)}')
 "
 }
 
-cmd_reconcile() {
-  ensure_ports_file
-  echo "Reconciling ports.json with instance directories..."
-  reconcile_ports
-}
-
 # --- Main ---
-
-ensure_ports_file
 
 case "${1:-}" in
   add-dm)      cmd_add_dm "${2:-}" ;;
@@ -356,7 +326,6 @@ case "${1:-}" in
   remove)      cmd_remove "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
   list)        cmd_list ;;
-  reconcile)   cmd_reconcile ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -366,6 +335,5 @@ case "${1:-}" in
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
     echo "  list                    List all registered channels and ports"
-    echo "  reconcile               Sync ports.json with instance directories"
     ;;
 esac
