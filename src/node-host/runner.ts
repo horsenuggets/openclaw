@@ -11,6 +11,7 @@ import {
 } from "../browser/control-service.js";
 import { createBrowserRouteDispatcher } from "../browser/routes/dispatcher.js";
 import { loadConfig } from "../config/config.js";
+import { DEFAULT_GATEWAY_PORT } from "../config/paths.js";
 import { GatewayClient } from "../gateway/client.js";
 import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
 import {
@@ -588,7 +589,7 @@ export async function runNodeHost(opts: NodeHostRunOptions): Promise<void> {
     (isRemoteMode ? cfg.gateway?.remote?.password : cfg.gateway?.auth?.password);
 
   const host = gateway.host ?? "127.0.0.1";
-  const port = gateway.port ?? 18789;
+  const port = gateway.port ?? DEFAULT_GATEWAY_PORT;
   const scheme = gateway.tls ? "wss" : "ws";
   const url = `${scheme}://${host}:${port}`;
   const pathEnv = ensureNodePathEnv();

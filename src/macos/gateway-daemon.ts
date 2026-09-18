@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import process from "node:process";
 import type { GatewayLockHandle } from "../infra/gateway-lock.js";
+import { DEFAULT_GATEWAY_PORT } from "../config/paths.js";
 
 declare const __OPENCLAW_VERSION__: string | undefined;
 
@@ -78,7 +79,7 @@ async function main() {
     process.env.OPENCLAW_GATEWAY_PORT ??
     process.env.CLAWDBOT_GATEWAY_PORT ??
     (typeof cfg.gateway?.port === "number" ? String(cfg.gateway.port) : "") ??
-    "18789";
+    String(DEFAULT_GATEWAY_PORT);
   const port = Number.parseInt(portRaw, 10);
   if (Number.isNaN(port) || port <= 0) {
     defaultRuntime.error(`Invalid --port (${portRaw})`);

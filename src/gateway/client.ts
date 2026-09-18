@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { WebSocket, type ClientOptions, type CertMeta } from "ws";
 import type { DeviceIdentity } from "../infra/device-identity.js";
+import { DEFAULT_GATEWAY_URL } from "../config/paths.js";
 import {
   clearDeviceAuthToken,
   loadDeviceAuthToken,
@@ -102,7 +103,7 @@ export class GatewayClient {
     if (this.closed) {
       return;
     }
-    const url = this.opts.url ?? "ws://127.0.0.1:18789";
+    const url = this.opts.url ?? DEFAULT_GATEWAY_URL;
     if (this.opts.tlsFingerprint && !url.startsWith("wss://")) {
       this.opts.onConnectError?.(new Error("gateway tls fingerprint requires wss:// gateway url"));
       return;

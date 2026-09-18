@@ -195,6 +195,9 @@ export function resolveDefaultConfigCandidates(
 
 export const DEFAULT_GATEWAY_PORT = 18789;
 
+/** Default local gateway WebSocket URL, derived from {@link DEFAULT_GATEWAY_PORT}. */
+export const DEFAULT_GATEWAY_URL = `ws://127.0.0.1:${DEFAULT_GATEWAY_PORT}`;
+
 /**
  * Gateway lock directory (ephemeral).
  * Default: os.tmpdir()/openclaw-<uid> (uid suffix when available).

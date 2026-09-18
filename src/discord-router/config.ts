@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_GATEWAY_PORT } from "../config/paths.js";
 
 export type OnboardingState = "none" | "greeted" | "named" | "google_pending" | "complete";
 
@@ -57,7 +58,7 @@ export function loadRouterConfig(opts: {
 
   // Read port registry
   const portsPath = path.join(instancesDir, "ports.json");
-  let portRegistry: PortRegistry = { basePort: 18789, assignments: {} };
+  let portRegistry: PortRegistry = { basePort: DEFAULT_GATEWAY_PORT, assignments: {} };
   if (fs.existsSync(portsPath)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
@@ -160,7 +161,7 @@ export function readPortRegistry(instancesDir: string): PortRegistry {
       // Fall through
     }
   }
-  return { basePort: 18789, assignments: {} };
+  return { basePort: DEFAULT_GATEWAY_PORT, assignments: {} };
 }
 
 /** Write the port registry to disk. */

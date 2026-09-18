@@ -1,6 +1,7 @@
 import type { RuntimeEnv } from "../runtime.js";
 import { withProgress } from "../cli/progress.js";
 import { loadConfig, resolveGatewayPort } from "../config/config.js";
+import { DEFAULT_GATEWAY_PORT } from "../config/paths.js";
 import { probeGateway } from "../gateway/probe.js";
 import { discoverGatewayBeacons } from "../infra/bonjour-discovery.js";
 import { resolveSshConfig } from "../infra/ssh-config.js";
@@ -240,7 +241,7 @@ export async function gatewayStatusCommand(
               sshPort: b.sshPort ?? null,
               wsUrl: (() => {
                 const host = b.tailnetDns || b.lanHost || b.host;
-                const port = b.gatewayPort ?? 18789;
+                const port = b.gatewayPort ?? DEFAULT_GATEWAY_PORT;
                 return host ? `ws://${host}:${port}` : null;
               })(),
             })),
