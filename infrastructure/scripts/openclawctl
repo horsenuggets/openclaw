@@ -43,13 +43,19 @@ port_file() {
 }
 
 # Parse a raw .port value to a canonical positive decimal port, or empty.
-# Mirrors the router's rule (all ASCII digits, value > 0) and normalizes
-# leading zeros (`10#` forces base-10) so `018789` compares equal to `18789`.
+# Mirrors the router's rule: trim surrounding whitespace (like the TS/Python
+# readers' .strip()/.trim()), require all ASCII digits, value > 0, and
+# normalize leading zeros (`10#` forces base-10) so `018789` == `18789`.
+# Always returns success so a malformed .port can't abort callers under set -e.
 parse_port() {
-  local raw="$1" n
+  local raw n
+  raw=$(printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   printf '%s' "$raw" | grep -Eq '^[0-9]+$' || return 0
   n=$((10#$raw))
-  [ "$n" -gt 0 ] && echo "$n"
+  if [ "$n" -gt 0 ]; then
+    echo "$n"
+  fi
+  return 0
 }
 
 # Read an instance's port as a canonical positive integer (empty if unset/invalid).
