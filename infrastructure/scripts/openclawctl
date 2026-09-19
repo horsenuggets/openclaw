@@ -16,6 +16,20 @@ PORT_FILENAME=".port"
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
 
+# Reject anything that is not a Discord snowflake (17-20 digits) before it is
+# ever used to build a filesystem path. This mirrors the router's directory
+# filter and prevents a value like `../foo` from touching files outside
+# $INSTANCES_DIR.
+require_channel_id() {
+  case "$1" in
+    "" ) echo "Error: channel/DM id required." >&2; exit 1 ;;
+  esac
+  if ! printf '%s' "$1" | grep -Eq '^[0-9]{17,20}$'; then
+    echo "Error: invalid channel id '$1' (expected a 17-20 digit Discord id)." >&2
+    exit 1
+  fi
+}
+
 # --- Port helpers ---
 #
 # Each instance owns its port as a plain-integer dotfile inside its own
@@ -27,10 +41,17 @@ port_file() {
   echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
 }
 
+# Read an instance's port, echoing it only when it is a positive integer.
 get_port() {
-  local file
+  local file value
   file=$(port_file "$1")
-  [ -f "$file" ] && cat "$file" || echo ""
+  [ -f "$file" ] || { echo ""; return; }
+  value=$(cat "$file")
+  if printf '%s' "$value" | grep -Eq '^[0-9]+$' && [ "$value" -gt 0 ]; then
+    echo "$value"
+  else
+    echo ""
+  fi
 }
 
 # Collect every port currently claimed by an instance dotfile.
@@ -164,6 +185,7 @@ cmd_add_dm() {
   echo "Resolving DM channel for user $userId..."
   local channelId
   channelId=$(resolve_dm_channel "$userId")
+  require_channel_id "$channelId"
   echo "DM channel ID: $channelId"
 
   # Check if already registered
@@ -205,6 +227,7 @@ cmd_add_channel() {
     echo "Usage: openclawctl add-channel <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   local existing_port
   existing_port=$(get_port "$channelId")
@@ -241,6 +264,7 @@ cmd_remove() {
     echo "Usage: openclawctl remove <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   echo "Stopping container for channel $channelId..."
   stop_container "$channelId"
@@ -258,6 +282,7 @@ cmd_restart() {
     echo "Usage: openclawctl restart <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   local port
   port=$(get_port "$channelId")

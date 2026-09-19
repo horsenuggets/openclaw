@@ -44,7 +44,16 @@ export function readInstancePort(instanceDir: string): number | undefined {
     return undefined;
   }
   try {
-    const parsed = Number.parseInt(fs.readFileSync(portPath, "utf-8").trim(), 10);
+    const raw = fs.readFileSync(portPath, "utf-8").trim();
+    // Require the entire value to be a positive integer. `parseInt` would
+    // accept malformed prefixes like "18789junk"; the boot script and
+    // `openclawctl list` use Python's strict int() and would skip such a
+    // file, so the router must reject it too to avoid loading an instance
+    // that boot never starts.
+    if (!/^\d+$/.test(raw)) {
+      return undefined;
+    }
+    const parsed = Number.parseInt(raw, 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   } catch {
     return undefined;

@@ -56,18 +56,19 @@ function loadDiscordToken(): string {
 }
 
 function loadChannels(): ChannelConfig[] {
-  const portsPath = path.join(INSTANCES_DIR, "ports.json");
-  if (!fs.existsSync(portsPath)) {
-    return [];
-  }
-  let ports: { assignments?: Record<string, number> };
-  try {
-    ports = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
-  } catch {
+  if (!fs.existsSync(INSTANCES_DIR)) {
     return [];
   }
   const channels: ChannelConfig[] = [];
-  for (const channelId of Object.keys(ports.assignments ?? {})) {
+  // A channel is registered when its instance directory holds a `.port`
+  // dotfile — the same signal the router uses (no central ports.json).
+  for (const channelId of fs.readdirSync(INSTANCES_DIR)) {
+    if (!DISCORD_ID_RE.test(channelId)) {
+      continue;
+    }
+    if (!fs.existsSync(path.join(INSTANCES_DIR, channelId, ".port"))) {
+      continue;
+    }
     const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
     let lifecycleMessages = false;
     let onboardingComplete = false;

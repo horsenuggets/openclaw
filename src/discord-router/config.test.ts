@@ -49,6 +49,17 @@ describe("readInstancePort", () => {
     fs.writeFileSync(path.join(d, ".port"), "0");
     expect(readInstancePort(d)).toBeUndefined();
   });
+
+  it("rejects a value with a valid numeric prefix but trailing junk", () => {
+    const d = path.join(dir, "1468768406504476936");
+    fs.mkdirSync(d, { recursive: true });
+    // parseInt would accept these; boot/list use strict int() and skip them,
+    // so the router must reject them too to stay consistent.
+    for (const bad of ["18789junk", "18789.5", "18789 18790"]) {
+      fs.writeFileSync(path.join(d, ".port"), bad);
+      expect(readInstancePort(d)).toBeUndefined();
+    }
+  });
 });
 
 describe("loadRouterConfig", () => {
