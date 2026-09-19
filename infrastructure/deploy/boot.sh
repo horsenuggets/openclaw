@@ -5,23 +5,45 @@
 set -euo pipefail
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
-PORTS_FILE="$INSTANCES_DIR/ports.json"
 
-if [ ! -f "$PORTS_FILE" ]; then
-  echo "No ports.json found at $PORTS_FILE — run openclawctl to register channels first."
-  exit 1
-fi
-
-# Reconcile ports.json with actual instance directories on boot
-~/deploy/bin/openclawctl reconcile
-
-# Read port assignments into a temp file to avoid subshell issues with pipes
+# Each instance owns its port as a `.port` dotfile in its own directory, so
+# there is no central ports.json to read or reconcile. Discover channels by
+# scanning for those dotfiles.
 ASSIGNMENTS=$(python3 -c "
-import json
-ports = json.load(open('$PORTS_FILE'))
-for cid, port in sorted(ports.get('assignments', {}).items(), key=lambda x: x[1]):
+import os, re
+instances_dir = '$INSTANCES_DIR'
+rows = []
+if os.path.isdir(instances_dir):
+    # Iterate with scandir and require a real, non-symlink directory — the
+    # same no-symlink boundary the router applies via Dirent.isDirectory().
+    # Otherwise a numeric symlink to an external dir could be started here
+    # but never loaded by the router (and could escape INSTANCES_DIR).
+    for entry in sorted(os.scandir(instances_dir), key=lambda e: e.name):
+        if not re.match(r'^\d{17,20}\$', entry.name):
+            continue
+        if not entry.is_dir(follow_symlinks=False):
+            continue
+        pf = os.path.join(entry.path, '.port')
+        if not os.path.isfile(pf):
+            continue
+        raw = open(pf).read().strip()
+        # Same strict rule the router uses: all ASCII digits, value > 0.
+        # Rejects '0', negatives, and trailing junk so the container we
+        # start here always matches the instance set the router will load.
+        if not re.fullmatch(r'[0-9]+', raw):
+            continue
+        port = int(raw)
+        if port <= 0:
+            continue
+        rows.append((entry.name, port))
+for cid, port in sorted(rows, key=lambda x: x[1]):
     print(f'{cid} {port}')
 " 2>/dev/null)
+
+if [ -z "$ASSIGNMENTS" ]; then
+  echo "No registered instances found under $INSTANCES_DIR — run openclawctl to register channels first."
+  exit 1
+fi
 
 # Start per-channel agent containers (router needs them running first)
 while read -r channelId port; do

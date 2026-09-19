@@ -5,117 +5,140 @@
 set -euo pipefail
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
-PORTS_FILE="$INSTANCES_DIR/ports.json"
 AGENT_YML="$HOME/deploy/docker/agent.yml"
+# Lowest port to hand out. Mirrors DEFAULT_GATEWAY_PORT in src/config/paths.ts
+# (a shell script cannot import the TypeScript constant).
+BASE_PORT=18789
+# Per-instance port file, relative to each instance directory. Mirrors
+# PORT_FILENAME in src/discord-router/config.ts.
+PORT_FILENAME=".port"
+PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
 
-# --- Port registry helpers ---
-
-ensure_ports_file() {
-  if [ ! -f "$PORTS_FILE" ]; then
-    echo '{"basePort": 18789, "assignments": {}}' > "$PORTS_FILE"
+# Reject anything that is not a Discord snowflake (17-20 digits) before it is
+# ever used to build a filesystem path. This mirrors the router's directory
+# filter and prevents a value like `../foo` from touching files outside
+# $INSTANCES_DIR.
+require_channel_id() {
+  case "$1" in
+    "" ) echo "Error: channel/DM id required." >&2; exit 1 ;;
+  esac
+  if ! printf '%s' "$1" | grep -Eq '^[0-9]{17,20}$'; then
+    echo "Error: invalid channel id '$1' (expected a 17-20 digit Discord id)." >&2
+    exit 1
   fi
 }
 
-# Atomic write: write to temp file, then rename (prevents corruption)
-write_ports_file() {
-  local content="$1"
-  local tmp="${PORTS_FILE}.tmp.$$"
-  echo "$content" > "$tmp"
-  mv "$tmp" "$PORTS_FILE"
+# --- Port helpers ---
+#
+# Each instance owns its port as a plain-integer dotfile inside its own
+# directory ($INSTANCES_DIR/<channelId>/.port). There is no central registry,
+# so a port cannot drift from its instance and removing the directory removes
+# the port. Allocation scans the dotfiles to find what is taken.
+
+port_file() {
+  echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
 }
 
+# Parse a raw .port value to a canonical positive decimal port, or empty.
+# Mirrors the router's rule: trim surrounding whitespace (like the TS/Python
+# readers' .strip()/.trim()), require all ASCII digits, value > 0, and
+# normalize leading zeros (`10#` forces base-10) so `018789` == `18789`.
+# Always returns success so a malformed .port can't abort callers under set -e.
+parse_port() {
+  local raw n
+  raw=$(printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+  printf '%s' "$raw" | grep -Eq '^[0-9]+$' || return 0
+  n=$((10#$raw))
+  if [ "$n" -gt 0 ]; then
+    echo "$n"
+  fi
+  return 0
+}
+
+# Read an instance's port as a canonical positive integer (empty if unset/invalid).
 get_port() {
-  local channelId="$1"
-  python3 -c "
-import json
-ports = json.load(open('$PORTS_FILE'))
-print(ports.get('assignments', {}).get('$channelId', ''))
-"
+  local file
+  file=$(port_file "$1")
+  [ -f "$file" ] || return 0
+  parse_port "$(cat "$file")"
+}
+
+# Collect every port currently claimed by an instance dotfile (canonicalized).
+used_ports() {
+  local f owner p
+  for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
+    [ -f "$f" ] || continue
+    p=$(parse_port "$(cat "$f")")
+    [ -n "$p" ] && echo "$p"
+  done
 }
 
 allocate_port() {
-  python3 -c "
-import json
-ports = json.load(open('$PORTS_FILE'))
-used = set(ports.get('assignments', {}).values())
-port = ports.get('basePort', 18789)
-while port in used:
-    port += 1
-print(port)
-"
+  local used port
+  used=$(used_ports)
+  port=$BASE_PORT
+  while echo "$used" | grep -qx "$port"; do
+    port=$((port + 1))
+  done
+  echo "$port"
 }
 
+# Reserve a port for a channel while holding an exclusive lock so concurrent
+# add-* invocations cannot both claim the same free port.
+reserve_port() {
+  local channelId="$1"
+  (
+    flock 9
+
+    local existing_port port
+    existing_port=$(get_port "$channelId")
+    if [ -n "$existing_port" ]; then
+      echo "ERROR: channel $channelId already assigned to port $existing_port" >&2
+      exit 2
+    fi
+
+    port=$(allocate_port)
+    assign_port "$channelId" "$port"
+    echo "$port"
+  ) 9>"$PORT_LOCK_FILE"
+}
+
+# Write a port to an instance's dotfile (atomic), refusing to reuse a port
+# already claimed by a different instance.
 assign_port() {
   local channelId="$1"
   local port="$2"
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-# Check for port conflict
-used = ports.get('assignments', {})
-for cid, p in used.items():
-    if p == $port and cid != '$channelId':
-        print(f'ERROR: port $port already assigned to {cid}', flush=True)
-        exit(1)
-ports.setdefault('assignments', {})['$channelId'] = $port
-tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-with open(tmp, 'w') as f:
-    json.dump(ports, f, indent=2)
-    f.write('\n')
-os.rename(tmp, '$PORTS_FILE')
-"
+  local f p
+  port=$(parse_port "$port")
+  if [ -z "$port" ]; then
+    echo "ERROR: invalid port '$2'" >&2
+    return 1
+  fi
+  for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
+    [ -f "$f" ] || continue
+    local owner
+    owner=$(basename "$(dirname "$f")")
+    [ "$owner" = "$channelId" ] && continue
+    p=$(get_port "$owner")
+    if [ "$p" = "$port" ]; then
+      echo "ERROR: port $port already assigned to $owner" >&2
+      return 1
+    fi
+  done
+  local dst tmp
+  dst=$(port_file "$channelId")
+  mkdir -p "$(dirname "$dst")"
+  tmp="${dst}.tmp.$$"
+  echo "$port" > "$tmp"
+  mv "$tmp" "$dst"
 }
 
+# Deregister a channel by removing its port dotfile (instance data is kept).
 free_port() {
-  local channelId="$1"
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-ports.get('assignments', {}).pop('$channelId', None)
-tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-with open(tmp, 'w') as f:
-    json.dump(ports, f, indent=2)
-    f.write('\n')
-os.rename(tmp, '$PORTS_FILE')
-"
-}
-
-# Reconcile ports.json with actual instance directories.
-# Removes stale entries (dirs that don't exist), warns about dirs without ports.
-reconcile_ports() {
-  python3 -c "
-import json, os
-ports = json.load(open('$PORTS_FILE'))
-assignments = ports.get('assignments', {})
-instances_dir = '$INSTANCES_DIR'
-changed = False
-
-# Remove entries whose instance directories no longer exist
-stale = [cid for cid in assignments if not os.path.isdir(os.path.join(instances_dir, cid))]
-for cid in stale:
-    print(f'  Removing stale entry: {cid} (port {assignments[cid]})')
-    del assignments[cid]
-    changed = True
-
-# Warn about dirs without port assignments
-import re
-for entry in sorted(os.listdir(instances_dir)):
-    if re.match(r'^\d{17,20}$', entry) and entry not in assignments:
-        print(f'  Warning: {entry} has no port assignment')
-
-if changed:
-    tmp = '$PORTS_FILE.tmp.' + str(os.getpid())
-    with open(tmp, 'w') as f:
-        json.dump(ports, f, indent=2)
-        f.write('\n')
-    os.rename(tmp, '$PORTS_FILE')
-    print('  Ports file updated.')
-else:
-    print('  No changes needed.')
-"
+  rm -f "$(port_file "$1")"
 }
 
 # --- Discord API helpers ---
@@ -199,6 +222,7 @@ cmd_add_dm() {
   echo "Resolving DM channel for user $userId..."
   local channelId
   channelId=$(resolve_dm_channel "$userId")
+  require_channel_id "$channelId"
   echo "DM channel ID: $channelId"
 
   # Check if already registered
@@ -210,9 +234,17 @@ cmd_add_dm() {
   fi
 
   # Allocate port and register
-  local port
-  port=$(allocate_port)
-  assign_port "$channelId" "$port"
+  local port status
+  if port=$(reserve_port "$channelId"); then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 2 ]; then
+      echo "Channel $channelId is already registered on port $(get_port "$channelId")."
+      exit 0
+    fi
+    exit 1
+  fi
   echo "Assigned port $port"
 
   # Create instance directory
@@ -240,6 +272,7 @@ cmd_add_channel() {
     echo "Usage: openclawctl add-channel <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   local existing_port
   existing_port=$(get_port "$channelId")
@@ -248,9 +281,17 @@ cmd_add_channel() {
     exit 0
   fi
 
-  local port
-  port=$(allocate_port)
-  assign_port "$channelId" "$port"
+  local port status
+  if port=$(reserve_port "$channelId"); then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 2 ]; then
+      echo "Channel $channelId is already registered on port $(get_port "$channelId")."
+      exit 0
+    fi
+    exit 1
+  fi
   echo "Assigned port $port"
 
   mkdir -p "$INSTANCES_DIR/$channelId"
@@ -276,6 +317,7 @@ cmd_remove() {
     echo "Usage: openclawctl remove <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   echo "Stopping container for channel $channelId..."
   stop_container "$channelId"
@@ -293,6 +335,7 @@ cmd_restart() {
     echo "Usage: openclawctl restart <channelId>"
     exit 1
   fi
+  require_channel_id "$channelId"
 
   local port
   port=$(get_port "$channelId")
@@ -308,12 +351,27 @@ cmd_restart() {
 }
 
 cmd_list() {
-  ensure_ports_file
-  python3 -c "
-import json, subprocess
-ports = json.load(open('$PORTS_FILE'))
-assignments = ports.get('assignments', {})
-base = ports.get('basePort', 18789)
+  BASE_PORT="$BASE_PORT" PORT_FILENAME="$PORT_FILENAME" python3 -c "
+import os, re, subprocess
+instances_dir = '$INSTANCES_DIR'
+base = int(os.environ['BASE_PORT'])
+port_filename = os.environ['PORT_FILENAME']
+
+# Discover ports from each instance's dotfile.
+assignments = {}
+for entry in sorted(os.listdir(instances_dir)):
+    if not re.match(r'^\d{17,20}\$', entry):
+        continue
+    pf = os.path.join(instances_dir, entry, port_filename)
+    if not os.path.isfile(pf):
+        print(f'  Warning: {entry} has no port assignment')
+        continue
+    raw = open(pf).read().strip()
+    # Same strict rule as the router: all ASCII digits, value > 0.
+    if re.fullmatch(r'[0-9]+', raw) and int(raw) > 0:
+        assignments[entry] = int(raw)
+    else:
+        print(f'  Warning: {entry} has an invalid .port file')
 
 print('Registered channels:')
 print()
@@ -340,15 +398,7 @@ print(f'Next port: {max_port + 1 if not gaps else min(gaps)}')
 "
 }
 
-cmd_reconcile() {
-  ensure_ports_file
-  echo "Reconciling ports.json with instance directories..."
-  reconcile_ports
-}
-
 # --- Main ---
-
-ensure_ports_file
 
 case "${1:-}" in
   add-dm)      cmd_add_dm "${2:-}" ;;
@@ -356,7 +406,6 @@ case "${1:-}" in
   remove)      cmd_remove "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
   list)        cmd_list ;;
-  reconcile)   cmd_reconcile ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -366,6 +415,5 @@ case "${1:-}" in
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
     echo "  list                    List all registered channels and ports"
-    echo "  reconcile               Sync ports.json with instance directories"
     ;;
 esac
