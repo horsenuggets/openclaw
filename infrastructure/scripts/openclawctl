@@ -319,11 +319,19 @@ cmd_remove() {
   fi
   require_channel_id "$channelId"
 
-  echo "Stopping container for channel $channelId..."
-  stop_container "$channelId"
+  # Hold the same lock reserve_port uses across the whole stop+free sequence,
+  # so a concurrent `add-*` for this channel cannot slip a freshly-assigned
+  # .port in between our stop and free_port (which would delete the new port
+  # and leave the new container running but undiscoverable).
+  (
+    flock 9
 
-  echo "Freeing port..."
-  free_port "$channelId"
+    echo "Stopping container for channel $channelId..."
+    stop_container "$channelId"
+
+    echo "Freeing port..."
+    free_port "$channelId"
+  ) 9>"$PORT_LOCK_FILE"
 
   echo "Done. Instance data preserved at $INSTANCES_DIR/$channelId/"
   echo "To delete data: rm -rf $INSTANCES_DIR/$channelId"
