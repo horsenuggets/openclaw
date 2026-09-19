@@ -61,7 +61,7 @@ get_port() {
 
 # Collect every port currently claimed by an instance dotfile (canonicalized).
 used_ports() {
-  local f p
+  local f owner p
   for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
     [ -f "$f" ] || continue
     p=$(parse_port "$(cat "$f")")
@@ -90,7 +90,7 @@ assign_port() {
     local owner
     owner=$(basename "$(dirname "$f")")
     [ "$owner" = "$channelId" ] && continue
-    p=$(cat "$f")
+    p=$(get_port "$owner")
     if [ "$p" = "$port" ]; then
       echo "ERROR: port $port already assigned to $owner" >&2
       return 1

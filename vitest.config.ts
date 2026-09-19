@@ -21,6 +21,7 @@ export default defineConfig({
     pool: "forks",
     maxWorkers: isCI ? ciWorkers : localWorkers,
     include: [
+      "discord-health-monitor/**/*.test.ts",
       "src/**/*.test.ts",
       "extensions/**/*.test.ts",
       "test/format-error.test.ts",

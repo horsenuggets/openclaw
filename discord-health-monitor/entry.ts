@@ -9,7 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { readInstancePort } from "../src/discord-router/config.js";
+import { readInstancePort } from "./ports.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const HEALTH_PORT = 18801;
