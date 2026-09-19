@@ -41,25 +41,30 @@ port_file() {
   echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
 }
 
-# Read an instance's port, echoing it only when it is a positive integer.
-get_port() {
-  local file value
-  file=$(port_file "$1")
-  [ -f "$file" ] || { echo ""; return; }
-  value=$(cat "$file")
-  if printf '%s' "$value" | grep -Eq '^[0-9]+$' && [ "$value" -gt 0 ]; then
-    echo "$value"
-  else
-    echo ""
-  fi
+# Parse a raw .port value to a canonical positive decimal port, or empty.
+# Mirrors the router's rule (all ASCII digits, value > 0) and normalizes
+# leading zeros (`10#` forces base-10) so `018789` compares equal to `18789`.
+parse_port() {
+  local raw="$1" n
+  printf '%s' "$raw" | grep -Eq '^[0-9]+$' || return 0
+  n=$((10#$raw))
+  [ "$n" -gt 0 ] && echo "$n"
 }
 
-# Collect every port currently claimed by an instance dotfile.
+# Read an instance's port as a canonical positive integer (empty if unset/invalid).
+get_port() {
+  local file
+  file=$(port_file "$1")
+  [ -f "$file" ] || return 0
+  parse_port "$(cat "$file")"
+}
+
+# Collect every port currently claimed by an instance dotfile (canonicalized).
 used_ports() {
   local f p
   for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
     [ -f "$f" ] || continue
-    p=$(cat "$f")
+    p=$(parse_port "$(cat "$f")")
     [ -n "$p" ] && echo "$p"
   done
 }
@@ -313,9 +318,11 @@ for entry in sorted(os.listdir(instances_dir)):
     if not os.path.isfile(pf):
         print(f'  Warning: {entry} has no port assignment')
         continue
-    try:
-        assignments[entry] = int(open(pf).read().strip())
-    except ValueError:
+    raw = open(pf).read().strip()
+    # Same strict rule as the router: all ASCII digits, value > 0.
+    if re.fullmatch(r'\d+', raw) and int(raw) > 0:
+        assignments[entry] = int(raw)
+    else:
         print(f'  Warning: {entry} has an invalid .port file')
 
 print('Registered channels:')

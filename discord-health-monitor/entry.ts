@@ -9,6 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { readInstancePort } from "../src/discord-router/config.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const HEALTH_PORT = 18801;
@@ -60,13 +61,15 @@ function loadChannels(): ChannelConfig[] {
     return [];
   }
   const channels: ChannelConfig[] = [];
-  // A channel is registered when its instance directory holds a `.port`
-  // dotfile — the same signal the router uses (no central ports.json).
+  // A channel is registered when its instance directory holds a valid `.port`
+  // dotfile — the same signal (and identical validation via readInstancePort)
+  // the router uses, so lifecycle messages target exactly the instances the
+  // router loads.
   for (const channelId of fs.readdirSync(INSTANCES_DIR)) {
     if (!DISCORD_ID_RE.test(channelId)) {
       continue;
     }
-    if (!fs.existsSync(path.join(INSTANCES_DIR, channelId, ".port"))) {
+    if (readInstancePort(path.join(INSTANCES_DIR, channelId)) === undefined) {
       continue;
     }
     const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");

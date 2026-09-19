@@ -20,10 +20,16 @@ if os.path.isdir(instances_dir):
         pf = os.path.join(instances_dir, entry, '.port')
         if not os.path.isfile(pf):
             continue
-        try:
-            rows.append((entry, int(open(pf).read().strip())))
-        except ValueError:
+        raw = open(pf).read().strip()
+        # Same strict rule the router uses: all ASCII digits, value > 0.
+        # Rejects '0', negatives, and trailing junk so the container we start
+        # here always matches the instance set the router will load.
+        if not re.fullmatch(r'\d+', raw):
             continue
+        port = int(raw)
+        if port <= 0:
+            continue
+        rows.append((entry, port))
 for cid, port in sorted(rows, key=lambda x: x[1]):
     print(f'{cid} {port}')
 " 2>/dev/null)
