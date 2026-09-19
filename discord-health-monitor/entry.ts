@@ -9,6 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { readInstancePort } from "./ports.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const HEALTH_PORT = 18801;
@@ -56,18 +57,23 @@ function loadDiscordToken(): string {
 }
 
 function loadChannels(): ChannelConfig[] {
-  const portsPath = path.join(INSTANCES_DIR, "ports.json");
-  if (!fs.existsSync(portsPath)) {
-    return [];
-  }
-  let ports: { assignments?: Record<string, number> };
-  try {
-    ports = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
-  } catch {
+  if (!fs.existsSync(INSTANCES_DIR)) {
     return [];
   }
   const channels: ChannelConfig[] = [];
-  for (const channelId of Object.keys(ports.assignments ?? {})) {
+  // A channel is registered when its instance directory holds a valid `.port`
+  // dotfile — the same signal (and identical validation via readInstancePort)
+  // the router uses, so lifecycle messages target exactly the instances the
+  // router loads. Use withFileTypes + isDirectory() (no symlink follow) to
+  // apply the router's no-symlink boundary here too.
+  for (const entry of fs.readdirSync(INSTANCES_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !DISCORD_ID_RE.test(entry.name)) {
+      continue;
+    }
+    const channelId = entry.name;
+    if (readInstancePort(path.join(INSTANCES_DIR, channelId)) === undefined) {
+      continue;
+    }
     const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
     let lifecycleMessages = false;
     let onboardingComplete = false;

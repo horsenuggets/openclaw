@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_GATEWAY_PORT } from "../config/paths.js";
 
 export type OnboardingState = "none" | "greeted" | "named" | "google_pending" | "complete";
 
@@ -20,10 +19,13 @@ export type InstanceConfig = {
   instanceDir: string;
 };
 
-export type PortRegistry = {
-  basePort: number;
-  assignments: Record<string, number>; // channelId → port
-};
+/**
+ * Filename of the per-instance port file. Each instance directory owns its
+ * port as a plain-integer dotfile (e.g. `.openclaw-instances/<id>/.port`),
+ * so the port travels with the instance and cannot drift from a central
+ * registry.
+ */
+export const PORT_FILENAME = ".port";
 
 export type RouterConfig = {
   discordToken: string;
@@ -33,9 +35,35 @@ export type RouterConfig = {
 };
 
 /**
+ * Read an instance's port from its `.port` dotfile. Returns undefined when
+ * the file is missing or does not contain a positive integer.
+ */
+export function readInstancePort(instanceDir: string): number | undefined {
+  const portPath = path.join(instanceDir, PORT_FILENAME);
+  if (!fs.existsSync(portPath)) {
+    return undefined;
+  }
+  try {
+    const raw = fs.readFileSync(portPath, "utf-8").trim();
+    // Require the entire value to be a positive integer. `parseInt` would
+    // accept malformed prefixes like "18789junk"; the boot script and
+    // `openclawctl list` use Python's strict int() and would skip such a
+    // file, so the router must reject it too to avoid loading an instance
+    // that boot never starts.
+    if (!/^\d+$/.test(raw)) {
+      return undefined;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Load router configuration by scanning the instances directory.
- * Each instance directory is named by Discord channel ID and contains
- * an openclaw.json with gateway config. Ports are read from ports.json.
+ * Each instance directory is named by Discord channel ID and contains an
+ * openclaw.json with gateway config plus a `.port` dotfile with its port.
  */
 export function loadRouterConfig(opts: {
   instancesDir?: string;
@@ -56,26 +84,6 @@ export function loadRouterConfig(opts: {
     throw new Error(`Instances directory not found: ${instancesDir}`);
   }
 
-  // Read port registry
-  const portsPath = path.join(instancesDir, "ports.json");
-  let portRegistry: PortRegistry = { basePort: DEFAULT_GATEWAY_PORT, assignments: {} };
-  if (fs.existsSync(portsPath)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(portsPath, "utf-8"));
-      if (parsed && typeof parsed === "object" && typeof parsed.basePort === "number") {
-        portRegistry = {
-          basePort: parsed.basePort,
-          assignments:
-            parsed.assignments && typeof parsed.assignments === "object"
-              ? (parsed.assignments as Record<string, number>)
-              : {},
-        };
-      }
-    } catch {
-      // Fall through with defaults
-    }
-  }
-
   const instances = new Map<string, InstanceConfig>();
   const DISCORD_ID_RE = /^\d{17,20}$/;
 
@@ -89,8 +97,8 @@ export function loadRouterConfig(opts: {
     const instanceDir = path.join(instancesDir, channelId);
     const configPath = path.join(instanceDir, "openclaw.json");
 
-    // Port must be in the registry — if missing, skip this instance
-    const port = portRegistry.assignments[channelId];
+    // Each instance owns its port via a `.port` dotfile — no port, no route.
+    const port = readInstancePort(instanceDir);
     if (port === undefined) {
       continue;
     }
@@ -149,35 +157,6 @@ export function loadRouterConfig(opts: {
     instancesDir,
     agentTimeoutMs: 600_000,
   };
-}
-
-/** Read the port registry from disk. */
-export function readPortRegistry(instancesDir: string): PortRegistry {
-  const portsPath = path.join(instancesDir, "ports.json");
-  if (fs.existsSync(portsPath)) {
-    try {
-      return JSON.parse(fs.readFileSync(portsPath, "utf-8"));
-    } catch {
-      // Fall through
-    }
-  }
-  return { basePort: DEFAULT_GATEWAY_PORT, assignments: {} };
-}
-
-/** Write the port registry to disk. */
-export function writePortRegistry(instancesDir: string, registry: PortRegistry): void {
-  const portsPath = path.join(instancesDir, "ports.json");
-  fs.writeFileSync(portsPath, JSON.stringify(registry, null, 2) + "\n");
-}
-
-/** Allocate the next available port for a new channel. */
-export function allocatePort(registry: PortRegistry): number {
-  const usedPorts = new Set(Object.values(registry.assignments));
-  let port = registry.basePort;
-  while (usedPorts.has(port)) {
-    port++;
-  }
-  return port;
 }
 
 /** Read the full onboarding file (state + preferences). */
