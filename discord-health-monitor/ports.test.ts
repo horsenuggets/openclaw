@@ -23,7 +23,7 @@ describe("readInstancePort", () => {
   it("returns undefined for missing, invalid, or non-positive ports", () => {
     expect(readInstancePort(dir)).toBeUndefined();
 
-    for (const bad of ["0", "-1", "+18789", "18789junk", "18789.5"]) {
+    for (const bad of ["0", "-1", "+18789", "18789junk", "18789.5", "١٨٧٨٩"]) {
       fs.writeFileSync(path.join(dir, ".port"), bad);
       expect(readInstancePort(dir)).toBeUndefined();
     }

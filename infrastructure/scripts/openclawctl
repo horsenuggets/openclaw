@@ -12,6 +12,7 @@ BASE_PORT=18789
 # Per-instance port file, relative to each instance directory. Mirrors
 # PORT_FILENAME in src/discord-router/config.ts.
 PORT_FILENAME=".port"
+PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
@@ -79,12 +80,37 @@ allocate_port() {
   echo "$port"
 }
 
+# Reserve a port for a channel while holding an exclusive lock so concurrent
+# add-* invocations cannot both claim the same free port.
+reserve_port() {
+  local channelId="$1"
+  (
+    flock 9
+
+    local existing_port port
+    existing_port=$(get_port "$channelId")
+    if [ -n "$existing_port" ]; then
+      echo "ERROR: channel $channelId already assigned to port $existing_port" >&2
+      exit 2
+    fi
+
+    port=$(allocate_port)
+    assign_port "$channelId" "$port"
+    echo "$port"
+  ) 9>"$PORT_LOCK_FILE"
+}
+
 # Write a port to an instance's dotfile (atomic), refusing to reuse a port
 # already claimed by a different instance.
 assign_port() {
   local channelId="$1"
   local port="$2"
   local f p
+  port=$(parse_port "$port")
+  if [ -z "$port" ]; then
+    echo "ERROR: invalid port '$2'" >&2
+    return 1
+  fi
   for f in "$INSTANCES_DIR"/*/"$PORT_FILENAME"; do
     [ -f "$f" ] || continue
     local owner
@@ -202,9 +228,17 @@ cmd_add_dm() {
   fi
 
   # Allocate port and register
-  local port
-  port=$(allocate_port)
-  assign_port "$channelId" "$port"
+  local port status
+  if port=$(reserve_port "$channelId"); then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 2 ]; then
+      echo "Channel $channelId is already registered on port $(get_port "$channelId")."
+      exit 0
+    fi
+    exit 1
+  fi
   echo "Assigned port $port"
 
   # Create instance directory
@@ -241,9 +275,17 @@ cmd_add_channel() {
     exit 0
   fi
 
-  local port
-  port=$(allocate_port)
-  assign_port "$channelId" "$port"
+  local port status
+  if port=$(reserve_port "$channelId"); then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 2 ]; then
+      echo "Channel $channelId is already registered on port $(get_port "$channelId")."
+      exit 0
+    fi
+    exit 1
+  fi
   echo "Assigned port $port"
 
   mkdir -p "$INSTANCES_DIR/$channelId"
@@ -320,7 +362,7 @@ for entry in sorted(os.listdir(instances_dir)):
         continue
     raw = open(pf).read().strip()
     # Same strict rule as the router: all ASCII digits, value > 0.
-    if re.fullmatch(r'\d+', raw) and int(raw) > 0:
+    if re.fullmatch(r'[0-9]+', raw) and int(raw) > 0:
         assignments[entry] = int(raw)
     else:
         print(f'  Warning: {entry} has an invalid .port file')

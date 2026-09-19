@@ -55,7 +55,7 @@ describe("readInstancePort", () => {
     fs.mkdirSync(d, { recursive: true });
     // parseInt would accept these; boot/list use strict int() and skip them,
     // so the router must reject them too to stay consistent.
-    for (const bad of ["18789junk", "18789.5", "18789 18790"]) {
+    for (const bad of ["18789junk", "18789.5", "18789 18790", "١٨٧٨٩"]) {
       fs.writeFileSync(path.join(d, ".port"), bad);
       expect(readInstancePort(d)).toBeUndefined();
     }

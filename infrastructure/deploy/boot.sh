@@ -25,7 +25,7 @@ if os.path.isdir(instances_dir):
             # Same strict rule the router uses: all ASCII digits, value > 0.
             # Rejects '0', negatives, and trailing junk so the container we
             # start here always matches the instance set the router will load.
-            if not re.fullmatch(r'\d+', raw):
+            if not re.fullmatch(r'[0-9]+', raw):
                 continue
             port = int(raw)
             if port <= 0:
@@ -33,10 +33,6 @@ if os.path.isdir(instances_dir):
             rows.append((entry, port))
         except ValueError:
             continue
-        port = int(raw)
-        if port <= 0:
-            continue
-        rows.append((entry, port))
 for cid, port in sorted(rows, key=lambda x: x[1]):
     print(f'{cid} {port}')
 " 2>/dev/null)
