@@ -64,11 +64,13 @@ function loadChannels(): ChannelConfig[] {
   // A channel is registered when its instance directory holds a valid `.port`
   // dotfile — the same signal (and identical validation via readInstancePort)
   // the router uses, so lifecycle messages target exactly the instances the
-  // router loads.
-  for (const channelId of fs.readdirSync(INSTANCES_DIR)) {
-    if (!DISCORD_ID_RE.test(channelId)) {
+  // router loads. Use withFileTypes + isDirectory() (no symlink follow) to
+  // apply the router's no-symlink boundary here too.
+  for (const entry of fs.readdirSync(INSTANCES_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !DISCORD_ID_RE.test(entry.name)) {
       continue;
     }
+    const channelId = entry.name;
     if (readInstancePort(path.join(INSTANCES_DIR, channelId)) === undefined) {
       continue;
     }

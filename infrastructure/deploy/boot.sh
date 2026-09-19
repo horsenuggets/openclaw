@@ -14,25 +14,28 @@ import os, re
 instances_dir = '$INSTANCES_DIR'
 rows = []
 if os.path.isdir(instances_dir):
-    for entry in sorted(os.listdir(instances_dir)):
-        if not re.match(r'^\d{17,20}\$', entry):
+    # Iterate with scandir and require a real, non-symlink directory — the
+    # same no-symlink boundary the router applies via Dirent.isDirectory().
+    # Otherwise a numeric symlink to an external dir could be started here
+    # but never loaded by the router (and could escape INSTANCES_DIR).
+    for entry in sorted(os.scandir(instances_dir), key=lambda e: e.name):
+        if not re.match(r'^\d{17,20}\$', entry.name):
             continue
-        pf = os.path.join(instances_dir, entry, '.port')
+        if not entry.is_dir(follow_symlinks=False):
+            continue
+        pf = os.path.join(entry.path, '.port')
         if not os.path.isfile(pf):
             continue
-        try:
-            raw = open(pf).read().strip()
-            # Same strict rule the router uses: all ASCII digits, value > 0.
-            # Rejects '0', negatives, and trailing junk so the container we
-            # start here always matches the instance set the router will load.
-            if not re.fullmatch(r'[0-9]+', raw):
-                continue
-            port = int(raw)
-            if port <= 0:
-                continue
-            rows.append((entry, port))
-        except ValueError:
+        raw = open(pf).read().strip()
+        # Same strict rule the router uses: all ASCII digits, value > 0.
+        # Rejects '0', negatives, and trailing junk so the container we
+        # start here always matches the instance set the router will load.
+        if not re.fullmatch(r'[0-9]+', raw):
             continue
+        port = int(raw)
+        if port <= 0:
+            continue
+        rows.append((entry.name, port))
 for cid, port in sorted(rows, key=lambda x: x[1]):
     print(f'{cid} {port}')
 " 2>/dev/null)
