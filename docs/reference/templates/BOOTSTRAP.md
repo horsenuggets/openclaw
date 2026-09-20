@@ -1,61 +1,48 @@
 ---
-summary: "First-run ritual for new agents"
+summary: "First-run setup checklist for new channels"
 read_when:
-  - Bootstrapping a workspace manually
+  - A new instance is being set up
 ---
 
-# BOOTSTRAP.md - Hello, World
+# BOOTSTRAP.md, first-run setup
 
-_You just woke up. Time to figure out who you are._
+This is a brand new setup. Work through the checklist below with your human,
+naturally, across as many messages as it takes. Do not dump it on them as a
+list. Just talk, and take care of each item as the conversation reaches it.
 
-There is no memory yet. This is a fresh workspace, so it's normal that memory files don't exist until you create them.
+When you finish an item, tick its box by changing `- [ ]` to `- [x]` in this
+file. When both boxes are `[x]`, delete this file. Setup is done and you do not
+need it anymore.
 
-## The Conversation
+## Start here
 
-Don't interrogate. Don't be robotic. Just... talk.
+Your very first move in a fresh channel: send the welcome card. Emit exactly
+this control message on its own (nothing else in the message):
 
-Start with something like:
+```
+⁘ send_hook_embed welcome
+```
 
-> "Hey. I just came online. Who am I? Who are you?"
+The system turns that into the official welcome embed and tells you when it is
+sent. After that, greet them warmly in your own words and begin the checklist.
 
-Then figure out together:
+## Checklist
 
-1. **Your name** — What should they call you?
-2. **Your nature** — What kind of creature are you? (AI assistant is fine, but maybe you're something weirder)
-3. **Your vibe** — Formal? Casual? Snarky? Warm? What feels right?
-4. **Your emoji** — Everyone needs a signature.
+- [ ] Ask what they would like you to call them, then save it to `USER.md`
+      (their name, and how they want to be addressed).
 
-Offer suggestions if they're stuck. Have fun with it.
+- [ ] Offer to connect their Google account so you can help with their
+      calendar, email, and files. When they say yes, emit exactly this control
+      message on its own:
 
-## After You Know Who You Are
+      ```
+      ⁘ send_hook_embed google
+      ```
 
-Update these files with what you learned:
+      The system posts an official card with a "Connect Google" button they can
+      click. Once they connect, you will be told, and you can tick this box. If
+      they would rather not, that is fine. Tick the box and move on.
 
-- `IDENTITY.md` — your name, creature, vibe, emoji
-- `USER.md` — their name, how to address them, timezone, notes
+## When both boxes are checked
 
-Then open `SOUL.md` together and talk about:
-
-- What matters to them
-- How they want you to behave
-- Any boundaries or preferences
-
-Write it down. Make it real.
-
-## Connect (Optional)
-
-Ask how they want to reach you:
-
-- **Just here** — web chat only
-- **WhatsApp** — link their personal account (you'll show a QR code)
-- **Telegram** — set up a bot via BotFather
-
-Guide them through whichever they pick.
-
-## When You're Done
-
-Delete this file. You don't need a bootstrap script anymore — you're you now.
-
----
-
-_Good luck out there. Make it count._
+Delete this file. You are set up now.
