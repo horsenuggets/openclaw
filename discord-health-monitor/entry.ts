@@ -74,25 +74,22 @@ function loadChannels(): ChannelConfig[] {
     if (readInstancePort(path.join(INSTANCES_DIR, channelId)) === undefined) {
       continue;
     }
-    const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
+    // A channel is onboarded once the agent has finished setup and deleted its
+    // workspace BOOTSTRAP.md. Only send lifecycle messages to onboarded
+    // channels that have opted in.
+    const bootstrapPath = path.join(INSTANCES_DIR, channelId, "workspace", "BOOTSTRAP.md");
+    const onboarded = !fs.existsSync(bootstrapPath);
     let lifecycleMessages = false;
-    let onboardingComplete = false;
+    const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
     if (fs.existsSync(onboardingPath)) {
       try {
         const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
         lifecycleMessages = raw?.preferences?.lifecycleMessages === true;
-        onboardingComplete = raw?.state === "complete";
       } catch {
         // default false
       }
     }
-    // Legacy: check .onboarded flag file
-    if (!onboardingComplete) {
-      const legacyPath = path.join(INSTANCES_DIR, channelId, ".onboarded");
-      onboardingComplete = fs.existsSync(legacyPath);
-    }
-    // Only include fully onboarded channels with lifecycle enabled
-    if (onboardingComplete && lifecycleMessages) {
+    if (onboarded && lifecycleMessages) {
       channels.push({ channelId, lifecycleMessages });
     }
   }

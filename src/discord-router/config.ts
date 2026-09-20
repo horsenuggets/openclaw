@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type OnboardingState = "none" | "greeted" | "named" | "google_pending" | "complete";
-
 export type UserPreferences = {
   /** Show "Back online." / "Shutting down..." lifecycle messages. Default: false. */
   lifecycleMessages?: boolean;
@@ -12,8 +10,6 @@ export type InstanceConfig = {
   channelId: string;
   port: number;
   token: string;
-  onboarded: boolean;
-  onboardingState: OnboardingState;
   preferences: UserPreferences;
   configPath: string;
   instanceDir: string;
@@ -113,23 +109,16 @@ export function loadRouterConfig(opts: {
       }
     }
 
-    // Onboarding state
+    // User preferences (lifecycle messages, etc.) live in .onboarding.json.
     const onboardingPath = path.join(instanceDir, ".onboarding.json");
-    let onboardingState: OnboardingState = "none";
     let preferences: UserPreferences = {};
     if (fs.existsSync(onboardingPath)) {
       try {
         const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
-        onboardingState = raw?.state ?? "none";
         preferences = raw?.preferences ?? {};
       } catch {
-        onboardingState = "none";
+        preferences = {};
       }
-    }
-    // Legacy: check old .onboarded flag file
-    const legacyOnboardedPath = path.join(instanceDir, ".onboarded");
-    if (onboardingState === "none" && fs.existsSync(legacyOnboardedPath)) {
-      onboardingState = "complete";
     }
 
     // Env var overrides
@@ -143,8 +132,6 @@ export function loadRouterConfig(opts: {
       channelId,
       port: envPort && Number.isFinite(Number(envPort)) ? Number(envPort) : port,
       token: gatewayToken,
-      onboarded: onboardingState === "complete",
-      onboardingState,
       preferences,
       configPath,
       instanceDir,
@@ -159,7 +146,7 @@ export function loadRouterConfig(opts: {
   };
 }
 
-/** Read the full onboarding file (state + preferences). */
+/** Read the onboarding preferences file. */
 function readOnboardingFile(instance: InstanceConfig): Record<string, unknown> {
   try {
     const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
@@ -173,20 +160,6 @@ function readOnboardingFile(instance: InstanceConfig): Record<string, unknown> {
 function writeOnboardingFile(instance: InstanceConfig, data: Record<string, unknown>): void {
   const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
   fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
-}
-
-/** Update onboarding state for an instance. */
-export function setOnboardingState(instance: InstanceConfig, state: OnboardingState): void {
-  try {
-    const existing = readOnboardingFile(instance);
-    existing.state = state;
-    existing.updatedAt = new Date().toISOString();
-    writeOnboardingFile(instance, existing);
-    instance.onboardingState = state;
-    instance.onboarded = state === "complete";
-  } catch {
-    // Best effort
-  }
 }
 
 /** Update a user preference. */
@@ -207,11 +180,6 @@ export function setUserPreference(
   } catch {
     // Best effort
   }
-}
-
-/** Legacy alias */
-export function markOnboarded(instance: InstanceConfig): void {
-  setOnboardingState(instance, "complete");
 }
 
 /**

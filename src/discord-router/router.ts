@@ -2,13 +2,36 @@ import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import WebSocket from "ws";
+import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
-import { refreshToken, setOnboardingState, setUserPreference } from "./config.js";
+import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
+import { refreshToken, setUserPreference } from "./config.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
+
+/** Runs a control command emitted by the agent; returns a result string to
+ * relay back to the agent, or null for a no-op (no relay). */
+export type RunAgentCommand = (
+  cmd: AgentCommand,
+  ctx: { channelId: string; instance: InstanceConfig; authorId: string },
+) => Promise<string | null>;
+
+const WELCOME_EMBED = {
+  title: "Welcome to OpenClaw!",
+  description:
+    "I'm your personal everything-assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
+  color: 0xff8080,
+};
+
+const GOOGLE_CONNECT_EMBED = {
+  title: "Connect your Google account",
+  description:
+    "Link your Google account so I can help with your calendar, email, and files. Click the button below to connect. You can skip this if you'd rather not.",
+  color: 0xff8080,
+};
 
 export type RouterRuntime = {
   log: (...args: unknown[]) => void;
@@ -97,6 +120,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         runtime,
         agentTimeoutMs,
         inflight,
+        runCommand: runAgentCommand,
       }).then(() => {});
     },
     onAuthComplete: async ({ discordUserId, code }) => {
@@ -202,34 +226,34 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         }
         fs.unlinkSync(tokenFile);
 
-        // Mark onboarding complete
-        setOnboardingState(instance, "complete");
         pendingGoogleAuth.delete(discordUserId);
 
-        // Notify agent via Discord
+        // Show the capabilities card.
         await discordSend(
           discordToken,
           channelId,
           "Google account connected successfully! Here are some things I can help you with:\n\n" +
-            "📅 **Calendar** — Check your schedule, create events, set reminders\n" +
-            "📧 **Email** — Read and summarize your inbox, draft replies\n" +
-            "📁 **Drive** — Search and manage your files\n" +
-            "✅ **Tasks** — Manage your to-do lists\n" +
-            "🔄 **Recurring tasks** — Set up heartbeats and automated check-ins\n\n" +
+            "📅 **Calendar**: check your schedule, create events, set reminders\n" +
+            "📧 **Email**: read and summarize your inbox, draft replies\n" +
+            "📁 **Drive**: search and manage your files\n" +
+            "✅ **Tasks**: manage your to-do lists\n" +
+            "🔄 **Recurring tasks**: set up heartbeats and automated check-ins\n\n" +
             "What would you like to try first?",
         );
 
-        // Also tell the agent via the gateway
+        // Tell the agent so it can tick the Google item on its BOOTSTRAP.md
+        // checklist and continue.
         void routeMessage({
           authorId: discordUserId,
           channelId,
           messageContent:
-            "[System: The user just successfully connected their Google account. Acknowledge this briefly and enthusiastically. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. Do NOT list what you can do — that was already sent.]",
+            "[system] The user just connected their Google account. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. If BOOTSTRAP.md exists, tick the Google item (and delete BOOTSTRAP.md if setup is now complete). The capabilities message was already sent, so acknowledge briefly without repeating it.",
           instance,
           discordToken,
           runtime,
           agentTimeoutMs,
           inflight,
+          runCommand: runAgentCommand,
         });
       } catch (err) {
         runtime.error(`[router] post-auth error: ${String(err)}`);
@@ -239,6 +263,34 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   const inflight = new Set<string>();
   const pendingGoogleAuth = new Map<string, { channelId: string; authUrl: string }>();
+
+  // Dispatches the agent's `⁘` control commands to host-side actions the agent
+  // cannot do itself (posting official Discord embeds and buttons).
+  const runAgentCommand: RunAgentCommand = async (cmd, ctx) => {
+    const { channelId, authorId } = ctx;
+    if (cmd.command === "return") {
+      return null; // deliberate no-op, nothing to relay
+    }
+    if (cmd.command === "send_hook_embed") {
+      const name = cmd.args[0];
+      if (name === "welcome") {
+        await discordSendEmbed(discordToken, channelId, WELCOME_EMBED);
+        return "welcome card sent";
+      }
+      if (name === "google") {
+        const { authUrl } = oauth.requestAuth({ discordUserId: authorId, email: "user" });
+        pendingGoogleAuth.set(authorId, { channelId, authUrl });
+        await discordSendEmbedWithLinkButton(discordToken, channelId, GOOGLE_CONNECT_EMBED, {
+          label: "Connect Google",
+          url: authUrl,
+        });
+        return "google connect card sent; waiting for the user to click the button and authorize";
+      }
+      return `error: unknown embed "${name ?? ""}"`;
+    }
+    return `error: unknown command "${cmd.command}"`;
+  };
+
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   let lastSequence: number | null = null;
   let sessionId: string | undefined;
@@ -384,25 +436,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
             // Lifecycle messages ("Back online") handled by health-monitor sidecar.
 
-            // Startup recovery: check for unanswered DMs and respond
-            // Delay to let containers finish starting before connecting.
+            // Startup recovery: answer any DM messages left unanswered while the
+            // router was down. Delay to let containers finish starting.
             setTimeout(async () => {
-              // Onboard new users first
-              await onboardNewChannels(
-                discordToken,
-                instances,
-                config,
-                runtime,
-                agentTimeoutMs,
-                inflight,
-              );
-              // Then recover unanswered messages
               await recoverUnansweredMessages(
                 discordToken,
                 instances,
                 runtime,
                 agentTimeoutMs,
                 inflight,
+                runAgentCommand,
               );
             }, 10_000);
           }
@@ -482,52 +525,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     runtime,
                     agentTimeoutMs,
                     inflight,
+                    runCommand: runAgentCommand,
                   });
                 }
               });
               return;
             }
 
-            // Onboarding state machine: inject context based on state
-            const state = instance.onboardingState;
-            if (state === "greeted") {
-              // User is responding with their name
-              content = `[System: The user just told you their name. Acknowledge it warmly in ONE short sentence only (e.g. "Nice to meet you, {name}! 👋"). Do NOT ask any questions or offer help. Just the name acknowledgment.]\n${content}`;
-            } else if (state === "named") {
-              // Named but auth link wasn't sent (e.g. router restarted mid-flow).
-              // Re-send the Google auth link now.
-              void (async () => {
-                try {
-                  const { authUrl } = oauth.requestAuth({
-                    discordUserId: authorId,
-                    email: "user",
-                  });
-                  pendingGoogleAuth.set(authorId, { channelId, authUrl });
-                  await discordSend(
-                    discordToken,
-                    channelId,
-                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
-                  );
-                  setOnboardingState(instance, "google_pending");
-                  runtime.log(
-                    `[router] re-sent Google auth link to ${authorId} (was in named state)`,
-                  );
-                } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
-                  setOnboardingState(instance, "complete");
-                }
-              })();
-              // Still route the message to the agent
-            } else if (state === "google_pending") {
-              // User responding to Google auth prompt — check if they declined
-              const declined = /no|nah|skip|later|not now|don't|dont/i.test(content.trim());
-              if (declined) {
-                setOnboardingState(instance, "complete");
-                runtime.log(`[router] user ${authorId} declined Google auth, onboarding complete`);
-              }
-              // Otherwise let the message through normally (they might be chatting)
-            }
-
+            // Route to the agent. Onboarding (including offering Google) is
+            // driven by the agent's BOOTSTRAP.md checklist and the `⁘` command
+            // channel, not by a router-side state machine.
             void routeMessage({
               authorId,
               channelId,
@@ -538,34 +545,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime,
               agentTimeoutMs,
               inflight,
-            }).then(async (success) => {
-              if (!success) {
-                return;
-              }
-
-              // State transitions after successful agent response
-              if (state === "greeted") {
-                // Name acknowledged → send Google auth link
-                setOnboardingState(instance, "named");
-                try {
-                  const { authUrl } = oauth.requestAuth({
-                    discordUserId: authorId,
-                    email: "user",
-                  });
-                  // Store auth URL for this user so the callback can find them
-                  pendingGoogleAuth.set(authorId, { channelId, authUrl });
-                  await discordSend(
-                    discordToken,
-                    channelId,
-                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
-                  );
-                  setOnboardingState(instance, "google_pending");
-                  runtime.log(`[router] sent Google auth link to ${authorId}`);
-                } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
-                  setOnboardingState(instance, "complete");
-                }
-              }
+              runCommand: runAgentCommand,
             });
           }
 
@@ -746,6 +726,8 @@ async function routeMessage(params: {
   runtime: RouterRuntime;
   agentTimeoutMs: number;
   inflight: Set<string>;
+  /** Handler for `⁘` control commands emitted by the agent. */
+  runCommand?: RunAgentCommand;
 }): Promise<boolean> {
   const {
     authorId,
@@ -861,68 +843,112 @@ async function routeMessage(params: {
 
       // Re-read token from disk so we never use a stale cached value
       const freshToken = refreshToken(instance);
-      const idempotencyKey = randomUUID();
-      const result = await callGatewaySimple({
-        url: `ws://127.0.0.1:${instance.port}`,
-        token: freshToken || undefined,
-        method: "agent",
-        params: {
-          message: messageContent || "<media>",
-          channel: "discord",
-          deliver: false,
-          idempotencyKey,
-          sessionKey: `agent:main:discord:default:channel:${channelId}`,
-          timeout: Math.floor(agentTimeoutMs / 1000),
-          ...(gatewayAttachments.length > 0 ? { attachments: gatewayAttachments } : {}),
-        },
-        expectFinal: true,
-        timeoutMs: agentTimeoutMs + 30_000,
-      });
 
-      // Stop typing as soon as we have the response
-      clearInterval(typingInterval);
+      // Drive the agent, processing any `⁘` control commands it emits and
+      // relaying their results back so it can continue. A depth cap prevents a
+      // command/result loop from running forever.
+      let agentMessage = messageContent || "<media>";
+      let attachmentsForCall = gatewayAttachments;
+      let commandDepth = 0;
+      const MAX_COMMAND_ROUNDTRIPS = 5;
+      let deliveredAnything = false;
+      let handled = false;
 
-      const payloads = result?.result?.payloads ?? [];
-      if (payloads.length === 0) {
-        runtime.log(`[router] empty response for channel ${channelId}`);
-        await discordSend(
-          discordToken,
-          channelId,
-          "*I processed your message but wasn't able to generate a response. Please try again.*",
-        );
-        return false;
-      }
+      while (true) {
+        const idempotencyKey = randomUUID();
+        const result = await callGatewaySimple({
+          url: `ws://127.0.0.1:${instance.port}`,
+          token: freshToken || undefined,
+          method: "agent",
+          params: {
+            message: agentMessage,
+            channel: "discord",
+            deliver: false,
+            idempotencyKey,
+            sessionKey: `agent:main:discord:default:channel:${channelId}`,
+            timeout: Math.floor(agentTimeoutMs / 1000),
+            ...(attachmentsForCall.length > 0 ? { attachments: attachmentsForCall } : {}),
+          },
+          expectFinal: true,
+          timeoutMs: agentTimeoutMs + 30_000,
+        });
+        attachmentsForCall = []; // attachments belong to the first turn only
 
-      for (const payload of payloads) {
-        let text = payload.text?.trim() ?? "";
-
-        // Filter out raw JS/system errors that leaked into agent output.
-        // These should never be shown to the user as normal text.
-        if (isLeakedError(text)) {
-          runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
-          continue;
+        const payloads = result?.result?.payloads ?? [];
+        if (payloads.length === 0) {
+          if (!handled) {
+            runtime.log(`[router] empty response for channel ${channelId}`);
+            await discordSend(
+              discordToken,
+              channelId,
+              "*I processed your message but wasn't able to generate a response. Please try again.*",
+            );
+          }
+          break;
         }
 
-        // Apply Discord text formatting pipeline
-        if (text) {
-          text = convertMarkdownTables(text, "code");
-          text = stripHorizontalRules(text);
-          text = convertTimesToDiscordTimestamps(text);
-        }
-        if (text) {
-          const chunks = chunkText(text, 2000);
-          for (const chunk of chunks) {
-            await discordSend(discordToken, channelId, chunk);
+        let commandResult: string | null = null;
+        let ranCommand = false;
+
+        for (const payload of payloads) {
+          const raw = payload.text ?? "";
+
+          // Control command? Never rendered to Discord; run it and capture a
+          // result to relay back to the agent.
+          const cmd = params.runCommand ? parseAgentCommand(raw) : null;
+          if (cmd) {
+            ranCommand = true;
+            handled = true;
+            try {
+              const res = await params.runCommand!(cmd, { channelId, instance, authorId });
+              if (res !== null) {
+                commandResult = res;
+              }
+            } catch (cmdErr) {
+              commandResult = `error running ${cmd.command}: ${String(cmdErr)}`;
+              runtime.error(`[router] command ${cmd.command} failed: ${String(cmdErr)}`);
+            }
+            continue;
+          }
+
+          // Normal message: unescape a leading `\⁘`, filter leaked errors, then
+          // format and send.
+          let text = unescapeAgentText(raw).trim();
+          if (isLeakedError(text)) {
+            runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
+            continue;
+          }
+          if (text) {
+            text = convertMarkdownTables(text, "code");
+            text = stripHorizontalRules(text);
+            text = convertTimesToDiscordTimestamps(text);
+            for (const chunk of chunkText(text, 2000)) {
+              await discordSend(discordToken, channelId, chunk);
+            }
+            deliveredAnything = true;
+            handled = true;
+          }
+          const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
+          for (const url of mediaUrls) {
+            await discordSend(discordToken, channelId, url);
+            deliveredAnything = true;
+            handled = true;
           }
         }
-        const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-        for (const url of mediaUrls) {
-          await discordSend(discordToken, channelId, url);
+
+        runtime.log(`[router] processed ${payloads.length} payload(s) for channel ${channelId}`);
+
+        // If a command produced a result, relay it back to the agent for a
+        // follow-up turn (bounded by the depth cap).
+        if (ranCommand && commandResult !== null && commandDepth < MAX_COMMAND_ROUNDTRIPS) {
+          commandDepth += 1;
+          agentMessage = `[system] Command result: ${commandResult}`;
+          continue;
         }
+        break;
       }
 
-      runtime.log(`[router] delivered ${payloads.length} payload(s) to channel ${channelId}`);
-      return true;
+      return handled || deliveredAnything;
     } finally {
       clearInterval(typingInterval);
     }
@@ -1163,6 +1189,38 @@ async function discordSendEmbed(
   });
 }
 
+/** Send an embed with a single Discord link-style button (opens `url`). */
+async function discordSendEmbedWithLinkButton(
+  token: string,
+  channelId: string,
+  embed: { title: string; description: string; color?: number },
+  button: { label: string; url: string },
+): Promise<void> {
+  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      embeds: [embed],
+      components: [
+        {
+          type: 1, // action row
+          components: [
+            {
+              type: 2, // button
+              style: 5, // link button
+              label: button.label,
+              url: button.url,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+}
+
 /**
  * Proactively message all non-onboarded users on startup.
  * Sends a welcome DM and triggers the agent to greet them.
@@ -1177,6 +1235,7 @@ async function recoverUnansweredMessages(
   runtime: RouterRuntime,
   agentTimeoutMs: number,
   inflight: Set<string>,
+  runCommand: RunAgentCommand,
 ): Promise<void> {
   const botId = (
     (await fetch(`${DISCORD_API}/applications/@me`, {
@@ -1185,10 +1244,6 @@ async function recoverUnansweredMessages(
   )?.id;
 
   for (const [channelId, instance] of instances) {
-    if (instance.onboardingState !== "complete") {
-      continue;
-    }
-
     try {
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
@@ -1251,56 +1306,10 @@ async function recoverUnansweredMessages(
         runtime,
         agentTimeoutMs,
         inflight,
+        runCommand,
       });
     } catch (err) {
       runtime.log(`[router] recovery failed for channel ${channelId}: ${String(err)}`);
     }
-  }
-}
-
-async function onboardNewChannels(
-  discordToken: string,
-  instances: Map<string, InstanceConfig>,
-  config: RouterConfig,
-  runtime: RouterRuntime,
-  agentTimeoutMs: number,
-  inflight: Set<string>,
-): Promise<void> {
-  for (const [channelId, instance] of instances) {
-    if (instance.onboardingState !== "none") {
-      continue;
-    }
-
-    runtime.log(`[router] proactive onboarding for channel ${channelId}`);
-
-    // Send welcome embed
-    await discordSendEmbed(discordToken, channelId, {
-      title: "Welcome to OpenClaw!",
-      description:
-        "I'm your personal AI assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
-      color: 0xff8080,
-    });
-
-    // Route through the agent for the greeting
-    void routeMessage({
-      authorId: "system",
-      channelId,
-      messageContent:
-        "[System: This is a brand new user who just joined. You are OpenClaw, a personal AI assistant. Do NOT refer to yourself as Claude Code or Claude — you are OpenClaw. Greet them warmly, introduce yourself as OpenClaw, and ask what they'd like to be called. Keep it brief and friendly — 2-3 sentences max. Do not mention Docker, containers, Google, OAuth, or any technical infrastructure. Just greet and ask their name.]",
-      instance,
-      discordToken,
-      runtime,
-      agentTimeoutMs,
-      inflight,
-    }).then((success) => {
-      if (success) {
-        setOnboardingState(instance, "greeted");
-        runtime.log(`[router] onboarding greeting sent for channel ${channelId}, waiting for name`);
-      } else {
-        runtime.log(
-          `[router] onboarding failed for channel ${channelId}, will retry on next restart`,
-        );
-      }
-    });
   }
 }
