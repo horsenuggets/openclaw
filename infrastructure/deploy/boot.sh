@@ -24,9 +24,13 @@ INSTANCES_DIR="$HOME/.openclaw-instances"
 # instance model) or an empty store; never clobber the live shared file.
 SHARED_AUTH_DIR="$INSTANCES_DIR/shared/auth"
 SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
+# If the path exists but is not a regular file, a container previously started
+# before seeding and Docker created the bind-mount target as a directory. Fail
+# fast with remediation rather than cp'ing *into* it (which leaves the mount
+# broken for every container).
 if [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; then
-  echo "Error: shared auth path exists but is not a regular file: $SHARED_AUTH_FILE" >&2
-  echo "Remove or move it, then rerun boot." >&2
+  echo "ERROR: $SHARED_AUTH_FILE exists but is not a regular file (likely a Docker-created bind-mount directory)." >&2
+  echo "       Stop the agent containers, remove that path, and re-run so it can be seeded as a file." >&2
   exit 1
 fi
 if [ ! -f "$SHARED_AUTH_FILE" ]; then
