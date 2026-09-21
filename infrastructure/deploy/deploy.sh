@@ -36,6 +36,7 @@ mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker"
 cp "$PROJECT_ROOT/dist/openclaw-linux-x64" "$STAGING/deploy/bin/openclaw"
 cp "$PROJECT_ROOT/dist/discord-router-linux-x64" "$STAGING/deploy/bin/discord-router"
 cp "$PROJECT_ROOT/dist/health-monitor-linux-x64" "$STAGING/deploy/bin/health-monitor"
+cp "$PROJECT_ROOT/dist/provisioner-linux-x64" "$STAGING/deploy/bin/provisioner"
 # cp "$PROJECT_ROOT/dist/whisper-linux-x64" "$STAGING/deploy/bin/whisper"  # when available
 
 # Extensions (pre-compiled plugins)
@@ -56,6 +57,9 @@ cp "$INFRA_DIR/docker/agent.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/scripts/openclawctl" "$STAGING/deploy/bin/openclawctl"
 chmod +x "$STAGING/deploy/bin/openclawctl"
+
+# systemd unit for the host provisioning daemon
+cp "$INFRA_DIR/systemd/openclaw-provisioner.service" "$STAGING/openclaw-provisioner.service"
 
 # Environment variables (local .env or CI-generated)
 if [ -f "$PROJECT_ROOT/.env" ]; then

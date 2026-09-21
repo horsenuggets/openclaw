@@ -1,0 +1,23 @@
+# OpenClaw provisioning daemon (host-side).
+#
+# Runs the compiled provisioner binary that the sandboxed discord-router calls
+# over loopback to register/unregister channels. Installed as a systemd --user
+# unit for the deploy user; env (OPENCLAW_PROVISIONER_PORT / _TOKEN) comes from
+# the deploy .env. Install with:
+#   mkdir -p ~/.config/systemd/user
+#   cp openclaw-provisioner.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now openclaw-provisioner.service
+[Unit]
+Description=OpenClaw provisioning daemon
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.env
+ExecStart=%h/deploy/bin/provisioner
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -17,9 +17,10 @@ import {
   handleChannelCommand,
   parseChannelTextCommand,
 } from "./channel-commands.js";
-import { refreshToken, setUserPreference } from "./config.js";
+import { loadRouterConfig, refreshToken, setUserPreference } from "./config.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
+import { createHttpProvisioningClient } from "./provisioning.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
 /** Runs a control command emitted by the agent; returns a result string to
@@ -396,21 +397,73 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
   };
 
-  // Phase 1 stub: provisioning needs host/Docker access the router lacks, so
-  // register/unregister are wired to the host daemon in Phase 2. Until then they
-  // report unavailability rather than pretending to succeed.
-  const provisioning: ProvisioningClient = {
+  // Reconcile the in-memory instance map with disk. The map is built once at
+  // startup, so after the daemon creates/removes an instance we re-scan so the
+  // channel becomes (or stops being) routable immediately, without a restart.
+  const reloadInstances = () => {
+    try {
+      const fresh = loadRouterConfig({ instancesDir: config.instancesDir, discordToken });
+      for (const [id, inst] of fresh.instances) {
+        instances.set(id, inst);
+      }
+      const removed: string[] = [];
+      for (const id of instances.keys()) {
+        if (!fresh.instances.has(id)) {
+          removed.push(id);
+        }
+      }
+      for (const id of removed) {
+        instances.delete(id);
+      }
+      runtime.log(`[router] instances reloaded: ${instances.size}`);
+    } catch (err) {
+      runtime.error(`[router] instance reload failed: ${String(err)}`);
+    }
+  };
+
+  // Provisioning needs host/Docker access the router lacks, so register/
+  // unregister go to the host daemon (discord-provisioner) over loopback when
+  // it is configured. Without the daemon env, it fails closed (unavailable).
+  const provisionerPort = process.env.OPENCLAW_PROVISIONER_PORT;
+  const provisionerToken = process.env.OPENCLAW_PROVISIONER_TOKEN;
+  const stubProvisioning: ProvisioningClient = {
     register: async () => ({
       ok: false,
-      message:
-        "Registration is not available yet on this deployment (the provisioning service is not wired up).",
+      message: "Registration is not available on this deployment (provisioning service not wired).",
     }),
     unregister: async () => ({
       ok: false,
       message:
-        "Unregistration is not available yet on this deployment (the provisioning service is not wired up).",
+        "Unregistration is not available on this deployment (provisioning service not wired).",
     }),
   };
+  const daemonProvisioning =
+    provisionerPort && provisionerToken
+      ? createHttpProvisioningClient({
+          baseUrl: `http://127.0.0.1:${provisionerPort}`,
+          token: provisionerToken,
+          log: (message) => runtime.log(message),
+        })
+      : null;
+  // Reconcile the instance map after any successful provisioning change.
+  const provisioning: ProvisioningClient = daemonProvisioning
+    ? {
+        register: async (p) => {
+          const result = await daemonProvisioning.register(p);
+          if (result.ok) {
+            reloadInstances();
+          }
+          return result;
+        },
+        unregister: async (p) => {
+          const result = await daemonProvisioning.unregister(p);
+          if (result.ok) {
+            reloadInstances();
+          }
+          return result;
+        },
+      }
+    : stubProvisioning;
 
   const channelCommandDeps: ChannelCommandDeps = {
     isWhitelisted: whitelist.isWhitelisted,

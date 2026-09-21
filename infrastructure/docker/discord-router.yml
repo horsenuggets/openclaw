@@ -18,6 +18,10 @@ services:
       # disabled (fails closed). Kept out of the repo; supplied via host env.
       - OPENCLAW_AUTH_GUILD_ID=${OPENCLAW_AUTH_GUILD_ID}
       - OPENCLAW_WHITELIST_ROLE_ID=${OPENCLAW_WHITELIST_ROLE_ID}
+      # Host provisioning daemon (discord-provisioner) the router calls over
+      # loopback for /channel register|unregister. Unset => those are disabled.
+      - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}
+      - OPENCLAW_PROVISIONER_TOKEN=${OPENCLAW_PROVISIONER_TOKEN}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
     healthcheck:

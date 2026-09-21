@@ -44,6 +44,18 @@ echo "[5/6] Installing boot script..."
 cp boot.sh ~/boot.sh
 chmod +x ~/boot.sh
 
+# 5b. Install + (re)start the provisioning daemon as a systemd --user unit.
+# Best-effort: only meaningful when OPENCLAW_PROVISIONER_* are set in ~/.env.
+if [ -f openclaw-provisioner.service ]; then
+  echo "[5b] Installing provisioner systemd unit..."
+  mkdir -p ~/.config/systemd/user
+  cp openclaw-provisioner.service ~/.config/systemd/user/
+  loginctl enable-linger "$(whoami)" 2>/dev/null || true
+  systemctl --user daemon-reload 2>/dev/null || true
+  systemctl --user enable --now openclaw-provisioner.service 2>/dev/null ||
+    echo "  (provisioner unit not started; check OPENCLAW_PROVISIONER_* in ~/.env)"
+fi
+
 # 6. Start containers
 echo "[6/6] Starting containers..."
 bash ~/boot.sh

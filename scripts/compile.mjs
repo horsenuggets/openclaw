@@ -348,6 +348,24 @@ for (const target of targets) {
   }
 }
 
+// Step 6d: Compile provisioner standalone binary (runs on the host, wraps openclawctl)
+console.log(`\nCompiling provisioner for ${targets.length} target(s)...`);
+
+for (const target of targets) {
+  const isWindows = target.name.startsWith("windows");
+  const provisionerOutfile = `dist/provisioner-${target.name}${isWindows ? ".exe" : ""}`;
+  console.log(`  ${target.name} -> ${provisionerOutfile}`);
+
+  try {
+    execSync(
+      `bun build discord-provisioner/entry.ts --compile --target=${target.bunTarget} --outfile ${provisionerOutfile}`,
+      { stdio: "inherit" },
+    );
+  } catch {
+    console.error(`  Failed to compile provisioner for ${target.name}`);
+  }
+}
+
 // Step 7: Copy workspace templates for agent system prompts.
 // The binary resolves templates relative to process.execPath.
 if (existsSync("docs/reference/templates")) {
