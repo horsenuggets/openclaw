@@ -187,6 +187,17 @@ function sendJson(res: http.ServerResponse, status: number, body: ProvisionRespo
   res.end(payload);
 }
 
+let mutationQueue: Promise<void> = Promise.resolve();
+
+function runSerializedMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const pending = mutationQueue.then(operation, operation);
+  mutationQueue = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  return pending;
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -213,10 +224,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const response =
+    const response = await runSerializedMutation(() =>
       req.url === "/register"
-        ? await handleRegister(body as RegisterRequest)
-        : await handleUnregister(body as UnregisterRequest);
+        ? handleRegister(body as RegisterRequest)
+        : handleUnregister(body as UnregisterRequest),
+    );
     sendJson(res, response.ok ? 200 : 500, response);
   } catch (err) {
     console.error(`[provisioner] ${req.url} errored: ${String(err)}`);
