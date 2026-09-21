@@ -203,6 +203,32 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Runtime: agent=sub | thinking=off");
   });
 
+  it("never leaks workspace content even if a file body reproduces the block marker verbatim", () => {
+    // Pathological: a workspace file body contains the exact two-line block
+    // preamble. Cutting from the FIRST marker occurrence must still remove all
+    // real workspace files (billing-safe: over-remove rather than leak).
+    const prompt = [
+      "## Persona",
+      "Persona stays.",
+      "",
+      PC_PREAMBLE,
+      "",
+      "## /workspace/SOUL.md",
+      "",
+      "A tricky file that pastes the loader line:",
+      PC_PREAMBLE,
+      "LEAK_CANARY_TEXT that must never reach the OAuth prompt.",
+      "",
+      "## Silent Replies",
+      "Real silent replies section.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("LEAK_CANARY_TEXT");
+    expect(wrapped).not.toContain("SOUL.md");
+    expect(wrapped).toContain("Persona stays.");
+    expect(wrapped).toContain("## Silent Replies");
+  });
+
   it("keeps requests on plan quota by never emitting workspace files regardless of length", () => {
     // Regression: even a huge Project Context block (well under the char cap on
     // its own would previously survive) must be fully removed by the filter.

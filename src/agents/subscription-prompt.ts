@@ -110,8 +110,16 @@ const PROJECT_CONTEXT_BLOCK_MARKER =
  * Boundary detection:
  *  - The block START is anchored on PROJECT_CONTEXT_BLOCK_MARKER (the builder's
  *    own preamble), not a bare heading, so headings embedded in file bodies do
- *    not trip it. We take the LAST occurrence because user-controlled content
- *    (extraSystemPrompt / Group Chat / Subagent Context) precedes the block.
+ *    not trip it. We take the FIRST occurrence: a fully-robust boundary would
+ *    require a delimiter the prompt builder guarantees cannot appear in file or
+ *    user content (out of scope here), so between indexOf and lastIndexOf we
+ *    pick the one that is billing-SAFE. If either extraSystemPrompt or a
+ *    workspace file body reproduced this whole two-line preamble verbatim,
+ *    cutting from the FIRST match removes everything from there to the trailing
+ *    sections — including the real workspace files — so nothing leaks; the worst
+ *    case is over-removing some legitimate preamble text, never leaking
+ *    workspace content into the OAuth prompt (which is what breaks plan-quota
+ *    billing).
  *  - The block END is the start of the final contiguous run of known trailing
  *    section headings. Trailing sections are emitted at most once each; scanning
  *    backwards we extend the run over unseen known headings and close it on the
@@ -119,13 +127,13 @@ const PROJECT_CONTEXT_BLOCK_MARKER =
  *    trailing sections except "## Runtime", which is preserved.
  *
  * Billing safety note: if a workspace file body pathologically contains exact
- * trailing-section heading lines, the worst case is that a genuine trailing
- * section is dropped (never that workspace content leaks). Dropping errs on the
- * side of keeping the OAuth system prompt lean, which is the safe direction for
- * plan-quota billing.
+ * marker/trailing-section lines, the worst case is that legitimate text is
+ * dropped (never that workspace content leaks). Dropping errs on the side of
+ * keeping the OAuth system prompt lean, the safe direction for plan-quota
+ * billing.
  */
 function stripProjectContext(prompt: string): string {
-  const markerStart = prompt.lastIndexOf(PROJECT_CONTEXT_BLOCK_MARKER);
+  const markerStart = prompt.indexOf(PROJECT_CONTEXT_BLOCK_MARKER);
   if (markerStart === -1) {
     return prompt;
   }
