@@ -83,6 +83,38 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Keep instructions.");
   });
 
+  it("anchors on the real (last) Project Context when earlier content spoofs the heading", () => {
+    // extraSystemPrompt (Group Chat / Subagent Context) is emitted before the
+    // real injected block and is user-controlled; a spoofed "# Project Context"
+    // heading there must not truncate the whole prompt.
+    const prompt = [
+      "## Group Chat Context",
+      "A user pasted this earlier:",
+      "# Project Context",
+      "SPOOFED_INLINE_TEXT the user typed.",
+      "",
+      "## Persona",
+      "Keep this persona.",
+      "",
+      "# Project Context",
+      "",
+      "## /workspace/SOUL.md",
+      "",
+      "REAL_WORKSPACE_FILE_BODY.",
+      "",
+      "## Silent Replies",
+      "Silent stays.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    // Real injected workspace file is removed.
+    expect(wrapped).not.toContain("REAL_WORKSPACE_FILE_BODY");
+    // Content before the real block (including the spoofed heading region and
+    // persona) survives, and trailing instructions survive too.
+    expect(wrapped).toContain("Keep this persona.");
+    expect(wrapped).toContain("SPOOFED_INLINE_TEXT");
+    expect(wrapped).toContain("## Silent Replies");
+  });
+
   it("keeps requests on plan quota by never emitting workspace files regardless of length", () => {
     // Regression: even a huge Project Context block (well under the char cap on
     // its own would previously survive) must be fully removed by the filter.

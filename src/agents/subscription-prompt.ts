@@ -88,16 +88,20 @@ const MAX_APPENDED_CHARS = 8000;
  */
 function stripProjectContext(prompt: string): string {
   const marker = "\n# Project Context\n";
-  const start = prompt.indexOf(marker);
+  // Anchor on the LAST occurrence: buildAgentSystemPrompt emits user-controlled
+  // text (extraSystemPrompt / Group Chat / Subagent Context) BEFORE the injected
+  // Project Context block, so an earlier "# Project Context" could appear inside
+  // that user content. The real injected block is always the final one, and
+  // using indexOf here would let a spoofed earlier heading truncate the whole
+  // prompt (including the genuine boundary and trailing instructions).
+  const start = prompt.lastIndexOf(marker);
   if (start === -1) {
     return prompt;
   }
   // Find the next section heading after the Project Context block. The block
-  // contains "## <file path>" subheadings, so we look for the first heading at
-  // or after the marker that is NOT part of the injected files: the trailing
-  // OpenClaw sections (## Silent Replies, ## Heartbeats) begin after the last
-  // "## " file entry. Rather than guess file names, resume at the first known
-  // trailing section heading.
+  // contains "## <file path>" subheadings, so we look for the first known
+  // trailing OpenClaw section (## Silent Replies, ## Heartbeats) after the
+  // marker rather than guessing file names.
   const afterBlock = prompt.slice(start + marker.length);
   const resumeHeadings = ["\n## Silent Replies\n", "\n## Heartbeats\n"];
   let resumeIndex = -1;
