@@ -27,7 +27,12 @@ SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
 if [ ! -f "$SHARED_AUTH_FILE" ]; then
   mkdir -p "$SHARED_AUTH_DIR"
   seeded=""
-  for existing in "$INSTANCES_DIR"/[0-9]*/agents/main/agent/auth-profiles.json; do
+  for instdir in "$INSTANCES_DIR"/[0-9]*; do
+    # Skip symlinked instance dirs to honour the same no-symlink boundary the
+    # router (Dirent.isDirectory) applies, so a numeric symlink can't seed
+    # secrets from a path outside the intended instances tree.
+    [ -d "$instdir" ] && [ ! -L "$instdir" ] || continue
+    existing="$instdir/agents/main/agent/auth-profiles.json"
     [ -f "$existing" ] || continue
     cp "$existing" "$SHARED_AUTH_FILE"
     chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true

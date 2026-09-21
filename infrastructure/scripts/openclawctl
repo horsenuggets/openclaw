@@ -222,21 +222,34 @@ except Exception as e:
 # migration off the old copy-per-instance model) or an empty store, so a fresh
 # host still comes up cleanly. Idempotent: never clobbers an existing shared
 # file (that file is the live, rotating source of truth).
+#
+# Runs the check+seed under the same $PORT_LOCK_FILE lock reserve_port uses, so
+# two concurrent `add-*` invocations on a fresh host can't both see the file
+# missing and race to write it. Skips symlinked instance directories to honour
+# the no-symlink boundary the router (Dirent.isDirectory) and boot.sh apply —
+# a numeric symlink could otherwise seed secrets from a path outside the
+# intended instances tree.
 ensure_shared_auth() {
-  [ -f "$SHARED_AUTH_FILE" ] && return 0
-  mkdir -p "$SHARED_AUTH_DIR"
-  local existing
-  for existing in "$INSTANCES_DIR"/[0-9]*/agents/main/agent/auth-profiles.json; do
-    [ -f "$existing" ] || continue
-    cp "$existing" "$SHARED_AUTH_FILE"
+  (
+    flock 9
+    [ -f "$SHARED_AUTH_FILE" ] && exit 0
+    mkdir -p "$SHARED_AUTH_DIR"
+    local instdir existing
+    for instdir in "$INSTANCES_DIR"/[0-9]*; do
+      # Require a real directory, not a symlink, matching the router's boundary.
+      [ -d "$instdir" ] && [ ! -L "$instdir" ] || continue
+      existing="$instdir/agents/main/agent/auth-profiles.json"
+      [ -f "$existing" ] || continue
+      cp "$existing" "$SHARED_AUTH_FILE"
+      chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+      echo "Seeded shared auth from $existing"
+      exit 0
+    done
+    # No existing profiles to migrate; write an empty store matching the shape
+    # src/agents/auth-profiles expects (version + profiles map).
+    printf '{\n  "version": 1,\n  "profiles": {}\n}\n' > "$SHARED_AUTH_FILE"
     chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
-    echo "Seeded shared auth from $existing"
-    return 0
-  done
-  # No existing profiles to migrate; write an empty store matching the shape
-  # src/agents/auth-profiles expects (version + profiles map).
-  printf '{\n  "version": 1,\n  "profiles": {}\n}\n' > "$SHARED_AUTH_FILE"
-  chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+  ) 9>"$PORT_LOCK_FILE"
 }
 
 start_container() {
