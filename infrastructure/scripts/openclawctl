@@ -6,6 +6,13 @@ set -euo pipefail
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
 AGENT_YML="$HOME/deploy/docker/agent.yml"
+# Single shared auth-profiles store mounted into every agent container (see
+# infrastructure/docker/agent.yml). OAuth refresh tokens rotate, so a
+# per-instance copy goes stale; sharing one file lets a refresh in any instance
+# be seen by all. Must exist as a regular file before a container starts, or
+# Docker would bind-mount it as an empty directory.
+SHARED_AUTH_DIR="$INSTANCES_DIR/shared/auth"
+SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
 # Lowest port to hand out. Mirrors DEFAULT_GATEWAY_PORT in src/config/paths.ts
 # (a shell script cannot import the TypeScript constant).
 BASE_PORT=18789
@@ -154,6 +161,9 @@ free_port() {
 # --- Discord API helpers ---
 
 get_discord_token() {
+  # Durable source: DISCORD_BOT_TOKEN from ~/.env (exported by boot.sh / the
+  # provisioner systemd unit's EnvironmentFile). The per-instance openclaw.json
+  # scan below is only a legacy fallback for hosts predating that convention.
   if [ -n "${DISCORD_BOT_TOKEN:-}" ]; then
     echo "$DISCORD_BOT_TOKEN"
     return
@@ -207,9 +217,32 @@ except Exception as e:
 
 # --- Container helpers ---
 
+# Ensure the shared auth-profiles file exists as a regular file before any
+# container mounts it. Seeds from an existing per-instance auth store (one-time
+# migration off the old copy-per-instance model) or an empty store, so a fresh
+# host still comes up cleanly. Idempotent: never clobbers an existing shared
+# file (that file is the live, rotating source of truth).
+ensure_shared_auth() {
+  [ -f "$SHARED_AUTH_FILE" ] && return 0
+  mkdir -p "$SHARED_AUTH_DIR"
+  local existing
+  for existing in "$INSTANCES_DIR"/[0-9]*/agents/main/agent/auth-profiles.json; do
+    [ -f "$existing" ] || continue
+    cp "$existing" "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+    echo "Seeded shared auth from $existing"
+    return 0
+  done
+  # No existing profiles to migrate; write an empty store matching the shape
+  # src/agents/auth-profiles expects (version + profiles map).
+  printf '{\n  "version": 1,\n  "profiles": {}\n}\n' > "$SHARED_AUTH_FILE"
+  chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+}
+
 start_container() {
   local channelId="$1"
   local port="$2"
+  ensure_shared_auth
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
     docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d
 }

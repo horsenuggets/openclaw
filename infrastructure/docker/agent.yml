@@ -16,6 +16,13 @@ services:
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro
       - ~/deploy/docs:/usr/local/bin/docs:ro
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}:/root/.openclaw
+      # Shared auth-profiles: a single host file mounted (read-write) over every
+      # instance's own auth store. OAuth refresh tokens rotate, so a per-instance
+      # copy goes stale (invalid_grant) once another instance refreshes. Sharing
+      # one file means a refresh in any container is immediately seen by all.
+      # boot.sh / openclawctl seed this file before the container starts (Docker
+      # would otherwise create it as an empty directory).
+      - ~/.openclaw-instances/shared/auth/auth-profiles.json:/root/.openclaw/agents/main/agent/auth-profiles.json
       - ~/.claude:/root/.claude
       - ~/logs/channel-${OPENCLAW_CHANNEL_ID}:/tmp/openclaw
     environment:

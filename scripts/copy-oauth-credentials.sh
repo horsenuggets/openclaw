@@ -8,12 +8,13 @@
 #      claude-cli credential blob).
 #   2. ~/.openclaw/agents/main/agent/auth-profiles.json (the main agent
 #      profile, kept for single-tenant deploys and CLI use).
-#   3. Every <instances-root>/<digits>/agents/main/agent/auth-profiles.json
-#      it finds (each per-channel agent container mounts its own instance
-#      dir; without this fanout, only freshly-created instances would pick
-#      up the new tokens). <instances-root> is $OPENCLAW_INSTANCES_DIR on
-#      the deploy host if set (matching src/discord-router/config.ts),
-#      else ~/.openclaw-instances.
+#   3. <instances-root>/shared/auth/auth-profiles.json — the SINGLE shared
+#      auth store every per-channel agent container mounts (see
+#      infrastructure/docker/agent.yml). Writing this one file updates all
+#      instances at once; because they share the same store, an OAuth refresh
+#      by any container is seen by all, so tokens never go stale per-instance.
+#      <instances-root> is $OPENCLAW_INSTANCES_DIR on the deploy host if set
+#      (matching src/discord-router/config.ts), else ~/.openclaw-instances.
 #
 # The gateway picks the new tokens up on the next refresh attempt — no
 # container restart needed.
@@ -64,7 +65,6 @@ import errno
 import json
 import os
 import random
-import re
 import tempfile
 import time
 
@@ -256,34 +256,20 @@ def update_store(auth_path):
 
 targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 
-# Per-channel dirs are named after the Discord snowflake channel ID.
-# The router (src/discord-router/config.ts) applies additional filtering
-# (e.g., must have a port assignment) that we do not replicate here; we
-# only mirror its ID-regex + no-symlink safety checks to avoid fanning
-# secrets into obviously invalid or dangling numeric dirs.
-DISCORD_ID_RE = re.compile(r"^\d{17,20}$")
-
+# Every per-channel agent container mounts one SHARED auth store
+# (<instances-root>/shared/auth/auth-profiles.json) over its own copy — see
+# infrastructure/docker/agent.yml. So we only need to write that single file
+# (plus the main-agent store above) instead of fanning a copy into each
+# per-instance dir; all containers read/write the shared file, so an OAuth
+# refresh by any one of them is seen by all. <instances-root> honours the
+# operator's OPENCLAW_INSTANCES_DIR override (src/discord-router/config.ts).
 instances_root_b64 = os.environ.get("OPENCLAW_INSTANCES_DIR_B64")
 instances_root = (
     base64.b64decode(instances_root_b64).decode()
     if instances_root_b64
     else os.path.join(home, ".openclaw-instances")
 )
-if os.path.isdir(instances_root):
-    # Mirror the router's Dirent.isDirectory() check
-    # (src/discord-router/config.ts) — do NOT follow symlinks, otherwise
-    # this could fan secrets into a symlinked numeric dir the router
-    # itself would refuse to load.
-    with os.scandir(instances_root) as it:
-        entries = sorted(it, key=lambda e: e.name)
-    for entry in entries:
-        if not DISCORD_ID_RE.match(entry.name):
-            continue
-        if not entry.is_dir(follow_symlinks=False):
-            continue
-        targets.append(os.path.join(
-            entry.path, "agents/main/agent/auth-profiles.json"
-        ))
+targets.append(os.path.join(instances_root, "shared/auth/auth-profiles.json"))
 
 home_prefix = home.rstrip("/") + "/"
 for path in targets:

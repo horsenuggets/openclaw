@@ -17,6 +17,30 @@ fi
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
 
+# Shared auth-profiles store mounted into every agent container (see
+# infrastructure/docker/agent.yml). Must exist as a regular file before any
+# container starts, or Docker bind-mounts it as an empty directory. Seed it once
+# from an existing per-instance auth store (migration off the old copy-per-
+# instance model) or an empty store; never clobber the live shared file.
+SHARED_AUTH_DIR="$INSTANCES_DIR/shared/auth"
+SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
+if [ ! -f "$SHARED_AUTH_FILE" ]; then
+  mkdir -p "$SHARED_AUTH_DIR"
+  seeded=""
+  for existing in "$INSTANCES_DIR"/[0-9]*/agents/main/agent/auth-profiles.json; do
+    [ -f "$existing" ] || continue
+    cp "$existing" "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+    echo "Seeded shared auth from $existing"
+    seeded=1
+    break
+  done
+  if [ -z "$seeded" ]; then
+    printf '{\n  "version": 1,\n  "profiles": {}\n}\n' > "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+  fi
+fi
+
 # Each instance owns its port as a `.port` dotfile in its own directory, so
 # there is no central ports.json to read or reconcile. Discover channels by
 # scanning for those dotfiles.
@@ -64,8 +88,13 @@ else
   done <<< "$ASSIGNMENTS"
 fi
 
-# Start discord router
+# Resolve the router's Discord token. The durable source is DISCORD_BOT_TOKEN in
+# ~/.env (loaded at the top of this script); setup.sh always installs that .env
+# from the deploy tarball, so it is present on any properly deployed host. The
+# per-instance openclaw.json scan below is a legacy fallback for hosts predating
+# the .env-as-source-of-truth convention; new deploys should never hit it.
 if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
+  echo "Warning: DISCORD_BOT_TOKEN not set in ~/.env; falling back to instance config scan." >&2
   for dir in "$INSTANCES_DIR"/*/; do
     [ -d "$dir" ] || continue
     DISCORD_BOT_TOKEN=$(python3 -c "
