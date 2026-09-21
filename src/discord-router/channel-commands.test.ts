@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   type ChannelCommandDeps,
+  type ChannelReplyPayload,
   type InstanceStatus,
   handleChannelCommand,
   parseChannelTextCommand,
@@ -36,7 +37,7 @@ describe("parseChannelTextCommand", () => {
   });
 });
 
-type ReplyCall = { text: string; ephemeral?: boolean };
+type ReplyCall = { payload: ChannelReplyPayload; ephemeral?: boolean };
 
 function makeCtx(subcommand: string | null, args: string[] = []) {
   const replies: ReplyCall[] = [];
@@ -48,10 +49,28 @@ function makeCtx(subcommand: string | null, args: string[] = []) {
       channelId: "123456789012345678",
       userId: "111111111111111111",
       isDM: false,
-      reply: (text: string, opts?: { ephemeral?: boolean }) => {
-        replies.push({ text, ephemeral: opts?.ephemeral });
+      reply: (payload: ChannelReplyPayload, opts?: { ephemeral?: boolean }) => {
+        replies.push({ payload, ephemeral: opts?.ephemeral });
       },
     },
+  };
+}
+
+/** Narrow a reply payload to a plain string (fails the test if it is an embed). */
+function textOf(payload: ChannelReplyPayload): string {
+  expect(typeof payload).toBe("string");
+  return payload as string;
+}
+
+/** Narrow a reply payload to its first embed (fails the test if it is a string). */
+function embedOf(payload: ChannelReplyPayload) {
+  expect(typeof payload).toBe("object");
+  const { embeds } = payload as { embeds: unknown[] };
+  expect(Array.isArray(embeds)).toBe(true);
+  return embeds[0] as {
+    title?: string;
+    description?: string;
+    fields?: { name: string; value: string }[];
   };
 }
 
@@ -70,19 +89,26 @@ function makeDeps(over: Partial<ChannelCommandDeps> = {}): ChannelCommandDeps {
 }
 
 describe("handleChannelCommand", () => {
-  it("status reports not-registered", async () => {
+  it("status reports not-registered via an embed", async () => {
     const { ctx, replies } = makeCtx("status");
     await handleChannelCommand(ctx, makeDeps());
-    expect(replies[0].text).toContain("not registered");
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Channel status");
+    expect(embed.description).toContain("not registered");
+    expect(replies[0].ephemeral).toBe(true);
   });
 
-  it("status reports registered details", async () => {
+  it("status reports registered details as an embed table", async () => {
     const status: InstanceStatus = { port: 18795, ownerId: "999", onboarded: false };
     const { ctx, replies } = makeCtx("status");
     await handleChannelCommand(ctx, makeDeps({ describeInstance: () => status }));
-    expect(replies[0].text).toContain("Port: 18795");
-    expect(replies[0].text).toContain("<@999>");
-    expect(replies[0].text).toContain("Onboarded: no");
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Channel status");
+    const fields = embed.fields ?? [];
+    const field = (name: string) => fields.find((f) => f.name === name)?.value;
+    expect(field("Port")).toBe("18795");
+    expect(field("Owner")).toBe("<@999>");
+    expect(field("Onboarded")).toContain("no");
   });
 
   it("register denies non-whitelisted users and does not provision", async () => {
@@ -95,7 +121,7 @@ describe("handleChannelCommand", () => {
         provisioning: { register, unregister: vi.fn() },
       }),
     );
-    expect(replies[0].text).toContain("not authorized");
+    expect(textOf(replies[0].payload)).toContain("not authorized");
     expect(register).not.toHaveBeenCalled();
   });
 
@@ -104,7 +130,7 @@ describe("handleChannelCommand", () => {
     const { ctx, replies } = makeCtx("register");
     await handleChannelCommand(ctx, makeDeps({ provisioning: { register, unregister: vi.fn() } }));
     expect(register).toHaveBeenCalledOnce();
-    expect(replies[0].text).toBe("done");
+    expect(textOf(replies[0].payload)).toBe("done");
   });
 
   it("register refuses when already registered", async () => {
@@ -118,7 +144,7 @@ describe("handleChannelCommand", () => {
       }),
     );
     expect(register).not.toHaveBeenCalled();
-    expect(replies[0].text).toContain("already registered");
+    expect(textOf(replies[0].payload)).toContain("already registered");
   });
 
   it("unregister requires explicit confirmation before removing", async () => {
@@ -131,12 +157,12 @@ describe("handleChannelCommand", () => {
     const first = makeCtx("unregister");
     await handleChannelCommand(first.ctx, deps);
     expect(unregister).not.toHaveBeenCalled();
-    expect(first.replies[0].text).toContain("To proceed");
+    expect(textOf(first.replies[0].payload)).toContain("To proceed");
 
     const second = makeCtx("unregister", ["yes"]);
     await handleChannelCommand(second.ctx, deps);
     expect(unregister).toHaveBeenCalledOnce();
-    expect(second.replies[0].text).toBe("removed");
+    expect(textOf(second.replies[0].payload)).toBe("removed");
   });
 
   it("blocks register when whitelist is not configured", async () => {
@@ -150,6 +176,15 @@ describe("handleChannelCommand", () => {
       }),
     );
     expect(register).not.toHaveBeenCalled();
-    expect(replies[0].text).toContain("not configured");
+    expect(textOf(replies[0].payload)).toContain("not configured");
+  });
+
+  it("allows status for anyone without a configured whitelist", async () => {
+    const isWhitelisted = vi.fn(async () => false);
+    const { ctx, replies } = makeCtx("status");
+    await handleChannelCommand(ctx, makeDeps({ whitelistConfigured: () => false, isWhitelisted }));
+    // status must never consult the whitelist and always replies with an embed.
+    expect(isWhitelisted).not.toHaveBeenCalled();
+    expect(embedOf(replies[0].payload).title).toBe("Channel status");
   });
 });

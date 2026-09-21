@@ -12,6 +12,8 @@ import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
+  type ChannelReplyPayload,
+  type DiscordEmbed,
   type InstanceStatus,
   type ProvisioningClient,
   handleChannelCommand,
@@ -107,6 +109,8 @@ function readBootstrapDirective(instance: InstanceConfig): string | null {
       "This channel is brand new and not set up yet. Before replying to the user's message below, begin the first-run setup checklist and work through it step by step. This is your BOOTSTRAP.md:",
       "",
       content,
+      "",
+      "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw. Never call yourself Claude, Claude Code, or an assistant named anything else. Never describe yourself as an AI or an AI assistant; do not use the word AI at all. If you need a noun, say assistant or your assistant.",
       "",
       "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
     ].join("\n");
@@ -742,13 +746,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   userId: authorId,
                   isDM: !guildId,
                   // Bots cannot send true ephemeral messages outside an
-                  // interaction, so honor the ephemeral hint with an
-                  // auto-deleting message (keeps whitelist denials/status from
-                  // lingering publicly in a guild).
-                  reply: (text, opts) =>
-                    opts?.ephemeral
-                      ? discordSendEphemeral(discordToken, channelId, text)
-                      : discordSend(discordToken, channelId, text),
+                  // interaction. Reply as a real Discord reply (referencing the
+                  // command message) so status/denials thread under the command
+                  // and embeds render. Ephemeral hints still fall back to an
+                  // auto-deleting plain message (only strings can auto-delete
+                  // cleanly; embeds are always full replies).
+                  reply: (payload, opts) =>
+                    opts?.ephemeral && typeof payload === "string"
+                      ? discordSendEphemeral(discordToken, channelId, payload)
+                      : discordSendReply(discordToken, channelId, commandMessageId, payload),
                 },
                 channelCommandDeps,
               );
@@ -868,8 +874,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               channelGuild.set(interactionChannelId, d.guild_id);
             }
 
-            // Helper to respond to interactions (always ephemeral)
-            const respondToInteraction = (text: string) => {
+            // Helper to respond to interactions (always ephemeral). Accepts a
+            // plain string (content) or an embeds payload from a channel
+            // command; either way keeps the ephemeral flag (64).
+            const respondToInteraction = (payload: ChannelReplyPayload) => {
+              const data =
+                typeof payload === "string"
+                  ? { content: payload, flags: 64 }
+                  : { embeds: payload.embeds, flags: 64 };
               void fetch(
                 `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
                 {
@@ -877,7 +889,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     type: 4,
-                    data: { content: text, flags: 64 },
+                    data,
                   }),
                 },
               )
@@ -954,13 +966,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     body: JSON.stringify({ type: 5, data: { flags: 64 } }),
                   },
                 ).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
-                const editReply = (text: string) => {
+                const editReply = (payload: ChannelReplyPayload) => {
+                  const body =
+                    typeof payload === "string" ? { content: payload } : { embeds: payload.embeds };
                   void fetch(
                     `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
                     {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ content: text }),
+                      body: JSON.stringify(body),
                     },
                   )
                     .then((resp) => {
@@ -979,7 +993,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     channelId: interactionChannelId,
                     userId,
                     isDM: !d.guild_id,
-                    reply: (text) => editReply(text),
+                    reply: (payload) => editReply(payload),
                   },
                   channelCommandDeps,
                 );
@@ -1364,6 +1378,10 @@ async function routeMessage(params: {
 
         let commandResult: string | null = null;
         let ranCommand = false;
+        // Whether this specific turn already delivered user-visible text/media.
+        // Used to decide if an internal command result warrants a follow-up
+        // turn (see the relay gate below).
+        let deliveredThisTurn = false;
 
         for (const payload of payloads) {
           const raw = payload.text ?? "";
@@ -1397,16 +1415,19 @@ async function routeMessage(params: {
             text = convertMarkdownTables(text, "code");
             text = stripHorizontalRules(text);
             text = convertTimesToDiscordTimestamps(text);
+            text = stripDashes(text);
             for (const chunk of chunkText(text, 2000)) {
               await discordSend(discordToken, channelId, chunk);
             }
             deliveredAnything = true;
+            deliveredThisTurn = true;
             handled = true;
           }
           const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
           for (const url of mediaUrls) {
             await discordSend(discordToken, channelId, url);
             deliveredAnything = true;
+            deliveredThisTurn = true;
             handled = true;
           }
         }
@@ -1414,8 +1435,20 @@ async function routeMessage(params: {
         runtime.log(`[router] processed ${payloads.length} payload(s) for channel ${channelId}`);
 
         // If a command produced a result, relay it back to the agent for a
-        // follow-up turn (bounded by the depth cap).
-        if (ranCommand && commandResult !== null && commandDepth < MAX_COMMAND_ROUNDTRIPS) {
+        // follow-up turn (bounded by the depth cap) ONLY when this turn was
+        // purely internal (no user-visible text/media). When the agent both
+        // ran a command and spoke to the user in the same turn, the turn is
+        // already complete: relaying the internal command result would spawn a
+        // second user-visible reply (e.g. "Great to meet you" followed by "Got
+        // it, what can I help you with"). Internal-only command turns (ticking
+        // the checklist, saving a name, `return` no-ops) still relay so the
+        // agent can continue.
+        if (
+          ranCommand &&
+          commandResult !== null &&
+          !deliveredThisTurn &&
+          commandDepth < MAX_COMMAND_ROUNDTRIPS
+        ) {
           commandDepth += 1;
           agentMessage = `[system] Command result: ${commandResult}`;
           continue;
@@ -1579,6 +1612,18 @@ async function handleTextCommand(params: {
   }
 }
 
+/**
+ * Deterministically remove em (—) and en (–) dashes from outgoing agent text.
+ * The model still emits them despite prompt rules, so this is a belt-and-braces
+ * post-process applied only to user-facing reply text (never control commands
+ * or embeds). A dash used as punctuation (surrounded by spaces) collapses to a
+ * comma; a bare dash becomes ", " so joined clauses stay readable. Regular
+ * hyphens (-) in compound words, CLI flags, and filenames are untouched.
+ */
+function stripDashes(text: string): string {
+  return text.replace(/\s*[—–]\s*/g, ", ").replace(/,\s+,/g, ",");
+}
+
 function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) {
     return [text];
@@ -1611,6 +1656,37 @@ async function discordSend(token: string, channelId: string, content: string): P
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ content }),
+  });
+}
+
+/**
+ * Post a real Discord reply that references the triggering command message
+ * (threads under it in the client). Accepts a plain string (content) or an
+ * embeds payload. Bots cannot send true ephemeral replies, so callers that
+ * want an auto-deleting notice use `discordSendEphemeral` instead.
+ */
+async function discordSendReply(
+  token: string,
+  channelId: string,
+  commandMessageId: string,
+  payload: ChannelReplyPayload,
+): Promise<void> {
+  const message_reference = {
+    message_id: commandMessageId,
+    channel_id: channelId,
+    fail_if_not_exists: false,
+  };
+  const body =
+    typeof payload === "string"
+      ? { content: payload, message_reference }
+      : { embeds: payload.embeds satisfies DiscordEmbed[], message_reference };
+  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
   });
 }
 
