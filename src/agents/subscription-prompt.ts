@@ -72,49 +72,96 @@ Carefully consider the reversibility and blast radius of actions. For actions th
 const MAX_APPENDED_CHARS = 8000;
 
 /**
- * Remove the injected "# Project Context" block (workspace files: SOUL.md,
- * USER.md, BOOTSTRAP.md, persona, ...) from the assembled system prompt.
+ * Exact heading lines of the OpenClaw system sections that buildAgentSystemPrompt
+ * emits AFTER the "# Project Context" block. These form a contiguous run at the
+ * very end of the prompt; `## Runtime` is emitted unconditionally and is always
+ * the final section, while the rest are gated on !isMinimal (subagent/minimal
+ * prompts skip them entirely, leaving `## Runtime` immediately after the block).
+ * Keep in sync with buildAgentSystemPrompt in system-prompt.ts.
+ */
+const TRAILING_SECTION_HEADINGS = new Set([
+  "## Silent Replies",
+  "## Heartbeats",
+  "## Message Priority",
+  "## Output Boundaries",
+  "## Context Recovery",
+  "## Conversation History",
+  "## Runtime",
+]);
+
+/**
+ * Exact multi-line preamble that buildAgentSystemPrompt emits at the start of
+ * the injected Project Context block (see system-prompt.ts). Anchoring on this
+ * builder-emitted sentence rather than the bare "# Project Context" heading
+ * makes the block boundary robust: a workspace file body that merely contains a
+ * standalone "# Project Context" heading will not be mistaken for the block
+ * start (a file would have to reproduce this whole preamble verbatim). Keep in
+ * sync with buildAgentSystemPrompt.
+ */
+const PROJECT_CONTEXT_BLOCK_MARKER =
+  "# Project Context\n\nThe following project context files have been loaded:";
+
+/**
+ * Remove the injected Project Context block (workspace files: SOUL.md, USER.md,
+ * BOOTSTRAP.md, persona, ...) from the assembled system prompt, while preserving
+ * the genuine trailing OpenClaw sections (Silent Replies, Heartbeats, Message
+ * Priority, Output Boundaries, Context Recovery, Conversation History, Runtime).
  *
- * buildAgentSystemPrompt emits the block as:
- *   # Project Context
- *   ...file contents...
- *   ## Silent Replies   (or ## Heartbeats, or end of prompt)
+ * Boundary detection:
+ *  - The block START is anchored on PROJECT_CONTEXT_BLOCK_MARKER (the builder's
+ *    own preamble), not a bare heading, so headings embedded in file bodies do
+ *    not trip it. We take the LAST occurrence because user-controlled content
+ *    (extraSystemPrompt / Group Chat / Subagent Context) precedes the block.
+ *  - The block END is the start of the final contiguous run of known trailing
+ *    section headings. Trailing sections are emitted at most once each; scanning
+ *    backwards we extend the run over unseen known headings and close it on the
+ *    first non-trailing or duplicate heading. Minimal/subagent prompts skip all
+ *    trailing sections except "## Runtime", which is preserved.
  *
- * We drop everything from the "# Project Context" heading up to the next
- * top-level/second-level heading that starts a non-workspace section, so
- * legitimate trailing instructions (Silent Replies, Heartbeats, ...) survive.
- * Workspace file contents must never reach the OAuth system prompt or the
- * request spills to paid extra usage.
+ * Billing safety note: if a workspace file body pathologically contains exact
+ * trailing-section heading lines, the worst case is that a genuine trailing
+ * section is dropped (never that workspace content leaks). Dropping errs on the
+ * side of keeping the OAuth system prompt lean, which is the safe direction for
+ * plan-quota billing.
  */
 function stripProjectContext(prompt: string): string {
-  const marker = "\n# Project Context\n";
-  // Anchor on the LAST occurrence: buildAgentSystemPrompt emits user-controlled
-  // text (extraSystemPrompt / Group Chat / Subagent Context) BEFORE the injected
-  // Project Context block, so an earlier "# Project Context" could appear inside
-  // that user content. The real injected block is always the final one, and
-  // using indexOf here would let a spoofed earlier heading truncate the whole
-  // prompt (including the genuine boundary and trailing instructions).
-  const start = prompt.lastIndexOf(marker);
-  if (start === -1) {
+  const markerStart = prompt.lastIndexOf(PROJECT_CONTEXT_BLOCK_MARKER);
+  if (markerStart === -1) {
     return prompt;
   }
-  // Find the next section heading after the Project Context block. The block
-  // contains "## <file path>" subheadings, so we look for the first known
-  // trailing OpenClaw section (## Silent Replies, ## Heartbeats) after the
-  // marker rather than guessing file names.
-  const afterBlock = prompt.slice(start + marker.length);
-  const resumeHeadings = ["\n## Silent Replies\n", "\n## Heartbeats\n"];
-  let resumeIndex = -1;
-  for (const heading of resumeHeadings) {
-    const idx = afterBlock.indexOf(heading);
-    if (idx !== -1 && (resumeIndex === -1 || idx < resumeIndex)) {
-      resumeIndex = idx;
+  // The marker may be preceded by a newline; drop that too so we cut cleanly at
+  // the blank line before "# Project Context".
+  const cutStart =
+    markerStart > 0 && prompt[markerStart - 1] === "\n" ? markerStart - 1 : markerStart;
+
+  const lines = prompt.split("\n");
+  // Line index of the marker's first line ("# Project Context").
+  const before = prompt.slice(0, cutStart);
+  const beforeLineCount = before.length === 0 ? 0 : before.split("\n").length;
+
+  // Walk from the end to find where the contiguous trailing-section run begins.
+  let runOpen = true;
+  const seenHeadings = new Set<string>();
+  let trailingStart = lines.length; // default: no trailing sections -> drop to end
+  for (let i = lines.length - 1; i >= beforeLineCount; i--) {
+    const line = lines[i];
+    const isHeading = line.startsWith("# ") || line.startsWith("## ");
+    if (!isHeading) {
+      continue;
+    }
+    if (runOpen && TRAILING_SECTION_HEADINGS.has(line) && !seenHeadings.has(line)) {
+      seenHeadings.add(line);
+      trailingStart = i;
+    } else {
+      runOpen = false;
     }
   }
-  const before = prompt.slice(0, start);
-  // +1 to skip the leading "\n" of the resume heading so the join stays clean.
-  const after = resumeIndex === -1 ? "" : afterBlock.slice(resumeIndex + 1);
-  return after ? `${before}\n${after}` : before;
+
+  const trailing = lines.slice(trailingStart);
+  if (trailing.length === 0) {
+    return before;
+  }
+  return before.length === 0 ? trailing.join("\n") : `${before}\n${trailing.join("\n")}`;
 }
 
 export function wrapForSubscription(openClawPrompt: string): string {
