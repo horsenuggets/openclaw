@@ -120,18 +120,36 @@ const PROJECT_CONTEXT_BLOCK_MARKER =
  *    case is over-removing some legitimate preamble text, never leaking
  *    workspace content into the OAuth prompt (which is what breaks plan-quota
  *    billing).
- *  - The block END is the start of the final contiguous run of known trailing
- *    section headings. Trailing sections are emitted at most once each; scanning
- *    backwards we extend the run over unseen known headings and close it on the
- *    first non-trailing or duplicate heading. Minimal/subagent prompts skip all
- *    trailing sections except "## Runtime", which is preserved.
+ *  - The block END (where the genuine trailing sections resume) is anchored on
+ *    "## Runtime", which buildAgentSystemPrompt emits UNCONDITIONALLY as the very
+ *    last section. We take its LAST occurrence, then walk backwards over the
+ *    contiguous run of known trailing headings that directly precede it. The
+ *    walk STOPS at the first heading that is not a known trailing heading, is a
+ *    duplicate, or looks like an injected workspace-file heading ("## <path>",
+ *    i.e. contains "/" or "."). Because injected files are emitted as
+ *    "## ${file.path}" and the OpenClaw trailing headings never contain "/" or
+ *    ".", that path check filters out ordinary file subheadings.
  *
- * Billing safety note: if a workspace file body pathologically contains exact
- * marker/trailing-section lines, the worst case is that legitimate text is
- * dropped (never that workspace content leaks). Dropping errs on the side of
- * keeping the OAuth system prompt lean, the safe direction for plan-quota
- * billing.
+ * Limits and defense-in-depth: a fully unspoofable boundary would require the
+ * prompt builder (system-prompt.ts) to emit a dedicated delimiter it guarantees
+ * cannot appear in file/user content; that is out of scope for this change and
+ * tracked as follow-up. The heuristics above cover every realistic prompt shape
+ * (full, minimal/subagent, spoofed pre-block headings, huge files, and file
+ * bodies containing lone/duplicate known headings). For the residual pathological
+ * case where a file body reproduces exact builder marker AND unique
+ * trailing-heading lines in the exact order, the retained MAX_APPENDED_CHARS cap
+ * acts as the final backstop that keeps oversized workspace content from riding
+ * into the OAuth system prompt. All boundary choices bias toward DROPPING content
+ * (never leaking), which is the billing-safe direction for plan quota.
  */
+// Injected files render as "## ${file.path}"; real trailing headings are plain
+// words. A "/" or "." after the "## " marks a path/filename heading.
+const WORKSPACE_FILE_HEADING_RE = /^## .*[/.]/;
+
+function looksLikeWorkspaceFileHeading(line: string): boolean {
+  return WORKSPACE_FILE_HEADING_RE.test(line);
+}
+
 function stripProjectContext(prompt: string): string {
   const markerStart = prompt.indexOf(PROJECT_CONTEXT_BLOCK_MARKER);
   if (markerStart === -1) {
@@ -143,25 +161,45 @@ function stripProjectContext(prompt: string): string {
     markerStart > 0 && prompt[markerStart - 1] === "\n" ? markerStart - 1 : markerStart;
 
   const lines = prompt.split("\n");
-  // Line index of the marker's first line ("# Project Context").
   const before = prompt.slice(0, cutStart);
   const beforeLineCount = before.length === 0 ? 0 : before.split("\n").length;
 
-  // Walk from the end to find where the contiguous trailing-section run begins.
-  let runOpen = true;
-  const seenHeadings = new Set<string>();
-  let trailingStart = lines.length; // default: no trailing sections -> drop to end
+  // Anchor the trailing suffix on the LAST "## Runtime" (always the final
+  // section). If there is none, there are no trailing sections to preserve and
+  // we drop everything from the marker to the end.
+  let runtimeLine = -1;
   for (let i = lines.length - 1; i >= beforeLineCount; i--) {
-    const line = lines[i];
-    const isHeading = line.startsWith("# ") || line.startsWith("## ");
-    if (!isHeading) {
-      continue;
+    if (lines[i] === "## Runtime") {
+      runtimeLine = i;
+      break;
     }
-    if (runOpen && TRAILING_SECTION_HEADINGS.has(line) && !seenHeadings.has(line)) {
-      seenHeadings.add(line);
-      trailingStart = i;
-    } else {
-      runOpen = false;
+  }
+
+  let trailingStart = lines.length; // default: no trailing sections -> drop to end
+  if (runtimeLine !== -1) {
+    trailingStart = runtimeLine;
+    const seenHeadings = new Set<string>(["## Runtime"]);
+    // Walk backwards over headings directly preceding Runtime, extending the
+    // trailing run only across unseen known headings that are not file headings.
+    // Stop at the first non-trailing / duplicate / file heading. Because injected
+    // files render as "## ${file.path}" (containing "/" or "."), the file-heading
+    // check keeps ordinary file subheadings from being mistaken for a section.
+    for (let i = runtimeLine - 1; i >= beforeLineCount; i--) {
+      const line = lines[i];
+      const isHeading = line.startsWith("# ") || line.startsWith("## ");
+      if (!isHeading) {
+        continue;
+      }
+      if (
+        TRAILING_SECTION_HEADINGS.has(line) &&
+        !seenHeadings.has(line) &&
+        !looksLikeWorkspaceFileHeading(line)
+      ) {
+        seenHeadings.add(line);
+        trailingStart = i;
+      } else {
+        break;
+      }
     }
   }
 

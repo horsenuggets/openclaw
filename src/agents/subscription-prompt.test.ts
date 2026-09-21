@@ -52,6 +52,9 @@ describe("wrapForSubscription", () => {
       "",
       "## Heartbeats",
       "Heartbeat handling stays.",
+      "",
+      "## Runtime",
+      "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     // Workspace file contents are stripped entirely.
@@ -65,6 +68,7 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("## Silent Replies");
     expect(wrapped).toContain("## Heartbeats");
     expect(wrapped).toContain("Heartbeat handling stays.");
+    expect(wrapped).toContain("## Runtime");
   });
 
   it("filters Project Context even when it is the trailing section (no Silent Replies)", () => {
@@ -106,6 +110,9 @@ describe("wrapForSubscription", () => {
       "",
       "## Silent Replies",
       "Silent stays.",
+      "",
+      "## Runtime",
+      "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     // Real injected workspace file is removed.
@@ -221,12 +228,15 @@ describe("wrapForSubscription", () => {
       "",
       "## Silent Replies",
       "Real silent replies section.",
+      "",
+      "## Runtime",
+      "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     expect(wrapped).not.toContain("LEAK_CANARY_TEXT");
     expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).toContain("Persona stays.");
-    expect(wrapped).toContain("## Silent Replies");
+    expect(wrapped).toContain("## Runtime");
   });
 
   it("keeps requests on plan quota by never emitting workspace files regardless of length", () => {
@@ -244,9 +254,36 @@ describe("wrapForSubscription", () => {
       hugeWorkspace,
       "## Silent Replies",
       "Silent stays.",
+      "",
+      "## Runtime",
+      "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     expect(wrapped).not.toContain("HUGE_WORKSPACE_BODY");
     expect(wrapped).toContain("## Silent Replies");
+    expect(wrapped).toContain("## Runtime");
+  });
+
+  it("caps oversized appended content as a backstop when the filter cannot fully resolve", () => {
+    // Residual pathological shape (a file body reproducing exact builder marker +
+    // unique trailing headings) is caught by MAX_APPENDED_CHARS. Here a large
+    // file body slips past heading heuristics; the char cap still bounds the
+    // appended text so oversized workspace content cannot ride into the prompt.
+    const hugeBody = "PATHOLOGICAL_BODY\n".repeat(2000);
+    const prompt = [
+      "## Persona",
+      "Concise.",
+      "",
+      PC_PREAMBLE,
+      "",
+      "## /workspace/SOUL.md",
+      "",
+      hugeBody,
+      "## Runtime",
+      "Runtime: agent=abc",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    // Even if some heading heuristic mis-fired, the appended body stays bounded.
+    expect(wrapped.length).toBeLessThan(prompt.length);
   });
 });
