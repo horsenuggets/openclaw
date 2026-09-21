@@ -72,24 +72,6 @@ Carefully consider the reversibility and blast radius of actions. For actions th
 const MAX_APPENDED_CHARS = 8000;
 
 /**
- * Exact heading lines of the OpenClaw system sections that buildAgentSystemPrompt
- * emits AFTER the "# Project Context" block. These form a contiguous run at the
- * very end of the prompt; `## Runtime` is emitted unconditionally and is always
- * the final section, while the rest are gated on !isMinimal (subagent/minimal
- * prompts skip them entirely, leaving `## Runtime` immediately after the block).
- * Keep in sync with buildAgentSystemPrompt in system-prompt.ts.
- */
-const TRAILING_SECTION_HEADINGS = new Set([
-  "## Silent Replies",
-  "## Heartbeats",
-  "## Message Priority",
-  "## Output Boundaries",
-  "## Context Recovery",
-  "## Conversation History",
-  "## Runtime",
-]);
-
-/**
  * Exact multi-line preamble that buildAgentSystemPrompt emits at the start of
  * the injected Project Context block (see system-prompt.ts). Anchoring on this
  * builder-emitted sentence rather than the bare "# Project Context" heading
@@ -104,52 +86,41 @@ const PROJECT_CONTEXT_BLOCK_MARKER =
 /**
  * Remove the injected Project Context block (workspace files: SOUL.md, USER.md,
  * BOOTSTRAP.md, persona, ...) from the assembled system prompt, while preserving
- * the genuine trailing OpenClaw sections (Silent Replies, Heartbeats, Message
- * Priority, Output Boundaries, Context Recovery, Conversation History, Runtime).
+ * the "## Runtime" section that buildAgentSystemPrompt emits after it.
  *
- * Boundary detection:
+ * Boundary detection (both anchors chosen to be robust against workspace-file
+ * bodies, which are emitted verbatim and can contain ANY text, including strings
+ * that mimic prompt headings/markers):
+ *
  *  - The block START is anchored on PROJECT_CONTEXT_BLOCK_MARKER (the builder's
- *    own preamble), not a bare heading, so headings embedded in file bodies do
- *    not trip it. We take the FIRST occurrence: a fully-robust boundary would
- *    require a delimiter the prompt builder guarantees cannot appear in file or
- *    user content (out of scope here), so between indexOf and lastIndexOf we
- *    pick the one that is billing-SAFE. If either extraSystemPrompt or a
- *    workspace file body reproduced this whole two-line preamble verbatim,
- *    cutting from the FIRST match removes everything from there to the trailing
- *    sections — including the real workspace files — so nothing leaks; the worst
- *    case is over-removing some legitimate preamble text, never leaking
- *    workspace content into the OAuth prompt (which is what breaks plan-quota
- *    billing).
- *  - The block END (where the genuine trailing sections resume) is anchored on
- *    "## Runtime", which buildAgentSystemPrompt emits UNCONDITIONALLY as the very
- *    last section. We take its LAST occurrence, then walk backwards over the
- *    contiguous run of known trailing headings that directly precede it. The
- *    walk STOPS at the first heading that is not a known trailing heading, is a
- *    duplicate, or looks like an injected workspace-file heading ("## <path>",
- *    i.e. contains "/" or "."). Because injected files are emitted as
- *    "## ${file.path}" and the OpenClaw trailing headings never contain "/" or
- *    ".", that path check filters out ordinary file subheadings.
+ *    own preamble sentence), not a bare "# Project Context" heading. We take its
+ *    FIRST occurrence: if either extraSystemPrompt or a file body reproduced the
+ *    whole two-line preamble verbatim, cutting from the first match removes
+ *    everything from there through the tail — including the real workspace files
+ *    — so nothing leaks; worst case is over-removing benign preamble text.
  *
- * Limits and defense-in-depth: a fully unspoofable boundary would require the
- * prompt builder (system-prompt.ts) to emit a dedicated delimiter it guarantees
- * cannot appear in file/user content; that is out of scope for this change and
- * tracked as follow-up. The heuristics above cover every realistic prompt shape
- * (full, minimal/subagent, spoofed pre-block headings, huge files, and file
- * bodies containing lone/duplicate known headings). For the residual pathological
- * case where a file body reproduces exact builder marker AND unique
- * trailing-heading lines in the exact order, the retained MAX_APPENDED_CHARS cap
- * acts as the final backstop that keeps oversized workspace content from riding
- * into the OAuth system prompt. All boundary choices bias toward DROPPING content
- * (never leaking), which is the billing-safe direction for plan quota.
+ *  - The block END is anchored on "## Runtime", which the builder emits
+ *    UNCONDITIONALLY as the very LAST section of every prompt (full, minimal, and
+ *    subagent). We preserve from its LAST occurrence to the end of the prompt.
+ *    Since the genuine Runtime section is always final, a file body cannot place
+ *    a "## Runtime" heading after it, so lastIndexOf lands on the real one.
+ *
+ * We deliberately do NOT try to also preserve the optional trailing sections
+ * (Silent Replies, Heartbeats, Message Priority, Output Boundaries, Context
+ * Recovery, Conversation History). Distinguishing those from an identical heading
+ * embedded in a workspace file body is impossible from content alone (a genuine
+ * "## Silent Replies" and one pasted into a SOUL.md body are byte-identical and
+ * occupy the same structural position relative to the file block), and a robust
+ * fix would require the prompt builder to emit a machine-readable delimiter
+ * (system-prompt.ts change, out of scope here / tracked as follow-up). Dropping
+ * those optional sections is billing-SAFE (they are non-critical behavioral hints
+ * for the OAuth path) and guarantees no workspace content ever reaches the OAuth
+ * system prompt, which is the only failure mode that breaks plan-quota billing.
+ *
+ * For reference, the full builder tail after the block is (in order): Silent
+ * Replies, Heartbeats, Message Priority, Output Boundaries, Context Recovery,
+ * Conversation History, Runtime -- with only Runtime emitted unconditionally.
  */
-// Injected files render as "## ${file.path}"; real trailing headings are plain
-// words. A "/" or "." after the "## " marks a path/filename heading.
-const WORKSPACE_FILE_HEADING_RE = /^## .*[/.]/;
-
-function looksLikeWorkspaceFileHeading(line: string): boolean {
-  return WORKSPACE_FILE_HEADING_RE.test(line);
-}
-
 function stripProjectContext(prompt: string): string {
   const markerStart = prompt.indexOf(PROJECT_CONTEXT_BLOCK_MARKER);
   if (markerStart === -1) {
@@ -159,55 +130,19 @@ function stripProjectContext(prompt: string): string {
   // the blank line before "# Project Context".
   const cutStart =
     markerStart > 0 && prompt[markerStart - 1] === "\n" ? markerStart - 1 : markerStart;
-
-  const lines = prompt.split("\n");
   const before = prompt.slice(0, cutStart);
-  const beforeLineCount = before.length === 0 ? 0 : before.split("\n").length;
 
-  // Anchor the trailing suffix on the LAST "## Runtime" (always the final
-  // section). If there is none, there are no trailing sections to preserve and
-  // we drop everything from the marker to the end.
-  let runtimeLine = -1;
-  for (let i = lines.length - 1; i >= beforeLineCount; i--) {
-    if (lines[i] === "## Runtime") {
-      runtimeLine = i;
-      break;
-    }
-  }
+  // Preserve the final "## Runtime" section (always the last builder section).
+  const runtimeMarker = "\n## Runtime\n";
+  const runtimeStart = prompt.lastIndexOf(runtimeMarker);
+  // Only honor a Runtime section that occurs after the block start; otherwise
+  // there is nothing genuine to preserve and we drop to the end.
+  const runtime = runtimeStart > markerStart ? prompt.slice(runtimeStart + 1) : "";
 
-  let trailingStart = lines.length; // default: no trailing sections -> drop to end
-  if (runtimeLine !== -1) {
-    trailingStart = runtimeLine;
-    const seenHeadings = new Set<string>(["## Runtime"]);
-    // Walk backwards over headings directly preceding Runtime, extending the
-    // trailing run only across unseen known headings that are not file headings.
-    // Stop at the first non-trailing / duplicate / file heading. Because injected
-    // files render as "## ${file.path}" (containing "/" or "."), the file-heading
-    // check keeps ordinary file subheadings from being mistaken for a section.
-    for (let i = runtimeLine - 1; i >= beforeLineCount; i--) {
-      const line = lines[i];
-      const isHeading = line.startsWith("# ") || line.startsWith("## ");
-      if (!isHeading) {
-        continue;
-      }
-      if (
-        TRAILING_SECTION_HEADINGS.has(line) &&
-        !seenHeadings.has(line) &&
-        !looksLikeWorkspaceFileHeading(line)
-      ) {
-        seenHeadings.add(line);
-        trailingStart = i;
-      } else {
-        break;
-      }
-    }
-  }
-
-  const trailing = lines.slice(trailingStart);
-  if (trailing.length === 0) {
+  if (!runtime) {
     return before;
   }
-  return before.length === 0 ? trailing.join("\n") : `${before}\n${trailing.join("\n")}`;
+  return before.length === 0 ? runtime : `${before}\n${runtime}`;
 }
 
 export function wrapForSubscription(openClawPrompt: string): string {

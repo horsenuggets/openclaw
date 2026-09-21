@@ -63,15 +63,14 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("USER_PROFILE_DETAILS");
     expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).not.toContain("USER.md");
-    // Legitimate non-workspace content before and after the block is preserved.
+    // Content before the block is preserved, and the final Runtime section is
+    // preserved. Optional trailing sections are dropped (billing-safe).
     expect(wrapped).toContain("Be warm and concise.");
-    expect(wrapped).toContain("## Silent Replies");
-    expect(wrapped).toContain("## Heartbeats");
-    expect(wrapped).toContain("Heartbeat handling stays.");
     expect(wrapped).toContain("## Runtime");
+    expect(wrapped).toContain("Runtime: agent=abc");
   });
 
-  it("filters Project Context even when it is the trailing section (no Silent Replies)", () => {
+  it("filters Project Context even when there is no trailing Runtime section", () => {
     const prompt = [
       "## Persona",
       "Keep instructions.",
@@ -108,20 +107,17 @@ describe("wrapForSubscription", () => {
       "",
       "REAL_WORKSPACE_FILE_BODY.",
       "",
-      "## Silent Replies",
-      "Silent stays.",
-      "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     // Real injected workspace file is removed.
     expect(wrapped).not.toContain("REAL_WORKSPACE_FILE_BODY");
-    // Content before the real block (including the spoofed heading region and
-    // persona) survives, and trailing instructions survive too.
+    // Content before the real block (spoofed heading region and persona) survives,
+    // and the final Runtime section survives.
     expect(wrapped).toContain("Keep this persona.");
     expect(wrapped).toContain("SPOOFED_INLINE_TEXT");
-    expect(wrapped).toContain("## Silent Replies");
+    expect(wrapped).toContain("## Runtime");
   });
 
   it("ignores a bare '# Project Context' heading inside a workspace file body", () => {
@@ -140,9 +136,6 @@ describe("wrapForSubscription", () => {
       "# Project Context",
       "EMBEDDED_FILE_TEXT still inside the SOUL file body.",
       "",
-      "## Silent Replies",
-      "Real silent replies section.",
-      "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
@@ -150,17 +143,15 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("EMBEDDED_FILE_TEXT");
     expect(wrapped).not.toContain("My doc mentions the phrase");
     expect(wrapped).not.toContain("SOUL.md");
-    // The real trailing sections survive.
-    expect(wrapped).toContain("Real silent replies section.");
     expect(wrapped).toContain("## Runtime");
     expect(wrapped).toContain("Runtime: agent=abc");
     expect(wrapped).toContain("Persona stays.");
   });
 
-  it("does not resume at a duplicate trailing heading embedded in a file body", () => {
-    // A file body containing "## Silent Replies" must not become the resume
-    // point; the genuine trailing sections are unique, so a duplicate marks the
-    // earlier one as embedded and keeps it out of the OAuth prompt.
+  it("does not leak a file body that embeds a lone trailing-section heading", () => {
+    // A file body containing a genuine-looking "## Silent Replies" must not cause
+    // the following file content to survive. Since only "## Runtime" is preserved,
+    // any embedded section heading and its body are dropped with the block.
     const prompt = [
       "## Persona",
       "Persona stays.",
@@ -170,25 +161,22 @@ describe("wrapForSubscription", () => {
       "## /workspace/SOUL.md",
       "",
       "## Silent Replies",
-      "EMBEDDED_DUP_TEXT inside the file body.",
-      "",
-      "## Silent Replies",
-      "Real silent replies section.",
+      "EMBEDDED_LEAK_TEXT inside the file body.",
       "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
-    expect(wrapped).not.toContain("EMBEDDED_DUP_TEXT");
-    expect(wrapped).toContain("Real silent replies section.");
+    expect(wrapped).not.toContain("EMBEDDED_LEAK_TEXT");
+    expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).toContain("## Runtime");
     expect(wrapped).toContain("Persona stays.");
   });
 
-  it("preserves the Runtime section in minimal/subagent prompts (no Silent Replies/Heartbeats)", () => {
+  it("preserves the Runtime section in minimal/subagent prompts", () => {
     // Minimal/subagent prompts skip Silent Replies/Heartbeats/etc.; the only
     // trailing section is "## Runtime", which must be preserved (dropping it
-    // would strip runtime info and any conversation history).
+    // would strip runtime info).
     const prompt = [
       "## Subagent Context",
       "Do the subtask.",
@@ -226,9 +214,6 @@ describe("wrapForSubscription", () => {
       PC_PREAMBLE,
       "LEAK_CANARY_TEXT that must never reach the OAuth prompt.",
       "",
-      "## Silent Replies",
-      "Real silent replies section.",
-      "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
@@ -252,23 +237,17 @@ describe("wrapForSubscription", () => {
       "## /workspace/SOUL.md",
       "",
       hugeWorkspace,
-      "## Silent Replies",
-      "Silent stays.",
-      "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     expect(wrapped).not.toContain("HUGE_WORKSPACE_BODY");
-    expect(wrapped).toContain("## Silent Replies");
     expect(wrapped).toContain("## Runtime");
   });
 
-  it("caps oversized appended content as a backstop when the filter cannot fully resolve", () => {
-    // Residual pathological shape (a file body reproducing exact builder marker +
-    // unique trailing headings) is caught by MAX_APPENDED_CHARS. Here a large
-    // file body slips past heading heuristics; the char cap still bounds the
-    // appended text so oversized workspace content cannot ride into the prompt.
+  it("caps oversized appended content as a defense-in-depth backstop", () => {
+    // If (pathologically) content still slips past the filter, MAX_APPENDED_CHARS
+    // bounds the appended text so oversized workspace content cannot ride in.
     const hugeBody = "PATHOLOGICAL_BODY\n".repeat(2000);
     const prompt = [
       "## Persona",
@@ -283,7 +262,7 @@ describe("wrapForSubscription", () => {
       "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
-    // Even if some heading heuristic mis-fired, the appended body stays bounded.
+    // The appended body stays bounded.
     expect(wrapped.length).toBeLessThan(prompt.length);
   });
 });
