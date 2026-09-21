@@ -76,9 +76,19 @@ used_ports() {
   done
 }
 
+# Ports actually bound right now. Each agent gateway opens its primary port
+# (from .port) plus a secondary listener on a port it picks dynamically at
+# startup, and those secondaries are NOT recorded in any .port file. Allocating
+# only around .port files therefore hands out a port a neighbour already holds,
+# and the new agent crash-loops on bind. So allocation also skips every port
+# that is currently listening.
+listening_ports() {
+  ss -ltnH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^[0-9]+$'
+}
+
 allocate_port() {
   local used port
-  used=$(used_ports)
+  used=$(printf '%s\n%s\n' "$(used_ports)" "$(listening_ports)" | sort -u)
   port=$BASE_PORT
   while echo "$used" | grep -qx "$port"; do
     port=$((port + 1))

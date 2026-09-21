@@ -14,7 +14,7 @@ read_when:
 - **Vibe:**
   *(how do you come across? sharp? warm? chaotic? calm?)*
 - **Emoji:**
-  *(your signature — pick one that feels right)*
+  *(your signature, pick one that feels right)*
 - **Avatar:**
   *(workspace-relative path, http(s) URL, or data URI)*
 

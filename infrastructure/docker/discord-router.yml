@@ -10,6 +10,18 @@ services:
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      # Optional E2E hook: comma-separated bot author ids the router treats as
+      # human. Unset in production (every bot is ignored); set only for tests.
+      - OPENCLAW_E2E_TEST_BOT_IDS=${OPENCLAW_E2E_TEST_BOT_IDS}
+      # Whitelist for /channel register/unregister: the auth guild id and the
+      # role within it that grants access. Unset => /channel management is
+      # disabled (fails closed). Kept out of the repo; supplied via host env.
+      - OPENCLAW_AUTH_GUILD_ID=${OPENCLAW_AUTH_GUILD_ID}
+      - OPENCLAW_WHITELIST_ROLE_ID=${OPENCLAW_WHITELIST_ROLE_ID}
+      # Host provisioning daemon (discord-provisioner) the router calls over
+      # loopback for /channel register|unregister. Unset => those are disabled.
+      - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}
+      - OPENCLAW_PROVISIONER_TOKEN=${OPENCLAW_PROVISIONER_TOKEN}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
     healthcheck:

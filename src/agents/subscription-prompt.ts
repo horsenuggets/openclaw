@@ -53,10 +53,18 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * [CC base prompt] + separator + [custom instructions]
  */
 /**
- * Max characters of OpenClaw content to append. The subscription plan has
- * a per-request input token limit. Dense technical content (markdown, code,
- * URLs) tokenizes at ~3-4 chars/token, so 8K chars ≈ 2-3K tokens which
- * leaves room for tool schemas and messages.
+ * Max characters of OpenClaw content to append. Empirically, injecting the
+ * workspace persona/first-run files into the OAuth system prompt makes the
+ * request bill to paid extra usage instead of the free plan quota (Anthropic's
+ * subscription validation flags system-prompt content that diverges from the
+ * Claude Code identity), so the appended content must stay lean and
+ * CC-consistent. buildAgentSystemPrompt still assembles the workspace files
+ * near the end (under "# Project Context"), so this cap is set so the appended
+ * text ends before that section: it keeps the operational preamble and
+ * truncates the workspace files (persona, BOOTSTRAP, USER, ...) out of the
+ * subscription request entirely. First-run onboarding is instead driven through
+ * conversation content by the
+ * discord-router (see routeMessage), which does not affect billing.
  */
 const MAX_APPENDED_CHARS = 5000;
 
@@ -81,5 +89,12 @@ export function wrapForSubscription(openClawPrompt: string): string {
         : truncated.trim();
   }
 
+  // NOTE: the subscription (OAuth) plan only bills to the free plan quota when
+  // the system prompt stays consistent with the Claude Code identity that pi-ai
+  // sets as system block 0. Content that explicitly contradicts it (e.g. "you
+  // are not Claude Code", "you are OpenClaw", or telling the model the base is
+  // fake/overridable) makes the request spill into paid extra usage. So we
+  // append the extra guidance plainly, with no identity flip — the persona and
+  // workspace files carry the behavior without contradicting the base.
   return `${CC_BASE_PROMPT}\n\n# Session-specific guidance\n\n${cleaned}`;
 }

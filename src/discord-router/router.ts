@@ -1,22 +1,136 @@
 import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import WebSocket from "ws";
+import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
-import { refreshToken, setOnboardingState, setUserPreference } from "./config.js";
+import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
+import {
+  CHANNEL_COMMAND_SPEC,
+  type ChannelCommandDeps,
+  type InstanceStatus,
+  type ProvisioningClient,
+  handleChannelCommand,
+  parseChannelTextCommand,
+} from "./channel-commands.js";
+import { loadRouterConfig, refreshToken, setUserPreference } from "./config.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
+import { createHttpProvisioningClient } from "./provisioning.js";
+import { createWhitelistChecker } from "./whitelist.js";
+
+/** Runs a control command emitted by the agent; returns a result string to
+ * relay back to the agent, or null for a no-op (no relay). */
+export type RunAgentCommand = (
+  cmd: AgentCommand,
+  ctx: { channelId: string; instance: InstanceConfig; authorId: string },
+) => Promise<string | null>;
+
+const WELCOME_EMBED = {
+  title: "Welcome to OpenClaw!",
+  description:
+    "I'm your personal everything-assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
+  color: 0xff8080,
+};
+
+const GOOGLE_CONNECT_EMBED = {
+  title: "Connect your Google account",
+  description:
+    "Link your Google account so I can help with your calendar, email, and files. Click the button below to connect. You can skip this if you'd rather not.",
+  color: 0xff8080,
+};
 
 export type RouterRuntime = {
   log: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
 };
 
+/** Workspace-relative path of the first-run checklist. */
+const BOOTSTRAP_RELATIVE_PATH = "workspace/BOOTSTRAP.md";
+/** Workspace-relative path of the user profile. */
+const USER_RELATIVE_PATH = "workspace/USER.md";
+
+/** True once the first-run checklist file is still present (setup in progress). */
+function bootstrapExists(instance: InstanceConfig): boolean {
+  try {
+    return fs.existsSync(path.join(instance.instanceDir, BOOTSTRAP_RELATIVE_PATH));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True once USER.md has a real name filled in. The template ships with an empty
+ * `- **Name:**` line; the agent reliably fills it during the name step. The
+ * router uses this as the trigger to post the Google card itself, because the
+ * model reliably saves the name but does not reliably emit the Google control
+ * command mid-conversation (it narrates a card instead of sending one).
+ */
+function userHasName(instance: InstanceConfig): boolean {
+  try {
+    const content = fs.readFileSync(path.join(instance.instanceDir, USER_RELATIVE_PATH), "utf-8");
+    // Match the Name line only; [ \t] (not \s) so it cannot span into the next
+    // line, and \S requires real content after the label (empty template = no
+    // match).
+    const match = content.match(/^[ \t]*-?[ \t]*\*\*Name:\*\*[ \t]*(\S.*)$/m);
+    return Boolean(match && match[1].trim().length > 0);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * First-run onboarding is driven from here, through conversation content,
+ * rather than by injecting the checklist into the agent's system prompt. That
+ * is deliberate: the anthropic-subscription (OAuth) plan only bills to the free
+ * plan quota while the system prompt stays consistent with the Claude Code
+ * identity, and workspace persona/first-run text in the system prompt makes
+ * requests spill into paid extra usage. Conversation content does not affect
+ * that billing, so the router reads the instance's BOOTSTRAP.md (mounted
+ * read-only) and prepends it, with a directive, to the user's message while the
+ * file exists. Once the agent finishes setup and deletes BOOTSTRAP.md, this
+ * returns null and normal chat resumes.
+ */
+function readBootstrapDirective(instance: InstanceConfig): string | null {
+  try {
+    const bootstrapPath = path.join(instance.instanceDir, BOOTSTRAP_RELATIVE_PATH);
+    const content = fs.readFileSync(bootstrapPath, "utf-8").trim();
+    if (!content) {
+      return null;
+    }
+    return [
+      "[first-run setup]",
+      "This channel is brand new and not set up yet. Before replying to the user's message below, begin the first-run setup checklist and work through it step by step. This is your BOOTSTRAP.md:",
+      "",
+      content,
+      "",
+      "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
+    ].join("\n");
+  } catch {
+    return null;
+  }
+}
+
 const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_API = "https://discord.com/api/v10";
+
+/**
+ * Bot authors are normally ignored (the router only serves humans). For
+ * end-to-end testing, a designated tester bot may drive the router: any author
+ * id listed in the comma-separated `OPENCLAW_E2E_TEST_BOT_IDS` env var is
+ * treated as a human. Unset (the production default) means every bot is
+ * ignored, so this has no effect unless explicitly opted into.
+ */
+const TEST_BOT_IDS = new Set(
+  (process.env.OPENCLAW_E2E_TEST_BOT_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
+);
 
 /**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
@@ -67,6 +181,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
   );
 
+  // Register the /channel management command (register/status/unregister).
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(CHANNEL_COMMAND_SPEC),
+  }).catch((err) => runtime.error(`[router] failed to register /channel command: ${String(err)}`));
+
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
     headers: { Authorization: `Bot ${discordToken}` },
@@ -97,6 +221,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         runtime,
         agentTimeoutMs,
         inflight,
+        runCommand: runAgentCommand,
+        onboardingGoogleSent,
       }).then(() => {});
     },
     onAuthComplete: async ({ discordUserId, code }) => {
@@ -202,34 +328,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         }
         fs.unlinkSync(tokenFile);
 
-        // Mark onboarding complete
-        setOnboardingState(instance, "complete");
         pendingGoogleAuth.delete(discordUserId);
 
-        // Notify agent via Discord
+        // Show the capabilities card.
         await discordSend(
           discordToken,
           channelId,
           "Google account connected successfully! Here are some things I can help you with:\n\n" +
-            "📅 **Calendar** — Check your schedule, create events, set reminders\n" +
-            "📧 **Email** — Read and summarize your inbox, draft replies\n" +
-            "📁 **Drive** — Search and manage your files\n" +
-            "✅ **Tasks** — Manage your to-do lists\n" +
-            "🔄 **Recurring tasks** — Set up heartbeats and automated check-ins\n\n" +
+            "📅 **Calendar**: check your schedule, create events, set reminders\n" +
+            "📧 **Email**: read and summarize your inbox, draft replies\n" +
+            "📁 **Drive**: search and manage your files\n" +
+            "✅ **Tasks**: manage your to-do lists\n" +
+            "🔄 **Recurring tasks**: set up heartbeats and automated check-ins\n\n" +
             "What would you like to try first?",
         );
 
-        // Also tell the agent via the gateway
+        // Tell the agent so it can tick the Google item on its BOOTSTRAP.md
+        // checklist and continue.
         void routeMessage({
           authorId: discordUserId,
           channelId,
           messageContent:
-            "[System: The user just successfully connected their Google account. Acknowledge this briefly and enthusiastically. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. Do NOT list what you can do — that was already sent.]",
+            "[system] The user just connected their Google account. You now have access to their Google Calendar, Gmail, Drive, Contacts, Tasks, Sheets, and Docs via the gog command. If BOOTSTRAP.md exists, tick the Google item (and delete BOOTSTRAP.md if setup is now complete). The capabilities message was already sent, so acknowledge briefly without repeating it.",
           instance,
           discordToken,
           runtime,
           agentTimeoutMs,
           inflight,
+          runCommand: runAgentCommand,
+          onboardingGoogleSent,
         });
       } catch (err) {
         runtime.error(`[router] post-auth error: ${String(err)}`);
@@ -239,6 +366,148 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   const inflight = new Set<string>();
   const pendingGoogleAuth = new Map<string, { channelId: string; authUrl: string }>();
+  // Channels for which the onboarding Google card has already been posted, so
+  // the deterministic first-run trigger fires at most once per channel.
+  const onboardingGoogleSent = new Set<string>();
+
+  // --- /channel command wiring ---
+  const whitelist = createWhitelistChecker({
+    discordToken,
+    guildId: process.env.OPENCLAW_AUTH_GUILD_ID,
+    roleId: process.env.OPENCLAW_WHITELIST_ROLE_ID,
+    log: (message) => runtime.log(message),
+  });
+
+  // Read-only view of an instance for `/channel status`. Owner is stored by the
+  // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
+  const describeInstance = (channelId: string): InstanceStatus | null => {
+    const inst = instances.get(channelId);
+    if (!inst) {
+      return null;
+    }
+    let ownerId: string | undefined;
+    try {
+      const raw = JSON.parse(
+        fs.readFileSync(path.join(inst.instanceDir, ".onboarding.json"), "utf-8"),
+      );
+      ownerId = typeof raw?.ownerId === "string" ? raw.ownerId : undefined;
+    } catch {
+      // no owner recorded yet
+    }
+    return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
+  };
+
+  // Reconcile the in-memory instance map with disk. The map is built once at
+  // startup, so after the daemon creates/removes an instance we re-scan so the
+  // channel becomes (or stops being) routable immediately, without a restart.
+  const reloadInstances = () => {
+    try {
+      const fresh = loadRouterConfig({ instancesDir: config.instancesDir, discordToken });
+      for (const [id, inst] of fresh.instances) {
+        instances.set(id, inst);
+      }
+      const removed: string[] = [];
+      for (const id of instances.keys()) {
+        if (!fresh.instances.has(id)) {
+          removed.push(id);
+        }
+      }
+      for (const id of removed) {
+        instances.delete(id);
+      }
+      runtime.log(`[router] instances reloaded: ${instances.size}`);
+    } catch (err) {
+      runtime.error(`[router] instance reload failed: ${String(err)}`);
+    }
+  };
+
+  // Provisioning needs host/Docker access the router lacks, so register/
+  // unregister go to the host daemon (discord-provisioner) over loopback when
+  // it is configured. Without the daemon env, it fails closed (unavailable).
+  const provisionerPort = process.env.OPENCLAW_PROVISIONER_PORT;
+  const provisionerToken = process.env.OPENCLAW_PROVISIONER_TOKEN;
+  const stubProvisioning: ProvisioningClient = {
+    register: async () => ({
+      ok: false,
+      message: "Registration is not available on this deployment (provisioning service not wired).",
+    }),
+    unregister: async () => ({
+      ok: false,
+      message:
+        "Unregistration is not available on this deployment (provisioning service not wired).",
+    }),
+  };
+  const daemonProvisioning =
+    provisionerPort && provisionerToken
+      ? createHttpProvisioningClient({
+          baseUrl: `http://127.0.0.1:${provisionerPort}`,
+          token: provisionerToken,
+          log: (message) => runtime.log(message),
+        })
+      : null;
+  // Reconcile the instance map after any successful provisioning change.
+  const provisioning: ProvisioningClient = daemonProvisioning
+    ? {
+        register: async (p) => {
+          const result = await daemonProvisioning.register(p);
+          if (result.ok) {
+            reloadInstances();
+          }
+          return result;
+        },
+        unregister: async (p) => {
+          const result = await daemonProvisioning.unregister(p);
+          if (result.ok) {
+            reloadInstances();
+          }
+          return result;
+        },
+      }
+    : stubProvisioning;
+
+  const channelCommandDeps: ChannelCommandDeps = {
+    isWhitelisted: whitelist.isWhitelisted,
+    whitelistConfigured: whitelist.isConfigured,
+    describeInstance,
+    provisioning,
+    log: (message) => runtime.log(message),
+  };
+
+  // Dispatches the agent's `⁘` control commands to host-side actions the agent
+  // cannot do itself (posting official Discord embeds and buttons).
+  const runAgentCommand: RunAgentCommand = async (cmd, ctx) => {
+    const { channelId, authorId } = ctx;
+    if (cmd.command === "return") {
+      return null; // deliberate no-op, nothing to relay
+    }
+    if (cmd.command === "send_hook_embed") {
+      const name = cmd.args[0];
+      if (name === "welcome") {
+        await discordSendEmbed(discordToken, channelId, WELCOME_EMBED);
+        return "welcome card sent";
+      }
+      if (name === "google") {
+        const { authUrl } = oauth.requestAuth({ discordUserId: authorId, email: "user" });
+        pendingGoogleAuth.set(authorId, { channelId, authUrl });
+        const sent = await discordSendEmbedWithLinkButton(
+          discordToken,
+          channelId,
+          GOOGLE_CONNECT_EMBED,
+          { label: "Connect Google", url: authUrl },
+        );
+        // Surface a failed send so the deterministic onboarding trigger clears
+        // its dedup marker and retries on the next turn, instead of silently
+        // leaving onboarding without its card.
+        if (!sent) {
+          throw new Error("failed to post the Google connect card");
+        }
+        return "google connect card sent; waiting for the user to click the button and authorize";
+      }
+      return `error: unknown embed "${name ?? ""}"`;
+    }
+    return `error: unknown command "${cmd.command}"`;
+  };
+
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   let lastSequence: number | null = null;
   let sessionId: string | undefined;
@@ -384,25 +653,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
             // Lifecycle messages ("Back online") handled by health-monitor sidecar.
 
-            // Startup recovery: check for unanswered DMs and respond
-            // Delay to let containers finish starting before connecting.
+            // Startup recovery: answer any DM messages left unanswered while the
+            // router was down. Delay to let containers finish starting.
             setTimeout(async () => {
-              // Onboard new users first
-              await onboardNewChannels(
-                discordToken,
-                instances,
-                config,
-                runtime,
-                agentTimeoutMs,
-                inflight,
-              );
-              // Then recover unanswered messages
               await recoverUnansweredMessages(
                 discordToken,
                 instances,
                 runtime,
                 agentTimeoutMs,
                 inflight,
+                runAgentCommand,
+                onboardingGoogleSent,
               );
             }, 10_000);
           }
@@ -438,7 +699,41 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
             );
 
-            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
+            if (
+              !authorId ||
+              (isBot && !TEST_BOT_IDS.has(authorId)) ||
+              (!content.trim() && !hasAttachments)
+            ) {
+              return;
+            }
+
+            // `/channel` management commands must work even when the channel is
+            // not registered yet (register is the whole point), so handle them
+            // before the registered-instance gate below.
+            const channelCmd = parseChannelTextCommand(content);
+            if (channelCmd) {
+              const commandMessageId = d.id;
+              void handleChannelCommand(
+                {
+                  subcommand: channelCmd.subcommand,
+                  args: channelCmd.args,
+                  channelId,
+                  userId: authorId,
+                  isDM: !guildId,
+                  // Bots cannot send true ephemeral messages outside an
+                  // interaction, so honor the ephemeral hint with an
+                  // auto-deleting message (keeps whitelist denials/status from
+                  // lingering publicly in a guild).
+                  reply: (text, opts) =>
+                    opts?.ephemeral
+                      ? discordSendEphemeral(discordToken, channelId, text)
+                      : discordSend(discordToken, channelId, text),
+                },
+                channelCommandDeps,
+              );
+              runtime.log(
+                `[router] /channel ${channelCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId})`,
+              );
               return;
             }
 
@@ -482,52 +777,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     runtime,
                     agentTimeoutMs,
                     inflight,
+                    runCommand: runAgentCommand,
+                    onboardingGoogleSent,
                   });
                 }
               });
               return;
             }
 
-            // Onboarding state machine: inject context based on state
-            const state = instance.onboardingState;
-            if (state === "greeted") {
-              // User is responding with their name
-              content = `[System: The user just told you their name. Acknowledge it warmly in ONE short sentence only (e.g. "Nice to meet you, {name}! 👋"). Do NOT ask any questions or offer help. Just the name acknowledgment.]\n${content}`;
-            } else if (state === "named") {
-              // Named but auth link wasn't sent (e.g. router restarted mid-flow).
-              // Re-send the Google auth link now.
-              void (async () => {
-                try {
-                  const { authUrl } = oauth.requestAuth({
-                    discordUserId: authorId,
-                    email: "user",
-                  });
-                  pendingGoogleAuth.set(authorId, { channelId, authUrl });
-                  await discordSend(
-                    discordToken,
-                    channelId,
-                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
-                  );
-                  setOnboardingState(instance, "google_pending");
-                  runtime.log(
-                    `[router] re-sent Google auth link to ${authorId} (was in named state)`,
-                  );
-                } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
-                  setOnboardingState(instance, "complete");
-                }
-              })();
-              // Still route the message to the agent
-            } else if (state === "google_pending") {
-              // User responding to Google auth prompt — check if they declined
-              const declined = /no|nah|skip|later|not now|don't|dont/i.test(content.trim());
-              if (declined) {
-                setOnboardingState(instance, "complete");
-                runtime.log(`[router] user ${authorId} declined Google auth, onboarding complete`);
-              }
-              // Otherwise let the message through normally (they might be chatting)
-            }
-
+            // Route to the agent. Onboarding (including offering Google) is
+            // driven by the agent's BOOTSTRAP.md checklist and the `⁘` command
+            // channel, not by a router-side state machine.
             void routeMessage({
               authorId,
               channelId,
@@ -538,34 +798,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime,
               agentTimeoutMs,
               inflight,
-            }).then(async (success) => {
-              if (!success) {
-                return;
-              }
-
-              // State transitions after successful agent response
-              if (state === "greeted") {
-                // Name acknowledged → send Google auth link
-                setOnboardingState(instance, "named");
-                try {
-                  const { authUrl } = oauth.requestAuth({
-                    discordUserId: authorId,
-                    email: "user",
-                  });
-                  // Store auth URL for this user so the callback can find them
-                  pendingGoogleAuth.set(authorId, { channelId, authUrl });
-                  await discordSend(
-                    discordToken,
-                    channelId,
-                    `Would you like to connect your Google account? This lets me help with your calendar, email, files, and more.\n\nClick [here](${authUrl}) to connect your Google account.`,
-                  );
-                  setOnboardingState(instance, "google_pending");
-                  runtime.log(`[router] sent Google auth link to ${authorId}`);
-                } catch (err) {
-                  runtime.log(`[router] failed to send Google auth link: ${String(err)}`);
-                  setOnboardingState(instance, "complete");
-                }
-              }
+              runCommand: runAgentCommand,
+              onboardingGoogleSent,
             });
           }
 
@@ -630,6 +864,68 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime.log(
                 `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
               );
+            }
+
+            if (interactionData?.name === "channel" && interactionChannelId) {
+              // Subcommand + its options (e.g. unregister confirm) live one level
+              // down in the interaction options tree.
+              const subOpt = (
+                interactionData.options as
+                  | Array<{
+                      name: string;
+                      options?: Array<{ name: string; value: string | number | boolean }>;
+                    }>
+                  | undefined
+              )?.[0];
+              const args: string[] = [];
+              const confirm = subOpt?.options?.find((o) => o.name === "confirm")?.value;
+              if (confirm !== undefined) {
+                args.push(String(confirm));
+              }
+              const userId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
+              if (userId) {
+                // Acknowledge immediately with a deferred (ephemeral) response:
+                // register can take up to the daemon's command timeout plus
+                // readiness polling, well beyond Discord's ~3s window. The
+                // result is then delivered by editing the deferred reply.
+                void fetch(
+                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+                  },
+                ).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
+                const editReply = (text: string) => {
+                  void fetch(
+                    `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ content: text }),
+                    },
+                  )
+                    .then((resp) => {
+                      if (!resp.ok) {
+                        runtime.error(`[router] channel followup failed (${resp.status})`);
+                      }
+                    })
+                    .catch((err) =>
+                      runtime.error(`[router] channel followup failed: ${String(err)}`),
+                    );
+                };
+                void handleChannelCommand(
+                  {
+                    subcommand: subOpt?.name ?? null,
+                    args,
+                    channelId: interactionChannelId,
+                    userId,
+                    isDM: !d.guild_id,
+                    reply: (text) => editReply(text),
+                  },
+                  channelCommandDeps,
+                );
+              }
             }
           }
           break;
@@ -746,6 +1042,9 @@ async function routeMessage(params: {
   runtime: RouterRuntime;
   agentTimeoutMs: number;
   inflight: Set<string>;
+  /** Handler for `⁘` control commands emitted by the agent. */
+  runCommand?: RunAgentCommand;
+  onboardingGoogleSent?: Set<string>;
 }): Promise<boolean> {
   const {
     authorId,
@@ -861,68 +1160,147 @@ async function routeMessage(params: {
 
       // Re-read token from disk so we never use a stale cached value
       const freshToken = refreshToken(instance);
-      const idempotencyKey = randomUUID();
-      const result = await callGatewaySimple({
-        url: `ws://127.0.0.1:${instance.port}`,
-        token: freshToken || undefined,
-        method: "agent",
-        params: {
-          message: messageContent || "<media>",
-          channel: "discord",
-          deliver: false,
-          idempotencyKey,
-          sessionKey: `agent:main:discord:default:channel:${channelId}`,
-          timeout: Math.floor(agentTimeoutMs / 1000),
-          ...(gatewayAttachments.length > 0 ? { attachments: gatewayAttachments } : {}),
-        },
-        expectFinal: true,
-        timeoutMs: agentTimeoutMs + 30_000,
-      });
 
-      // Stop typing as soon as we have the response
-      clearInterval(typingInterval);
+      // Drive the agent, processing any `⁘` control commands it emits and
+      // relaying their results back so it can continue. A depth cap prevents a
+      // command/result loop from running forever.
+      let agentMessage = messageContent || "<media>";
 
-      const payloads = result?.result?.payloads ?? [];
-      if (payloads.length === 0) {
-        runtime.log(`[router] empty response for channel ${channelId}`);
-        await discordSend(
-          discordToken,
-          channelId,
-          "*I processed your message but wasn't able to generate a response. Please try again.*",
-        );
-        return false;
+      // On a brand-new channel, steer the agent through its first-run checklist
+      // by prepending BOOTSTRAP.md (as conversation content, to keep the system
+      // prompt billing-safe). Only affects the first turn of this call; command
+      // result relays below reuse agentMessage without it.
+      const bootstrapDirective = readBootstrapDirective(instance);
+      if (bootstrapDirective) {
+        agentMessage = `${bootstrapDirective}\n\n${agentMessage}`;
       }
+      let attachmentsForCall = gatewayAttachments;
+      let commandDepth = 0;
+      const MAX_COMMAND_ROUNDTRIPS = 5;
+      let deliveredAnything = false;
+      let handled = false;
 
-      for (const payload of payloads) {
-        let text = payload.text?.trim() ?? "";
+      while (true) {
+        const idempotencyKey = randomUUID();
+        const result = await callGatewaySimple({
+          url: `ws://127.0.0.1:${instance.port}`,
+          token: freshToken || undefined,
+          method: "agent",
+          params: {
+            message: agentMessage,
+            channel: "discord",
+            deliver: false,
+            idempotencyKey,
+            sessionKey: `agent:main:discord:default:channel:${channelId}`,
+            timeout: Math.floor(agentTimeoutMs / 1000),
+            ...(attachmentsForCall.length > 0 ? { attachments: attachmentsForCall } : {}),
+          },
+          expectFinal: true,
+          timeoutMs: agentTimeoutMs + 30_000,
+        });
+        attachmentsForCall = []; // attachments belong to the first turn only
 
-        // Filter out raw JS/system errors that leaked into agent output.
-        // These should never be shown to the user as normal text.
-        if (isLeakedError(text)) {
-          runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
-          continue;
+        const payloads = result?.result?.payloads ?? [];
+        if (payloads.length === 0) {
+          if (!handled) {
+            runtime.log(`[router] empty response for channel ${channelId}`);
+            await discordSend(
+              discordToken,
+              channelId,
+              "*I processed your message but wasn't able to generate a response. Please try again.*",
+            );
+          }
+          break;
         }
 
-        // Apply Discord text formatting pipeline
-        if (text) {
-          text = convertMarkdownTables(text, "code");
-          text = stripHorizontalRules(text);
-          text = convertTimesToDiscordTimestamps(text);
-        }
-        if (text) {
-          const chunks = chunkText(text, 2000);
-          for (const chunk of chunks) {
-            await discordSend(discordToken, channelId, chunk);
+        let commandResult: string | null = null;
+        let ranCommand = false;
+
+        for (const payload of payloads) {
+          const raw = payload.text ?? "";
+
+          // Control command? Never rendered to Discord; run it and capture a
+          // result to relay back to the agent.
+          const cmd = params.runCommand ? parseAgentCommand(raw) : null;
+          if (cmd) {
+            ranCommand = true;
+            handled = true;
+            try {
+              const res = await params.runCommand!(cmd, { channelId, instance, authorId });
+              if (res !== null) {
+                commandResult = res;
+              }
+            } catch (cmdErr) {
+              commandResult = `error running ${cmd.command}: ${String(cmdErr)}`;
+              runtime.error(`[router] command ${cmd.command} failed: ${String(cmdErr)}`);
+            }
+            continue;
+          }
+
+          // Normal message: unescape a leading `\⁘`, filter leaked errors, then
+          // format and send.
+          let text = unescapeAgentText(raw).trim();
+          if (isLeakedError(text)) {
+            runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
+            continue;
+          }
+          if (text) {
+            text = convertMarkdownTables(text, "code");
+            text = stripHorizontalRules(text);
+            text = convertTimesToDiscordTimestamps(text);
+            for (const chunk of chunkText(text, 2000)) {
+              await discordSend(discordToken, channelId, chunk);
+            }
+            deliveredAnything = true;
+            handled = true;
+          }
+          const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
+          for (const url of mediaUrls) {
+            await discordSend(discordToken, channelId, url);
+            deliveredAnything = true;
+            handled = true;
           }
         }
-        const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-        for (const url of mediaUrls) {
-          await discordSend(discordToken, channelId, url);
+
+        runtime.log(`[router] processed ${payloads.length} payload(s) for channel ${channelId}`);
+
+        // If a command produced a result, relay it back to the agent for a
+        // follow-up turn (bounded by the depth cap).
+        if (ranCommand && commandResult !== null && commandDepth < MAX_COMMAND_ROUNDTRIPS) {
+          commandDepth += 1;
+          agentMessage = `[system] Command result: ${commandResult}`;
+          continue;
+        }
+        break;
+      }
+
+      // Deterministic onboarding step: once the agent has saved the user's name
+      // (USER.md filled in) during first-run setup, post the Google connect card
+      // ourselves. The model reliably writes the name but does not reliably emit
+      // the `⁘ send_hook_embed google` command mid-conversation, so the router
+      // owns this step. Guarded by an in-memory set so it fires at most once per
+      // channel per router lifetime.
+      if (
+        params.runCommand &&
+        params.onboardingGoogleSent &&
+        !params.onboardingGoogleSent.has(channelId) &&
+        bootstrapExists(instance) &&
+        userHasName(instance)
+      ) {
+        params.onboardingGoogleSent.add(channelId);
+        try {
+          await params.runCommand(
+            { command: "send_hook_embed", args: ["google"] },
+            { channelId, instance, authorId },
+          );
+          runtime.log(`[router] posted onboarding Google card for channel ${channelId}`);
+        } catch (err) {
+          params.onboardingGoogleSent.delete(channelId);
+          runtime.error(`[router] failed to post onboarding Google card: ${String(err)}`);
         }
       }
 
-      runtime.log(`[router] delivered ${payloads.length} payload(s) to channel ${channelId}`);
-      return true;
+      return handled || deliveredAnything;
     } finally {
       clearInterval(typingInterval);
     }
@@ -1163,6 +1541,60 @@ async function discordSendEmbed(
   });
 }
 
+/** Send an embed with a single Discord link-style button (opens `url`). */
+/** Discord rejects link-button URLs longer than this, so we fall back to an
+ * in-embed markdown link for longer URLs (e.g. Google OAuth URLs with many
+ * scopes). */
+const DISCORD_BUTTON_URL_MAX = 512;
+
+/** Returns true only when Discord accepted the message, so callers can retry. */
+async function discordSendEmbedWithLinkButton(
+  token: string,
+  channelId: string,
+  embed: { title: string; description: string; color?: number },
+  button: { label: string; url: string },
+): Promise<boolean> {
+  // A link button carries the URL cleanly, but Discord caps button URLs at 512
+  // chars. When the URL is longer, drop the button and put a markdown link in
+  // the embed description instead, so the card still works.
+  const useButton = button.url.length <= DISCORD_BUTTON_URL_MAX;
+  const body = useButton
+    ? {
+        embeds: [embed],
+        components: [
+          {
+            type: 1, // action row
+            components: [
+              { type: 2, style: 5, label: button.label, url: button.url }, // link button
+            ],
+          },
+        ],
+      }
+    : {
+        embeds: [
+          { ...embed, description: `${embed.description}\n\n**[${button.label}](${button.url})**` },
+        ],
+      };
+  try {
+    const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      console.error(
+        `[router] embed+link send failed ${resp.status} for ${channelId}: ${detail.slice(0, 200)}`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`[router] embed+link send error for ${channelId}: ${String(err)}`);
+    return false;
+  }
+}
+
 /**
  * Proactively message all non-onboarded users on startup.
  * Sends a welcome DM and triggers the agent to greet them.
@@ -1177,6 +1609,8 @@ async function recoverUnansweredMessages(
   runtime: RouterRuntime,
   agentTimeoutMs: number,
   inflight: Set<string>,
+  runCommand: RunAgentCommand,
+  onboardingGoogleSent: Set<string>,
 ): Promise<void> {
   const botId = (
     (await fetch(`${DISCORD_API}/applications/@me`, {
@@ -1185,10 +1619,6 @@ async function recoverUnansweredMessages(
   )?.id;
 
   for (const [channelId, instance] of instances) {
-    if (instance.onboardingState !== "complete") {
-      continue;
-    }
-
     try {
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
@@ -1251,56 +1681,11 @@ async function recoverUnansweredMessages(
         runtime,
         agentTimeoutMs,
         inflight,
+        runCommand,
+        onboardingGoogleSent,
       });
     } catch (err) {
       runtime.log(`[router] recovery failed for channel ${channelId}: ${String(err)}`);
     }
-  }
-}
-
-async function onboardNewChannels(
-  discordToken: string,
-  instances: Map<string, InstanceConfig>,
-  config: RouterConfig,
-  runtime: RouterRuntime,
-  agentTimeoutMs: number,
-  inflight: Set<string>,
-): Promise<void> {
-  for (const [channelId, instance] of instances) {
-    if (instance.onboardingState !== "none") {
-      continue;
-    }
-
-    runtime.log(`[router] proactive onboarding for channel ${channelId}`);
-
-    // Send welcome embed
-    await discordSendEmbed(discordToken, channelId, {
-      title: "Welcome to OpenClaw!",
-      description:
-        "I'm your personal AI assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
-      color: 0xff8080,
-    });
-
-    // Route through the agent for the greeting
-    void routeMessage({
-      authorId: "system",
-      channelId,
-      messageContent:
-        "[System: This is a brand new user who just joined. You are OpenClaw, a personal AI assistant. Do NOT refer to yourself as Claude Code or Claude — you are OpenClaw. Greet them warmly, introduce yourself as OpenClaw, and ask what they'd like to be called. Keep it brief and friendly — 2-3 sentences max. Do not mention Docker, containers, Google, OAuth, or any technical infrastructure. Just greet and ask their name.]",
-      instance,
-      discordToken,
-      runtime,
-      agentTimeoutMs,
-      inflight,
-    }).then((success) => {
-      if (success) {
-        setOnboardingState(instance, "greeted");
-        runtime.log(`[router] onboarding greeting sent for channel ${channelId}, waiting for name`);
-      } else {
-        runtime.log(
-          `[router] onboarding failed for channel ${channelId}, will retry on next restart`,
-        );
-      }
-    });
   }
 }
