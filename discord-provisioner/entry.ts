@@ -187,6 +187,11 @@ function sendJson(res: http.ServerResponse, status: number, body: ProvisionRespo
   res.end(payload);
 }
 
+// Serialize register/unregister so concurrent requests never interleave.
+// openclawctl only holds its port lock across reserve_port (register) but the
+// container starts after the lock releases, so an overlapping register/remove
+// could leave the router map and host state disagreeing. Running mutations one
+// at a time here avoids that.
 let mutationQueue: Promise<void> = Promise.resolve();
 
 function runSerializedMutation<T>(operation: () => Promise<T>): Promise<T> {

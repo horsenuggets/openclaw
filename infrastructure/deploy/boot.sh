@@ -51,17 +51,18 @@ for cid, port in sorted(rows, key=lambda x: x[1]):
     print(f'{cid} {port}')
 " 2>/dev/null)
 
+# Start per-channel agent containers (router needs them running first). With no
+# instances yet we still start the router below so a fresh deployment can create
+# its first channel via /channel register.
 if [ -z "$ASSIGNMENTS" ]; then
-  echo "No registered instances found under $INSTANCES_DIR — run openclawctl to register channels first."
-  exit 1
+  echo "No registered instances found under $INSTANCES_DIR — starting router only; use /channel register to add one."
+else
+  while read -r channelId port; do
+    [ -z "$channelId" ] && continue
+    OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
+      docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
+  done <<< "$ASSIGNMENTS"
 fi
-
-# Start per-channel agent containers (router needs them running first)
-while read -r channelId port; do
-  [ -z "$channelId" ] && continue
-  OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
-    docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
-done <<< "$ASSIGNMENTS"
 
 # Start discord router
 if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then

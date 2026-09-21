@@ -11,19 +11,19 @@ const config = loadRouterConfig({
   instancesDir: process.env.OPENCLAW_INSTANCES_DIR,
 });
 
-if (config.instances.size === 0) {
-  console.error(
-    "No instances found. Create instance directories with Discord channel IDs in the instances directory.",
-  );
-  process.exit(1);
-}
-
 const runtime = {
   log: console.log,
   error: console.error,
 };
 
-console.log(`Starting Discord router with ${config.instances.size} instance(s)...`);
+// Start even with zero instances: the router still registers slash commands and
+// connects to Discord, so a fresh deployment can create its first channel with
+// `/channel register` instead of needing one seeded out of band.
+if (config.instances.size === 0) {
+  console.warn("No instances registered yet; starting router so /channel register can seed one.");
+} else {
+  console.log(`Starting Discord router with ${config.instances.size} instance(s)...`);
+}
 startRouter(config, runtime).catch((err: unknown) => {
   console.error("Router error:", err);
   process.exit(1);

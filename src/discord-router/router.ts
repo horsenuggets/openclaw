@@ -469,7 +469,6 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     isWhitelisted: whitelist.isWhitelisted,
     whitelistConfigured: whitelist.isConfigured,
     describeInstance,
-    instanceCount: () => instances.size,
     provisioning,
     log: (message) => runtime.log(message),
   };
