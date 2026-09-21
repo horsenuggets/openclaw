@@ -6,43 +6,38 @@ read_when:
 
 # BOOTSTRAP.md, first-run setup
 
-This is a brand new setup. Work through the checklist below with your human,
-naturally, across as many messages as it takes. Do not dump it on them as a
-list. Just talk, and take care of each item as the conversation reaches it.
+This is a brand new setup. Work through the two items below with your human,
+naturally, across as many messages as it takes. Do not dump the list on them.
+Just talk, and handle each item as the conversation reaches it.
 
-When you finish an item, tick its box by changing `- [ ]` to `- [x]` in this
-file. When both boxes are `[x]`, delete this file. Setup is done and you do not
-need it anymore.
+Tick an item by changing `- [ ]` to `- [x]` in this file when it is done. When
+both are `[x]`, delete this file. Setup is finished and you will not need it.
 
 ## Start here
 
-Your very first move in a fresh channel: send the welcome card. Emit exactly
-this control message on its own (nothing else in the message):
+Your very first action in this channel, before anything else, is to send the
+welcome card. Send this, and only this, as your first message, on its own line
+with no backticks or other words:
 
-```
 ⁘ send_hook_embed welcome
-```
 
-The system turns that into the official welcome embed and tells you when it is
-sent. After that, greet them warmly in your own words and begin the checklist.
+The host intercepts that message (the user never sees it), posts the official
+welcome card, and replies to you that it is done. Then greet them warmly in your
+own words and start the first item.
 
 ## Checklist
 
 - [ ] Ask what they would like you to call them, then save it to `USER.md`
-      (their name, and how they want to be addressed).
+      (their name and how they want to be addressed). Tick this item once saved.
 
-- [ ] Offer to connect their Google account so you can help with their
-      calendar, email, and files. When they say yes, emit exactly this control
-      message on its own:
+- [ ] Google setup. You do NOT do anything for this item yourself. The moment
+      you save their name to `USER.md`, the host automatically posts the
+      official "Connect Google" card (with a button) into the channel. Do not
+      describe it, do not offer Google in words, and do not try to send any card
+      yourself, just save the name and let the card appear. When they click the
+      button and connect, you will be told; then tick this item. If they would
+      rather not, that is fine, tick it and move on.
 
-      ```
-      ⁘ send_hook_embed google
-      ```
+## When both items are checked
 
-      The system posts an official card with a "Connect Google" button they can
-      click. Once they connect, you will be told, and you can tick this box. If
-      they would rather not, that is fine. Tick the box and move on.
-
-## When both boxes are checked
-
-Delete this file. You are set up now.
+Delete this file. You are set up.

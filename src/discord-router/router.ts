@@ -1,6 +1,7 @@
 import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
@@ -38,8 +39,88 @@ export type RouterRuntime = {
   error: (...args: unknown[]) => void;
 };
 
+/** Workspace-relative path of the first-run checklist. */
+const BOOTSTRAP_RELATIVE_PATH = "workspace/BOOTSTRAP.md";
+/** Workspace-relative path of the user profile. */
+const USER_RELATIVE_PATH = "workspace/USER.md";
+
+/** True once the first-run checklist file is still present (setup in progress). */
+function bootstrapExists(instance: InstanceConfig): boolean {
+  try {
+    return fs.existsSync(path.join(instance.instanceDir, BOOTSTRAP_RELATIVE_PATH));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True once USER.md has a real name filled in. The template ships with an empty
+ * `- **Name:**` line; the agent reliably fills it during the name step. The
+ * router uses this as the trigger to post the Google card itself, because the
+ * model reliably saves the name but does not reliably emit the Google control
+ * command mid-conversation (it narrates a card instead of sending one).
+ */
+function userHasName(instance: InstanceConfig): boolean {
+  try {
+    const content = fs.readFileSync(path.join(instance.instanceDir, USER_RELATIVE_PATH), "utf-8");
+    // Match the Name line only; [ \t] (not \s) so it cannot span into the next
+    // line, and \S requires real content after the label (empty template = no
+    // match).
+    const match = content.match(/^[ \t]*-?[ \t]*\*\*Name:\*\*[ \t]*(\S.*)$/m);
+    return Boolean(match && match[1].trim().length > 0);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * First-run onboarding is driven from here, through conversation content,
+ * rather than by injecting the checklist into the agent's system prompt. That
+ * is deliberate: the anthropic-subscription (OAuth) plan only bills to the free
+ * plan quota while the system prompt stays consistent with the Claude Code
+ * identity, and workspace persona/first-run text in the system prompt makes
+ * requests spill into paid extra usage. Conversation content does not affect
+ * that billing, so the router reads the instance's BOOTSTRAP.md (mounted
+ * read-only) and prepends it, with a directive, to the user's message while the
+ * file exists. Once the agent finishes setup and deletes BOOTSTRAP.md, this
+ * returns null and normal chat resumes.
+ */
+function readBootstrapDirective(instance: InstanceConfig): string | null {
+  try {
+    const bootstrapPath = path.join(instance.instanceDir, BOOTSTRAP_RELATIVE_PATH);
+    const content = fs.readFileSync(bootstrapPath, "utf-8").trim();
+    if (!content) {
+      return null;
+    }
+    return [
+      "[first-run setup]",
+      "This channel is brand new and not set up yet. Before replying to the user's message below, begin the first-run setup checklist and work through it step by step. This is your BOOTSTRAP.md:",
+      "",
+      content,
+      "",
+      "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
+    ].join("\n");
+  } catch {
+    return null;
+  }
+}
+
 const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_API = "https://discord.com/api/v10";
+
+/**
+ * Bot authors are normally ignored (the router only serves humans). For
+ * end-to-end testing, a designated tester bot may drive the router: any author
+ * id listed in the comma-separated `OPENCLAW_E2E_TEST_BOT_IDS` env var is
+ * treated as a human. Unset (the production default) means every bot is
+ * ignored, so this has no effect unless explicitly opted into.
+ */
+const TEST_BOT_IDS = new Set(
+  (process.env.OPENCLAW_E2E_TEST_BOT_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
+);
 
 /**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
@@ -121,6 +202,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         agentTimeoutMs,
         inflight,
         runCommand: runAgentCommand,
+        onboardingGoogleSent,
       }).then(() => {});
     },
     onAuthComplete: async ({ discordUserId, code }) => {
@@ -254,6 +336,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           agentTimeoutMs,
           inflight,
           runCommand: runAgentCommand,
+          onboardingGoogleSent,
         });
       } catch (err) {
         runtime.error(`[router] post-auth error: ${String(err)}`);
@@ -263,6 +346,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   const inflight = new Set<string>();
   const pendingGoogleAuth = new Map<string, { channelId: string; authUrl: string }>();
+  // Channels for which the onboarding Google card has already been posted, so
+  // the deterministic first-run trigger fires at most once per channel.
+  const onboardingGoogleSent = new Set<string>();
 
   // Dispatches the agent's `⁘` control commands to host-side actions the agent
   // cannot do itself (posting official Discord embeds and buttons).
@@ -481,7 +567,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
             );
 
-            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
+            if (
+              !authorId ||
+              (isBot && !TEST_BOT_IDS.has(authorId)) ||
+              (!content.trim() && !hasAttachments)
+            ) {
               return;
             }
 
@@ -526,6 +616,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     agentTimeoutMs,
                     inflight,
                     runCommand: runAgentCommand,
+                    onboardingGoogleSent,
                   });
                 }
               });
@@ -546,6 +637,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               agentTimeoutMs,
               inflight,
               runCommand: runAgentCommand,
+              onboardingGoogleSent,
             });
           }
 
@@ -728,6 +820,7 @@ async function routeMessage(params: {
   inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
+  onboardingGoogleSent?: Set<string>;
 }): Promise<boolean> {
   const {
     authorId,
@@ -848,6 +941,15 @@ async function routeMessage(params: {
       // relaying their results back so it can continue. A depth cap prevents a
       // command/result loop from running forever.
       let agentMessage = messageContent || "<media>";
+
+      // On a brand-new channel, steer the agent through its first-run checklist
+      // by prepending BOOTSTRAP.md (as conversation content, to keep the system
+      // prompt billing-safe). Only affects the first turn of this call; command
+      // result relays below reuse agentMessage without it.
+      const bootstrapDirective = readBootstrapDirective(instance);
+      if (bootstrapDirective) {
+        agentMessage = `${bootstrapDirective}\n\n${agentMessage}`;
+      }
       let attachmentsForCall = gatewayAttachments;
       let commandDepth = 0;
       const MAX_COMMAND_ROUNDTRIPS = 5;
@@ -946,6 +1048,32 @@ async function routeMessage(params: {
           continue;
         }
         break;
+      }
+
+      // Deterministic onboarding step: once the agent has saved the user's name
+      // (USER.md filled in) during first-run setup, post the Google connect card
+      // ourselves. The model reliably writes the name but does not reliably emit
+      // the `⁘ send_hook_embed google` command mid-conversation, so the router
+      // owns this step. Guarded by an in-memory set so it fires at most once per
+      // channel per router lifetime.
+      if (
+        params.runCommand &&
+        params.onboardingGoogleSent &&
+        !params.onboardingGoogleSent.has(channelId) &&
+        bootstrapExists(instance) &&
+        userHasName(instance)
+      ) {
+        params.onboardingGoogleSent.add(channelId);
+        try {
+          await params.runCommand(
+            { command: "send_hook_embed", args: ["google"] },
+            { channelId, instance, authorId },
+          );
+          runtime.log(`[router] posted onboarding Google card for channel ${channelId}`);
+        } catch (err) {
+          params.onboardingGoogleSent.delete(channelId);
+          runtime.error(`[router] failed to post onboarding Google card: ${String(err)}`);
+        }
       }
 
       return handled || deliveredAnything;
@@ -1190,35 +1318,53 @@ async function discordSendEmbed(
 }
 
 /** Send an embed with a single Discord link-style button (opens `url`). */
+/** Discord rejects link-button URLs longer than this, so we fall back to an
+ * in-embed markdown link for longer URLs (e.g. Google OAuth URLs with many
+ * scopes). */
+const DISCORD_BUTTON_URL_MAX = 512;
+
 async function discordSendEmbedWithLinkButton(
   token: string,
   channelId: string,
   embed: { title: string; description: string; color?: number },
   button: { label: string; url: string },
 ): Promise<void> {
-  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      embeds: [embed],
-      components: [
-        {
-          type: 1, // action row
-          components: [
-            {
-              type: 2, // button
-              style: 5, // link button
-              label: button.label,
-              url: button.url,
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  // A link button carries the URL cleanly, but Discord caps button URLs at 512
+  // chars. When the URL is longer, drop the button and put a markdown link in
+  // the embed description instead, so the card still works.
+  const useButton = button.url.length <= DISCORD_BUTTON_URL_MAX;
+  const body = useButton
+    ? {
+        embeds: [embed],
+        components: [
+          {
+            type: 1, // action row
+            components: [
+              { type: 2, style: 5, label: button.label, url: button.url }, // link button
+            ],
+          },
+        ],
+      }
+    : {
+        embeds: [
+          { ...embed, description: `${embed.description}\n\n**[${button.label}](${button.url})**` },
+        ],
+      };
+  try {
+    const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      console.error(
+        `[router] embed+link send failed ${resp.status} for ${channelId}: ${detail.slice(0, 200)}`,
+      );
+    }
+  } catch (err) {
+    console.error(`[router] embed+link send error for ${channelId}: ${String(err)}`);
+  }
 }
 
 /**

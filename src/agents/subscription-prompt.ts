@@ -53,10 +53,20 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * [CC base prompt] + separator + [custom instructions]
  */
 /**
- * Max characters of OpenClaw content to append. The subscription plan has
- * a per-request input token limit. Dense technical content (markdown, code,
- * URLs) tokenizes at ~3-4 chars/token, so 8K chars ≈ 2-3K tokens which
- * leaves room for tool schemas and messages.
+ * Max characters of OpenClaw content to append. The subscription (OAuth) plan
+ * only bills to the free plan quota while the whole request stays under a
+ * per-request input token budget; overflowing it spills into paid extra usage.
+ * So this cap is deliberately tight. It is sized to reach the start of the
+ * injected workspace files ("# Project Context"), which the loader now orders
+ * so the highest-value context comes first — the first-run checklist
+ * (BOOTSTRAP.md), then the persona (SOUL.md) and who-the-user-is (USER.md) —
+ * with the large AGENTS/TOOLS guides last, where a tail-trim drops them first.
+ * Empirically, injecting the workspace persona/first-run files here makes the
+ * request bill to paid extra usage instead of the free plan quota (Anthropic's
+ * subscription validation flags system-prompt content that diverges from the
+ * Claude Code identity). So the system prompt is kept lean and CC-consistent;
+ * first-run onboarding is instead driven through conversation content by the
+ * discord-router (see routeMessage), which does not affect billing.
  */
 const MAX_APPENDED_CHARS = 5000;
 
@@ -81,5 +91,12 @@ export function wrapForSubscription(openClawPrompt: string): string {
         : truncated.trim();
   }
 
+  // NOTE: the subscription (OAuth) plan only bills to the free plan quota when
+  // the system prompt stays consistent with the Claude Code identity that pi-ai
+  // sets as system block 0. Content that explicitly contradicts it (e.g. "you
+  // are not Claude Code", "you are OpenClaw", or telling the model the base is
+  // fake/overridable) makes the request spill into paid extra usage. So we
+  // append the extra guidance plainly, with no identity flip — the persona and
+  // workspace files carry the behavior without contradicting the base.
   return `${CC_BASE_PROMPT}\n\n# Session-specific guidance\n\n${cleaned}`;
 }

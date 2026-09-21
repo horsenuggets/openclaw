@@ -30,6 +30,20 @@ describe("parseAgentCommand", () => {
     expect(parseAgentCommand("⁘send_hook_embed")).toBeNull();
   });
 
+  it("unwraps a command the model put in inline backticks", () => {
+    expect(parseAgentCommand("`⁘ send_hook_embed google`")).toEqual({
+      command: "send_hook_embed",
+      args: ["google"],
+    });
+  });
+
+  it("unwraps a command the model put in a fenced code block", () => {
+    expect(parseAgentCommand("```\n⁘ send_hook_embed welcome\n```")).toEqual({
+      command: "send_hook_embed",
+      args: ["welcome"],
+    });
+  });
+
   it("tokenizes quoted args with spaces and escaped quotes", () => {
     const parsed = parseAgentCommand(
       '⁘ command arg1 arg2 arg3 "argument 4" "argument \\"5\\" with double-quotes"',

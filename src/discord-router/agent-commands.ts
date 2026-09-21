@@ -26,8 +26,26 @@ export type AgentCommand = {
  * arguments when the message begins with an unescaped `⁘ `, otherwise null
  * (meaning it is a normal message to render).
  */
+/**
+ * Strip a single layer of code wrapping the model likes to add around a bare
+ * command: a fenced block (```...```) or inline backticks (`...`). Agents often
+ * echo a command the way it is written in docs (in backticks); unwrapping here
+ * means those still run as commands instead of leaking to the channel as text.
+ */
+function stripCodeWrapping(text: string): string {
+  const fence = text.match(/^```[^\n]*\n?([\s\S]*?)\n?```$/);
+  if (fence) {
+    return fence[1].trim();
+  }
+  const inline = text.match(/^`([^`]+)`$/);
+  if (inline) {
+    return inline[1].trim();
+  }
+  return text;
+}
+
 export function parseAgentCommand(rawText: string): AgentCommand | null {
-  const text = rawText.trim();
+  const text = stripCodeWrapping(rawText.trim());
   if (!text.startsWith(COMMAND_PREFIX)) {
     return null;
   }

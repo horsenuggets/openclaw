@@ -10,6 +10,9 @@ services:
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      # Optional E2E hook: comma-separated bot author ids the router treats as
+      # human. Unset in production (every bot is ignored); set only for tests.
+      - OPENCLAW_E2E_TEST_BOT_IDS=${OPENCLAW_E2E_TEST_BOT_IDS}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
     healthcheck:
