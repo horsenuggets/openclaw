@@ -24,6 +24,11 @@ INSTANCES_DIR="$HOME/.openclaw-instances"
 # instance model) or an empty store; never clobber the live shared file.
 SHARED_AUTH_DIR="$INSTANCES_DIR/shared/auth"
 SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
+if [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; then
+  echo "Error: shared auth path exists but is not a regular file: $SHARED_AUTH_FILE" >&2
+  echo "Remove or move it, then rerun boot." >&2
+  exit 1
+fi
 if [ ! -f "$SHARED_AUTH_FILE" ]; then
   mkdir -p "$SHARED_AUTH_DIR"
   seeded=""

@@ -232,6 +232,11 @@ except Exception as e:
 ensure_shared_auth() {
   (
     flock 9
+    if [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; then
+      echo "Error: shared auth path exists but is not a regular file: $SHARED_AUTH_FILE" >&2
+      echo "Remove or move it, then retry." >&2
+      exit 1
+    fi
     [ -f "$SHARED_AUTH_FILE" ] && exit 0
     mkdir -p "$SHARED_AUTH_DIR"
     local instdir existing
