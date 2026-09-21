@@ -168,13 +168,17 @@ get_discord_token() {
     echo "$DISCORD_BOT_TOKEN"
     return
   fi
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
+  for dir in "$INSTANCES_DIR"/[0-9]*; do
+    # Match the router/boot/shared-auth boundary: only scan real numeric
+    # instance dirs, never symlinks.
+    if [ ! -d "$dir" ] || [ -L "$dir" ]; then
+      continue
+    fi
     local token
     token=$(python3 -c "
 import json
 try:
-    cfg = json.load(open('${dir}openclaw.json'))
+    cfg = json.load(open('${dir}/openclaw.json'))
     print(cfg.get('channels',{}).get('discord',{}).get('token',''))
 except: pass
 " 2>/dev/null)
@@ -246,7 +250,9 @@ ensure_shared_auth() {
     local instdir existing
     for instdir in "$INSTANCES_DIR"/[0-9]*; do
       # Require a real directory, not a symlink, matching the router's boundary.
-      [ -d "$instdir" ] && [ ! -L "$instdir" ] || continue
+      if [ ! -d "$instdir" ] || [ -L "$instdir" ]; then
+        continue
+      fi
       existing="$instdir/agents/main/agent/auth-profiles.json"
       [ -f "$existing" ] || continue
       cp "$existing" "$SHARED_AUTH_FILE"

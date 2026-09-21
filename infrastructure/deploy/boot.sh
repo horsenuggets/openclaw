@@ -40,7 +40,9 @@ if [ ! -f "$SHARED_AUTH_FILE" ]; then
     # Skip symlinked instance dirs to honour the same no-symlink boundary the
     # router (Dirent.isDirectory) applies, so a numeric symlink can't seed
     # secrets from a path outside the intended instances tree.
-    [ -d "$instdir" ] && [ ! -L "$instdir" ] || continue
+    if [ ! -d "$instdir" ] || [ -L "$instdir" ]; then
+      continue
+    fi
     existing="$instdir/agents/main/agent/auth-profiles.json"
     [ -f "$existing" ] || continue
     cp "$existing" "$SHARED_AUTH_FILE"
@@ -109,12 +111,16 @@ fi
 # the .env-as-source-of-truth convention; new deploys should never hit it.
 if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
   echo "Warning: DISCORD_BOT_TOKEN not set in ~/.env; falling back to instance config scan." >&2
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
+  for dir in "$INSTANCES_DIR"/[0-9]*; do
+    # Keep the legacy fallback behind the same real-directory/no-symlink
+    # boundary as startup and shared-auth seeding.
+    if [ ! -d "$dir" ] || [ -L "$dir" ]; then
+      continue
+    fi
     DISCORD_BOT_TOKEN=$(python3 -c "
 import json
 try:
-    cfg = json.load(open('${dir}openclaw.json'))
+    cfg = json.load(open('${dir}/openclaw.json'))
     print(cfg.get('channels',{}).get('discord',{}).get('token',''))
 except: pass
 " 2>/dev/null)
