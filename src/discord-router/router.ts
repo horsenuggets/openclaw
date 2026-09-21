@@ -9,9 +9,18 @@ import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
+import {
+  CHANNEL_COMMAND_SPEC,
+  type ChannelCommandDeps,
+  type InstanceStatus,
+  type ProvisioningClient,
+  handleChannelCommand,
+  parseChannelTextCommand,
+} from "./channel-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { startOAuthCallbackServer } from "./oauth-callback.js";
+import { createWhitelistChecker } from "./whitelist.js";
 
 /** Runs a control command emitted by the agent; returns a result string to
  * relay back to the agent, or null for a no-op (no relay). */
@@ -170,6 +179,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }).catch((err) =>
     runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
   );
+
+  // Register the /channel management command (register/status/unregister).
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(CHANNEL_COMMAND_SPEC),
+  }).catch((err) => runtime.error(`[router] failed to register /channel command: ${String(err)}`));
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -349,6 +368,57 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // Channels for which the onboarding Google card has already been posted, so
   // the deterministic first-run trigger fires at most once per channel.
   const onboardingGoogleSent = new Set<string>();
+
+  // --- /channel command wiring ---
+  const whitelist = createWhitelistChecker({
+    discordToken,
+    guildId: process.env.OPENCLAW_AUTH_GUILD_ID,
+    roleId: process.env.OPENCLAW_WHITELIST_ROLE_ID,
+    log: (message) => runtime.log(message),
+  });
+
+  // Read-only view of an instance for `/channel status`. Owner is stored by the
+  // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
+  const describeInstance = (channelId: string): InstanceStatus | null => {
+    const inst = instances.get(channelId);
+    if (!inst) {
+      return null;
+    }
+    let ownerId: string | undefined;
+    try {
+      const raw = JSON.parse(
+        fs.readFileSync(path.join(inst.instanceDir, ".onboarding.json"), "utf-8"),
+      );
+      ownerId = typeof raw?.ownerId === "string" ? raw.ownerId : undefined;
+    } catch {
+      // no owner recorded yet
+    }
+    return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
+  };
+
+  // Phase 1 stub: provisioning needs host/Docker access the router lacks, so
+  // register/unregister are wired to the host daemon in Phase 2. Until then they
+  // report unavailability rather than pretending to succeed.
+  const provisioning: ProvisioningClient = {
+    register: async () => ({
+      ok: false,
+      message:
+        "Registration is not available yet on this deployment (the provisioning service is not wired up).",
+    }),
+    unregister: async () => ({
+      ok: false,
+      message:
+        "Unregistration is not available yet on this deployment (the provisioning service is not wired up).",
+    }),
+  };
+
+  const channelCommandDeps: ChannelCommandDeps = {
+    isWhitelisted: whitelist.isWhitelisted,
+    whitelistConfigured: whitelist.isConfigured,
+    describeInstance,
+    provisioning,
+    log: (message) => runtime.log(message),
+  };
 
   // Dispatches the agent's `⁘` control commands to host-side actions the agent
   // cannot do itself (posting official Discord embeds and buttons).
@@ -575,6 +645,29 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
+            // `/channel` management commands must work even when the channel is
+            // not registered yet (register is the whole point), so handle them
+            // before the registered-instance gate below.
+            const channelCmd = parseChannelTextCommand(content);
+            if (channelCmd) {
+              const commandMessageId = d.id;
+              void handleChannelCommand(
+                {
+                  subcommand: channelCmd.subcommand,
+                  args: channelCmd.args,
+                  channelId,
+                  userId: authorId,
+                  isDM: !guildId,
+                  reply: (text) => discordSend(discordToken, channelId, text),
+                },
+                channelCommandDeps,
+              );
+              runtime.log(
+                `[router] /channel ${channelCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId})`,
+              );
+              return;
+            }
+
             const instance = instances.get(channelId);
             if (!instance) {
               // Only respond in DMs (no guild_id), silently ignore unregistered guild channels
@@ -702,6 +795,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime.log(
                 `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
               );
+            }
+
+            if (interactionData?.name === "channel" && interactionChannelId) {
+              // Subcommand + its options (e.g. unregister confirm) live one level
+              // down in the interaction options tree.
+              const subOpt = (
+                interactionData.options as
+                  | Array<{ name: string; options?: Array<{ name: string; value: unknown }> }>
+                  | undefined
+              )?.[0];
+              const args: string[] = [];
+              const confirm = subOpt?.options?.find((o) => o.name === "confirm")?.value;
+              if (confirm !== undefined) {
+                args.push(String(confirm));
+              }
+              const userId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
+              if (userId) {
+                void handleChannelCommand(
+                  {
+                    subcommand: subOpt?.name ?? null,
+                    args,
+                    channelId: interactionChannelId,
+                    userId,
+                    isDM: !d.guild_id,
+                    reply: (text) => respondToInteraction(text),
+                  },
+                  channelCommandDeps,
+                );
+              }
             }
           }
           break;
