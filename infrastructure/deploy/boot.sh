@@ -4,6 +4,17 @@
 # Starts per-channel agent containers and the discord router.
 set -euo pipefail
 
+# Load deployment env (Discord token, whitelist guild/role, provisioner
+# port/token, etc.) so the compose files below get their ${VAR} substitutions.
+# Without this the router would come up with whitelist and provisioning
+# disabled after a reboot.
+if [ -f "$HOME/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$HOME/.env"
+  set +a
+fi
+
 INSTANCES_DIR="$HOME/.openclaw-instances"
 
 # Each instance owns its port as a `.port` dotfile in its own directory, so
