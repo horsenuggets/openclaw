@@ -75,6 +75,8 @@ export type ChannelCommandDeps = {
   whitelistConfigured: () => boolean;
   /** Returns the instance's status, or null when the channel is not registered. */
   describeInstance: (channelId: string) => InstanceStatus | null;
+  /** Number of currently registered instances (to protect the last one). */
+  instanceCount: () => number;
   provisioning: ProvisioningClient;
   log: (message: string) => void;
 };
@@ -170,6 +172,15 @@ export async function handleChannelCommand(
       await ctx.reply("This channel is not registered, so there is nothing to remove.", {
         ephemeral: true,
       });
+      return;
+    }
+    // The boot script and router currently require at least one instance to
+    // start, so refuse to remove the last one and strand the control plane.
+    if (deps.instanceCount() <= 1) {
+      await ctx.reply(
+        "This is the only registered channel. Register another before removing this one, so the router still has an instance to run.",
+        { ephemeral: true },
+      );
       return;
     }
     const confirm = (ctx.args[0] ?? "").toLowerCase();

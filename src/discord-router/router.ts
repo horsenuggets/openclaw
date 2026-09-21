@@ -469,6 +469,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     isWhitelisted: whitelist.isWhitelisted,
     whitelistConfigured: whitelist.isConfigured,
     describeInstance,
+    instanceCount: () => instances.size,
     provisioning,
     log: (message) => runtime.log(message),
   };
@@ -489,10 +490,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       if (name === "google") {
         const { authUrl } = oauth.requestAuth({ discordUserId: authorId, email: "user" });
         pendingGoogleAuth.set(authorId, { channelId, authUrl });
-        await discordSendEmbedWithLinkButton(discordToken, channelId, GOOGLE_CONNECT_EMBED, {
-          label: "Connect Google",
-          url: authUrl,
-        });
+        const sent = await discordSendEmbedWithLinkButton(
+          discordToken,
+          channelId,
+          GOOGLE_CONNECT_EMBED,
+          { label: "Connect Google", url: authUrl },
+        );
+        // Surface a failed send so the deterministic onboarding trigger clears
+        // its dedup marker and retries on the next turn, instead of silently
+        // leaving onboarding without its card.
+        if (!sent) {
+          throw new Error("failed to post the Google connect card");
+        }
         return "google connect card sent; waiting for the user to click the button and authorize";
       }
       return `error: unknown embed "${name ?? ""}"`;
@@ -655,6 +664,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 agentTimeoutMs,
                 inflight,
                 runAgentCommand,
+                onboardingGoogleSent,
               );
             }, 10_000);
           }
@@ -711,7 +721,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                   channelId,
                   userId: authorId,
                   isDM: !guildId,
-                  reply: (text) => discordSend(discordToken, channelId, text),
+                  // Bots cannot send true ephemeral messages outside an
+                  // interaction, so honor the ephemeral hint with an
+                  // auto-deleting message (keeps whitelist denials/status from
+                  // lingering publicly in a guild).
+                  reply: (text, opts) =>
+                    opts?.ephemeral
+                      ? discordSendEphemeral(discordToken, channelId, text)
+                      : discordSend(discordToken, channelId, text),
                 },
                 channelCommandDeps,
               );
@@ -868,6 +885,36 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               }
               const userId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
               if (userId) {
+                // Acknowledge immediately with a deferred (ephemeral) response:
+                // register can take up to the daemon's command timeout plus
+                // readiness polling, well beyond Discord's ~3s window. The
+                // result is then delivered by editing the deferred reply.
+                void fetch(
+                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+                  },
+                ).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
+                const editReply = (text: string) => {
+                  void fetch(
+                    `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ content: text }),
+                    },
+                  )
+                    .then((resp) => {
+                      if (!resp.ok) {
+                        runtime.error(`[router] channel followup failed (${resp.status})`);
+                      }
+                    })
+                    .catch((err) =>
+                      runtime.error(`[router] channel followup failed: ${String(err)}`),
+                    );
+                };
                 void handleChannelCommand(
                   {
                     subcommand: subOpt?.name ?? null,
@@ -875,7 +922,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     channelId: interactionChannelId,
                     userId,
                     isDM: !d.guild_id,
-                    reply: (text) => respondToInteraction(text),
+                    reply: (text) => editReply(text),
                   },
                   channelCommandDeps,
                 );
@@ -1501,12 +1548,13 @@ async function discordSendEmbed(
  * scopes). */
 const DISCORD_BUTTON_URL_MAX = 512;
 
+/** Returns true only when Discord accepted the message, so callers can retry. */
 async function discordSendEmbedWithLinkButton(
   token: string,
   channelId: string,
   embed: { title: string; description: string; color?: number },
   button: { label: string; url: string },
-): Promise<void> {
+): Promise<boolean> {
   // A link button carries the URL cleanly, but Discord caps button URLs at 512
   // chars. When the URL is longer, drop the button and put a markdown link in
   // the embed description instead, so the card still works.
@@ -1539,9 +1587,12 @@ async function discordSendEmbedWithLinkButton(
       console.error(
         `[router] embed+link send failed ${resp.status} for ${channelId}: ${detail.slice(0, 200)}`,
       );
+      return false;
     }
+    return true;
   } catch (err) {
     console.error(`[router] embed+link send error for ${channelId}: ${String(err)}`);
+    return false;
   }
 }
 
@@ -1560,6 +1611,7 @@ async function recoverUnansweredMessages(
   agentTimeoutMs: number,
   inflight: Set<string>,
   runCommand: RunAgentCommand,
+  onboardingGoogleSent: Set<string>,
 ): Promise<void> {
   const botId = (
     (await fetch(`${DISCORD_API}/applications/@me`, {
@@ -1631,6 +1683,7 @@ async function recoverUnansweredMessages(
         agentTimeoutMs,
         inflight,
         runCommand,
+        onboardingGoogleSent,
       });
     } catch (err) {
       runtime.log(`[router] recovery failed for channel ${channelId}: ${String(err)}`);

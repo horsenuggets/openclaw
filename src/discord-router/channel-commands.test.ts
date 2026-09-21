@@ -60,6 +60,7 @@ function makeDeps(over: Partial<ChannelCommandDeps> = {}): ChannelCommandDeps {
     isWhitelisted: vi.fn(async () => true),
     whitelistConfigured: () => true,
     describeInstance: () => null,
+    instanceCount: () => 2,
     provisioning: {
       register: vi.fn(async () => ({ ok: true, message: "registered" })),
       unregister: vi.fn(async () => ({ ok: true, message: "removed" })),
@@ -137,6 +138,21 @@ describe("handleChannelCommand", () => {
     await handleChannelCommand(second.ctx, deps);
     expect(unregister).toHaveBeenCalledOnce();
     expect(second.replies[0].text).toBe("removed");
+  });
+
+  it("refuses to unregister the last remaining instance", async () => {
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    const { ctx, replies } = makeCtx("unregister", ["yes"]);
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        describeInstance: () => ({ port: 1, onboarded: true }),
+        instanceCount: () => 1,
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).not.toHaveBeenCalled();
+    expect(replies[0].text).toContain("only registered channel");
   });
 
   it("blocks register when whitelist is not configured", async () => {

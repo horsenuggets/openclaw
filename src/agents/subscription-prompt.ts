@@ -53,19 +53,17 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * [CC base prompt] + separator + [custom instructions]
  */
 /**
- * Max characters of OpenClaw content to append. The subscription (OAuth) plan
- * only bills to the free plan quota while the whole request stays under a
- * per-request input token budget; overflowing it spills into paid extra usage.
- * So this cap is deliberately tight. It is sized to reach the start of the
- * injected workspace files ("# Project Context"), which the loader now orders
- * so the highest-value context comes first — the first-run checklist
- * (BOOTSTRAP.md), then the persona (SOUL.md) and who-the-user-is (USER.md) —
- * with the large AGENTS/TOOLS guides last, where a tail-trim drops them first.
- * Empirically, injecting the workspace persona/first-run files here makes the
+ * Max characters of OpenClaw content to append. Empirically, injecting the
+ * workspace persona/first-run files into the OAuth system prompt makes the
  * request bill to paid extra usage instead of the free plan quota (Anthropic's
  * subscription validation flags system-prompt content that diverges from the
- * Claude Code identity). So the system prompt is kept lean and CC-consistent;
- * first-run onboarding is instead driven through conversation content by the
+ * Claude Code identity), so the appended content must stay lean and
+ * CC-consistent. buildAgentSystemPrompt still assembles the workspace files
+ * near the end (under "# Project Context"), so this cap is set so the appended
+ * text ends before that section: it keeps the operational preamble and
+ * truncates the workspace files (persona, BOOTSTRAP, USER, ...) out of the
+ * subscription request entirely. First-run onboarding is instead driven through
+ * conversation content by the
  * discord-router (see routeMessage), which does not affect billing.
  */
 const MAX_APPENDED_CHARS = 5000;

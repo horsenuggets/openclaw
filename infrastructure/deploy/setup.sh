@@ -52,7 +52,10 @@ if [ -f openclaw-provisioner.service ]; then
   cp openclaw-provisioner.service ~/.config/systemd/user/
   loginctl enable-linger "$(whoami)" 2>/dev/null || true
   systemctl --user daemon-reload 2>/dev/null || true
-  systemctl --user enable --now openclaw-provisioner.service 2>/dev/null ||
+  systemctl --user enable openclaw-provisioner.service 2>/dev/null || true
+  # restart (not just enable --now) so a redeploy actually picks up the new
+  # binary even when the unit is already running.
+  systemctl --user restart openclaw-provisioner.service 2>/dev/null ||
     echo "  (provisioner unit not started; check OPENCLAW_PROVISIONER_* in ~/.env)"
 fi
 
