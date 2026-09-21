@@ -236,12 +236,13 @@ except Exception as e:
 ensure_shared_auth() {
   (
     flock 9
-    # If the path already exists but is not a regular file, a prior run started
-    # a container before seeding and Docker created the bind-mount target as a
-    # directory. Fail fast with remediation rather than cp'ing *into* it (which
-    # would leave the mount broken for every container).
-    if [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; then
-      echo "ERROR: $SHARED_AUTH_FILE exists but is not a regular file (likely a Docker-created bind-mount directory)." >&2
+    # The shared auth store holds OAuth refresh tokens and is bind-mounted into
+    # every container, so require it to be a real regular file. Reject a symlink
+    # (which -f/-e would silently follow, letting the store be redirected outside
+    # the instances tree) and reject a non-file such as a Docker-created
+    # bind-mount directory. Fail fast rather than cp'ing *into* it.
+    if [ -L "$SHARED_AUTH_FILE" ] || { [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; }; then
+      echo "ERROR: $SHARED_AUTH_FILE must be a regular file, not a symlink or directory (e.g. a Docker-created bind-mount dir)." >&2
       echo "       Stop the agent containers, remove that path, and re-run so it can be seeded as a file." >&2
       exit 1
     fi
