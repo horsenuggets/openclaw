@@ -17,6 +17,48 @@ fi
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
 
+# Shared auth-profiles store mounted into every agent container (see
+# infrastructure/docker/agent.yml). Must exist as a regular file before any
+# container starts, or Docker bind-mounts it as an empty directory. Seed it once
+# from an existing per-instance auth store (migration off the old copy-per-
+# instance model) or an empty store; never clobber the live shared file.
+SHARED_AUTH_DIR="$INSTANCES_DIR/shared/auth"
+SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
+# The shared auth store holds OAuth refresh tokens and is bind-mounted into
+# every container, so require it to be a real regular file. Reject a symlink
+# (which -f/-e would silently follow, letting the store be redirected outside
+# the instances tree) and reject a non-file such as a Docker-created bind-mount
+# directory. Fail fast with remediation rather than cp'ing *into* it.
+if [ -L "$SHARED_AUTH_FILE" ] || { [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; }; then
+  echo "ERROR: $SHARED_AUTH_FILE must be a regular file, not a symlink or directory (e.g. a Docker-created bind-mount dir)." >&2
+  echo "       Stop the agent containers, remove that path, and re-run so it can be seeded as a file." >&2
+  exit 1
+fi
+if [ ! -f "$SHARED_AUTH_FILE" ]; then
+  mkdir -p "$SHARED_AUTH_DIR"
+  chmod 700 "$SHARED_AUTH_DIR" 2>/dev/null || true
+  seeded=""
+  for instdir in "$INSTANCES_DIR"/[0-9]*; do
+    # Skip symlinked instance dirs to honour the same no-symlink boundary the
+    # router (Dirent.isDirectory) applies, so a numeric symlink can't seed
+    # secrets from a path outside the intended instances tree.
+    if [ ! -d "$instdir" ] || [ -L "$instdir" ]; then
+      continue
+    fi
+    existing="$instdir/agents/main/agent/auth-profiles.json"
+    [ -f "$existing" ] || continue
+    cp "$existing" "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+    echo "Seeded shared auth from $existing"
+    seeded=1
+    break
+  done
+  if [ -z "$seeded" ]; then
+    printf '{\n  "version": 1,\n  "profiles": {}\n}\n' > "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" 2>/dev/null || true
+  fi
+fi
+
 # Each instance owns its port as a `.port` dotfile in its own directory, so
 # there is no central ports.json to read or reconcile. Discover channels by
 # scanning for those dotfiles.
@@ -64,14 +106,23 @@ else
   done <<< "$ASSIGNMENTS"
 fi
 
-# Start discord router
+# Resolve the router's Discord token. The durable source is DISCORD_BOT_TOKEN in
+# ~/.env (loaded at the top of this script); setup.sh always installs that .env
+# from the deploy tarball, so it is present on any properly deployed host. The
+# per-instance openclaw.json scan below is a legacy fallback for hosts predating
+# the .env-as-source-of-truth convention; new deploys should never hit it.
 if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
+  echo "Warning: DISCORD_BOT_TOKEN not set in ~/.env; falling back to instance config scan." >&2
+  for dir in "$INSTANCES_DIR"/[0-9]*; do
+    # Keep the legacy fallback behind the same real-directory/no-symlink
+    # boundary as startup and shared-auth seeding.
+    if [ ! -d "$dir" ] || [ -L "$dir" ]; then
+      continue
+    fi
     DISCORD_BOT_TOKEN=$(python3 -c "
 import json
 try:
-    cfg = json.load(open('${dir}openclaw.json'))
+    cfg = json.load(open('${dir}/openclaw.json'))
     print(cfg.get('channels',{}).get('discord',{}).get('token',''))
 except: pass
 " 2>/dev/null)
