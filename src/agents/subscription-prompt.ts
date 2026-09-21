@@ -53,24 +53,73 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * [CC base prompt] + separator + [custom instructions]
  */
 /**
- * Max characters of OpenClaw content to append. Empirically, injecting the
- * workspace persona/first-run files into the OAuth system prompt makes the
- * request bill to paid extra usage instead of the free plan quota (Anthropic's
- * subscription validation flags system-prompt content that diverges from the
- * Claude Code identity), so the appended content must stay lean and
- * CC-consistent. buildAgentSystemPrompt still assembles the workspace files
- * near the end (under "# Project Context"), so this cap is set so the appended
- * text ends before that section: it keeps the operational preamble and
- * truncates the workspace files (persona, BOOTSTRAP, USER, ...) out of the
- * subscription request entirely. First-run onboarding is instead driven through
- * conversation content by the
+ * Belt-and-suspenders cap on appended OpenClaw content. Injecting workspace
+ * persona/first-run files into the OAuth system prompt makes the request bill
+ * to paid extra usage instead of the free plan quota (Anthropic's subscription
+ * validation flags system-prompt content that diverges from the Claude Code
+ * identity), so the appended content must stay lean and CC-consistent.
+ *
+ * The PRIMARY mechanism keeping workspace files out of the subscription request
+ * is now the explicit "# Project Context" filter in stripProjectContext(): it
+ * deterministically removes the injected workspace files (SOUL/persona,
+ * BOOTSTRAP, USER, ...) regardless of their length, rather than relying on a
+ * character cap to accidentally chop them off. This cap is kept only as a
+ * safety net in case some future prompt section grows unexpectedly large; it is
+ * raised to 8000 so it no longer doubles as the workspace-file cutoff. First-run
+ * onboarding is instead driven through conversation content by the
  * discord-router (see routeMessage), which does not affect billing.
  */
-const MAX_APPENDED_CHARS = 5000;
+const MAX_APPENDED_CHARS = 8000;
+
+/**
+ * Remove the injected "# Project Context" block (workspace files: SOUL.md,
+ * USER.md, BOOTSTRAP.md, persona, ...) from the assembled system prompt.
+ *
+ * buildAgentSystemPrompt emits the block as:
+ *   # Project Context
+ *   ...file contents...
+ *   ## Silent Replies   (or ## Heartbeats, or end of prompt)
+ *
+ * We drop everything from the "# Project Context" heading up to the next
+ * top-level/second-level heading that starts a non-workspace section, so
+ * legitimate trailing instructions (Silent Replies, Heartbeats, ...) survive.
+ * Workspace file contents must never reach the OAuth system prompt or the
+ * request spills to paid extra usage.
+ */
+function stripProjectContext(prompt: string): string {
+  const marker = "\n# Project Context\n";
+  const start = prompt.indexOf(marker);
+  if (start === -1) {
+    return prompt;
+  }
+  // Find the next section heading after the Project Context block. The block
+  // contains "## <file path>" subheadings, so we look for the first heading at
+  // or after the marker that is NOT part of the injected files: the trailing
+  // OpenClaw sections (## Silent Replies, ## Heartbeats) begin after the last
+  // "## " file entry. Rather than guess file names, resume at the first known
+  // trailing section heading.
+  const afterBlock = prompt.slice(start + marker.length);
+  const resumeHeadings = ["\n## Silent Replies\n", "\n## Heartbeats\n"];
+  let resumeIndex = -1;
+  for (const heading of resumeHeadings) {
+    const idx = afterBlock.indexOf(heading);
+    if (idx !== -1 && (resumeIndex === -1 || idx < resumeIndex)) {
+      resumeIndex = idx;
+    }
+  }
+  const before = prompt.slice(0, start);
+  // +1 to skip the leading "\n" of the resume heading so the join stays clean.
+  const after = resumeIndex === -1 ? "" : afterBlock.slice(resumeIndex + 1);
+  return after ? `${before}\n${after}` : before;
+}
 
 export function wrapForSubscription(openClawPrompt: string): string {
+  // Deterministically drop injected workspace files (Project Context) before
+  // any other processing so their length can't push the request off plan quota.
+  const withoutProjectContext = stripProjectContext(openClawPrompt);
+
   // Strip any existing CC prefix and anti-CC identity lines.
-  let cleaned = openClawPrompt
+  let cleaned = withoutProjectContext
     .replace(/You are Claude Code, Anthropic's official CLI for Claude\.\s*/g, "")
     .replace(/You are NOT Claude Code\.[^\n]*/g, "")
     .replace(/You are a personal assistant running inside OpenClaw\./g, "")

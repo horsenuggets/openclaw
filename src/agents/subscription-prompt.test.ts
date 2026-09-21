@@ -19,12 +19,88 @@ describe("wrapForSubscription", () => {
   });
 
   it("truncates oversized content at a section boundary", () => {
-    const big = Array.from({ length: 200 }, (_, i) => `## Section ${i}\n${"y".repeat(300)}`).join(
+    const big = Array.from({ length: 400 }, (_, i) => `## Section ${i}\n${"y".repeat(300)}`).join(
       "\n",
     );
     const wrapped = wrapForSubscription(big);
     // The appended body is capped; the tail sections are dropped at a `## ` cut.
     expect(wrapped.length).toBeLessThan(big.length);
-    expect(wrapped).not.toContain("Section 199");
+    expect(wrapped).not.toContain("Section 399");
+  });
+
+  it("filters injected Project Context workspace files out of the appended prompt", () => {
+    const prompt = [
+      "## Persona",
+      "Be warm and concise.",
+      "",
+      "# Project Context",
+      "",
+      "The following project context files have been loaded:",
+      "",
+      "## /workspace/SOUL.md",
+      "",
+      "SECRET_PERSONA_CONTENT that must not reach the OAuth system prompt.",
+      "",
+      "## /workspace/USER.md",
+      "",
+      "USER_PROFILE_DETAILS about the human.",
+      "",
+      "## Silent Replies",
+      "When you have nothing to say, respond with ONLY: <silent>",
+      "",
+      "## Heartbeats",
+      "Heartbeat handling stays.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    // Workspace file contents are stripped entirely.
+    expect(wrapped).not.toContain("# Project Context");
+    expect(wrapped).not.toContain("SECRET_PERSONA_CONTENT");
+    expect(wrapped).not.toContain("USER_PROFILE_DETAILS");
+    expect(wrapped).not.toContain("SOUL.md");
+    expect(wrapped).not.toContain("USER.md");
+    // Legitimate non-workspace content before and after the block is preserved.
+    expect(wrapped).toContain("Be warm and concise.");
+    expect(wrapped).toContain("## Silent Replies");
+    expect(wrapped).toContain("## Heartbeats");
+    expect(wrapped).toContain("Heartbeat handling stays.");
+  });
+
+  it("filters Project Context even when it is the trailing section (no Silent Replies)", () => {
+    const prompt = [
+      "## Persona",
+      "Keep instructions.",
+      "",
+      "# Project Context",
+      "",
+      "## /workspace/BOOTSTRAP.md",
+      "",
+      "BOOTSTRAP_FILE_BODY that would spill billing to paid usage.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("# Project Context");
+    expect(wrapped).not.toContain("BOOTSTRAP_FILE_BODY");
+    expect(wrapped).not.toContain("BOOTSTRAP.md");
+    expect(wrapped).toContain("Keep instructions.");
+  });
+
+  it("keeps requests on plan quota by never emitting workspace files regardless of length", () => {
+    // Regression: even a huge Project Context block (well under the char cap on
+    // its own would previously survive) must be fully removed by the filter.
+    const hugeWorkspace = "HUGE_WORKSPACE_BODY\n".repeat(500);
+    const prompt = [
+      "## Persona",
+      "Concise.",
+      "",
+      "# Project Context",
+      "",
+      "## /workspace/SOUL.md",
+      "",
+      hugeWorkspace,
+      "## Silent Replies",
+      "Silent stays.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("HUGE_WORKSPACE_BODY");
+    expect(wrapped).toContain("## Silent Replies");
   });
 });
