@@ -1195,6 +1195,30 @@ type DiscordAttachment = {
 };
 
 /** Returns true if the agent responded successfully. */
+/**
+ * Decide whether an internal command result should be relayed back to the agent
+ * for a follow-up turn. Relaying happens only when the turn was purely internal
+ * (a command ran and produced a result but nothing user-visible was delivered)
+ * and the roundtrip budget is not exhausted. When the agent both ran a command
+ * and spoke to the user in the same turn, relaying would spawn a duplicate reply
+ * (e.g. "Great to meet you" followed by "Got it, what can I help you with"), so
+ * this returns false.
+ */
+export function shouldRelayCommandResult(params: {
+  ranCommand: boolean;
+  commandResult: string | null;
+  deliveredThisTurn: boolean;
+  commandDepth: number;
+  maxRoundtrips: number;
+}): boolean {
+  return (
+    params.ranCommand &&
+    params.commandResult !== null &&
+    !params.deliveredThisTurn &&
+    params.commandDepth < params.maxRoundtrips
+  );
+}
+
 async function routeMessage(params: {
   authorId: string;
   channelId: string;
@@ -1444,10 +1468,13 @@ async function routeMessage(params: {
         // the checklist, saving a name, `return` no-ops) still relay so the
         // agent can continue.
         if (
-          ranCommand &&
-          commandResult !== null &&
-          !deliveredThisTurn &&
-          commandDepth < MAX_COMMAND_ROUNDTRIPS
+          shouldRelayCommandResult({
+            ranCommand,
+            commandResult,
+            deliveredThisTurn,
+            commandDepth,
+            maxRoundtrips: MAX_COMMAND_ROUNDTRIPS,
+          })
         ) {
           commandDepth += 1;
           agentMessage = `[system] Command result: ${commandResult}`;
