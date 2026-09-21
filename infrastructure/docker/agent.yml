@@ -20,9 +20,12 @@ services:
       # instance's own auth store. OAuth refresh tokens rotate, so a per-instance
       # copy goes stale (invalid_grant) once another instance refreshes. Sharing
       # one file means a refresh in any container is immediately seen by all.
+      # Also share the sibling lock directory used by proper-lockfile
+      # (<file>.lock), so refresh/write locking coordinates across containers.
       # boot.sh / openclawctl seed this file before the container starts (Docker
       # would otherwise create it as an empty directory).
       - ~/.openclaw-instances/shared/auth/auth-profiles.json:/root/.openclaw/agents/main/agent/auth-profiles.json
+      - ~/.openclaw-instances/shared/auth/auth-profiles.json.lock:/root/.openclaw/agents/main/agent/auth-profiles.json.lock
       - ~/.claude:/root/.claude
       - ~/logs/channel-${OPENCLAW_CHANNEL_ID}:/tmp/openclaw
     environment:

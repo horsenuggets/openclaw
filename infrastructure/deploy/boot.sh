@@ -36,6 +36,7 @@ if [ -L "$SHARED_AUTH_FILE" ] || { [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED
 fi
 if [ ! -f "$SHARED_AUTH_FILE" ]; then
   mkdir -p "$SHARED_AUTH_DIR"
+  chmod 700 "$SHARED_AUTH_DIR" 2>/dev/null || true
   seeded=""
   for instdir in "$INSTANCES_DIR"/[0-9]*; do
     # Skip symlinked instance dirs to honour the same no-symlink boundary the

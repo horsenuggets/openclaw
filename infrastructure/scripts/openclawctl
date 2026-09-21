@@ -248,6 +248,7 @@ ensure_shared_auth() {
     fi
     [ -f "$SHARED_AUTH_FILE" ] && exit 0
     mkdir -p "$SHARED_AUTH_DIR"
+    chmod 700 "$SHARED_AUTH_DIR" 2>/dev/null || true
     local instdir existing
     for instdir in "$INSTANCES_DIR"/[0-9]*; do
       # Require a real directory, not a symlink, matching the router's boundary.
