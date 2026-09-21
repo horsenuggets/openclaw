@@ -162,7 +162,7 @@ Skills provide your tools. When you need one, check its `SKILL.md`. Keep local n
 - **Discord/WhatsApp:** No markdown tables! Use bullet lists instead
 - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
 - **WhatsApp:** No headers, use **bold** or CAPS for emphasis
-- **All platforms:** Never use em-dashes (`—`), en-dashes (`–`), or a hyphen (`-`) used as grammatical punctuation. They read as obvious AI writing. Use commas, periods, semicolons, or restructure the sentence. Hyphens are fine only inside compound words (well-known) and technical use (minus signs, CLI flags, filenames).
+- **All platforms:** Never use em-dashes (`—`), en-dashes (`–`), or a hyphen (`-`) used as grammatical punctuation. They read as generated, machine-written filler. Use commas, periods, semicolons, or restructure the sentence. Hyphens are fine only inside compound words (well-known) and technical use (minus signs, CLI flags, filenames).
 
 ## 💓 Heartbeats - Be Proactive!
 
