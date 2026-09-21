@@ -855,7 +855,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               // down in the interaction options tree.
               const subOpt = (
                 interactionData.options as
-                  | Array<{ name: string; options?: Array<{ name: string; value: unknown }> }>
+                  | Array<{
+                      name: string;
+                      options?: Array<{ name: string; value: string | number | boolean }>;
+                    }>
                   | undefined
               )?.[0];
               const args: string[] = [];
