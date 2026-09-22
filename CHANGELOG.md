@@ -7,6 +7,8 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Agents: wrap the injected Project Context block (workspace files: SOUL/USER/BOOTSTRAP) in builder-emitted sentinel markers and slice it out of the anthropic-subscription system prompt, so workspace files reliably stay out of OAuth requests (keeping them on plan quota instead of spilling to paid extra usage) while all surrounding sections are preserved. The previous character-cap/heading heuristic was spoofable and never matched the builder's actual output.
+- Discord router: automatically tear down a channel's agent instance when the Discord channel (or its guild) is deleted, so dead routes and containers do not linger.
+- Discord router: restrict ordinary messages in shared guild channels to the channel owner or a whitelisted admin, so other members cannot hijack someone else's agent (DMs and first-run onboarding are unaffected); key the Google OAuth onboarding state per channel so concurrent onboarding cannot collide; and drop the temporary e2e test-bot allowlist from production.
 - Infra: share one auth-profiles store across all per-channel agent containers (mounted into each instance) so rotating OAuth refresh tokens no longer go stale per-instance; seed it in boot.sh/openclawctl, point the credential push at the shared file, source the Discord token from .env, and drop the drifted orphan `instance-create.sh`.
 - Discord/Agents: load personal memory in 1:1 DMs regardless of transport, and fix per-instance workspace/memory paths so provisioned agents stop losing memory. (#38)
 - Agents: bump pi-mono packages to 0.52.5. (#9949) Thanks @gumadeiras.

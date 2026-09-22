@@ -10,9 +10,6 @@ services:
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      # Optional E2E hook: comma-separated bot author ids the router treats as
-      # human. Unset in production (every bot is ignored); set only for tests.
-      - OPENCLAW_E2E_TEST_BOT_IDS=${OPENCLAW_E2E_TEST_BOT_IDS}
       # Whitelist for /channel register/unregister: the auth guild id and the
       # role within it that grants access. Unset => /channel management is
       # disabled (fails closed). Kept out of the repo; supplied via host env.
