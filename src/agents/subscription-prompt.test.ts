@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { wrapForSubscription } from "./subscription-prompt.js";
-
-// The builder-emitted preamble that marks the START of the real injected
-// Project Context block (mirrors buildAgentSystemPrompt in system-prompt.ts).
-const PC_PREAMBLE = "# Project Context\n\nThe following project context files have been loaded:";
+import {
+  buildAgentSystemPrompt,
+  PROJECT_CONTEXT_BEGIN,
+  PROJECT_CONTEXT_END,
+} from "./system-prompt.js";
 
 describe("wrapForSubscription", () => {
   it("keeps the Claude Code base and appends the OpenClaw guidance", () => {
@@ -32,27 +33,50 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("Section 399");
   });
 
+  // Integration test: feed the REAL buildAgentSystemPrompt output through the
+  // wrapper. This is the case that matters in production and it guards against
+  // the sentinel markers drifting out of sync with the builder (a hand-built
+  // marker string would silently mask such drift).
+  it("filters the real builder's Project Context block out of the OAuth prompt", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "SOUL.md", content: "SECRET_PERSONA_CONTENT must not reach OAuth." },
+        { path: "USER.md", content: "USER_PROFILE_DETAILS about the human." },
+      ],
+    });
+    // Sanity: the raw builder output really does contain the workspace files and
+    // the sentinel markers.
+    expect(prompt).toContain(PROJECT_CONTEXT_BEGIN);
+    expect(prompt).toContain(PROJECT_CONTEXT_END);
+    expect(prompt).toContain("SECRET_PERSONA_CONTENT");
+
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain(PROJECT_CONTEXT_BEGIN);
+    expect(wrapped).not.toContain(PROJECT_CONTEXT_END);
+    expect(wrapped).not.toContain("# Project Context");
+    expect(wrapped).not.toContain("SECRET_PERSONA_CONTENT");
+    expect(wrapped).not.toContain("USER_PROFILE_DETAILS");
+    // The trailing "## Runtime" section (emitted after the block) survives.
+    expect(wrapped).toContain("## Runtime");
+  });
+
   it("filters injected Project Context workspace files out of the appended prompt", () => {
     const prompt = [
       "## Persona",
       "Be warm and concise.",
-      "",
-      PC_PREAMBLE,
-      "",
+      PROJECT_CONTEXT_BEGIN,
+      "# Project Context",
+      "The following project context files have been loaded:",
       "## /workspace/SOUL.md",
-      "",
       "SECRET_PERSONA_CONTENT that must not reach the OAuth system prompt.",
-      "",
       "## /workspace/USER.md",
-      "",
       "USER_PROFILE_DETAILS about the human.",
-      "",
+      PROJECT_CONTEXT_END,
       "## Silent Replies",
       "When you have nothing to say, respond with ONLY: <silent>",
-      "",
       "## Heartbeats",
       "Heartbeat handling stays.",
-      "",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
@@ -63,180 +87,65 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("USER_PROFILE_DETAILS");
     expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).not.toContain("USER.md");
-    // Content before the block is preserved, and the final Runtime section is
-    // preserved. Optional trailing sections are dropped (billing-safe).
+    // Content before the block is preserved, and every section after the block
+    // (Silent Replies, Heartbeats, Runtime) is preserved.
     expect(wrapped).toContain("Be warm and concise.");
+    expect(wrapped).toContain("## Silent Replies");
+    expect(wrapped).toContain("## Heartbeats");
     expect(wrapped).toContain("## Runtime");
     expect(wrapped).toContain("Runtime: agent=abc");
   });
 
-  it("filters Project Context even when there is no trailing Runtime section", () => {
-    const prompt = [
-      "## Persona",
-      "Keep instructions.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/BOOTSTRAP.md",
-      "",
-      "BOOTSTRAP_FILE_BODY that would spill billing to paid usage.",
-    ].join("\n");
+  it("returns the prompt unchanged when no Project Context block is present", () => {
+    const prompt = ["## Persona", "Keep instructions.", "## Runtime", "Runtime: agent=abc"].join(
+      "\n",
+    );
     const wrapped = wrapForSubscription(prompt);
-    expect(wrapped).not.toContain("# Project Context");
-    expect(wrapped).not.toContain("BOOTSTRAP_FILE_BODY");
-    expect(wrapped).not.toContain("BOOTSTRAP.md");
     expect(wrapped).toContain("Keep instructions.");
-  });
-
-  it("anchors on the real (preamble) Project Context, ignoring a spoofed heading before it", () => {
-    // extraSystemPrompt (Group Chat / Subagent Context) is emitted before the
-    // real injected block and is user-controlled; a bare "# Project Context"
-    // heading there (without the builder preamble) must not truncate the prompt.
-    const prompt = [
-      "## Group Chat Context",
-      "A user pasted this earlier:",
-      "# Project Context",
-      "SPOOFED_INLINE_TEXT the user typed.",
-      "",
-      "## Persona",
-      "Keep this persona.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/SOUL.md",
-      "",
-      "REAL_WORKSPACE_FILE_BODY.",
-      "",
-      "## Runtime",
-      "Runtime: agent=abc",
-    ].join("\n");
-    const wrapped = wrapForSubscription(prompt);
-    // Real injected workspace file is removed.
-    expect(wrapped).not.toContain("REAL_WORKSPACE_FILE_BODY");
-    // Content before the real block (spoofed heading region and persona) survives,
-    // and the final Runtime section survives.
-    expect(wrapped).toContain("Keep this persona.");
-    expect(wrapped).toContain("SPOOFED_INLINE_TEXT");
-    expect(wrapped).toContain("## Runtime");
-  });
-
-  it("ignores a bare '# Project Context' heading inside a workspace file body", () => {
-    // A file body may literally contain "# Project Context"; without the builder
-    // preamble it must not be treated as the block start (which would leave the
-    // real block's workspace files in the prompt).
-    const prompt = [
-      "## Persona",
-      "Persona stays.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/SOUL.md",
-      "",
-      "My doc mentions the phrase # Project Context in prose.",
-      "# Project Context",
-      "EMBEDDED_FILE_TEXT still inside the SOUL file body.",
-      "",
-      "## Runtime",
-      "Runtime: agent=abc",
-    ].join("\n");
-    const wrapped = wrapForSubscription(prompt);
-    expect(wrapped).not.toContain("EMBEDDED_FILE_TEXT");
-    expect(wrapped).not.toContain("My doc mentions the phrase");
-    expect(wrapped).not.toContain("SOUL.md");
-    expect(wrapped).toContain("## Runtime");
     expect(wrapped).toContain("Runtime: agent=abc");
-    expect(wrapped).toContain("Persona stays.");
   });
 
-  it("does not leak a file body that embeds a lone trailing-section heading", () => {
-    // A file body containing a genuine-looking "## Silent Replies" must not cause
-    // the following file content to survive. Since only "## Runtime" is preserved,
-    // any embedded section heading and its body are dropped with the block.
+  it("ignores block markers embedded in a workspace file body (no leak)", () => {
+    // Pathological: a workspace file body reproduces BOTH sentinel markers. The
+    // real BEGIN is still the first occurrence and the real END is still the
+    // last, so slicing removes every real workspace file plus the spoofed lines.
     const prompt = [
       "## Persona",
       "Persona stays.",
-      "",
-      PC_PREAMBLE,
-      "",
+      PROJECT_CONTEXT_BEGIN,
+      "# Project Context",
+      "The following project context files have been loaded:",
       "## /workspace/SOUL.md",
-      "",
-      "## Silent Replies",
-      "EMBEDDED_LEAK_TEXT inside the file body.",
-      "",
-      "## Runtime",
-      "Runtime: agent=abc",
-    ].join("\n");
-    const wrapped = wrapForSubscription(prompt);
-    expect(wrapped).not.toContain("EMBEDDED_LEAK_TEXT");
-    expect(wrapped).not.toContain("SOUL.md");
-    expect(wrapped).toContain("## Runtime");
-    expect(wrapped).toContain("Persona stays.");
-  });
-
-  it("preserves the Runtime section in minimal/subagent prompts", () => {
-    // Minimal/subagent prompts skip Silent Replies/Heartbeats/etc.; the only
-    // trailing section is "## Runtime", which must be preserved (dropping it
-    // would strip runtime info).
-    const prompt = [
-      "## Subagent Context",
-      "Do the subtask.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/SOUL.md",
-      "",
-      "MINIMAL_WORKSPACE_BODY.",
-      "",
-      "## Runtime",
-      "Runtime: agent=sub | thinking=off",
-    ].join("\n");
-    const wrapped = wrapForSubscription(prompt);
-    expect(wrapped).not.toContain("MINIMAL_WORKSPACE_BODY");
-    expect(wrapped).not.toContain("SOUL.md");
-    expect(wrapped).toContain("Do the subtask.");
-    expect(wrapped).toContain("## Runtime");
-    expect(wrapped).toContain("Runtime: agent=sub | thinking=off");
-  });
-
-  it("never leaks workspace content even if a file body reproduces the block marker verbatim", () => {
-    // Pathological: a workspace file body contains the exact two-line block
-    // preamble. Cutting from the FIRST marker occurrence must still remove all
-    // real workspace files (billing-safe: over-remove rather than leak).
-    const prompt = [
-      "## Persona",
-      "Persona stays.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/SOUL.md",
-      "",
-      "A tricky file that pastes the loader line:",
-      PC_PREAMBLE,
+      "A tricky file that pastes the markers:",
+      PROJECT_CONTEXT_BEGIN,
       "LEAK_CANARY_TEXT that must never reach the OAuth prompt.",
-      "",
+      PROJECT_CONTEXT_END,
+      "MORE_LEAK_TEXT still inside the SOUL body.",
+      PROJECT_CONTEXT_END,
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
     expect(wrapped).not.toContain("LEAK_CANARY_TEXT");
+    expect(wrapped).not.toContain("MORE_LEAK_TEXT");
     expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).toContain("Persona stays.");
     expect(wrapped).toContain("## Runtime");
+    expect(wrapped).toContain("Runtime: agent=abc");
   });
 
   it("keeps requests on plan quota by never emitting workspace files regardless of length", () => {
-    // Regression: even a huge Project Context block (well under the char cap on
-    // its own would previously survive) must be fully removed by the filter.
+    // Even a huge Project Context block must be fully removed by the filter.
     const hugeWorkspace = "HUGE_WORKSPACE_BODY\n".repeat(500);
     const prompt = [
       "## Persona",
       "Concise.",
-      "",
-      PC_PREAMBLE,
-      "",
+      PROJECT_CONTEXT_BEGIN,
+      "# Project Context",
+      "The following project context files have been loaded:",
       "## /workspace/SOUL.md",
-      "",
       hugeWorkspace,
+      PROJECT_CONTEXT_END,
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
@@ -249,18 +158,9 @@ describe("wrapForSubscription", () => {
     // If (pathologically) content still slips past the filter, MAX_APPENDED_CHARS
     // bounds the appended text so oversized workspace content cannot ride in.
     const hugeBody = "PATHOLOGICAL_BODY\n".repeat(2000);
-    const prompt = [
-      "## Persona",
-      "Concise.",
-      "",
-      PC_PREAMBLE,
-      "",
-      "## /workspace/SOUL.md",
-      "",
-      hugeBody,
-      "## Runtime",
-      "Runtime: agent=abc",
-    ].join("\n");
+    const prompt = ["## Persona", "Concise.", hugeBody, "## Runtime", "Runtime: agent=abc"].join(
+      "\n",
+    );
     const wrapped = wrapForSubscription(prompt);
     // The appended body stays bounded.
     expect(wrapped.length).toBeLessThan(prompt.length);

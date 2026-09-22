@@ -6,7 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- Agents: explicitly filter injected workspace files (Project Context: SOUL/USER/BOOTSTRAP) out of the anthropic-subscription system prompt so requests reliably bill to plan quota instead of spilling to paid extra usage, rather than relying on a blunt character cap.
+- Agents: wrap the injected Project Context block (workspace files: SOUL/USER/BOOTSTRAP) in builder-emitted sentinel markers and slice it out of the anthropic-subscription system prompt, so workspace files reliably stay out of OAuth requests (keeping them on plan quota instead of spilling to paid extra usage) while all surrounding sections are preserved. The previous character-cap/heading heuristic was spoofable and never matched the builder's actual output.
 - Infra: share one auth-profiles store across all per-channel agent containers (mounted into each instance) so rotating OAuth refresh tokens no longer go stale per-instance; seed it in boot.sh/openclawctl, point the credential push at the shared file, source the Discord token from .env, and drop the drifted orphan `instance-create.sh`.
 - Discord/Agents: load personal memory in 1:1 DMs regardless of transport, and fix per-instance workspace/memory paths so provisioned agents stop losing memory. (#38)
 - Agents: bump pi-mono packages to 0.52.5. (#9949) Thanks @gumadeiras.

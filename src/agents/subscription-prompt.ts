@@ -12,6 +12,8 @@
  * the CLI appends custom instructions.
  */
 
+import { PROJECT_CONTEXT_BEGIN, PROJECT_CONTEXT_END } from "./system-prompt.js";
+
 // Minimal Claude Code base prompt — contains the key sections the server
 // validates. Kept lean to leave room for OpenClaw's actual instructions
 // within the token budget.
@@ -60,89 +62,51 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * identity), so the appended content must stay lean and CC-consistent.
  *
  * The PRIMARY mechanism keeping workspace files out of the subscription request
- * is now the explicit "# Project Context" filter in stripProjectContext(): it
- * deterministically removes the injected workspace files (SOUL/persona,
- * BOOTSTRAP, USER, ...) regardless of their length, rather than relying on a
- * character cap to accidentally chop them off. This cap is kept only as a
- * safety net in case some future prompt section grows unexpectedly large; it is
- * raised to 8000 so it no longer doubles as the workspace-file cutoff. First-run
+ * is the sentinel-delimited filter in stripProjectContext(): it deterministically
+ * removes the injected workspace files (SOUL/persona, BOOTSTRAP, USER, ...)
+ * regardless of their length or content. This cap is kept only as a safety net
+ * in case some future prompt section grows unexpectedly large. First-run
  * onboarding is instead driven through conversation content by the
  * discord-router (see routeMessage), which does not affect billing.
  */
 const MAX_APPENDED_CHARS = 8000;
 
 /**
- * Exact multi-line preamble that buildAgentSystemPrompt emits at the start of
- * the injected Project Context block (see system-prompt.ts). Anchoring on this
- * builder-emitted sentence rather than the bare "# Project Context" heading
- * makes the block boundary robust: a workspace file body that merely contains a
- * standalone "# Project Context" heading will not be mistaken for the block
- * start (a file would have to reproduce this whole preamble verbatim). Keep in
- * sync with buildAgentSystemPrompt.
- */
-const PROJECT_CONTEXT_BLOCK_MARKER =
-  "# Project Context\n\nThe following project context files have been loaded:";
-
-/**
  * Remove the injected Project Context block (workspace files: SOUL.md, USER.md,
- * BOOTSTRAP.md, persona, ...) from the assembled system prompt, while preserving
- * the "## Runtime" section that buildAgentSystemPrompt emits after it.
+ * BOOTSTRAP.md, persona, ...) from the assembled system prompt, preserving
+ * everything before and after it (including all trailing sections such as Silent
+ * Replies, Heartbeats, and Runtime).
  *
- * Boundary detection (both anchors chosen to be robust against workspace-file
- * bodies, which are emitted verbatim and can contain ANY text, including strings
- * that mimic prompt headings/markers):
+ * The block is delimited by the builder-emitted sentinels PROJECT_CONTEXT_BEGIN
+ * / PROJECT_CONTEXT_END (see buildAgentSystemPrompt). Because those markers come
+ * only from the builder and the workspace files always sit strictly BETWEEN
+ * them, the boundaries are unspoofable by file content:
  *
- *  - The block START is anchored on PROJECT_CONTEXT_BLOCK_MARKER (the builder's
- *    own preamble sentence), not a bare "# Project Context" heading. We take its
- *    FIRST occurrence: if either extraSystemPrompt or a file body reproduced the
- *    whole two-line preamble verbatim, cutting from the first match removes
- *    everything from there through the tail — including the real workspace files
- *    — so nothing leaks; worst case is over-removing benign preamble text.
+ *  - The real BEGIN is the FIRST occurrence: any BEGIN literal a file body
+ *    contains is emitted after the real one, so indexOf lands on the real BEGIN.
+ *  - The real END is the LAST occurrence: any END literal a file body contains
+ *    is emitted before the real one, so lastIndexOf lands on the real END.
  *
- *  - The block END is anchored on "## Runtime", which the builder emits
- *    UNCONDITIONALLY as the very LAST section of every prompt (full, minimal, and
- *    subagent). We preserve from its LAST occurrence to the end of the prompt.
- *    Since the genuine Runtime section is always final, a file body cannot place
- *    a "## Runtime" heading after it, so lastIndexOf lands on the real one.
- *
- * We deliberately do NOT try to also preserve the optional trailing sections
- * (Silent Replies, Heartbeats, Message Priority, Output Boundaries, Context
- * Recovery, Conversation History). Distinguishing those from an identical heading
- * embedded in a workspace file body is impossible from content alone (a genuine
- * "## Silent Replies" and one pasted into a SOUL.md body are byte-identical and
- * occupy the same structural position relative to the file block), and a robust
- * fix would require the prompt builder to emit a machine-readable delimiter
- * (system-prompt.ts change, out of scope here / tracked as follow-up). Dropping
- * those optional sections is billing-SAFE (they are non-critical behavioral hints
- * for the OAuth path) and guarantees no workspace content ever reaches the OAuth
- * system prompt, which is the only failure mode that breaks plan-quota billing.
- *
- * For reference, the full builder tail after the block is (in order): Silent
- * Replies, Heartbeats, Message Priority, Output Boundaries, Context Recovery,
- * Conversation History, Runtime -- with only Runtime emitted unconditionally.
+ * If the markers are absent (no context files were injected) the prompt is
+ * returned unchanged.
  */
 function stripProjectContext(prompt: string): string {
-  const markerStart = prompt.indexOf(PROJECT_CONTEXT_BLOCK_MARKER);
-  if (markerStart === -1) {
+  const begin = prompt.indexOf(PROJECT_CONTEXT_BEGIN);
+  if (begin === -1) {
     return prompt;
   }
-  // The marker may be preceded by a newline; drop that too so we cut cleanly at
-  // the blank line before "# Project Context".
-  const cutStart =
-    markerStart > 0 && prompt[markerStart - 1] === "\n" ? markerStart - 1 : markerStart;
-  const before = prompt.slice(0, cutStart);
-
-  // Preserve the final "## Runtime" section (always the last builder section).
-  const runtimeMarker = "\n## Runtime\n";
-  const runtimeStart = prompt.lastIndexOf(runtimeMarker);
-  // Only honor a Runtime section that occurs after the block start; otherwise
-  // there is nothing genuine to preserve and we drop to the end.
-  const runtime = runtimeStart > markerStart ? prompt.slice(runtimeStart + 1) : "";
-
-  if (!runtime) {
+  const endIdx = prompt.lastIndexOf(PROJECT_CONTEXT_END);
+  const before = prompt.slice(0, begin).replace(/\n+$/, "");
+  // Missing/backwards END should never happen (the builder always pairs them),
+  // but if it does, drop to the end rather than risk leaking workspace content.
+  if (endIdx < begin) {
     return before;
   }
-  return before.length === 0 ? runtime : `${before}\n${runtime}`;
+  const after = prompt.slice(endIdx + PROJECT_CONTEXT_END.length).replace(/^\n+/, "");
+  if (!after) {
+    return before;
+  }
+  return before.length === 0 ? after : `${before}\n${after}`;
 }
 
 export function wrapForSubscription(openClawPrompt: string): string {

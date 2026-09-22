@@ -6,6 +6,19 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 
 /**
+ * Sentinel comment markers wrapping the injected Project Context block (the
+ * workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...). They are emitted only
+ * by this builder and never derived from file content, so downstream code can
+ * identify the exact block boundaries even though workspace file bodies may
+ * contain arbitrary text (including strings that mimic prompt headings). The
+ * anthropic-subscription path uses them to strip workspace files out of the
+ * OAuth system prompt (see stripProjectContext in subscription-prompt.ts). On
+ * the API path they are inert HTML comments.
+ */
+export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
+export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
+
+/**
  * Controls which hardcoded sections are included in the system prompt.
  * - "full": All sections (default, for main agent)
  * - "minimal": Reduced sections (Tooling, Workspace, Runtime) - used for subagents
@@ -573,6 +586,12 @@ export function buildAgentSystemPrompt(params: {
       const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
       return baseName.toLowerCase() === "soul.md";
     });
+    // Wrap the injected workspace files in sentinel comment markers. These are
+    // builder-emitted (never sourced from file content), so the subscription
+    // path can slice the block out unambiguously — see stripProjectContext in
+    // subscription-prompt.ts. The markers are inert HTML comments on the API
+    // path.
+    lines.push(PROJECT_CONTEXT_BEGIN);
     lines.push("# Project Context", "", "The following project context files have been loaded:");
     if (hasSoulFile) {
       lines.push(
@@ -583,6 +602,7 @@ export function buildAgentSystemPrompt(params: {
     for (const file of contextFiles) {
       lines.push(`## ${file.path}`, "", file.content, "");
     }
+    lines.push(PROJECT_CONTEXT_END);
   }
 
   // Skip silent replies for subagent/none modes
