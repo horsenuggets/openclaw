@@ -310,4 +310,37 @@ describe("discord router channel-delete cleanup", () => {
 
     expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
   });
+
+  it("fails closed and skips recovery when the channel lookup errors", async () => {
+    // A transient channel-lookup failure must not be treated as a DM (which
+    // would recover unguarded); the channel is skipped entirely.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: false, status: 500, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [{ id: "m1", author: { id: OWNER, bot: false }, content: "hi" }],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("channel lookup failed"))).toBe(true);
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+  });
 });

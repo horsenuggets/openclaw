@@ -1770,13 +1770,24 @@ async function recoverUnansweredMessages(
     try {
       // Determine whether this is a guild channel (has a guild_id) or a DM. DMs
       // are inherently 1:1 with the owner, so they recover without a gate; guild
-      // channels reuse the live access control below.
-      const channelInfo = (await fetch(`${DISCORD_API}/channels/${channelId}`, {
+      // channels reuse the live access control below. Fail closed: if the lookup
+      // errors we cannot tell DM from guild, so we skip the channel rather than
+      // risk recovering an unauthorized message into a shared guild channel.
+      const channelResp = await fetch(`${DISCORD_API}/channels/${channelId}`, {
         headers: { Authorization: `Bot ${discordToken}` },
-      })
-        .then((r) => (r.ok ? r.json() : {}))
-        .catch(() => ({}))) as { guild_id?: string };
-      const isGuildChannel = Boolean(channelInfo?.guild_id);
+      }).catch(() => null);
+      if (!channelResp || !channelResp.ok) {
+        runtime.log(`[router] skipping recovery for ${channelId}: channel lookup failed`);
+        continue;
+      }
+      const channelInfo = (await channelResp.json().catch(() => null)) as {
+        guild_id?: string;
+      } | null;
+      if (!channelInfo) {
+        runtime.log(`[router] skipping recovery for ${channelId}: channel lookup unparseable`);
+        continue;
+      }
+      const isGuildChannel = Boolean(channelInfo.guild_id);
 
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
