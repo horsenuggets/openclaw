@@ -394,6 +394,9 @@ export async function runEmbeddedAttempt(
       userTimeFormat,
       contextFiles,
       memoryCitationsMode: params.config?.memory?.citations,
+      // Only the subscription path slices the Project Context block back out
+      // (wrapForSubscription below), so only it needs the sentinel markers.
+      wrapProjectContext: needsSubscriptionPrefix,
     });
     const systemPromptReport = buildSystemPromptReport({
       source: "run",

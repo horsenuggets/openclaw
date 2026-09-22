@@ -252,7 +252,21 @@ export function buildAgentSystemPrompt(params: {
   memoryCitationsMode?: MemoryCitationsMode;
   /** Serialized prior conversation turns for CLI-backed sessions. */
   conversationHistory?: string;
+  /**
+   * When true, wrap the injected Project Context block in sentinel markers and
+   * neutralize any sentinel literals in caller-provided text. Only the
+   * anthropic-subscription path sets this (it slices the block back out via
+   * stripProjectContext to keep workspace files off the OAuth request). Left
+   * false for every other provider so their system prompt is byte-for-byte
+   * unchanged.
+   */
+  wrapProjectContext?: boolean;
 }) {
+  // Sentinel wrapping + caller-text escaping only apply to the subscription
+  // path; for every other provider this is a no-op so the prompt is unchanged.
+  const wrapProjectContext = params.wrapProjectContext === true;
+  const maybeNeutralize = (text: string): string =>
+    wrapProjectContext ? neutralizeContextSentinels(text) : text;
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
@@ -565,7 +579,7 @@ export function buildAgentSystemPrompt(params: {
     // Use "Subagent Context" header for minimal mode (subagents), otherwise "Group Chat Context"
     const contextHeader =
       promptMode === "minimal" ? "## Subagent Context" : "## Group Chat Context";
-    lines.push(contextHeader, neutralizeContextSentinels(extraSystemPrompt), "");
+    lines.push(contextHeader, maybeNeutralize(extraSystemPrompt), "");
   }
   if (params.reactionGuidance) {
     const { level, channel } = params.reactionGuidance;
@@ -606,7 +620,9 @@ export function buildAgentSystemPrompt(params: {
     // path can slice the block out unambiguously — see stripProjectContext in
     // subscription-prompt.ts. The markers are inert HTML comments on the API
     // path.
-    lines.push(PROJECT_CONTEXT_BEGIN);
+    if (wrapProjectContext) {
+      lines.push(PROJECT_CONTEXT_BEGIN);
+    }
     lines.push("# Project Context", "", "The following project context files have been loaded:");
     if (hasSoulFile) {
       lines.push(
@@ -615,9 +631,11 @@ export function buildAgentSystemPrompt(params: {
     }
     lines.push("");
     for (const file of contextFiles) {
-      lines.push(`## ${file.path}`, "", neutralizeContextSentinels(file.content), "");
+      lines.push(`## ${file.path}`, "", maybeNeutralize(file.content), "");
     }
-    lines.push(PROJECT_CONTEXT_END);
+    if (wrapProjectContext) {
+      lines.push(PROJECT_CONTEXT_END);
+    }
   }
 
   // Skip silent replies for subagent/none modes
@@ -676,11 +694,7 @@ export function buildAgentSystemPrompt(params: {
   }
 
   if (params.conversationHistory) {
-    lines.push(
-      "## Conversation History",
-      neutralizeContextSentinels(params.conversationHistory),
-      "",
-    );
+    lines.push("## Conversation History", maybeNeutralize(params.conversationHistory), "");
   }
 
   lines.push(

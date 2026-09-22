@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentSystemPrompt, buildRuntimeLine } from "./system-prompt.js";
+import {
+  buildAgentSystemPrompt,
+  buildRuntimeLine,
+  PROJECT_CONTEXT_BEGIN,
+  PROJECT_CONTEXT_END,
+} from "./system-prompt.js";
 
 describe("buildAgentSystemPrompt", () => {
   it("includes owner numbers when provided", () => {
@@ -299,6 +304,35 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Alpha");
     expect(prompt).toContain("## IDENTITY.md");
     expect(prompt).toContain("Bravo");
+  });
+
+  it("omits Project Context sentinels and does not escape caller text by default", () => {
+    // The non-subscription (default) path must stay byte-clean: no sentinel
+    // markers and no rewriting of caller-provided text.
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      extraSystemPrompt: `caller text with a literal ${PROJECT_CONTEXT_BEGIN} inside`,
+      contextFiles: [{ path: "SOUL.md", content: "Persona" }],
+    });
+
+    expect(prompt).toContain("# Project Context");
+    // The literal from caller text is the ONLY occurrence; no builder markers.
+    expect(prompt).not.toContain(PROJECT_CONTEXT_END);
+    expect(prompt).toContain(`literal ${PROJECT_CONTEXT_BEGIN} inside`);
+  });
+
+  it("wraps Project Context in sentinels only when wrapProjectContext is set", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      wrapProjectContext: true,
+      contextFiles: [{ path: "SOUL.md", content: "Persona" }],
+    });
+
+    expect(prompt).toContain(PROJECT_CONTEXT_BEGIN);
+    expect(prompt).toContain(PROJECT_CONTEXT_END);
+    // BEGIN precedes the heading which precedes END.
+    expect(prompt.indexOf(PROJECT_CONTEXT_BEGIN)).toBeLessThan(prompt.indexOf("# Project Context"));
+    expect(prompt.indexOf("# Project Context")).toBeLessThan(prompt.indexOf(PROJECT_CONTEXT_END));
   });
 
   it("adds SOUL guidance when a soul file is present", () => {
