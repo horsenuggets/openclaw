@@ -81,6 +81,22 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("## Runtime");
   });
 
+  // Any dynamic field emitted around the block (here skillsPrompt, before it)
+  // could contain a stray sentinel literal; the subscription build neutralizes
+  // all surrounding content, so the boundary stays on the real block.
+  it("does not let a spoofed marker in skillsPrompt move the block boundary", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      wrapProjectContext: true,
+      skillsPrompt: `<skills>KEEP_THIS_SKILL ${PROJECT_CONTEXT_BEGIN} ${PROJECT_CONTEXT_END}</skills>`,
+      contextFiles: [{ path: "SOUL.md", content: "REAL_WORKSPACE_BODY must not reach OAuth." }],
+    });
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("REAL_WORKSPACE_BODY");
+    expect(wrapped).toContain("KEEP_THIS_SKILL");
+    expect(wrapped).toContain("## Runtime");
+  });
+
   it("filters injected Project Context workspace files out of the appended prompt", () => {
     const prompt = [
       "## Persona",

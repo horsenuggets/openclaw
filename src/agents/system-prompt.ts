@@ -19,13 +19,14 @@ export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
 /**
- * Neutralize any Project Context sentinel literals that appear in caller-provided
- * free text (extraSystemPrompt, workspace file bodies, conversation history).
- * Those inputs are arbitrary and can be user/agent-derived, so a copy of a marker
- * inside them would otherwise let the subscription filter (stripProjectContext)
- * anchor on a spoofed boundary. Escaping guarantees the only real
- * PROJECT_CONTEXT_BEGIN/END pair in the assembled prompt is the one this builder
- * emits around the injected block.
+ * Neutralize any Project Context sentinel literals in assembled prompt text.
+ * Many prompt fields are arbitrary and user/workspace-derived (skillsPrompt,
+ * extraSystemPrompt, workspace file bodies, conversation history, ...), so a
+ * copy of a marker inside any of them would otherwise let the subscription
+ * filter (stripProjectContext) anchor on a spoofed boundary. The subscription
+ * build runs this over all content surrounding and inside the injected block
+ * before adding the real marker pair, guaranteeing the only real
+ * PROJECT_CONTEXT_BEGIN/END literals in the output are the ones the builder adds.
  */
 function neutralizeContextSentinels(text: string): string {
   return text
@@ -265,8 +266,6 @@ export function buildAgentSystemPrompt(params: {
   // Sentinel wrapping + caller-text escaping only apply to the subscription
   // path; for every other provider this is a no-op so the prompt is unchanged.
   const wrapProjectContext = params.wrapProjectContext === true;
-  const maybeNeutralize = (text: string): string =>
-    wrapProjectContext ? neutralizeContextSentinels(text) : text;
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
@@ -579,7 +578,7 @@ export function buildAgentSystemPrompt(params: {
     // Use "Subagent Context" header for minimal mode (subagents), otherwise "Group Chat Context"
     const contextHeader =
       promptMode === "minimal" ? "## Subagent Context" : "## Group Chat Context";
-    lines.push(contextHeader, maybeNeutralize(extraSystemPrompt), "");
+    lines.push(contextHeader, extraSystemPrompt, "");
   }
   if (params.reactionGuidance) {
     const { level, channel } = params.reactionGuidance;
@@ -609,20 +608,19 @@ export function buildAgentSystemPrompt(params: {
   }
 
   const contextFiles = params.contextFiles ?? [];
+  // Record the [start, end) span of the injected Project Context block within
+  // `lines` so the subscription path can wrap exactly that region in sentinels
+  // after everything is assembled (see the wrapProjectContext handling at the
+  // return). -1 means no block was injected.
+  let contextBlockStart = -1;
+  let contextBlockEnd = -1;
   if (contextFiles.length > 0) {
     const hasSoulFile = contextFiles.some((file) => {
       const normalizedPath = file.path.trim().replace(/\\/g, "/");
       const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
       return baseName.toLowerCase() === "soul.md";
     });
-    // Wrap the injected workspace files in sentinel comment markers. These are
-    // builder-emitted (never sourced from file content), so the subscription
-    // path can slice the block out unambiguously — see stripProjectContext in
-    // subscription-prompt.ts. The markers are inert HTML comments on the API
-    // path.
-    if (wrapProjectContext) {
-      lines.push(PROJECT_CONTEXT_BEGIN);
-    }
+    contextBlockStart = lines.length;
     lines.push("# Project Context", "", "The following project context files have been loaded:");
     if (hasSoulFile) {
       lines.push(
@@ -631,11 +629,9 @@ export function buildAgentSystemPrompt(params: {
     }
     lines.push("");
     for (const file of contextFiles) {
-      lines.push(`## ${file.path}`, "", maybeNeutralize(file.content), "");
+      lines.push(`## ${file.path}`, "", file.content, "");
     }
-    if (wrapProjectContext) {
-      lines.push(PROJECT_CONTEXT_END);
-    }
+    contextBlockEnd = lines.length;
   }
 
   // Skip silent replies for subagent/none modes
@@ -694,7 +690,7 @@ export function buildAgentSystemPrompt(params: {
   }
 
   if (params.conversationHistory) {
-    lines.push("## Conversation History", maybeNeutralize(params.conversationHistory), "");
+    lines.push("## Conversation History", params.conversationHistory, "");
   }
 
   lines.push(
@@ -702,6 +698,30 @@ export function buildAgentSystemPrompt(params: {
     buildRuntimeLine(runtimeInfo, runtimeChannel, runtimeCapabilities, params.defaultThinkLevel),
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
+
+  if (wrapProjectContext && contextBlockStart >= 0) {
+    // Subscription path only. Split the assembled prompt around the injected
+    // block, neutralize any sentinel literal that appears in the (arbitrary,
+    // user/workspace-derived) content on either side or inside it, then wrap the
+    // block in the real builder-emitted marker pair. Because the surrounding
+    // content is fully neutralized, the only PROJECT_CONTEXT_BEGIN/END literals
+    // left in the output are the two we add here, so stripProjectContext's
+    // indexOf(BEGIN)/lastIndexOf(END) always land on the real boundaries
+    // regardless of which dynamic field (skillsPrompt, extraSystemPrompt,
+    // workspace files, conversation history, ...) contained a stray marker.
+    const before = neutralizeContextSentinels(
+      lines.slice(0, contextBlockStart).filter(Boolean).join("\n"),
+    );
+    const block = neutralizeContextSentinels(
+      lines.slice(contextBlockStart, contextBlockEnd).filter(Boolean).join("\n"),
+    );
+    const after = neutralizeContextSentinels(
+      lines.slice(contextBlockEnd).filter(Boolean).join("\n"),
+    );
+    return [before, PROJECT_CONTEXT_BEGIN, block, PROJECT_CONTEXT_END, after]
+      .filter(Boolean)
+      .join("\n");
+  }
 
   return lines.filter(Boolean).join("\n");
 }
