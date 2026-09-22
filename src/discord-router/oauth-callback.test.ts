@@ -8,23 +8,15 @@ import { startOAuthCallbackServer } from "./oauth-callback.js";
 // return minimal creds regardless of path.
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
+  const creds = JSON.stringify({
+    client_id: "cid",
+    client_secret: "secret",
+    redirect_uri: "http://127.0.0.1/cb",
+  });
   return {
     ...actual,
-    default: {
-      ...actual,
-      readFileSync: () =>
-        JSON.stringify({
-          client_id: "cid",
-          client_secret: "secret",
-          redirect_uri: "http://127.0.0.1/cb",
-        }),
-    },
-    readFileSync: () =>
-      JSON.stringify({
-        client_id: "cid",
-        client_secret: "secret",
-        redirect_uri: "http://127.0.0.1/cb",
-      }),
+    default: { ...actual, readFileSync: () => creds },
+    readFileSync: () => creds,
   };
 });
 
@@ -47,14 +39,24 @@ describe("oauth callback per-channel routing", () => {
 
   it("routes each auth completion back to the channel that requested it", async () => {
     const completions: Array<{ discordUserId: string; channelId?: string }> = [];
+    // startOAuthCallbackServer already calls server.listen() internally, so we
+    // wait for its own "listening" event and read the assigned port rather than
+    // listening again (which would throw ERR_SERVER_ALREADY_LISTEN).
     const { server, requestAuth } = startOAuthCallbackServer({
       instancesDir: "/tmp/does-not-matter",
       runtime,
       onAuthComplete: ({ discordUserId, channelId }) =>
         completions.push({ discordUserId, channelId }),
     });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     close = () => new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve, reject) => {
+      if (server.listening) {
+        resolve();
+        return;
+      }
+      server.once("listening", () => resolve());
+      server.once("error", reject);
+    });
     const { port } = server.address() as AddressInfo;
 
     // Same user starts Google auth in two different channels concurrently.

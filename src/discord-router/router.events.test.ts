@@ -101,7 +101,11 @@ describe("discord router channel-delete cleanup", () => {
   let startedRouters: Promise<void>[];
   let signalHandlers: Map<"SIGINT" | "SIGTERM", () => void>;
   let unregisterCalls: string[];
-  const runtime = { log: () => {}, error: () => {} };
+  let logs: string[];
+  const runtime = {
+    log: (...a: unknown[]) => logs.push(a.join(" ")),
+    error: (...a: unknown[]) => logs.push(a.join(" ")),
+  };
 
   const shutdown = () => {
     signalHandlers.get("SIGTERM")?.();
@@ -115,6 +119,7 @@ describe("discord router channel-delete cleanup", () => {
     startedRouters = [];
     signalHandlers = new Map();
     unregisterCalls = [];
+    logs = [];
     vi.useFakeTimers();
 
     // App id + slash command registration go through fetch; the provisioner
@@ -241,5 +246,68 @@ describe("discord router channel-delete cleanup", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(unregisterCalls).toEqual([]);
+  });
+
+  it("learns a channel's guild from interactions so GUILD_DELETE still cleans up", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // A slash-command interaction (not a message) teaches the guild mapping —
+    // e.g. `/channel register` on a channel that never sees a plain message.
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-1",
+      type: 2,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { name: "channel", options: [{ name: "status" }] },
+      member: { user: { id: OWNER } },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    ws.dispatch("GUILD_DELETE", { id: GUILD, unavailable: false });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(unregisterCalls).toEqual([CHANNEL]);
+  });
+
+  it("skips recovery of an unauthorized user's message in a guild channel", async () => {
+    // Recovery fetches the channel object (guild_id => guild channel) and the
+    // recent messages, then applies the same owner/admin gate as live messages.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({ guild_id: GUILD }) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              { id: "m1", author: { id: "444444444444444444", bot: false }, content: "hi" },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // Recovery runs 10s after READY; whitelist is unconfigured and the message
+    // author is not the owner, so the gate fails closed and skips recovery.
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
   });
 });

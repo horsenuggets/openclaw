@@ -675,6 +675,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 inflight,
                 runAgentCommand,
                 onboardingGoogleSent,
+                // Apply the same guild access control as live messages so a
+                // non-owner's message in a shared guild channel is not replayed
+                // to the agent on restart.
+                (channelId, userId) =>
+                  isAuthorizedForChannel(channelId, userId, {
+                    describeInstance,
+                    isWhitelisted: whitelist.isWhitelisted,
+                  }),
               );
             }, 10_000);
           }
@@ -852,6 +860,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             const interactionChannelId = d.channel_id;
             const interactionToken = d.token;
             const interactionId = d.id;
+
+            // Learn the channel's guild from interactions too (e.g. a channel
+            // registered via `/channel register` before any message is sent), so
+            // GUILD_DELETE can still tear its instance down (see channelGuild).
+            if (interactionChannelId && d.guild_id) {
+              channelGuild.set(interactionChannelId, d.guild_id);
+            }
 
             // Helper to respond to interactions (always ephemeral)
             const respondToInteraction = (text: string) => {
@@ -1742,6 +1757,8 @@ async function recoverUnansweredMessages(
   inflight: Set<string>,
   runCommand: RunAgentCommand,
   onboardingGoogleSent: Set<string>,
+  /** Same guild access control applied to live messages (owner/admin only). */
+  isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
   const botId = (
     (await fetch(`${DISCORD_API}/applications/@me`, {
@@ -1751,6 +1768,16 @@ async function recoverUnansweredMessages(
 
   for (const [channelId, instance] of instances) {
     try {
+      // Determine whether this is a guild channel (has a guild_id) or a DM. DMs
+      // are inherently 1:1 with the owner, so they recover without a gate; guild
+      // channels reuse the live access control below.
+      const channelInfo = (await fetch(`${DISCORD_API}/channels/${channelId}`, {
+        headers: { Authorization: `Bot ${discordToken}` },
+      })
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}))) as { guild_id?: string };
+      const isGuildChannel = Boolean(channelInfo?.guild_id);
+
       // Fetch last 10 messages to look past lifecycle messages
       const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages?limit=10`, {
         headers: { Authorization: `Bot ${discordToken}` },
@@ -1796,6 +1823,18 @@ async function recoverUnansweredMessages(
       const msgAttachments = lastUserMsg.attachments ?? [];
       if (!content && msgAttachments.length === 0) {
         continue;
+      }
+
+      // In a shared guild channel, only recover a message from the owner or a
+      // whitelisted admin, matching the live MESSAGE_CREATE gate. Fail closed.
+      if (isGuildChannel && isAuthorized) {
+        const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
+        if (!allowed) {
+          runtime.log(
+            `[router] skipping recovery in guild channel ${channelId}: ${lastUserMsg.author.id} not owner or whitelisted`,
+          );
+          continue;
+        }
       }
 
       runtime.log(
