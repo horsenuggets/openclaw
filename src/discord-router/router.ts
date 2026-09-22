@@ -119,20 +119,6 @@ const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_API = "https://discord.com/api/v10";
 
 /**
- * Bot authors are normally ignored (the router only serves humans). For
- * end-to-end testing, a designated tester bot may drive the router: any author
- * id listed in the comma-separated `OPENCLAW_E2E_TEST_BOT_IDS` env var is
- * treated as a human. Unset (the production default) means every bot is
- * ignored, so this has no effect unless explicitly opted into.
- */
-const TEST_BOT_IDS = new Set(
-  (process.env.OPENCLAW_E2E_TEST_BOT_IDS ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean),
-);
-
-/**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
  * Listens for DMs and forwards them to per-user Docker containers via gateway API.
  */
@@ -225,10 +211,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         onboardingGoogleSent,
       }).then(() => {});
     },
-    onAuthComplete: async ({ discordUserId, code }) => {
-      // Find the channel instance for this user's pending auth
-      const pending = pendingGoogleAuth.get(discordUserId);
-      const channelId = pending?.channelId ?? (await openDMChannel(discordToken, discordUserId));
+    onAuthComplete: async ({ discordUserId, channelId: authChannelId, code }) => {
+      // Resolve the channel this auth belongs to. The pending map is keyed per
+      // channel, so prefer the channel id carried through the OAuth flow; fall
+      // back to a DM channel only when the flow did not record one.
+      const channelId = authChannelId ?? (await openDMChannel(discordToken, discordUserId));
       if (!channelId) {
         runtime.error(`[router] could not resolve channel for ${discordUserId} after auth`);
         return;
@@ -328,7 +315,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         }
         fs.unlinkSync(tokenFile);
 
-        pendingGoogleAuth.delete(discordUserId);
+        pendingGoogleAuth.delete(channelId);
 
         // Show the capabilities card.
         await discordSend(
@@ -365,7 +352,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   });
 
   const inflight = new Set<string>();
-  const pendingGoogleAuth = new Map<string, { channelId: string; authUrl: string }>();
+  // Pending Google-auth onboarding state, keyed per channel/instance so a user
+  // onboarding several channels at once cannot collide or leak auth across
+  // channels (each channel resolves its own auth callback).
+  const pendingGoogleAuth = new Map<string, { userId: string; authUrl: string }>();
+  // Best-effort channel -> guild map, learned from message/interaction events.
+  // Used to tear down a guild's instances on GUILD_DELETE, where Discord does
+  // not emit a CHANNEL_DELETE per channel and instances carry no guild id.
+  const channelGuild = new Map<string, string>();
   // Channels for which the onboarding Google card has already been posted, so
   // the deterministic first-run trigger fires at most once per channel.
   const onboardingGoogleSent = new Set<string>();
@@ -473,6 +467,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   };
 
+  // When a Discord channel with a registered instance is deleted (or the bot is
+  // removed from a guild), tear the instance down through the same provisioning
+  // path `/channel unregister` uses, then drop any pending onboarding state.
+  const cleanupDeletedChannel = (channelId: string, reason: string): void => {
+    void handleChannelDeleted(channelId, reason, {
+      describeInstance,
+      provisioning,
+      onCleaned: () => pendingGoogleAuth.delete(channelId),
+      log: (message) => runtime.log(message),
+      error: (message) => runtime.error(message),
+    });
+  };
+
   // Dispatches the agent's `⁘` control commands to host-side actions the agent
   // cannot do itself (posting official Discord embeds and buttons).
   const runAgentCommand: RunAgentCommand = async (cmd, ctx) => {
@@ -487,8 +494,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         return "welcome card sent";
       }
       if (name === "google") {
-        const { authUrl } = oauth.requestAuth({ discordUserId: authorId, email: "user" });
-        pendingGoogleAuth.set(authorId, { channelId, authUrl });
+        const { authUrl } = oauth.requestAuth({
+          discordUserId: authorId,
+          channelId,
+          email: "user",
+        });
+        pendingGoogleAuth.set(channelId, { userId: authorId, authUrl });
         const sent = await discordSendEmbedWithLinkButton(
           discordToken,
           channelId,
@@ -675,6 +686,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             let content = d.content ?? "";
             const channelId = d.channel_id;
 
+            // Learn the channel's guild so GUILD_DELETE can tear down its
+            // instances (see channelGuild above).
+            if (channelId && guildId) {
+              channelGuild.set(channelId, guildId);
+            }
+
             // Collect attachments (voice messages, images, files)
             const rawAttachments = (d.attachments ?? []) as Array<{
               id: string;
@@ -699,11 +716,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
             );
 
-            if (
-              !authorId ||
-              (isBot && !TEST_BOT_IDS.has(authorId)) ||
-              (!content.trim() && !hasAttachments)
-            ) {
+            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
               return;
             }
 
@@ -750,57 +763,87 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
-            // Text command fallback: handle /command and //command prefixes
-            const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
-            if (commandMatch) {
-              const cmdName = commandMatch[1].toLowerCase();
-              const cmdArg = commandMatch[2]?.trim().toLowerCase();
-              const messageId = d.id;
-              void handleTextCommand({
-                cmdName,
-                cmdArg,
-                userId: authorId,
+            // Route the message to the instance (text-command fallback first,
+            // then the agent). Onboarding (including offering Google) is driven
+            // by the agent's BOOTSTRAP.md checklist and the `⁘` command channel,
+            // not by a router-side state machine.
+            const routeInstanceMessage = (): void => {
+              const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
+              if (commandMatch) {
+                const cmdName = commandMatch[1].toLowerCase();
+                const cmdArg = commandMatch[2]?.trim().toLowerCase();
+                const messageId = d.id;
+                void handleTextCommand({
+                  cmdName,
+                  cmdArg,
+                  userId: authorId,
+                  channelId,
+                  messageId,
+                  instance,
+                  discordToken,
+                  runtime,
+                }).then((handled) => {
+                  if (!handled) {
+                    void routeMessage({
+                      authorId,
+                      channelId,
+                      messageContent: content,
+                      attachments: rawAttachments,
+                      instance,
+                      discordToken,
+                      runtime,
+                      agentTimeoutMs,
+                      inflight,
+                      runCommand: runAgentCommand,
+                      onboardingGoogleSent,
+                    });
+                  }
+                });
+                return;
+              }
+
+              void routeMessage({
+                authorId,
                 channelId,
-                messageId,
+                messageContent: content,
+                attachments: rawAttachments,
                 instance,
                 discordToken,
                 runtime,
-              }).then((handled) => {
-                if (!handled) {
-                  void routeMessage({
-                    authorId,
-                    channelId,
-                    messageContent: content,
-                    attachments: rawAttachments,
-                    instance,
+                agentTimeoutMs,
+                inflight,
+                runCommand: runAgentCommand,
+                onboardingGoogleSent,
+              });
+            };
+
+            // Access control. DMs are inherently 1:1 with the owner, so they
+            // pass through untouched (onboarding a brand-new user happens here).
+            // In a shared guild channel, restrict conversation to the channel
+            // owner (the user it was registered for) or a whitelisted admin, so
+            // other members cannot hijack someone else's agent. Fail closed.
+            if (guildId) {
+              void isAuthorizedForChannel(channelId, authorId, {
+                describeInstance,
+                isWhitelisted: whitelist.isWhitelisted,
+              }).then((allowed) => {
+                if (!allowed) {
+                  runtime.log(
+                    `[router] denied message from ${authorId} in channel ${channelId} (not owner or whitelisted)`,
+                  );
+                  void discordSendEphemeral(
                     discordToken,
-                    runtime,
-                    agentTimeoutMs,
-                    inflight,
-                    runCommand: runAgentCommand,
-                    onboardingGoogleSent,
-                  });
+                    channelId,
+                    "*You are not authorized to use this channel's agent.*",
+                  );
+                  return;
                 }
+                routeInstanceMessage();
               });
               return;
             }
 
-            // Route to the agent. Onboarding (including offering Google) is
-            // driven by the agent's BOOTSTRAP.md checklist and the `⁘` command
-            // channel, not by a router-side state machine.
-            void routeMessage({
-              authorId,
-              channelId,
-              messageContent: content,
-              attachments: rawAttachments,
-              instance,
-              discordToken,
-              runtime,
-              agentTimeoutMs,
-              inflight,
-              runCommand: runAgentCommand,
-              onboardingGoogleSent,
-            });
+            routeInstanceMessage();
           }
 
           // Handle slash command interactions
@@ -928,6 +971,31 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               }
             }
           }
+
+          // A guild channel (or thread) was deleted. If it had a registered
+          // instance, tear it down so we don't keep a dead route around.
+          if (t === "CHANNEL_DELETE" || t === "THREAD_DELETE") {
+            const deletedChannelId = d.id;
+            if (deletedChannelId) {
+              cleanupDeletedChannel(deletedChannelId, t.toLowerCase());
+            }
+          }
+
+          // The bot was removed from a guild (or the guild was deleted). Tear
+          // down every registered instance that lived in that guild. GUILD_DELETE
+          // with `unavailable: true` is a transient outage, not a removal, so we
+          // ignore it and keep the instances.
+          if (t === "GUILD_DELETE" && d?.unavailable !== true) {
+            const deletedGuildId = d.id;
+            if (deletedGuildId) {
+              for (const [channelId, guildId] of channelGuild) {
+                if (guildId === deletedGuildId) {
+                  channelGuild.delete(channelId);
+                  cleanupDeletedChannel(channelId, "guild_delete");
+                }
+              }
+            }
+          }
           break;
         }
         case 7:
@@ -1021,6 +1089,69 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     process.once("SIGINT", () => shutdown());
     process.once("SIGTERM", () => shutdown());
   });
+}
+
+/** Deps for {@link isAuthorizedForChannel}; kept minimal for unit testing. */
+export type ChannelAuthDeps = {
+  describeInstance: (channelId: string) => InstanceStatus | null;
+  isWhitelisted: (userId: string) => Promise<boolean>;
+};
+
+/**
+ * Decide whether a user may converse with a registered channel's agent. Allowed
+ * when the user is the channel owner (recorded at registration) or a whitelisted
+ * admin. Fails closed: if the owner is unknown and the user is not whitelisted,
+ * access is denied. Used to gate ordinary messages in shared guild channels.
+ */
+export async function isAuthorizedForChannel(
+  channelId: string,
+  userId: string,
+  deps: ChannelAuthDeps,
+): Promise<boolean> {
+  const status = deps.describeInstance(channelId);
+  if (status?.ownerId && status.ownerId === userId) {
+    return true;
+  }
+  return deps.isWhitelisted(userId);
+}
+
+/** Deps for {@link handleChannelDeleted}; kept minimal so it is unit-testable. */
+export type ChannelDeletedDeps = {
+  /** Returns the channel's instance status, or null when not registered. */
+  describeInstance: (channelId: string) => InstanceStatus | null;
+  /** Same provisioning client `/channel unregister` uses (reloads on success). */
+  provisioning: ProvisioningClient;
+  /** Invoked after a successful teardown so callers can drop related state. */
+  onCleaned?: (channelId: string) => void;
+  log: (message: string) => void;
+  error: (message: string) => void;
+};
+
+/**
+ * Tear down the agent instance for a deleted Discord channel. No-op when the
+ * channel had no registered instance. Uses the same provisioning path as
+ * `/channel unregister`, so the instance map is reconciled on success.
+ */
+export async function handleChannelDeleted(
+  channelId: string,
+  reason: string,
+  deps: ChannelDeletedDeps,
+): Promise<void> {
+  if (!deps.describeInstance(channelId)) {
+    return; // nothing registered for this channel
+  }
+  deps.log(`[router] channel ${channelId} deleted (${reason}); unregistering instance`);
+  try {
+    const result = await deps.provisioning.unregister({ channelId });
+    if (result.ok) {
+      deps.onCleaned?.(channelId);
+      deps.log(`[router] instance for deleted channel ${channelId} unregistered`);
+    } else {
+      deps.error(`[router] failed to unregister deleted channel ${channelId}: ${result.message}`);
+    }
+  } catch (err) {
+    deps.error(`[router] error unregistering deleted channel ${channelId}: ${String(err)}`);
+  }
 }
 
 type DiscordAttachment = {
