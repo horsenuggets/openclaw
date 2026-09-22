@@ -1,10 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { wrapForSubscription } from "./subscription-prompt.js";
+import type { OpenClawConfig } from "../config/config.js";
+import { needsSubscriptionSystemPrompt, wrapForSubscription } from "./subscription-prompt.js";
 import {
   buildAgentSystemPrompt,
   PROJECT_CONTEXT_BEGIN,
   PROJECT_CONTEXT_END,
 } from "./system-prompt.js";
+
+describe("needsSubscriptionSystemPrompt", () => {
+  it("is true for the anthropic-subscription provider", () => {
+    expect(needsSubscriptionSystemPrompt("anthropic-subscription")).toBe(true);
+  });
+
+  it("is true for any provider configured with oauth auth", () => {
+    const config = {
+      models: { providers: { "my-proxy": { auth: "oauth" } } },
+    } as unknown as OpenClawConfig;
+    expect(needsSubscriptionSystemPrompt("my-proxy", config)).toBe(true);
+  });
+
+  it("is false for a plain api-key provider and when config is absent", () => {
+    const config = {
+      models: { providers: { anthropic: { auth: "api-key" } } },
+    } as unknown as OpenClawConfig;
+    expect(needsSubscriptionSystemPrompt("anthropic", config)).toBe(false);
+    expect(needsSubscriptionSystemPrompt("anthropic")).toBe(false);
+  });
+});
 
 describe("wrapForSubscription", () => {
   it("keeps the Claude Code base and appends the OpenClaw guidance", () => {

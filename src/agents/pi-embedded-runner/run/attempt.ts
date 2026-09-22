@@ -57,7 +57,7 @@ import {
   loadWorkspaceSkillEntries,
   resolveSkillsPromptForRun,
 } from "../../skills.js";
-import { wrapForSubscription } from "../../subscription-prompt.js";
+import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import {
@@ -256,9 +256,7 @@ export async function runEmbeddedAttempt(
 
     // Detect subscription providers early — needed for tool deferral and
     // system prompt prefix. Checked by provider name or explicit auth config.
-    const needsSubscriptionPrefix =
-      params.provider === "anthropic-subscription" ||
-      params.config?.models?.providers?.[params.provider]?.auth === "oauth";
+    const needsSubscriptionPrefix = needsSubscriptionSystemPrompt(params.provider, params.config);
 
     // For subscription providers, add tool_search and set up deferral state.
     // All tools remain registered for execution, but only essential + loaded

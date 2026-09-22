@@ -12,7 +12,21 @@
  * the CLI appends custom instructions.
  */
 
+import type { OpenClawConfig } from "../config/config.js";
 import { PROJECT_CONTEXT_BEGIN, PROJECT_CONTEXT_END } from "./system-prompt.js";
+
+/**
+ * Whether a provider/model uses subscription (OAuth) auth and therefore needs
+ * the Claude Code base-prompt wrapping and Project Context filtering. Shared by
+ * the normal run path and the compaction path so both apply the same treatment
+ * (otherwise an OAuth compaction request would send workspace files in its
+ * system prompt and spill to paid extra usage).
+ */
+export function needsSubscriptionSystemPrompt(provider: string, config?: OpenClawConfig): boolean {
+  return (
+    provider === "anthropic-subscription" || config?.models?.providers?.[provider]?.auth === "oauth"
+  );
+}
 
 // Minimal Claude Code base prompt — contains the key sections the server
 // validates. Kept lean to leave room for OpenClaw's actual instructions
