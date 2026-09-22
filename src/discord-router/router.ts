@@ -992,6 +992,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           if (t === "CHANNEL_DELETE" || t === "THREAD_DELETE") {
             const deletedChannelId = d.id;
             if (deletedChannelId) {
+              // Drop the learned guild mapping so deleted channels don't
+              // accumulate as stale entries on a long-lived router.
+              channelGuild.delete(deletedChannelId);
               cleanupDeletedChannel(deletedChannelId, t.toLowerCase());
             }
           }
