@@ -6,6 +6,35 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 
 /**
+ * Sentinel comment markers wrapping the injected Project Context block (the
+ * workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...). They are emitted only
+ * by this builder and never derived from file content, so downstream code can
+ * identify the exact block boundaries even though workspace file bodies may
+ * contain arbitrary text (including strings that mimic prompt headings). The
+ * anthropic-subscription path uses them to strip workspace files out of the
+ * OAuth system prompt (see stripProjectContext in subscription-prompt.ts). On
+ * the API path they are inert HTML comments.
+ */
+export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
+export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
+
+/**
+ * Neutralize any Project Context sentinel literals in assembled prompt text.
+ * Many prompt fields are arbitrary and user/workspace-derived (skillsPrompt,
+ * extraSystemPrompt, workspace file bodies, conversation history, ...), so a
+ * copy of a marker inside any of them would otherwise let the subscription
+ * filter (stripProjectContext) anchor on a spoofed boundary. The subscription
+ * build runs this over all content surrounding and inside the injected block
+ * before adding the real marker pair, guaranteeing the only real
+ * PROJECT_CONTEXT_BEGIN/END literals in the output are the ones the builder adds.
+ */
+function neutralizeContextSentinels(text: string): string {
+  return text
+    .replaceAll(PROJECT_CONTEXT_BEGIN, "<!-- openclaw:project-context:begin(escaped) -->")
+    .replaceAll(PROJECT_CONTEXT_END, "<!-- openclaw:project-context:end(escaped) -->");
+}
+
+/**
  * Controls which hardcoded sections are included in the system prompt.
  * - "full": All sections (default, for main agent)
  * - "minimal": Reduced sections (Tooling, Workspace, Runtime) - used for subagents
@@ -224,7 +253,19 @@ export function buildAgentSystemPrompt(params: {
   memoryCitationsMode?: MemoryCitationsMode;
   /** Serialized prior conversation turns for CLI-backed sessions. */
   conversationHistory?: string;
+  /**
+   * When true, wrap the injected Project Context block in sentinel markers and
+   * neutralize any sentinel literals in caller-provided text. Only the
+   * anthropic-subscription path sets this (it slices the block back out via
+   * stripProjectContext to keep workspace files off the OAuth request). Left
+   * false for every other provider so their system prompt is byte-for-byte
+   * unchanged.
+   */
+  wrapProjectContext?: boolean;
 }) {
+  // Sentinel wrapping + caller-text escaping only apply to the subscription
+  // path; for every other provider this is a no-op so the prompt is unchanged.
+  const wrapProjectContext = params.wrapProjectContext === true;
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
@@ -567,12 +608,19 @@ export function buildAgentSystemPrompt(params: {
   }
 
   const contextFiles = params.contextFiles ?? [];
+  // Record the [start, end) span of the injected Project Context block within
+  // `lines` so the subscription path can wrap exactly that region in sentinels
+  // after everything is assembled (see the wrapProjectContext handling at the
+  // return). -1 means no block was injected.
+  let contextBlockStart = -1;
+  let contextBlockEnd = -1;
   if (contextFiles.length > 0) {
     const hasSoulFile = contextFiles.some((file) => {
       const normalizedPath = file.path.trim().replace(/\\/g, "/");
       const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
       return baseName.toLowerCase() === "soul.md";
     });
+    contextBlockStart = lines.length;
     lines.push("# Project Context", "", "The following project context files have been loaded:");
     if (hasSoulFile) {
       lines.push(
@@ -583,6 +631,7 @@ export function buildAgentSystemPrompt(params: {
     for (const file of contextFiles) {
       lines.push(`## ${file.path}`, "", file.content, "");
     }
+    contextBlockEnd = lines.length;
   }
 
   // Skip silent replies for subagent/none modes
@@ -650,7 +699,34 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  return lines.filter(Boolean).join("\n");
+  if (!wrapProjectContext) {
+    return lines.filter(Boolean).join("\n");
+  }
+
+  // Subscription path. Neutralize every sentinel literal in the arbitrary,
+  // user/workspace-derived content (skillsPrompt, extraSystemPrompt, workspace
+  // files, conversation history, ...) so the only PROJECT_CONTEXT_BEGIN/END
+  // literals left are the ones this builder controls. stripProjectContext then
+  // anchors on real boundaries via indexOf(BEGIN)/lastIndexOf(END).
+  if (contextBlockStart < 0) {
+    // No block was injected: there is nothing to wrap, but we must still strip
+    // any stray marker so a literal in surrounding content can't trick
+    // stripProjectContext into dropping legitimate instructions.
+    return neutralizeContextSentinels(lines.filter(Boolean).join("\n"));
+  }
+
+  // Split around the injected block, neutralize each region, then wrap only the
+  // block in the real marker pair.
+  const before = neutralizeContextSentinels(
+    lines.slice(0, contextBlockStart).filter(Boolean).join("\n"),
+  );
+  const block = neutralizeContextSentinels(
+    lines.slice(contextBlockStart, contextBlockEnd).filter(Boolean).join("\n"),
+  );
+  const after = neutralizeContextSentinels(lines.slice(contextBlockEnd).filter(Boolean).join("\n"));
+  return [before, PROJECT_CONTEXT_BEGIN, block, PROJECT_CONTEXT_END, after]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildRuntimeLine(

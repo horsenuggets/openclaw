@@ -12,6 +12,22 @@
  * the CLI appends custom instructions.
  */
 
+import type { OpenClawConfig } from "../config/config.js";
+import { PROJECT_CONTEXT_BEGIN, PROJECT_CONTEXT_END } from "./system-prompt.js";
+
+/**
+ * Whether a provider/model uses subscription (OAuth) auth and therefore needs
+ * the Claude Code base-prompt wrapping and Project Context filtering. Shared by
+ * the normal run path and the compaction path so both apply the same treatment
+ * (otherwise an OAuth compaction request would send workspace files in its
+ * system prompt and spill to paid extra usage).
+ */
+export function needsSubscriptionSystemPrompt(provider: string, config?: OpenClawConfig): boolean {
+  return (
+    provider === "anthropic-subscription" || config?.models?.providers?.[provider]?.auth === "oauth"
+  );
+}
+
 // Minimal Claude Code base prompt — contains the key sections the server
 // validates. Kept lean to leave room for OpenClaw's actual instructions
 // within the token budget.
@@ -53,24 +69,67 @@ Carefully consider the reversibility and blast radius of actions. For actions th
  * [CC base prompt] + separator + [custom instructions]
  */
 /**
- * Max characters of OpenClaw content to append. Empirically, injecting the
- * workspace persona/first-run files into the OAuth system prompt makes the
- * request bill to paid extra usage instead of the free plan quota (Anthropic's
- * subscription validation flags system-prompt content that diverges from the
- * Claude Code identity), so the appended content must stay lean and
- * CC-consistent. buildAgentSystemPrompt still assembles the workspace files
- * near the end (under "# Project Context"), so this cap is set so the appended
- * text ends before that section: it keeps the operational preamble and
- * truncates the workspace files (persona, BOOTSTRAP, USER, ...) out of the
- * subscription request entirely. First-run onboarding is instead driven through
- * conversation content by the
+ * Belt-and-suspenders cap on appended OpenClaw content. Injecting workspace
+ * persona/first-run files into the OAuth system prompt makes the request bill
+ * to paid extra usage instead of the free plan quota (Anthropic's subscription
+ * validation flags system-prompt content that diverges from the Claude Code
+ * identity), so the appended content must stay lean and CC-consistent.
+ *
+ * The PRIMARY mechanism keeping workspace files out of the subscription request
+ * is the sentinel-delimited filter in stripProjectContext(): it deterministically
+ * removes the injected workspace files (SOUL/persona, BOOTSTRAP, USER, ...)
+ * regardless of their length or content. This cap is kept only as a safety net
+ * in case some future prompt section grows unexpectedly large. First-run
+ * onboarding is instead driven through conversation content by the
  * discord-router (see routeMessage), which does not affect billing.
  */
-const MAX_APPENDED_CHARS = 5000;
+const MAX_APPENDED_CHARS = 8000;
+
+/**
+ * Remove the injected Project Context block (workspace files: SOUL.md, USER.md,
+ * BOOTSTRAP.md, persona, ...) from the assembled system prompt, preserving
+ * everything before and after it (including all trailing sections such as Silent
+ * Replies, Heartbeats, and Runtime).
+ *
+ * The block is delimited by the builder-emitted sentinels PROJECT_CONTEXT_BEGIN
+ * / PROJECT_CONTEXT_END (see buildAgentSystemPrompt). Because those markers come
+ * only from the builder and the workspace files always sit strictly BETWEEN
+ * them, the boundaries are unspoofable by file content:
+ *
+ *  - The real BEGIN is the FIRST occurrence: any BEGIN literal a file body
+ *    contains is emitted after the real one, so indexOf lands on the real BEGIN.
+ *  - The real END is the LAST occurrence: any END literal a file body contains
+ *    is emitted before the real one, so lastIndexOf lands on the real END.
+ *
+ * If the markers are absent (no context files were injected) the prompt is
+ * returned unchanged.
+ */
+function stripProjectContext(prompt: string): string {
+  const begin = prompt.indexOf(PROJECT_CONTEXT_BEGIN);
+  if (begin === -1) {
+    return prompt;
+  }
+  const endIdx = prompt.lastIndexOf(PROJECT_CONTEXT_END);
+  const before = prompt.slice(0, begin).replace(/\n+$/, "");
+  // Missing/backwards END should never happen (the builder always pairs them),
+  // but if it does, drop to the end rather than risk leaking workspace content.
+  if (endIdx < begin) {
+    return before;
+  }
+  const after = prompt.slice(endIdx + PROJECT_CONTEXT_END.length).replace(/^\n+/, "");
+  if (!after) {
+    return before;
+  }
+  return before.length === 0 ? after : `${before}\n${after}`;
+}
 
 export function wrapForSubscription(openClawPrompt: string): string {
+  // Deterministically drop injected workspace files (Project Context) before
+  // any other processing so their length can't push the request off plan quota.
+  const withoutProjectContext = stripProjectContext(openClawPrompt);
+
   // Strip any existing CC prefix and anti-CC identity lines.
-  let cleaned = openClawPrompt
+  let cleaned = withoutProjectContext
     .replace(/You are Claude Code, Anthropic's official CLI for Claude\.\s*/g, "")
     .replace(/You are NOT Claude Code\.[^\n]*/g, "")
     .replace(/You are a personal assistant running inside OpenClaw\./g, "")

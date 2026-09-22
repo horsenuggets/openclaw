@@ -52,6 +52,7 @@ import {
   resolveSkillsPromptForRun,
   type SkillSnapshot,
 } from "../skills.js";
+import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../subscription-prompt.js";
 import { resolveTranscriptPolicy } from "../transcript-policy.js";
 import { buildEmbeddedExtensionPaths } from "./extensions.js";
 import {
@@ -330,6 +331,9 @@ export async function compactEmbeddedPiSessionDirect(
       moduleUrl: import.meta.url,
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
+    // Compaction must apply the same subscription treatment as normal runs, or an
+    // OAuth compaction request would send workspace files in its system prompt.
+    const needsSubscriptionPrefix = needsSubscriptionSystemPrompt(provider, params.config);
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
       defaultThinkLevel: params.thinkLevel,
@@ -355,8 +359,12 @@ export async function compactEmbeddedPiSessionDirect(
       userTimeFormat,
       contextFiles,
       memoryCitationsMode: params.config?.memory?.citations,
+      wrapProjectContext: needsSubscriptionPrefix,
     });
-    const systemPromptOverride = createSystemPromptOverride(appendPrompt);
+    const rawSystemPrompt = createSystemPromptOverride(appendPrompt)();
+    const systemPromptText = needsSubscriptionPrefix
+      ? wrapForSubscription(rawSystemPrompt)
+      : rawSystemPrompt;
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
@@ -409,7 +417,7 @@ export async function compactEmbeddedPiSessionDirect(
         sessionManager,
         settingsManager,
       });
-      applySystemPromptOverrideToSession(session, systemPromptOverride());
+      applySystemPromptOverrideToSession(session, systemPromptText);
 
       try {
         const prior = await sanitizeSessionHistory({

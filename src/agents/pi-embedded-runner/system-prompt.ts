@@ -48,6 +48,11 @@ export function buildEmbeddedSystemPrompt(params: {
   userTimeFormat?: ResolvedTimeFormat;
   contextFiles?: EmbeddedContextFile[];
   memoryCitationsMode?: MemoryCitationsMode;
+  /**
+   * Subscription path only: wrap the Project Context block in sentinel markers
+   * so it can be sliced out of the OAuth system prompt. Off for other providers.
+   */
+  wrapProjectContext?: boolean;
 }): string {
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
@@ -74,6 +79,7 @@ export function buildEmbeddedSystemPrompt(params: {
     userTimeFormat: params.userTimeFormat,
     contextFiles: params.contextFiles,
     memoryCitationsMode: params.memoryCitationsMode,
+    wrapProjectContext: params.wrapProjectContext,
   });
 }
 
