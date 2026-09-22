@@ -110,7 +110,7 @@ function readBootstrapDirective(instance: InstanceConfig): string | null {
       "",
       content,
       "",
-      "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw. Never call yourself Claude, Claude Code, or an assistant named anything else. Never describe yourself as an AI or an AI assistant; do not use the word AI at all. If you need a noun, say assistant or your assistant.",
+      "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw, never as Claude, Claude Code, or any other model or product name. If you need a noun, call yourself an assistant or your assistant.",
       "",
       "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
     ].join("\n");
