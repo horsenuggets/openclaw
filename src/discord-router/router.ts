@@ -733,8 +733,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             // author is a bot (e.g. an automated tester bot, which cannot invoke
             // slash commands), so handle them before both the bot filter and the
             // registered-instance gate below. register/unregister stay
-            // whitelist-gated inside handleChannelCommand, so opening this path
-            // to bots does not grant them provisioning rights.
+            // whitelist-gated inside handleChannelCommand: authorization is the
+            // configured auth-guild role, applied uniformly to bots and humans.
+            // A bot can therefore provision only if it has been granted that
+            // role (the intended setup for a trusted tester/automation bot);
+            // untrusted bots without the role are rejected exactly like
+            // untrusted humans. status stays open to everyone.
             const channelCmd = authorId ? parseChannelTextCommand(content) : null;
             if (channelCmd && authorId) {
               const commandMessageId = d.id;
@@ -1698,7 +1702,7 @@ async function discordSend(token: string, channelId: string, content: string): P
  * embeds payload. Bots cannot send true ephemeral replies, so callers that
  * want an auto-deleting notice use `discordSendEphemeral` instead.
  */
-async function discordSendReply(
+export async function discordSendReply(
   token: string,
   channelId: string,
   commandMessageId: string,
