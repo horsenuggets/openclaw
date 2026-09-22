@@ -123,6 +123,51 @@ const TYPING_INTERVAL_MS = 8_000;
 const DISCORD_API = "https://discord.com/api/v10";
 
 /**
+ * The only bot-authored channel messages that are NOT replies to a user message:
+ * the health-monitor sidecar's lifecycle banners (gated behind the per-instance
+ * `lifecycleMessages` preference). Recovery skips exactly these so it can find a
+ * genuinely-unanswered user message beneath them. Every OTHER bot message —
+ * including error replies like "*Something went wrong...*" — means the user's
+ * message was already handled and must NOT be skipped; otherwise recovery
+ * re-runs the same failing message on every reconnect (an endless error loop).
+ */
+export const LIFECYCLE_BANNERS = ["*Back online.*", "*Shutting down...*"];
+
+export function isLifecycleBanner(content: string | undefined): boolean {
+  return LIFECYCLE_BANNERS.includes((content ?? "").trim());
+}
+
+export type RouterErrorKind = "connection-refused" | "auth" | "timeout" | "generic";
+
+/**
+ * Classify an error thrown while routing a message to an agent container so the
+ * router can respond appropriately. Auth/config failures (missing key, expired
+ * or rotated OAuth token) are admin problems, NOT something the user can fix by
+ * retrying, so they are surfaced as "auth" (logged, not echoed to the user as a
+ * generic "try again") rather than falling through to "generic".
+ */
+export function classifyRouterError(errMsg: string): RouterErrorKind {
+  if (errMsg.includes("ECONNREFUSED")) {
+    return "connection-refused";
+  }
+  if (
+    errMsg.includes("unauthorized") ||
+    errMsg.includes("token_mismatch") ||
+    errMsg.includes("pairing") ||
+    errMsg.includes("No API key") ||
+    errMsg.includes("invalid_grant") ||
+    errMsg.includes("OAuth token refresh failed") ||
+    errMsg.includes("re-authenticate")
+  ) {
+    return "auth";
+  }
+  if (errMsg.includes("timeout") || errMsg.includes("ETIMEDOUT")) {
+    return "timeout";
+  }
+  return "generic";
+}
+
+/**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
  * Listens for DMs and forwards them to per-user Docker containers via gateway API.
  */
@@ -367,6 +412,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // Channels for which the onboarding Google card has already been posted, so
   // the deterministic first-run trigger fires at most once per channel.
   const onboardingGoogleSent = new Set<string>();
+  // Discord message IDs that recovery has already attempted this process. Auth/
+  // config failures intentionally post no reply, so without this the same
+  // message would look "unanswered" and be silently re-run on every reconnect.
+  // A process restart legitimately re-attempts once (the set starts empty).
+  const recoveredMessageIds = new Set<string>();
 
   // --- /channel command wiring ---
   const whitelist = createWhitelistChecker({
@@ -679,6 +729,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 inflight,
                 runAgentCommand,
                 onboardingGoogleSent,
+                recoveredMessageIds,
                 // Apply the same guild access control as live messages so a
                 // non-owner's message in a shared guild channel is not replayed
                 // to the agent on restart.
@@ -1527,24 +1578,20 @@ async function routeMessage(params: {
     const errMsg = String(err);
     runtime.error(`[router] error for channel ${channelId}: ${errMsg}`);
 
-    const isConnectionRefused =
-      errMsg.includes("ECONNREFUSED") || errMsg.includes("connect ECONNREFUSED");
-    const isTimeout = errMsg.includes("timeout") || errMsg.includes("ETIMEDOUT");
-    const isAuthError =
-      errMsg.includes("unauthorized") ||
-      errMsg.includes("token_mismatch") ||
-      errMsg.includes("pairing");
-
-    if (isConnectionRefused) {
+    const kind = classifyRouterError(errMsg);
+    if (kind === "connection-refused") {
       await discordSend(
         discordToken,
         channelId,
         "*Your agent is not running. Please contact the admin to start your instance.*",
       ).catch(() => {});
-    } else if (isAuthError) {
-      // Don't send error to user for auth issues — admin problem
-      runtime.error(`[router] auth error for channel ${channelId}, container may need restart`);
-    } else if (isTimeout) {
+    } else if (kind === "auth") {
+      // Auth/config failure is an admin problem the user cannot fix by retrying,
+      // so don't echo a misleading "try again" — just log for the admin.
+      runtime.error(
+        `[router] auth/config error for channel ${channelId}, needs admin attention (re-auth or restart)`,
+      );
+    } else if (kind === "timeout") {
       await discordSend(
         discordToken,
         channelId,
@@ -1873,6 +1920,8 @@ async function recoverUnansweredMessages(
   inflight: Set<string>,
   runCommand: RunAgentCommand,
   onboardingGoogleSent: Set<string>,
+  /** Message IDs already attempted this process, to avoid re-recovery loops. */
+  recoveredMessageIds: Set<string>,
   /** Same guild access control applied to live messages (owner/admin only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
@@ -1928,15 +1977,21 @@ async function recoverUnansweredMessages(
         continue;
       }
 
-      // Skip italic lifecycle messages (*Back online.*, *Shutting down...*)
-      const isLifecycle = (c: string) => /^\*[^*]+\*$/.test(c?.trim() ?? "");
-
+      // Walk newest-first. For a BOT message, skip ONLY genuine lifecycle banners
+      // (*Back online.*, *Shutting down...*), which are not replies to a user
+      // message; any other bot message — including an error reply — means the
+      // newest user message was already handled, so stop and do not re-run it.
+      // (Previously all italic text was skipped, swallowing error replies and
+      // re-attempting the same failing message on every reconnect.) Authorship is
+      // checked first so a user literally typing "*Back online.*" is not mistaken
+      // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       for (const msg of messages) {
-        if (isLifecycle(msg.content)) {
-          continue;
-        }
-        if (msg.author.bot || msg.author.id === botId) {
+        const isBotMsg = msg.author.bot || msg.author.id === botId;
+        if (isBotMsg) {
+          if (isLifecycleBanner(msg.content)) {
+            continue;
+          }
           break;
         }
         lastUserMsg = msg;
@@ -1963,6 +2018,14 @@ async function recoverUnansweredMessages(
           continue;
         }
       }
+
+      // Attempt each message at most once per process. A persistently-failing
+      // agent (e.g. bad auth) posts no reply, so this message would otherwise
+      // stay "unanswered" and be silently re-run on every reconnect.
+      if (recoveredMessageIds.has(lastUserMsg.id)) {
+        continue;
+      }
+      recoveredMessageIds.add(lastUserMsg.id);
 
       runtime.log(
         `[router] recovering unanswered message in channel ${channelId}: ${content?.slice(0, 60) || `(${msgAttachments.length} attachment(s))`}`,
