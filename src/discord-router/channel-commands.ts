@@ -59,7 +59,27 @@ export type ProvisioningClient = {
   unregister: (params: { channelId: string }) => Promise<ProvisioningResult>;
 };
 
-export type ChannelReply = (text: string, opts?: { ephemeral?: boolean }) => Promise<void> | void;
+/**
+ * Shared reply payload contract. The router adapter consumes these exact types
+ * to render either a plain string or a Discord embed table. Kept transport
+ * agnostic: this module never imports from the router or touches Discord.
+ */
+export type DiscordEmbedField = { name: string; value: string; inline?: boolean };
+export type DiscordEmbed = {
+  title?: string;
+  description?: string;
+  color?: number;
+  fields?: DiscordEmbedField[];
+  footer?: { text: string };
+};
+export type ChannelReplyPayload = string | { embeds: DiscordEmbed[] };
+export type ChannelReply = (
+  payload: ChannelReplyPayload,
+  opts?: { ephemeral?: boolean },
+) => Promise<void> | void;
+
+/** Brand color shared with the welcome/google embeds. */
+const BRAND_COLOR = 0xff8080;
 
 export type ChannelCommandContext = {
   subcommand: string | null;
@@ -101,21 +121,29 @@ export function parseChannelTextCommand(
   return { subcommand: parts[0]?.toLowerCase() ?? null, args: parts.slice(1) };
 }
 
-function formatStatus(channelId: string, status: InstanceStatus | null): string {
+/** Build the `/channel status` embed. Renders a compact table via inline fields. */
+function formatStatus(status: InstanceStatus | null): DiscordEmbed {
   if (!status) {
-    return "This channel is **not registered**. Use `/channel register` to set it up.";
+    return {
+      title: "Channel status",
+      description: "This channel is not registered. Use `/channel register` to set it up.",
+      color: BRAND_COLOR,
+    };
   }
-  const lines = [
-    "**Channel status**",
-    "- Registered: yes",
-    `- Port: ${status.port}`,
-    `- Owner: ${status.ownerId ? `<@${status.ownerId}>` : "unknown"}`,
-    `- Onboarded: ${status.onboarded ? "yes" : "no (first-run setup pending)"}`,
+  const fields: DiscordEmbedField[] = [
+    { name: "Registered", value: "yes", inline: true },
+    { name: "Port", value: String(status.port), inline: true },
+    { name: "Owner", value: status.ownerId ? `<@${status.ownerId}>` : "unknown", inline: true },
+    {
+      name: "Onboarded",
+      value: status.onboarded ? "yes" : "no (first-run setup pending)",
+      inline: true,
+    },
   ];
   if (status.running !== undefined) {
-    lines.push(`- Agent running: ${status.running ? "yes" : "no"}`);
+    fields.push({ name: "Agent running", value: status.running ? "yes" : "no", inline: true });
   }
-  return lines.join("\n");
+  return { title: "Channel status", color: BRAND_COLOR, fields };
 }
 
 /** Dispatch a parsed `/channel` command. Transport-agnostic. */
@@ -126,9 +154,8 @@ export async function handleChannelCommand(
   const sub = (ctx.subcommand ?? "").toLowerCase();
 
   if (sub === "status") {
-    await ctx.reply(formatStatus(ctx.channelId, deps.describeInstance(ctx.channelId)), {
-      ephemeral: true,
-    });
+    const statusEmbed = formatStatus(deps.describeInstance(ctx.channelId));
+    await ctx.reply({ embeds: [statusEmbed] }, { ephemeral: true });
     return;
   }
 
