@@ -24,6 +24,9 @@ type OAuthCredentials = {
 
 type PendingAuth = {
   discordUserId: string;
+  /** The channel/instance this auth belongs to, so the callback resolves to the
+   * exact channel even when the same user is onboarding several channels. */
+  channelId?: string;
   email: string;
   nonce: string;
   createdAt: number;
@@ -34,7 +37,11 @@ type PendingAuth = {
  * OAuth callback server that receives auth codes from the GitHub Pages relay.
  * Runs on port 18800 and handles Google OAuth token exchange.
  */
-export type AuthCompleteCallback = (params: { discordUserId: string; code: string }) => void;
+export type AuthCompleteCallback = (params: {
+  discordUserId: string;
+  channelId?: string;
+  code: string;
+}) => void;
 
 export type DiscordSendFn = (channelId: string, content: string) => Promise<{ messageId?: string }>;
 export type OpenDMChannelFn = (userId: string) => Promise<string | null>;
@@ -59,7 +66,7 @@ export function startOAuthCallbackServer(opts: {
   routeMessage?: RouteMessageFn;
 }): {
   server: http.Server;
-  requestAuth: (params: { discordUserId: string; email: string }) => {
+  requestAuth: (params: { discordUserId: string; channelId?: string; email: string }) => {
     authUrl: string;
     waitForCode: () => Promise<string>;
   };
@@ -174,7 +181,11 @@ export function startOAuthCallbackServer(opts: {
         runtime.log(`[oauth] received code for ${pendingAuth.email} via redirect`);
         pending.delete(stateData.nonce);
         pendingAuth.resolve(code);
-        opts.onAuthComplete?.({ discordUserId: pendingAuth.discordUserId, code });
+        opts.onAuthComplete?.({
+          discordUserId: pendingAuth.discordUserId,
+          channelId: pendingAuth.channelId,
+          code,
+        });
       } else {
         runtime.log(`[oauth] received code via redirect (no pending auth, nonce may have expired)`);
       }
@@ -488,7 +499,7 @@ export function startOAuthCallbackServer(opts: {
     runtime.log(`[oauth] callback server listening on ${oauthHost}:${CALLBACK_PORT}`);
   });
 
-  function requestAuth(params: { discordUserId: string; email: string }) {
+  function requestAuth(params: { discordUserId: string; channelId?: string; email: string }) {
     // Load web OAuth credentials
     const credsPath = path.join(
       instancesDir,
@@ -545,6 +556,7 @@ export function startOAuthCallbackServer(opts: {
 
     pending.set(nonce, {
       discordUserId: params.discordUserId,
+      channelId: params.channelId,
       email: params.email,
       nonce,
       createdAt: Date.now(),
