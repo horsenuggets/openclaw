@@ -699,31 +699,34 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  if (wrapProjectContext && contextBlockStart >= 0) {
-    // Subscription path only. Split the assembled prompt around the injected
-    // block, neutralize any sentinel literal that appears in the (arbitrary,
-    // user/workspace-derived) content on either side or inside it, then wrap the
-    // block in the real builder-emitted marker pair. Because the surrounding
-    // content is fully neutralized, the only PROJECT_CONTEXT_BEGIN/END literals
-    // left in the output are the two we add here, so stripProjectContext's
-    // indexOf(BEGIN)/lastIndexOf(END) always land on the real boundaries
-    // regardless of which dynamic field (skillsPrompt, extraSystemPrompt,
-    // workspace files, conversation history, ...) contained a stray marker.
-    const before = neutralizeContextSentinels(
-      lines.slice(0, contextBlockStart).filter(Boolean).join("\n"),
-    );
-    const block = neutralizeContextSentinels(
-      lines.slice(contextBlockStart, contextBlockEnd).filter(Boolean).join("\n"),
-    );
-    const after = neutralizeContextSentinels(
-      lines.slice(contextBlockEnd).filter(Boolean).join("\n"),
-    );
-    return [before, PROJECT_CONTEXT_BEGIN, block, PROJECT_CONTEXT_END, after]
-      .filter(Boolean)
-      .join("\n");
+  if (!wrapProjectContext) {
+    return lines.filter(Boolean).join("\n");
   }
 
-  return lines.filter(Boolean).join("\n");
+  // Subscription path. Neutralize every sentinel literal in the arbitrary,
+  // user/workspace-derived content (skillsPrompt, extraSystemPrompt, workspace
+  // files, conversation history, ...) so the only PROJECT_CONTEXT_BEGIN/END
+  // literals left are the ones this builder controls. stripProjectContext then
+  // anchors on real boundaries via indexOf(BEGIN)/lastIndexOf(END).
+  if (contextBlockStart < 0) {
+    // No block was injected: there is nothing to wrap, but we must still strip
+    // any stray marker so a literal in surrounding content can't trick
+    // stripProjectContext into dropping legitimate instructions.
+    return neutralizeContextSentinels(lines.filter(Boolean).join("\n"));
+  }
+
+  // Split around the injected block, neutralize each region, then wrap only the
+  // block in the real marker pair.
+  const before = neutralizeContextSentinels(
+    lines.slice(0, contextBlockStart).filter(Boolean).join("\n"),
+  );
+  const block = neutralizeContextSentinels(
+    lines.slice(contextBlockStart, contextBlockEnd).filter(Boolean).join("\n"),
+  );
+  const after = neutralizeContextSentinels(lines.slice(contextBlockEnd).filter(Boolean).join("\n"));
+  return [before, PROJECT_CONTEXT_BEGIN, block, PROJECT_CONTEXT_END, after]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildRuntimeLine(

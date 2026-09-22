@@ -132,6 +132,22 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Runtime: agent=abc");
   });
 
+  // Subscription prompt with NO context files but a stray marker in surrounding
+  // content: the builder still neutralizes it, so stripProjectContext finds no
+  // real marker and drops nothing.
+  it("neutralizes stray markers on the subscription path even without context files", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      wrapProjectContext: true,
+      extraSystemPrompt: `KEEP_BEFORE ${PROJECT_CONTEXT_BEGIN} KEEP_MIDDLE ${PROJECT_CONTEXT_END} KEEP_AFTER`,
+    });
+    const wrapped = wrapForSubscription(prompt);
+    // No legitimate content is dropped by a spoofed marker pair.
+    expect(wrapped).toContain("KEEP_BEFORE");
+    expect(wrapped).toContain("KEEP_MIDDLE");
+    expect(wrapped).toContain("KEEP_AFTER");
+  });
+
   it("returns the prompt unchanged when no Project Context block is present", () => {
     const prompt = ["## Persona", "Keep instructions.", "## Runtime", "Runtime: agent=abc"].join(
       "\n",
