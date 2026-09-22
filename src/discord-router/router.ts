@@ -728,15 +728,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
             );
 
-            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
-              return;
-            }
-
             // `/channel` management commands must work even when the channel is
-            // not registered yet (register is the whole point), so handle them
-            // before the registered-instance gate below.
-            const channelCmd = parseChannelTextCommand(content);
-            if (channelCmd) {
+            // not registered yet (register is the whole point) AND even when the
+            // author is a bot (e.g. an automated tester bot, which cannot invoke
+            // slash commands), so handle them before both the bot filter and the
+            // registered-instance gate below. register/unregister stay
+            // whitelist-gated inside handleChannelCommand, so opening this path
+            // to bots does not grant them provisioning rights.
+            const channelCmd = authorId ? parseChannelTextCommand(content) : null;
+            if (channelCmd && authorId) {
               const commandMessageId = d.id;
               void handleChannelCommand(
                 {
@@ -761,6 +761,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               runtime.log(
                 `[router] /channel ${channelCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId})`,
               );
+              return;
+            }
+
+            // Normal agent messages: ignore bots and empty messages. Channel
+            // commands were already handled above so bots can still drive them.
+            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
               return;
             }
 
