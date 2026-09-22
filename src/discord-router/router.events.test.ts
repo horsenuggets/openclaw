@@ -311,6 +311,84 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
   });
 
+  it("does not re-recover a message that already got an error reply", async () => {
+    // Retry-loop repro: the last user message is followed by the router's own
+    // italic error reply. Recovery must treat that reply as "already handled"
+    // and NOT re-run "hi" — otherwise every reconnect re-attempts the same
+    // failing message forever (the observed all-night error storm).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          // No guild_id => DM => no whitelist gate.
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            // Newest first: the bot's error reply, then the user's "hi".
+            json: async () => [
+              {
+                id: "e1",
+                author: { id: "app-123", bot: true },
+                content: "*Something went wrong processing your message. Please try again.*",
+              },
+              { id: "u1", author: { id: OWNER, bot: false }, content: "hi" },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+  });
+
+  it("still recovers a message left beneath a genuine lifecycle banner", async () => {
+    // Guard against over-fixing: a real "*Back online.*" banner is NOT a reply,
+    // so a user message beneath it is genuinely unanswered and must be recovered.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              { id: "b1", author: { id: "app-123", bot: true }, content: "*Back online.*" },
+              { id: "u1", author: { id: OWNER, bot: false }, content: "hi" },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(true);
+  });
+
   it("fails closed and skips recovery when the channel lookup errors", async () => {
     // A transient channel-lookup failure must not be treated as a DM (which
     // would recover unguarded); the channel is skipped entirely.
