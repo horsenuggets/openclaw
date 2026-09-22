@@ -19,6 +19,21 @@ export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
 /**
+ * Neutralize any Project Context sentinel literals that appear in caller-provided
+ * free text (extraSystemPrompt, workspace file bodies, conversation history).
+ * Those inputs are arbitrary and can be user/agent-derived, so a copy of a marker
+ * inside them would otherwise let the subscription filter (stripProjectContext)
+ * anchor on a spoofed boundary. Escaping guarantees the only real
+ * PROJECT_CONTEXT_BEGIN/END pair in the assembled prompt is the one this builder
+ * emits around the injected block.
+ */
+function neutralizeContextSentinels(text: string): string {
+  return text
+    .replaceAll(PROJECT_CONTEXT_BEGIN, "<!-- openclaw:project-context:begin(escaped) -->")
+    .replaceAll(PROJECT_CONTEXT_END, "<!-- openclaw:project-context:end(escaped) -->");
+}
+
+/**
  * Controls which hardcoded sections are included in the system prompt.
  * - "full": All sections (default, for main agent)
  * - "minimal": Reduced sections (Tooling, Workspace, Runtime) - used for subagents
@@ -550,7 +565,7 @@ export function buildAgentSystemPrompt(params: {
     // Use "Subagent Context" header for minimal mode (subagents), otherwise "Group Chat Context"
     const contextHeader =
       promptMode === "minimal" ? "## Subagent Context" : "## Group Chat Context";
-    lines.push(contextHeader, extraSystemPrompt, "");
+    lines.push(contextHeader, neutralizeContextSentinels(extraSystemPrompt), "");
   }
   if (params.reactionGuidance) {
     const { level, channel } = params.reactionGuidance;
@@ -600,7 +615,7 @@ export function buildAgentSystemPrompt(params: {
     }
     lines.push("");
     for (const file of contextFiles) {
-      lines.push(`## ${file.path}`, "", file.content, "");
+      lines.push(`## ${file.path}`, "", neutralizeContextSentinels(file.content), "");
     }
     lines.push(PROJECT_CONTEXT_END);
   }
@@ -661,7 +676,11 @@ export function buildAgentSystemPrompt(params: {
   }
 
   if (params.conversationHistory) {
-    lines.push("## Conversation History", params.conversationHistory, "");
+    lines.push(
+      "## Conversation History",
+      neutralizeContextSentinels(params.conversationHistory),
+      "",
+    );
   }
 
   lines.push(

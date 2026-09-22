@@ -61,6 +61,24 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("## Runtime");
   });
 
+  // A spoofed BEGIN marker in caller-provided text emitted BEFORE the block
+  // (extraSystemPrompt / Group Chat Context) must not move the real boundary:
+  // the builder neutralizes sentinel literals in caller text, so the legitimate
+  // context is preserved and only the real block is removed.
+  it("does not let a spoofed BEGIN in extraSystemPrompt truncate legitimate content", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      extraSystemPrompt: `A user pasted ${PROJECT_CONTEXT_BEGIN} then said KEEP_THIS_GROUP_CONTEXT.`,
+      contextFiles: [{ path: "SOUL.md", content: "REAL_WORKSPACE_BODY must not reach OAuth." }],
+    });
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("REAL_WORKSPACE_BODY");
+    // The group-chat context before the real block survives (only the real
+    // Project Context block is removed).
+    expect(wrapped).toContain("KEEP_THIS_GROUP_CONTEXT");
+    expect(wrapped).toContain("## Runtime");
+  });
+
   it("filters injected Project Context workspace files out of the appended prompt", () => {
     const prompt = [
       "## Persona",
