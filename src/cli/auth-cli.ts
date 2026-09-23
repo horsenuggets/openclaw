@@ -27,13 +27,27 @@ export function registerAuthCli(program: Command) {
       "--agent-dir <path>",
       "Explicit agent dir to write auth-profiles.json into (overrides --store)",
     )
+    .option(
+      "--callback-port <port>",
+      "Capture the OAuth redirect on this local port instead of pasting the code (used by the tunnel script)",
+    )
+    .option("--bind-host <host>", "Host the callback server binds to (default localhost)")
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
+        const callbackPort =
+          opts.callbackPort === undefined
+            ? undefined
+            : Number.parseInt(String(opts.callbackPort), 10);
+        if (callbackPort !== undefined && !Number.isInteger(callbackPort)) {
+          throw new Error("--callback-port must be an integer.");
+        }
         await mintAnthropicCommand(
           {
             store: opts.store as MintStore,
             instancesDir: opts.instancesDir as string | undefined,
             agentDir: opts.agentDir as string | undefined,
+            callbackPort,
+            bindHost: opts.bindHost as string | undefined,
           },
           defaultRuntime,
         );

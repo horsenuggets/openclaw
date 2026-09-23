@@ -8,6 +8,7 @@ import { AUTH_STORE_LOCK_OPTIONS } from "../agents/auth-profiles/constants.js";
 import { ensureAuthStoreFile, resolveAuthStorePath } from "../agents/auth-profiles/paths.js";
 import { saveAuthProfileStore } from "../agents/auth-profiles/store.js";
 import { loadJsonFile } from "../infra/json-file.js";
+import { loginAnthropicViaCallback } from "./auth-anthropic-login.js";
 
 // The profile id every per-channel agent resolves for the Claude Max OAuth
 // ("anthropic-subscription") provider, and the provider name stored alongside
@@ -21,15 +22,24 @@ export type MintAnthropicOptions = {
   store?: MintStore;
   instancesDir?: string;
   agentDir?: string;
+  // When set, use the localhost-callback flow on this port instead of the paste
+  // flow. A laptop-side script tunnels this port so the browser redirect is
+  // captured automatically (no code paste, no TTY).
+  callbackPort?: number;
+  // Host the callback server binds to (default "localhost"). Use "0.0.0.0" when
+  // the redirect must reach the server across a container/bind-mount boundary.
+  bindHost?: string;
 };
 
 export type MintAnthropicDeps = {
-  // Injectable OAuth flow (defaults to pi-ai's claude.ai browser/paste flow).
+  // Injectable paste-flow OAuth (defaults to pi-ai's claude.ai paste flow).
   // Kept injectable so tests can drive the command without a live browser.
   login?: (
     onAuthUrl: (url: string) => void,
     onPromptCode: () => Promise<string>,
   ) => Promise<OAuthCredentials>;
+  // Injectable localhost-callback OAuth (defaults to loginAnthropicViaCallback).
+  loginViaCallback?: typeof loginAnthropicViaCallback;
   // Injectable prompt for the pasted "code#state" (defaults to a clack input).
   promptCode?: () => Promise<string>;
 };
@@ -114,23 +124,43 @@ export async function mintAnthropicCommand(
   runtime: RuntimeEnv,
   deps: MintAnthropicDeps = {},
 ): Promise<void> {
-  // Only the real interactive flow needs a TTY; tests inject `login`.
-  if (!deps.login && !process.stdin.isTTY) {
-    throw new Error("mint-anthropic requires an interactive TTY (run it over `ssh -t`).");
-  }
-
-  const login = deps.login ?? loginAnthropic;
-  const promptCode = deps.promptCode ?? defaultPromptCode;
   const targetDir = resolveMintTargetDir(opts);
 
-  const creds = await login((url) => {
-    runtime.log("");
-    runtime.log("Open this URL in any browser to authorize OpenClaw with your Claude account.");
-    runtime.log("");
-    runtime.log(`  ${url}`);
-    runtime.log("");
-    runtime.log('After approving, Anthropic shows a code like "abc123#xyz". Paste it below.');
-  }, promptCode);
+  let creds: OAuthCredentials;
+  if (opts.callbackPort !== undefined) {
+    // Localhost-callback flow: a local server captures the redirect (a laptop
+    // script tunnels the port), so there is no code paste and no TTY needed.
+    const loginViaCallback = deps.loginViaCallback ?? loginAnthropicViaCallback;
+    creds = await loginViaCallback({
+      callbackPort: opts.callbackPort,
+      bindHost: opts.bindHost,
+      onAuthUrl: (url) => {
+        runtime.log("");
+        runtime.log("Open this URL in a browser to authorize OpenClaw with your Claude account.");
+        runtime.log("");
+        runtime.log(url);
+        runtime.log("");
+        runtime.log("Waiting for the authorization redirect...");
+      },
+    });
+  } else {
+    // Paste flow: pi-ai prints the URL and we prompt for the code Anthropic shows.
+    if (!deps.login && !process.stdin.isTTY) {
+      throw new Error(
+        "mint-anthropic requires an interactive TTY (run it over `ssh -t`), or pass --callback-port.",
+      );
+    }
+    const login = deps.login ?? loginAnthropic;
+    const promptCode = deps.promptCode ?? defaultPromptCode;
+    creds = await login((url) => {
+      runtime.log("");
+      runtime.log("Open this URL in any browser to authorize OpenClaw with your Claude account.");
+      runtime.log("");
+      runtime.log(`  ${url}`);
+      runtime.log("");
+      runtime.log('After approving, Anthropic shows a code like "abc123#xyz". Paste it below.');
+    }, promptCode);
+  }
 
   const profile = buildAnthropicSubscriptionProfile(creds);
   const authPath = await writeAnthropicProfile({ agentDir: targetDir, profile });

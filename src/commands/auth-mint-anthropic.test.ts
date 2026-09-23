@@ -130,6 +130,19 @@ describe("mintAnthropicCommand", () => {
     });
   });
 
+  it("uses the callback flow when a callback port is given", async () => {
+    let calledWith: { callbackPort?: number } = {};
+    await mintAnthropicCommand({ agentDir: dir, callbackPort: 5555 }, silentRuntime, {
+      loginViaCallback: async (params) => {
+        calledWith = { callbackPort: params.callbackPort };
+        params.onAuthUrl("https://claude.ai/oauth/authorize?state=x");
+        return CREDS;
+      },
+    });
+    expect(calledWith.callbackPort).toBe(5555);
+    expect(readStore(dir).profiles[ANTHROPIC_SUBSCRIPTION_PROFILE_ID]?.access).toBe("access-token");
+  });
+
   it("preserves existing profiles in the store", async () => {
     fs.writeFileSync(
       path.join(dir, "auth-profiles.json"),
