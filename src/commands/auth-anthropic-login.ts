@@ -33,6 +33,15 @@ function base64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function generatePkce(): { verifier: string; challenge: string } {
   const verifier = base64url(crypto.randomBytes(32));
   const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
@@ -124,9 +133,11 @@ export function captureAuthCode(params: {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
       const fail = (status: number, message: string) => {
+        // Escape the message: `error` is an attacker-controllable query param, so
+        // inserting it raw would allow HTML/JS injection in the callback origin.
         res
           .writeHead(status, { "Content-Type": "text/html" })
-          .end(`<!doctype html><h1>Authorization failed</h1><p>${message}</p>`);
+          .end(`<!doctype html><h1>Authorization failed</h1><p>${escapeHtml(message)}</p>`);
         finish();
         reject(new Error(message));
       };

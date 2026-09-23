@@ -34,12 +34,18 @@ export function registerAuthCli(program: Command) {
     .option("--bind-host <host>", "Host the callback server binds to (default localhost)")
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
-        const callbackPort =
-          opts.callbackPort === undefined
-            ? undefined
-            : Number.parseInt(String(opts.callbackPort), 10);
-        if (callbackPort !== undefined && !Number.isInteger(callbackPort)) {
-          throw new Error("--callback-port must be an integer.");
+        let callbackPort: number | undefined;
+        if (opts.callbackPort !== undefined) {
+          const raw = String(opts.callbackPort).trim();
+          // Reject non-numeric input (Number.parseInt would accept "123abc")
+          // and out-of-range ports so failures surface here, not in the server.
+          if (!/^\d+$/.test(raw)) {
+            throw new Error("--callback-port must be a whole number.");
+          }
+          callbackPort = Number.parseInt(raw, 10);
+          if (callbackPort < 1 || callbackPort > 65535) {
+            throw new Error("--callback-port must be between 1 and 65535.");
+          }
         }
         await mintAnthropicCommand(
           {

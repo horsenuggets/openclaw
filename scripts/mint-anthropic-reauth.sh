@@ -32,6 +32,16 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+# Restrict --store to the documented values: it is interpolated into the remote
+# command below, so an arbitrary value would be a shell-injection vector.
+case "$STORE" in
+  shared | main) ;;
+  *)
+    echo "Invalid --store \"$STORE\" (use \"shared\" or \"main\")." >&2
+    exit 1
+    ;;
+esac
+
 HOST="${OPENCLAW_DEPLOY_HOST:?Set OPENCLAW_DEPLOY_HOST}"
 
 SSH_PORT_FLAG=()
@@ -48,8 +58,12 @@ fi
 
 # Resolve the openclaw binary on the host: honour an explicit override, else
 # prefer one on PATH, else fall back to the standard deploy location. This runs
-# on the remote side under `sh -lc`, so $HOME is the host's home.
-REMOTE_BIN_RESOLVE='B="'"${OPENCLAW_REMOTE_BIN:-}"'"; if [ -z "$B" ]; then if command -v openclaw >/dev/null 2>&1; then B=openclaw; else B="$HOME/deploy/bin/openclaw"; fi; fi'
+# on the remote side under `sh -lc`, so $HOME is the host's home. The override is
+# base64-encoded locally and decoded on the host so a value containing quotes or
+# shell metacharacters can never alter the remote command (base64 output is safe
+# to interpolate into the single-quoted remote program).
+REMOTE_BIN_B64=$(printf %s "${OPENCLAW_REMOTE_BIN:-}" | base64 | tr -d '\n')
+REMOTE_BIN_RESOLVE="B=\$(printf %s ${REMOTE_BIN_B64} | base64 -d 2>/dev/null); if [ -z \"\$B\" ]; then if command -v openclaw >/dev/null 2>&1; then B=openclaw; else B=\"\$HOME/deploy/bin/openclaw\"; fi; fi"
 
 echo "=== Claude OAuth Re-auth ==="
 echo "Host: $HOST"
