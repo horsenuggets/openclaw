@@ -11,8 +11,11 @@ export const ANTHROPIC_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 // format"; claude.com/platform.claude.com are the live endpoints.
 export const ANTHROPIC_AUTHORIZE_URL = "https://claude.com/cai/oauth/authorize";
 export const ANTHROPIC_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
-export const ANTHROPIC_OAUTH_SCOPES =
-  "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
+// Subscription long-lived token scope. This must be exactly "user:inference":
+// the claude.ai (Pro/Max) loopback flow rejects the broader console scope set
+// (e.g. org:create_api_key) as "Invalid request format". Matches what
+// `claude setup-token` sends.
+export const ANTHROPIC_OAUTH_SCOPES = "user:inference";
 const CALLBACK_PATH = "/callback";
 const DEFAULT_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 
