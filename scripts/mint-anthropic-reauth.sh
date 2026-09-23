@@ -13,6 +13,8 @@
 # Env:
 #   OPENCLAW_DEPLOY_HOST  SSH host for the deploy server (required)
 #   OPENCLAW_DEPLOY_PORT  SSH port (optional; omit to use the SSH config alias)
+#   OPENCLAW_REMOTE_BIN   Path to openclaw on the host (optional; defaults to one
+#                         on PATH, else ~/deploy/bin/openclaw)
 set -euo pipefail
 
 STORE="shared"
@@ -36,6 +38,11 @@ SSH_PORT_FLAG=()
 if [ -n "${OPENCLAW_DEPLOY_PORT:-}" ]; then
   SSH_PORT_FLAG=(-p "$OPENCLAW_DEPLOY_PORT")
 fi
+
+# Resolve the openclaw binary on the host: honour an explicit override, else
+# prefer one on PATH, else fall back to the standard deploy location. This runs
+# on the remote side under `sh -lc`, so $HOME is the host's home.
+REMOTE_BIN_RESOLVE='B="'"${OPENCLAW_REMOTE_BIN:-}"'"; if [ -z "$B" ]; then if command -v openclaw >/dev/null 2>&1; then B=openclaw; else B="$HOME/deploy/bin/openclaw"; fi; fi'
 
 echo "=== Claude OAuth Re-auth ==="
 echo "Host: $HOST"
@@ -125,7 +132,7 @@ attempt() {
     fi
   done < <(
     ssh -t "${SSH_PORT_FLAG[@]}" "$HOST" \
-      "openclaw auth mint-anthropic --store $STORE --callback-port $port" 2>&1
+      "sh -lc '${REMOTE_BIN_RESOLVE}; \"\$B\" auth mint-anthropic --store ${STORE} --callback-port ${port}'" 2>&1
     printf '\n%s=%d\n' "$SENTINEL" "$?"
   )
 
