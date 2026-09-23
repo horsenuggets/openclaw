@@ -125,9 +125,9 @@ attempt() {
     echo "$clean"
     if [ "$opened" = 0 ]; then
       case "$clean" in
-        *"https://claude.ai/oauth/authorize"*)
+        *oauth/authorize*)
           local url
-          url=$(printf '%s' "$clean" | grep -o 'https://claude.ai/oauth/authorize[^ ]*' || true)
+          url=$(printf '%s' "$clean" | grep -oE 'https://[^ ]*oauth/authorize[^ ]*' || true)
           if [ -n "$url" ]; then
             echo ""
             echo "Opening your browser..."
