@@ -89,6 +89,14 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "auth",
+    description: "Authentication helpers",
+    register: async (program) => {
+      const mod = await import("../auth-cli.js");
+      mod.registerAuthCli(program);
+    },
+  },
+  {
     name: "approvals",
     description: "Exec approvals",
     register: async (program) => {
