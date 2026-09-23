@@ -39,6 +39,13 @@ if [ -n "${OPENCLAW_DEPLOY_PORT:-}" ]; then
   SSH_PORT_FLAG=(-p "$OPENCLAW_DEPLOY_PORT")
 fi
 
+# Extra ssh options (e.g. -i <key>, -o UserKnownHostsFile=...). Word-split so a
+# space-separated list works; leave empty for normal use.
+SSH_OPTS=()
+if [ -n "${OPENCLAW_SSH_OPTS:-}" ]; then
+  read -ra SSH_OPTS <<<"$OPENCLAW_SSH_OPTS"
+fi
+
 # Resolve the openclaw binary on the host: honour an explicit override, else
 # prefer one on PATH, else fall back to the standard deploy location. This runs
 # on the remote side under `sh -lc`, so $HOME is the host's home.
@@ -91,7 +98,7 @@ attempt() {
 
   # Forward laptop:port -> host:localhost:port. The host's callback server binds
   # localhost, so the mirrored port reaches it directly (no bridge lookup).
-  ssh -N -L "$port:localhost:$port" "${SSH_PORT_FLAG[@]}" "$HOST" \
+  ssh -N -L "$port:localhost:$port" "${SSH_PORT_FLAG[@]}" "${SSH_OPTS[@]}" "$HOST" \
     -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=accept-new &
   TUNNEL_PID=$!
@@ -131,7 +138,7 @@ attempt() {
       esac
     fi
   done < <(
-    ssh -t "${SSH_PORT_FLAG[@]}" "$HOST" \
+    ssh -t "${SSH_PORT_FLAG[@]}" "${SSH_OPTS[@]}" "$HOST" \
       "sh -lc '${REMOTE_BIN_RESOLVE}; \"\$B\" auth mint-anthropic --store ${STORE} --callback-port ${port}'" 2>&1
     printf '\n%s=%d\n' "$SENTINEL" "$?"
   )

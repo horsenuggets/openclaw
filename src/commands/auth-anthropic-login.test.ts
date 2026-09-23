@@ -65,6 +65,59 @@ describe("buildAnthropicAuthorizeUrl", () => {
   });
 });
 
+describe("endpoint env overrides", () => {
+  it("uses OPENCLAW_ANTHROPIC_AUTHORIZE_URL when set", () => {
+    const prev = process.env.OPENCLAW_ANTHROPIC_AUTHORIZE_URL;
+    process.env.OPENCLAW_ANTHROPIC_AUTHORIZE_URL = "http://localhost:9/mock/authorize";
+    try {
+      const url = new URL(
+        buildAnthropicAuthorizeUrl({
+          challenge: "c",
+          state: "s",
+          redirectUri: "http://localhost:1/callback",
+        }),
+      );
+      expect(`${url.origin}${url.pathname}`).toBe("http://localhost:9/mock/authorize");
+    } finally {
+      if (prev === undefined) {
+        delete process.env.OPENCLAW_ANTHROPIC_AUTHORIZE_URL;
+      } else {
+        process.env.OPENCLAW_ANTHROPIC_AUTHORIZE_URL = prev;
+      }
+    }
+  });
+
+  it("posts to OPENCLAW_ANTHROPIC_TOKEN_URL when set", async () => {
+    const prev = process.env.OPENCLAW_ANTHROPIC_TOKEN_URL;
+    process.env.OPENCLAW_ANTHROPIC_TOKEN_URL = "http://localhost:9/mock/token";
+    let calledUrl = "";
+    const fetchImpl = (async (url: string) => {
+      calledUrl = String(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "a", refresh_token: "r", expires_in: 1 }),
+      };
+    }) as unknown as typeof fetch;
+    try {
+      await exchangeAnthropicCode({
+        code: "c",
+        verifier: "v",
+        state: "s",
+        redirectUri: "http://localhost:1/callback",
+        fetchImpl,
+      });
+      expect(calledUrl).toBe("http://localhost:9/mock/token");
+    } finally {
+      if (prev === undefined) {
+        delete process.env.OPENCLAW_ANTHROPIC_TOKEN_URL;
+      } else {
+        process.env.OPENCLAW_ANTHROPIC_TOKEN_URL = prev;
+      }
+    }
+  });
+});
+
 describe("exchangeAnthropicCode", () => {
   it("posts the code and shapes the credentials", async () => {
     let sentBody: Record<string, unknown> = {};

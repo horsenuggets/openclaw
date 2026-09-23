@@ -12,6 +12,16 @@ export const ANTHROPIC_OAUTH_SCOPES = "org:create_api_key user:profile user:infe
 const CALLBACK_PATH = "/callback";
 const DEFAULT_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 
+// Endpoints are overridable via env so staging and e2e tests can point the flow
+// at a mock OAuth server (defaults are the real claude.ai/Anthropic endpoints).
+function resolveAuthorizeUrl(): string {
+  return process.env.OPENCLAW_ANTHROPIC_AUTHORIZE_URL?.trim() || ANTHROPIC_AUTHORIZE_URL;
+}
+
+function resolveTokenUrl(): string {
+  return process.env.OPENCLAW_ANTHROPIC_TOKEN_URL?.trim() || ANTHROPIC_TOKEN_URL;
+}
+
 function base64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -41,7 +51,7 @@ export function buildAnthropicAuthorizeUrl(params: {
     code_challenge_method: "S256",
     state: params.state,
   });
-  return `${ANTHROPIC_AUTHORIZE_URL}?${query.toString()}`;
+  return `${resolveAuthorizeUrl()}?${query.toString()}`;
 }
 
 export async function exchangeAnthropicCode(params: {
@@ -52,7 +62,7 @@ export async function exchangeAnthropicCode(params: {
   fetchImpl?: typeof fetch;
 }): Promise<OAuthCredentials> {
   const doFetch = params.fetchImpl ?? fetch;
-  const response = await doFetch(ANTHROPIC_TOKEN_URL, {
+  const response = await doFetch(resolveTokenUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
