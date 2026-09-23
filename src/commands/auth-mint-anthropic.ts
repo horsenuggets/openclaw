@@ -69,7 +69,9 @@ export function resolveMintTargetDir(opts: MintAnthropicOptions): string | undef
   if (store === "shared") {
     return path.join(resolveInstancesDir(opts.instancesDir), "shared", "auth");
   }
-  throw new Error(`Unknown store "${store}". Use "shared", "main", or --agent-dir.`);
+  // `store` narrows to `never` here (the union is exhausted above), but the CLI
+  // can pass an arbitrary string at runtime, so coerce for the message.
+  throw new Error(`Unknown store "${String(store)}". Use "shared", "main", or --agent-dir.`);
 }
 
 // Shape the minted OAuth credential into the stored profile. Pure so it can be
