@@ -138,7 +138,9 @@ attempt() {
       esac
     fi
   done < <(
-    ssh -t "${SSH_PORT_FLAG[@]}" "${SSH_OPTS[@]}" "$HOST" \
+    # No `-t`: the callback flow needs no input, and a remote pty makes openclaw
+    # emit fancy width-wrapped tables/ANSI that render as garbled output here.
+    ssh "${SSH_PORT_FLAG[@]}" "${SSH_OPTS[@]}" "$HOST" \
       "sh -lc '${REMOTE_BIN_RESOLVE}; \"\$B\" auth mint-anthropic --store ${STORE} --callback-port ${port}'" 2>&1
     printf '\n%s=%d\n' "$SENTINEL" "$?"
   )

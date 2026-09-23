@@ -6,9 +6,13 @@ import http from "node:http";
 // for the paste flow; here we drive a localhost callback instead so the redirect
 // can be tunnelled back from a laptop to the deploy host).
 export const ANTHROPIC_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-export const ANTHROPIC_AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
-export const ANTHROPIC_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
-export const ANTHROPIC_OAUTH_SCOPES = "org:create_api_key user:profile user:inference";
+// Current Claude Code OAuth endpoints. The older claude.ai/console.anthropic.com
+// authorize host rejects the localhost-callback request as "Invalid request
+// format"; claude.com/platform.claude.com are the live endpoints.
+export const ANTHROPIC_AUTHORIZE_URL = "https://claude.com/cai/oauth/authorize";
+export const ANTHROPIC_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+export const ANTHROPIC_OAUTH_SCOPES =
+  "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 const CALLBACK_PATH = "/callback";
 const DEFAULT_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 
