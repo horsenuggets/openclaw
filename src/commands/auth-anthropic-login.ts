@@ -186,7 +186,10 @@ export async function loginAnthropicViaCallback(
   deps: { fetchImpl?: typeof fetch } = {},
 ): Promise<OAuthCredentials> {
   const { verifier, challenge } = generatePkce();
-  const state = base64url(crypto.randomBytes(16));
+  // 32 bytes: claude.ai rejects the authorize submit as "Invalid request format"
+  // with a shorter state (a 16-byte state renders the consent page but fails on
+  // Authorize). Matches what `claude setup-token` sends.
+  const state = base64url(crypto.randomBytes(32));
   const redirectUri = callbackRedirectUri(params.callbackPort);
   const code = await captureAuthCode({
     port: params.callbackPort,
