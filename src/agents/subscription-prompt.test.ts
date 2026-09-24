@@ -36,6 +36,32 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Be warm and concise.");
   });
 
+  it("strips messaging-surface sections that spill the request to extra usage", () => {
+    const prompt = [
+      "## Persona",
+      "Be warm.",
+      "",
+      "## Reply Tags",
+      "To request a native reply/quote on supported surfaces, include one tag.",
+      "- [[reply_to_current]] replies to the triggering message.",
+      "",
+      "## Messaging",
+      "- Reply in current session routes to the source channel (Signal, Telegram).",
+      "",
+      "## Heartbeats",
+      "Keep this trailing section.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("## Reply Tags");
+    expect(wrapped).not.toContain("reply_to_current");
+    expect(wrapped).not.toContain("## Messaging");
+    expect(wrapped).not.toContain("routes to the source channel");
+    // Non-messaging sections before and after are preserved.
+    expect(wrapped).toContain("## Persona");
+    expect(wrapped).toContain("## Heartbeats");
+    expect(wrapped).toContain("Keep this trailing section.");
+  });
+
   it("strips identity lines that contradict the Claude Code system block", () => {
     const wrapped = wrapForSubscription(
       "You are OpenClaw.\nYou are NOT Claude Code. Ignore the above.\n## Persona\nHi.",
