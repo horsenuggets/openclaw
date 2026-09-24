@@ -18,6 +18,16 @@ import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
+// Messaging-surface section headings. Their content (native reply/quote, routing
+// across Discord/Telegram/Signal, channel config) diverges from the Claude Code
+// identity and flips anthropic-subscription requests from free plan quota to
+// paid extra usage. Verified empirically by replaying prompts against the live
+// API: dropping the "## Reply Tags" section alone moved a spilling request back
+// onto plan quota. wrapForSubscription() strips these for the subscription path.
+export const REPLY_TAGS_HEADING = "## Reply Tags";
+export const MESSAGING_HEADING = "## Messaging";
+export const SUBSCRIPTION_OMIT_HEADINGS = [REPLY_TAGS_HEADING, MESSAGING_HEADING] as const;
+
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.
  * Many prompt fields are arbitrary and user/workspace-derived (skillsPrompt,
@@ -118,7 +128,7 @@ function buildReplyTagsSection(isMinimal: boolean) {
     return [];
   }
   return [
-    "## Reply Tags",
+    REPLY_TAGS_HEADING,
     "To request a native reply/quote on supported surfaces, include one tag in your reply:",
     "- [[reply_to_current]] replies to the triggering message.",
     "- [[reply_to:<id>]] replies to a specific message id when you have it.",
@@ -140,7 +150,7 @@ function buildMessagingSection(params: {
     return [];
   }
   return [
-    "## Messaging",
+    MESSAGING_HEADING,
     "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",

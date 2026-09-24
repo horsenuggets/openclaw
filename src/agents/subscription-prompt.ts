@@ -13,7 +13,11 @@
  */
 
 import type { OpenClawConfig } from "../config/config.js";
-import { PROJECT_CONTEXT_BEGIN, PROJECT_CONTEXT_END } from "./system-prompt.js";
+import {
+  PROJECT_CONTEXT_BEGIN,
+  PROJECT_CONTEXT_END,
+  SUBSCRIPTION_OMIT_HEADINGS,
+} from "./system-prompt.js";
 
 /**
  * Whether a provider/model uses subscription (OAuth) auth and therefore needs
@@ -123,10 +127,43 @@ function stripProjectContext(prompt: string): string {
   return before.length === 0 ? after : `${before}\n${after}`;
 }
 
+/**
+ * Remove a whole "## <heading>" section (heading line through everything up to
+ * the next top-level "# " or "## " heading, or end of prompt). Used to drop
+ * messaging-surface sections whose content flips the subscription request to
+ * paid extra usage. Idempotent when the heading is absent.
+ */
+function stripSection(prompt: string, heading: string): string {
+  const lines = prompt.split("\n");
+  // Remove EVERY occurrence: the same heading can appear both in
+  // caller/config-derived extraSystemPrompt and in the builder's own generated
+  // section, so stopping at the first would leave a later copy and defeat the
+  // quota fix.
+  for (;;) {
+    const start = lines.findIndex((line) => line.trim() === heading);
+    if (start === -1) {
+      break;
+    }
+    let end = start + 1;
+    while (end < lines.length && !/^#{1,2} \S/.test(lines[end])) {
+      end += 1;
+    }
+    lines.splice(start, end - start);
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
 export function wrapForSubscription(openClawPrompt: string): string {
   // Deterministically drop injected workspace files (Project Context) before
   // any other processing so their length can't push the request off plan quota.
-  const withoutProjectContext = stripProjectContext(openClawPrompt);
+  let withoutProjectContext = stripProjectContext(openClawPrompt);
+
+  // Drop messaging-surface sections (Reply Tags, Messaging). Their content
+  // diverges from the Claude Code identity and flips the request to paid extra
+  // usage; they are irrelevant to a subscription (OAuth) coding request.
+  for (const heading of SUBSCRIPTION_OMIT_HEADINGS) {
+    withoutProjectContext = stripSection(withoutProjectContext, heading);
+  }
 
   // Strip any existing CC prefix and anti-CC identity lines.
   let cleaned = withoutProjectContext
