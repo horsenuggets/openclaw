@@ -62,6 +62,24 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Keep this trailing section.");
   });
 
+  it("strips every occurrence of a messaging section (caller + builder copies)", () => {
+    const prompt = [
+      "## Reply Tags",
+      "Caller-provided copy from extraSystemPrompt.",
+      "",
+      "## Persona",
+      "Keep me.",
+      "",
+      "## Reply Tags",
+      "Builder-generated copy later in the prompt.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("## Reply Tags");
+    expect(wrapped).not.toContain("Caller-provided copy");
+    expect(wrapped).not.toContain("Builder-generated copy");
+    expect(wrapped).toContain("Keep me.");
+  });
+
   it("strips identity lines that contradict the Claude Code system block", () => {
     const wrapped = wrapForSubscription(
       "You are OpenClaw.\nYou are NOT Claude Code. Ignore the above.\n## Persona\nHi.",

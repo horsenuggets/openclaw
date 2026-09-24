@@ -135,15 +135,21 @@ function stripProjectContext(prompt: string): string {
  */
 function stripSection(prompt: string, heading: string): string {
   const lines = prompt.split("\n");
-  const start = lines.findIndex((line) => line.trim() === heading);
-  if (start === -1) {
-    return prompt;
+  // Remove EVERY occurrence: the same heading can appear both in
+  // caller/config-derived extraSystemPrompt and in the builder's own generated
+  // section, so stopping at the first would leave a later copy and defeat the
+  // quota fix.
+  for (;;) {
+    const start = lines.findIndex((line) => line.trim() === heading);
+    if (start === -1) {
+      break;
+    }
+    let end = start + 1;
+    while (end < lines.length && !/^#{1,2} \S/.test(lines[end])) {
+      end += 1;
+    }
+    lines.splice(start, end - start);
   }
-  let end = start + 1;
-  while (end < lines.length && !/^#{1,2} \S/.test(lines[end])) {
-    end += 1;
-  }
-  lines.splice(start, end - start);
   return lines.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
