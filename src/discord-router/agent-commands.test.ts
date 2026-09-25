@@ -31,9 +31,9 @@ describe("parseAgentCommand", () => {
   });
 
   it("unwraps a command the model put in inline backticks", () => {
-    expect(parseAgentCommand("`⁘ send_hook_embed google`")).toEqual({
+    expect(parseAgentCommand("`⁘ send_hook_embed welcome`")).toEqual({
       command: "send_hook_embed",
-      args: ["google"],
+      args: ["welcome"],
     });
   });
 

@@ -99,14 +99,10 @@ class FakeWebSocket {
 }
 
 vi.mock("ws", () => ({ default: FakeWebSocket }));
-const oauthServerClose = vi.fn((callback?: (err?: Error) => void) => callback?.());
-vi.mock("./oauth-callback.js", () => ({
-  startOAuthCallbackServer: () => ({
-    server: { close: oauthServerClose },
-    requestAuth: () => ({
-      authUrl: "http://example.test",
-      waitForCode: () => Promise.resolve("code"),
-    }),
+const proxyServerClose = vi.fn((callback?: (err?: Error) => void) => callback?.());
+vi.mock("./container-proxy.js", () => ({
+  startContainerProxyServer: () => ({
+    server: { close: proxyServerClose },
   }),
 }));
 
@@ -141,7 +137,7 @@ describe("discord router reconnect", () => {
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
-    oauthServerClose.mockClear();
+    proxyServerClose.mockClear();
     logs = [];
     startedRouters = [];
     signalHandlers = new Map();
@@ -367,6 +363,6 @@ describe("discord router reconnect", () => {
 
     expect(first.closed).toBe(true);
     expect(first.sent.length).toBe(beforeShutdownHeartbeats);
-    expect(oauthServerClose).toHaveBeenCalledTimes(1);
+    expect(proxyServerClose).toHaveBeenCalledTimes(1);
   });
 });

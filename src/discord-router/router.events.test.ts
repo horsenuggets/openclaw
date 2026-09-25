@@ -60,14 +60,10 @@ class FakeWebSocket {
 }
 
 vi.mock("ws", () => ({ default: FakeWebSocket }));
-const oauthServerClose = vi.fn((cb?: (err?: Error) => void) => cb?.());
-vi.mock("./oauth-callback.js", () => ({
-  startOAuthCallbackServer: () => ({
-    server: { close: oauthServerClose },
-    requestAuth: () => ({
-      authUrl: "http://example.test",
-      waitForCode: () => Promise.resolve("c"),
-    }),
+const proxyServerClose = vi.fn((cb?: (err?: Error) => void) => cb?.());
+vi.mock("./container-proxy.js", () => ({
+  startContainerProxyServer: () => ({
+    server: { close: proxyServerClose },
   }),
 }));
 
@@ -115,7 +111,7 @@ describe("discord router channel-delete cleanup", () => {
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
-    oauthServerClose.mockClear();
+    proxyServerClose.mockClear();
     startedRouters = [];
     signalHandlers = new Map();
     unregisterCalls = [];
