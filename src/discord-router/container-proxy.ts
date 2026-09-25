@@ -21,6 +21,13 @@ export type RouteMessageFn = (userId: string, channelId: string, message: string
 
 export function startContainerProxyServer(opts: {
   runtime: RouterRuntime;
+  /**
+   * Resolved Discord bot token owned by the router. Used for the direct REST
+   * calls (`/discord/embed`, `/discord/read`) that don't go through an injected
+   * helper. Falls back to `DISCORD_BOT_TOKEN` only when not provided so callers
+   * that resolve the token via config (e.g. `OPENCLAW_DISCORD_TOKEN`) keep working.
+   */
+  discordToken?: string;
   /** Send a message to a Discord channel. Injected by the router. */
   discordSend?: DiscordSendFn;
   /** Open a DM channel with a user. Injected by the router. */
@@ -33,6 +40,8 @@ export function startContainerProxyServer(opts: {
   port?: number;
 }): { server: http.Server } {
   const { runtime } = opts;
+  // Prefer the router-resolved token; fall back to the env var for compatibility.
+  const resolvedToken = opts.discordToken || process.env.DISCORD_BOT_TOKEN || "";
 
   const server = http.createServer(async (req, res) => {
     // CORS headers so browser-side callers can reach the proxy.
@@ -191,11 +200,10 @@ export function startContainerProxyServer(opts: {
           }
 
           // Send embed via Discord REST API directly
-          const discordToken = process.env.DISCORD_BOT_TOKEN ?? "";
           await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
             method: "POST",
             headers: {
-              Authorization: `Bot ${discordToken}`,
+              Authorization: `Bot ${resolvedToken}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -240,10 +248,9 @@ export function startContainerProxyServer(opts: {
           return;
         }
 
-        const discordToken = process.env.DISCORD_BOT_TOKEN ?? "";
         const msgsResp = await fetch(
           `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`,
-          { headers: { Authorization: `Bot ${discordToken}` } },
+          { headers: { Authorization: `Bot ${resolvedToken}` } },
         );
         if (!msgsResp.ok) {
           res.writeHead(msgsResp.status, { "Content-Type": "application/json" });

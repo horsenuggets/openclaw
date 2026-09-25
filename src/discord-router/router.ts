@@ -211,6 +211,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // Discord messages via the router (network_mode host, loopback only).
   const proxy = startContainerProxyServer({
     runtime,
+    discordToken,
     discordSend: async (channelId, content) => {
       await discordSend(discordToken, channelId, content);
       return {};

@@ -34,7 +34,6 @@ with the result.
 Commands you can use:
 
 - `⁘ send_hook_embed welcome` posts the official welcome card.
-- `⁘ send_hook_embed google` posts the official "Connect Google" card with a button.
 - `⁘ return` does nothing on purpose. Use it when you have no message and no
   action to take (for example, to end a turn cleanly without saying anything).
 
