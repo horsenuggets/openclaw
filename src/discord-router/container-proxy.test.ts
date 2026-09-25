@@ -148,4 +148,44 @@ describe("container proxy server", () => {
     const resp = await fetch(`${base}/discord/read?userId=u-7`);
     expect(resp.status).toBe(403);
   });
+
+  it("posts an embed and routes the message for /discord/system", async () => {
+    const openDMChannel = vi.fn(async () => "chan-3");
+    const discordSendEmbed = vi.fn(async () => {});
+    const routeMessage = vi.fn(async () => {});
+    const base = await start({
+      runtime,
+      openDMChannel,
+      discordSendEmbed,
+      routeMessage,
+    });
+
+    const resp = await fetch(`${base}/discord/system`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "u-3", message: "reboot" }),
+    });
+
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toMatchObject({ ok: true, channelId: "chan-3" });
+    // 1. Embed titled "System" is posted to the resolved DM channel.
+    expect(discordSendEmbed).toHaveBeenCalledWith("chan-3", {
+      title: "System",
+      description: "reboot",
+      color: 0x808080,
+    });
+    // 2. The message is routed through the standard pipeline, wrapped as a System note.
+    expect(routeMessage).toHaveBeenCalledWith("u-3", "chan-3", "[System: reboot]");
+  });
+
+  it("returns 503 for /discord/system when dependencies are not wired", async () => {
+    // openDMChannel is present but the embed/route deps are missing.
+    const base = await start({ runtime, openDMChannel: vi.fn(async () => "chan-3") });
+    const resp = await fetch(`${base}/discord/system`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "u-3", message: "reboot" }),
+    });
+    expect(resp.status).toBe(503);
+  });
 });

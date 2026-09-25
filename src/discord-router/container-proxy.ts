@@ -44,16 +44,12 @@ export function startContainerProxyServer(opts: {
   const resolvedToken = opts.discordToken || process.env.DISCORD_BOT_TOKEN || "";
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers so browser-side callers can reach the proxy.
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
+    // No CORS headers on purpose. These endpoints are unauthenticated and act
+    // through the router's bot token; the only intended callers are the agent
+    // containers (server-side, same-host loopback), which do not need CORS. A
+    // wildcard Access-Control-Allow-Origin would let any webpage in a user's
+    // browser reach 127.0.0.1 and drive the proxy cross-origin, so we omit it
+    // to keep the surface non-browser-accessible.
 
     // Discord send proxy — containers POST here to send messages via the router.
     if (req.method === "POST" && req.url === "/discord/send") {
