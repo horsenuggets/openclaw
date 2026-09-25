@@ -73,8 +73,10 @@ fi
 cp "$SCRIPT_DIR/setup.sh" "$STAGING/"
 cp "$SCRIPT_DIR/boot.sh" "$STAGING/"
 
-# Create tarball (preserves permissions)
-tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
+# Create tarball (preserves permissions). COPYFILE_DISABLE=1 stops macOS's BSD
+# tar from embedding AppleDouble (._*) resource-fork files, which otherwise
+# litter the remote deploy tree with hundreds of junk files.
+COPYFILE_DISABLE=1 tar czf /tmp/openclaw-deployment.tar.gz --exclude='._*' -C "$STAGING" .
 rm -rf "$STAGING"
 
 # 3. Ship to remote
