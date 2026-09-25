@@ -1,6 +1,7 @@
 import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
@@ -13,11 +14,14 @@ import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
   type ChannelReplyPayload,
+  type DiscordActionRow,
   type DiscordEmbed,
   type InstanceStatus,
   type ProvisioningClient,
   handleChannelCommand,
+  handleUnregisterButtonClick,
   parseChannelTextCommand,
+  parseUnregisterCustomId,
 } from "./channel-commands.js";
 import { loadRouterConfig, refreshToken, setUserPreference } from "./config.js";
 import { callGatewaySimple } from "./gateway-call.js";
@@ -423,6 +427,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     discordToken,
     guildId: process.env.OPENCLAW_AUTH_GUILD_ID,
     roleId: process.env.OPENCLAW_WHITELIST_ROLE_ID,
+    adminRoleId: process.env.OPENCLAW_ADMIN_ROLE_ID,
     log: (message) => runtime.log(message),
   });
 
@@ -515,8 +520,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
   const channelCommandDeps: ChannelCommandDeps = {
     isWhitelisted: whitelist.isWhitelisted,
+    isAdmin: whitelist.isAdmin,
     whitelistConfigured: whitelist.isConfigured,
     describeInstance,
+    // The router shares the host network, so the agent container's port is
+    // reachable on loopback; a quick TCP connect tells `/channel status`
+    // whether the agent is actually up.
+    probeRunning: (port) => probePort(port),
     provisioning,
     log: (message) => runtime.log(message),
   };
@@ -942,7 +952,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               const data =
                 typeof payload === "string"
                   ? { content: payload, flags: 64 }
-                  : { embeds: payload.embeds, flags: 64 };
+                  : {
+                      embeds: payload.embeds,
+                      ...(payload.components ? { components: payload.components } : {}),
+                      flags: 64,
+                    };
               void fetch(
                 `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
                 {
@@ -1008,7 +1022,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     }>
                   | undefined
               )?.[0];
+              // A subcommand carries at most one relevant option: register's
+              // optional `owner` (a user id) or unregister's optional `confirm`.
+              // Either becomes args[0], interpreted per subcommand downstream.
               const args: string[] = [];
+              const owner = subOpt?.options?.find((o) => o.name === "owner")?.value;
+              if (owner !== undefined) {
+                args.push(String(owner));
+              }
               const confirm = subOpt?.options?.find((o) => o.name === "confirm")?.value;
               if (confirm !== undefined) {
                 args.push(String(confirm));
@@ -1029,7 +1050,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 ).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
                 const editReply = (payload: ChannelReplyPayload) => {
                   const body =
-                    typeof payload === "string" ? { content: payload } : { embeds: payload.embeds };
+                    typeof payload === "string"
+                      ? { content: payload }
+                      : {
+                          embeds: payload.embeds,
+                          // Always send components so an updated reply can also
+                          // clear a previous action row (e.g. the confirm button).
+                          components: payload.components ?? [],
+                        };
                   void fetch(
                     `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
                     {
@@ -1057,6 +1085,75 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                     reply: (payload) => editReply(payload),
                   },
                   channelCommandDeps,
+                );
+              }
+            }
+          }
+
+          // Handle message-component interactions (buttons). Currently only the
+          // `/channel unregister` confirmation buttons.
+          if (t === "INTERACTION_CREATE" && d.type === 3) {
+            const customId = d.data?.custom_id as string | undefined;
+            const parsed = customId ? parseUnregisterCustomId(customId) : null;
+            const clickerId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
+            const interactionId = d.id;
+            const interactionToken = d.token;
+            if (d.channel_id && d.guild_id) {
+              channelGuild.set(d.channel_id, d.guild_id);
+            }
+
+            if (parsed && clickerId && customId) {
+              if (parsed.initiatorId !== clickerId) {
+                // Someone other than the initiator clicked: reply ephemerally
+                // and leave the original confirmation message untouched.
+                void fetch(
+                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      type: 4,
+                      data: { content: "This confirmation isn't for you.", flags: 64 },
+                    }),
+                  },
+                ).catch((err) => runtime.error(`[router] button response failed: ${String(err)}`));
+              } else {
+                // Defer the message update (type 6) so a slow unregister does
+                // not blow Discord's ~3s response window, then edit the original
+                // confirmation message with the result and drop the buttons.
+                void fetch(
+                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ type: 6 }),
+                  },
+                ).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
+                void handleUnregisterButtonClick({ customId, clickerId }, channelCommandDeps).then(
+                  (result) => {
+                    if (!result.update) {
+                      return;
+                    }
+                    void fetch(
+                      `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+                      {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          embeds: result.update.embeds,
+                          components: result.update.components satisfies DiscordActionRow[],
+                        }),
+                      },
+                    )
+                      .then((resp) => {
+                        if (!resp.ok) {
+                          runtime.error(`[router] button followup failed (${resp.status})`);
+                        }
+                      })
+                      .catch((err) =>
+                        runtime.error(`[router] button followup failed: ${String(err)}`),
+                      );
+                  },
                 );
               }
             }
@@ -1732,6 +1829,25 @@ function chunkText(text: string, limit: number): string[] {
   return chunks;
 }
 
+/**
+ * Quick liveness check: resolve true if a TCP connection to 127.0.0.1:port
+ * succeeds within the timeout, false otherwise. Used by `/channel status` to
+ * report whether the agent container is actually up.
+ */
+function probePort(port: number, timeoutMs = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const finish = (up: boolean) => {
+      socket.destroy();
+      resolve(up);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
+
 async function discordSend(token: string, channelId: string, content: string): Promise<void> {
   await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
     method: "POST",
@@ -1763,7 +1879,11 @@ export async function discordSendReply(
   const body =
     typeof payload === "string"
       ? { content: payload, message_reference }
-      : { embeds: payload.embeds satisfies DiscordEmbed[], message_reference };
+      : {
+          embeds: payload.embeds satisfies DiscordEmbed[],
+          ...(payload.components ? { components: payload.components } : {}),
+          message_reference,
+        };
   await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
     method: "POST",
     headers: {

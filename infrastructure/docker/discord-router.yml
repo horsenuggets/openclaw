@@ -15,6 +15,10 @@ services:
       # disabled (fails closed). Kept out of the repo; supplied via host env.
       - OPENCLAW_AUTH_GUILD_ID=${OPENCLAW_AUTH_GUILD_ID}
       - OPENCLAW_WHITELIST_ROLE_ID=${OPENCLAW_WHITELIST_ROLE_ID}
+      # Higher-privilege admin role within the same auth guild: may register any
+      # channel (incl. on another user's behalf) and unregister any channel.
+      # Unset => nobody is admin (only owners/whitelisted-DM rules apply).
+      - OPENCLAW_ADMIN_ROLE_ID=${OPENCLAW_ADMIN_ROLE_ID}
       # Host provisioning daemon (discord-provisioner) the router calls over
       # loopback for /channel register|unregister. Unset => those are disabled.
       - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}

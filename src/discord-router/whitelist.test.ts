@@ -49,6 +49,58 @@ describe("createWhitelistChecker", () => {
     expect(await checker.isWhitelisted("u1")).toBe(false);
   });
 
+  it("isAdmin is true only when the member holds the admin role", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ roles: ["ROLE", "ADMIN"] }),
+    }));
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: "G",
+      roleId: "ROLE",
+      adminRoleId: "ADMIN",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(await checker.isAdmin("u1")).toBe(true);
+    // Whitelist + admin derive from a single member fetch.
+    expect(await checker.isWhitelisted("u1")).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("isAdmin fails closed when no admin role is configured", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ roles: ["ROLE", "ADMIN"] }),
+    }));
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: "G",
+      roleId: "ROLE",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(await checker.isAdmin("u1")).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("isAdmin is false when the member lacks the admin role", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ roles: ["ROLE"] }),
+    }));
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: "G",
+      roleId: "ROLE",
+      adminRoleId: "ADMIN",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(await checker.isAdmin("u1")).toBe(false);
+    expect(await checker.isWhitelisted("u1")).toBe(true);
+  });
+
   it("caches results within the TTL", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
