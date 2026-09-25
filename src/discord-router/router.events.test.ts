@@ -493,4 +493,110 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("channel lookup failed"))).toBe(true);
     expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
   });
+
+  it("unregisters via the confirm button and edits the original message", async () => {
+    // ownerId is unknown on disk here, so authorize the clicker via the admin
+    // role instead (member lookup returns the admin role id).
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const callbacks: { type: number; data?: { content?: string } }[] = [];
+    const patches: { components?: unknown; embeds?: { description?: string }[] }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes("/messages/@original")) {
+          patches.push(JSON.parse((init?.body as string) ?? "{}"));
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+
+    // Deferred update ack (type 6), then the instance was removed and the
+    // original confirmation message edited to the result with no buttons.
+    expect(callbacks.some((c) => c.type === 6)).toBe(true);
+    expect(unregisterCalls).toEqual([CHANNEL]);
+    const patch = patches.at(-1);
+    expect(patch?.components).toEqual([]);
+    expect(patch?.embeds?.[0]?.description).toContain("successfully unregistered");
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
+  it("rejects a confirm button click from someone other than the initiator", async () => {
+    const callbacks: { type: number; data?: { content?: string; flags?: number } }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn2",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      // custom_id names OWNER as initiator, but a different user clicks.
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      member: { user: { id: "444444444444444444" } },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Ephemeral "not for you" (type 4, flags 64); nothing was unregistered.
+    const ephemeral = callbacks.find((c) => c.type === 4);
+    expect(ephemeral?.data?.content).toContain("isn't for you");
+    expect(ephemeral?.data?.flags).toBe(64);
+    expect(unregisterCalls).toEqual([]);
+  });
 });
