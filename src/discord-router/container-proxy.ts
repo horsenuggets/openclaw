@@ -298,7 +298,12 @@ export function startContainerProxyServer(opts: {
     res.end("not found");
   });
 
-  const proxyHost = process.env.OPENCLAW_OAUTH_HOST || "127.0.0.1";
+  // Loopback-only by design: these endpoints are unauthenticated and act through
+  // the router's bot token. Containers run with `network_mode host`, so they reach
+  // the proxy over loopback and never need a public bind. We deliberately do NOT
+  // honor the legacy `OPENCLAW_OAUTH_HOST` override (from the removed OAuth server),
+  // which could otherwise expose these endpoints on a public interface.
+  const proxyHost = "127.0.0.1";
   server.on("error", (err) => {
     runtime.error(`[proxy] server error: ${String(err)}`);
   });
