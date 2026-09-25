@@ -196,22 +196,32 @@ export function startContainerProxyServer(opts: {
           }
 
           // Send embed via Discord REST API directly
-          await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bot ${resolvedToken}`,
-              "Content-Type": "application/json",
+          const embedResp = await fetch(
+            `https://discord.com/api/v10/channels/${channelId}/messages`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bot ${resolvedToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                embeds: [
+                  {
+                    title: data.title ?? "System",
+                    description: data.description,
+                    color: data.color ?? 0x808080,
+                  },
+                ],
+              }),
             },
-            body: JSON.stringify({
-              embeds: [
-                {
-                  title: data.title ?? "System",
-                  description: data.description,
-                  color: data.color ?? 0x808080,
-                },
-              ],
-            }),
-          });
+          );
+          // Surface a non-2xx Discord response instead of reporting success.
+          if (!embedResp.ok) {
+            runtime.error(`[proxy] embed failed: discord API ${embedResp.status}`);
+            res.writeHead(embedResp.status, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "discord API error" }));
+            return;
+          }
           runtime.log(`[proxy] sent embed to ${data.userId}`);
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true, channelId }));

@@ -111,6 +111,21 @@ describe("container proxy server", () => {
     expect(headers?.Authorization).toBe("Bot router-tok");
   });
 
+  it("surfaces Discord API failures from /discord/embed", async () => {
+    const openDMChannel = vi.fn(async () => "chan-9");
+    mockDiscordFetch(() => new Response("nope", { status: 403 }));
+    const base = await start({ runtime, openDMChannel, discordToken: "router-tok" });
+
+    const resp = await fetch(`${base}/discord/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "u-9", description: "body" }),
+    });
+    // A non-2xx Discord response must not be reported as success.
+    expect(resp.status).toBe(403);
+    expect(await resp.json()).toMatchObject({ error: "discord API error" });
+  });
+
   it("reads messages via the router-resolved token for /discord/read", async () => {
     const openDMChannel = vi.fn(async () => "chan-7");
     const calls: Array<{ url: string; init?: RequestInit }> = [];

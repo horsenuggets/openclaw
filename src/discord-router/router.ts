@@ -370,7 +370,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   };
 
   // Dispatches the agent's `⁘` control commands to host-side actions the agent
-  // cannot do itself (posting official Discord embeds and buttons).
+  // cannot do itself (posting the official Discord welcome embed).
   const runAgentCommand: RunAgentCommand = async (cmd, ctx) => {
     const { channelId } = ctx;
     if (cmd.command === "return") {
