@@ -112,7 +112,9 @@ jobs:
           cp infrastructure/deploy/boot.sh "$STAGING/"
           chmod +x "$STAGING/setup.sh" "$STAGING/boot.sh"
 
-          tar czf /tmp/openclaw-deployment.tar.gz -C "$STAGING" .
+          # --exclude='._*' drops macOS AppleDouble files if any slipped into
+          # the staging tree, matching infrastructure/deploy/deploy.sh.
+          tar czf /tmp/openclaw-deployment.tar.gz --exclude='._*' -C "$STAGING" .
           rm -rf "$STAGING"
           echo "Tarball size: $(du -h /tmp/openclaw-deployment.tar.gz | cut -f1)"
 
