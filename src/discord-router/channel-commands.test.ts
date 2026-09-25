@@ -297,6 +297,19 @@ describe("handleChannelCommand unregister", () => {
     expect(button?.style).toBe(4);
   });
 
+  it("accepts the confirm:yes text token and skips the button", async () => {
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    const { ctx } = makeCtx("unregister", ["confirm:yes"], { userId: "U1" });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        describeInstance: () => ({ port: 1, ownerId: "U1", onboarded: true }),
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).toHaveBeenCalledOnce();
+  });
+
   it("denies a non-owner, non-admin user", async () => {
     const unregister = vi.fn();
     const { ctx, replies } = makeCtx("unregister", [], { userId: "STRANGER" });

@@ -413,9 +413,10 @@ export async function handleChannelCommand(
       return;
     }
 
-    // A text `confirm:yes` skips the button (used by bots/e2e that cannot
-    // click); humans get a confirmation button instead.
-    const confirm = (ctx.args[0] ?? "").toLowerCase();
+    // A text `confirm:yes` (or bare `yes`) skips the button (used by bots/e2e
+    // that cannot click); humans get a confirmation button instead. Strip a
+    // leading `confirm:` so both spellings resolve to the same token.
+    const confirm = (ctx.args[0] ?? "").toLowerCase().replace(/^confirm:/, "");
     if (confirm !== "yes") {
       await ctx.reply(
         {
