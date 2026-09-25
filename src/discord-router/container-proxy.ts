@@ -51,6 +51,23 @@ export function startContainerProxyServer(opts: {
     // browser reach 127.0.0.1 and drive the proxy cross-origin, so we omit it
     // to keep the surface non-browser-accessible.
 
+    // Require application/json on POST routes. This blocks browser-originated
+    // cross-origin "simple request" writes: a page can send a cross-origin POST
+    // with a text/plain body without a preflight, but it cannot set
+    // Content-Type: application/json without triggering a preflight, which the
+    // browser then blocks (we return no CORS headers). Legitimate container
+    // callers always send JSON, so this closes the write path without needing
+    // per-request auth.
+    if (req.method === "POST") {
+      const contentType = req.headers["content-type"] ?? "";
+      // Tolerate charset/parameters, e.g. "application/json; charset=utf-8".
+      if (!contentType.split(";")[0].trim().toLowerCase().startsWith("application/json")) {
+        res.writeHead(415, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "content-type must be application/json" }));
+        return;
+      }
+    }
+
     // Discord send proxy — containers POST here to send messages via the router.
     if (req.method === "POST" && req.url === "/discord/send") {
       let body = "";

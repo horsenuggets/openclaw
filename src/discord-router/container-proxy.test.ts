@@ -70,6 +70,19 @@ describe("container proxy server", () => {
     expect(resp.status).toBe(400);
   });
 
+  it("rejects POST routes without an application/json content type", async () => {
+    const discordSend = vi.fn(async () => ({ messageId: "m-1" }));
+    const base = await start({ runtime, openDMChannel: vi.fn(async () => "chan-1"), discordSend });
+    // A browser cross-origin "simple request" would send text/plain; reject it.
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ userId: "u-1", text: "hi" }),
+    });
+    expect(resp.status).toBe(415);
+    expect(discordSend).not.toHaveBeenCalled();
+  });
+
   it("returns 503 when the send dependency is not wired", async () => {
     const base = await start({ runtime });
     const resp = await fetch(`${base}/discord/send`, {
