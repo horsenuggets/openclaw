@@ -70,9 +70,9 @@ describe("computeNextIntervalMs", () => {
     const base = HOUR;
     const backoff = { factor: 2, maxIntervalMs: 7 * 24 * HOUR };
     // streak 2 -> 4h base, no jitter -> exactly 4h.
-    expect(
-      computeNextIntervalMs({ baseIntervalMs: base, quietStreak: 2 }, { backoff }),
-    ).toBe(4 * HOUR);
+    expect(computeNextIntervalMs({ baseIntervalMs: base, quietStreak: 2 }, { backoff })).toBe(
+      4 * HOUR,
+    );
     // streak 2 with jitter still centered on 4h.
     expect(
       computeNextIntervalMs(

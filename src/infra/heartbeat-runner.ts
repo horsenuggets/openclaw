@@ -34,7 +34,6 @@ import {
   saveSessionStore,
   updateSessionStore,
 } from "../config/sessions.js";
-import { type CadenceOptions, computeNextIntervalMs } from "./heartbeat-cadence.js";
 import { logVerbose } from "../globals.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getQueueSize } from "../process/command-queue.js";
@@ -42,6 +41,7 @@ import { CommandLane } from "../process/lanes.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { formatErrorMessage } from "./errors.js";
+import { type CadenceOptions, computeNextIntervalMs } from "./heartbeat-cadence.js";
 import { emitHeartbeatEvent, resolveIndicatorType } from "./heartbeat-events.js";
 import { resolveHeartbeatVisibility } from "./heartbeat-visibility.js";
 import {
