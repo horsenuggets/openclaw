@@ -164,6 +164,10 @@ function isWithinActiveHours(
   heartbeat?: HeartbeatConfig,
   nowMs?: number,
 ): boolean {
+  // Debug time override: bypass the active-hours window entirely for testing.
+  if (process.env.OPENCLAW_HEARTBEAT_IGNORE_ACTIVE_HOURS === "1") {
+    return true;
+  }
   const active = heartbeat?.activeHours;
   if (!active) {
     return true;
@@ -302,12 +306,23 @@ function resolveHeartbeatAgents(cfg: OpenClawConfig): HeartbeatAgent[] {
   return [{ agentId: fallbackId, heartbeat: resolveHeartbeatConfig(cfg, fallbackId) }];
 }
 
+/**
+ * Debug time override: when OPENCLAW_HEARTBEAT_EVERY is set (e.g. "20s"), it
+ * takes priority over all configured intervals so heartbeats can be exercised
+ * live without waiting the natural cadence. Returns null when unset/invalid.
+ */
+function debugHeartbeatEvery(): string | null {
+  const raw = process.env.OPENCLAW_HEARTBEAT_EVERY?.trim();
+  return raw ? raw : null;
+}
+
 export function resolveHeartbeatIntervalMs(
   cfg: OpenClawConfig,
   overrideEvery?: string,
   heartbeat?: HeartbeatConfig,
 ) {
   const raw =
+    debugHeartbeatEvery() ??
     overrideEvery ??
     heartbeat?.every ??
     cfg.agents?.defaults?.heartbeat?.every ??
@@ -337,8 +352,10 @@ const DEFAULT_BACKOFF_MAX_MS = 7 * 24 * 60 * 60 * 1000;
 /** Resolve jitter/backoff cadence options from the heartbeat config. */
 export function resolveCadenceOptions(heartbeat?: HeartbeatConfig): CadenceOptions {
   const opts: CadenceOptions = {};
+  // Debug time override: drop jitter so wake timing is deterministic in tests.
+  const noJitter = process.env.OPENCLAW_HEARTBEAT_NO_JITTER === "1";
   const jitterPct = heartbeat?.jitterPct;
-  if (typeof jitterPct === "number" && jitterPct > 0) {
+  if (!noJitter && typeof jitterPct === "number" && jitterPct > 0) {
     opts.jitterPct = jitterPct;
   }
   const backoff = heartbeat?.backoff;
