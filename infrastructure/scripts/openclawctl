@@ -21,6 +21,16 @@ BASE_PORT=18789
 PORT_FILENAME=".port"
 PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
+# Locate the openclaw CLI. deploy.sh installs it alongside this script in
+# ~/deploy/bin, so prefer the sibling binary; fall back to PATH. Used for
+# JSON5-aware config edits (config set) so we don't hand-roll a JSON5 parser.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$SCRIPT_DIR/openclaw" ]; then
+  OPENCLAW_BIN="$SCRIPT_DIR/openclaw"
+else
+  OPENCLAW_BIN="$(command -v openclaw || true)"
+fi
+
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
 
@@ -305,29 +315,22 @@ seed_instance_config() {
     fi
   done
   if [ -f "$target" ]; then
-    # OpenClaw configs are JSON5 (comments + trailing commas allowed), which
-    # stdlib json.load rejects. Strip comments/trailing commas before parsing so
-    # a hand-edited source config can't abort provisioning under `set -e` (the
-    # port is already reserved by this point). If parsing still fails, warn and
-    # continue rather than killing the whole add-channel/add-dm flow.
-    if python3 - "$target" "$CONTAINER_PROXY_URL" <<'PY'
-import json, re, sys
-path, url = sys.argv[1], sys.argv[2]
-raw = open(path).read()
-# Strip /* */ and // comments, then trailing commas before } or ].
-no_block = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
-no_line = re.sub(r"(^|[^:])//[^\n]*", r"\1", no_block)
-no_trailing = re.sub(r",(\s*[}\]])", r"\1", no_line)
-try:
-    cfg = json.loads(no_trailing)
-except Exception as e:
-    print(f"Warning: could not parse {path} as JSON5 ({e}); left proxyUrl unchanged", file=sys.stderr)
-    sys.exit(1)
-cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = url
-json.dump(cfg, open(path, "w"), indent=2)
-PY
-    then
-      echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+    # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
+    # single-quoted strings), so we must not parse them with a stdlib JSON reader
+    # or a partial regex conversion. Use the CLI's own JSON5-aware `config set`
+    # against this file (OPENCLAW_CONFIG_PATH), which loads/validates/writes with
+    # the same parser the gateway uses. Guarded so a failure only warns and lets
+    # provisioning continue rather than aborting under `set -e` after the port is
+    # reserved.
+    if [ -n "$OPENCLAW_BIN" ]; then
+      if OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+        channels.discord.proxyUrl "$CONTAINER_PROXY_URL" >/dev/null 2>&1; then
+        echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+      else
+        echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
+      fi
+    else
+      echo "Warning: openclaw CLI not found; left Discord proxyUrl in $target unchanged" >&2
     fi
   fi
 }
