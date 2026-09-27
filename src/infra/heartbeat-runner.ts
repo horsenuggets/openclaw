@@ -356,6 +356,27 @@ export function resolveCadenceOptions(heartbeat?: HeartbeatConfig): CadenceOptio
   return opts;
 }
 
+/**
+ * Read the timestamp of the user's most recent message to this agent's main
+ * session, or 0 when unknown. Drives the cadence backoff: the quiet streak
+ * resets the moment the user has engaged since the previous wake.
+ */
+function readLastUserMessageAt(cfg: OpenClawConfig, agentId: string): number {
+  try {
+    const sessionCfg = cfg.session;
+    const scope = sessionCfg?.scope ?? "per-sender";
+    const mainSessionKey =
+      scope === "global" ? "global" : resolveAgentMainSessionKey({ cfg, agentId });
+    const storeAgentId = scope === "global" ? resolveDefaultAgentId(cfg) : agentId;
+    const storePath = resolveStorePath(sessionCfg?.store, { agentId: storeAgentId });
+    const store = loadSessionStore(storePath);
+    const entry = store[mainSessionKey];
+    return typeof entry?.lastUserMessageAt === "number" ? entry.lastUserMessageAt : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function resolveHeartbeatPrompt(cfg: OpenClawConfig, heartbeat?: HeartbeatConfig) {
   return resolveHeartbeatPromptText(heartbeat?.prompt ?? cfg.agents?.defaults?.heartbeat?.prompt);
 }
@@ -939,9 +960,12 @@ export function startHeartbeatRunner(opts: {
   runtime?: RuntimeEnv;
   abortSignal?: AbortSignal;
   runOnce?: typeof runHeartbeatOnce;
+  /** Injectable engagement reader (last user-message timestamp) for tests. */
+  readEngagementMs?: (cfg: OpenClawConfig, agentId: string) => number;
 }): HeartbeatRunner {
   const runtime = opts.runtime ?? defaultRuntime;
   const runOnce = opts.runOnce ?? runHeartbeatOnce;
+  const readEngagementMs = opts.readEngagementMs ?? readLastUserMessageAt;
   const state = {
     cfg: opts.cfg ?? loadConfig(),
     runtime,
@@ -1074,6 +1098,13 @@ export function startHeartbeatRunner(opts: {
         return res;
       }
       if (res.status !== "skipped" || res.reason !== "disabled") {
+        // Engagement-adaptive backoff: reset the quiet streak when the user has
+        // messaged since our previous wake, otherwise grow it so a dormant
+        // conversation widens the cadence (and stops burning a call every hour).
+        const prevLastRunMs = agent.lastRunMs;
+        const lastUserAt = readEngagementMs(state.cfg, agent.agentId);
+        const engaged = prevLastRunMs === undefined || lastUserAt > prevLastRunMs;
+        agent.quietStreak = engaged ? 0 : agent.quietStreak + 1;
         agent.lastRunMs = now;
         agent.nextDueMs =
           now +
