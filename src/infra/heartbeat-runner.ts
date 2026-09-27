@@ -12,7 +12,7 @@ import {
 } from "../agents/agent-scope.js";
 import { resolveUserTimezone } from "../agents/date-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
-import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
+import { DEFAULT_BOOTSTRAP_FILENAME, DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import {
   DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
   DEFAULT_HEARTBEAT_EVERY,
@@ -34,6 +34,7 @@ import {
   saveSessionStore,
   updateSessionStore,
 } from "../config/sessions.js";
+import { type CadenceOptions, computeNextIntervalMs } from "./heartbeat-cadence.js";
 import { logVerbose } from "../globals.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getQueueSize } from "../process/command-queue.js";
@@ -195,6 +196,10 @@ type HeartbeatAgentState = {
   intervalMs: number;
   lastRunMs?: number;
   nextDueMs: number;
+  /** Resolved jitter/backoff options for computing the next wake. */
+  cadence: CadenceOptions;
+  /** Consecutive wakes since the user last engaged (drives backoff). */
+  quietStreak: number;
 };
 
 export type HeartbeatRunner = {
@@ -324,6 +329,31 @@ export function resolveHeartbeatIntervalMs(
     return null;
   }
   return ms;
+}
+
+/** Default ceiling for backoff widening when `backoff.max` is unset: one week. */
+const DEFAULT_BACKOFF_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Resolve jitter/backoff cadence options from the heartbeat config. */
+export function resolveCadenceOptions(heartbeat?: HeartbeatConfig): CadenceOptions {
+  const opts: CadenceOptions = {};
+  const jitterPct = heartbeat?.jitterPct;
+  if (typeof jitterPct === "number" && jitterPct > 0) {
+    opts.jitterPct = jitterPct;
+  }
+  const backoff = heartbeat?.backoff;
+  if (backoff?.factor && backoff.factor > 1) {
+    let maxIntervalMs = DEFAULT_BACKOFF_MAX_MS;
+    if (backoff.max) {
+      try {
+        maxIntervalMs = parseDurationMs(backoff.max, { defaultUnit: "m" });
+      } catch {
+        maxIntervalMs = DEFAULT_BACKOFF_MAX_MS;
+      }
+    }
+    opts.backoff = { factor: backoff.factor, maxIntervalMs };
+  }
+  return opts;
 }
 
 export function resolveHeartbeatPrompt(cfg: OpenClawConfig, heartbeat?: HeartbeatConfig) {
@@ -547,6 +577,21 @@ export async function runHeartbeatOnce(opts: {
     return { status: "skipped", reason: "quiet-hours" };
   }
 
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+
+  // Onboarding gate: while BOOTSTRAP.md is still present, first-run setup is in
+  // progress, so proactive heartbeats stay silent until onboarding completes
+  // (the file is deleted). Opt-in via heartbeat.gateUntilOnboarded.
+  if (heartbeat?.gateUntilOnboarded) {
+    const bootstrapPath = path.join(workspaceDir, DEFAULT_BOOTSTRAP_FILENAME);
+    try {
+      await fs.access(bootstrapPath);
+      return { status: "skipped", reason: "onboarding-incomplete" };
+    } catch {
+      // No BOOTSTRAP.md => onboarding complete => proceed.
+    }
+  }
+
   const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(CommandLane.Main);
   if (queueSize > 0) {
     return { status: "skipped", reason: "requests-in-flight" };
@@ -556,7 +601,6 @@ export async function runHeartbeatOnce(opts: {
   // This saves API calls/costs when the file is effectively empty (only comments/headers).
   // EXCEPTION: Don't skip for exec events - they have pending system events to process.
   const isExecEventReason = opts.reason === "exec-event";
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
   const heartbeatFilePath = path.join(workspaceDir, DEFAULT_HEARTBEAT_FILENAME);
   try {
     const heartbeatFileContent = await fs.readFile(heartbeatFilePath, "utf-8");
@@ -968,6 +1012,8 @@ export function startHeartbeatRunner(opts: {
         intervalMs,
         lastRunMs: prevState?.lastRunMs,
         nextDueMs,
+        cadence: resolveCadenceOptions(agent.heartbeat),
+        quietStreak: prevState?.quietStreak ?? 0,
       });
     }
 
@@ -1029,7 +1075,12 @@ export function startHeartbeatRunner(opts: {
       }
       if (res.status !== "skipped" || res.reason !== "disabled") {
         agent.lastRunMs = now;
-        agent.nextDueMs = now + agent.intervalMs;
+        agent.nextDueMs =
+          now +
+          computeNextIntervalMs(
+            { baseIntervalMs: agent.intervalMs, quietStreak: agent.quietStreak },
+            agent.cadence,
+          );
       }
       if (res.status === "ran") {
         ran = true;

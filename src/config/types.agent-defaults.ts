@@ -197,6 +197,30 @@ export type AgentDefaultsConfig = {
      * Default: false (only the final heartbeat payload is delivered).
      */
     includeReasoning?: boolean;
+    /**
+     * Fractional jitter applied to the interval so wakes feel natural instead of
+     * landing exactly on the interval boundary. 0.17 spreads a 60m base to
+     * ~50-70m. Range 0..1. Default: 0 (no jitter).
+     */
+    jitterPct?: number;
+    /**
+     * Adaptive backoff for a user who is not engaging: after each wake with no
+     * user activity the interval is widened by `factor`, up to `max`, so a
+     * dormant conversation does not cost a model call every interval. The streak
+     * resets the moment the user replies. Omit to keep a flat cadence.
+     */
+    backoff?: {
+      /** Multiplier applied per unanswered wake (e.g. 2 doubles each step). */
+      factor?: number;
+      /** Ceiling on the widened interval (duration string, e.g. "7d"). */
+      max?: string;
+    };
+    /**
+     * When true, heartbeats are suppressed while the workspace still contains
+     * BOOTSTRAP.md (first-run onboarding in progress) and only begin once
+     * onboarding completes (the file is deleted). Default: false.
+     */
+    gateUntilOnboarded?: boolean;
   };
   /** Max concurrent agent runs across all conversations. Default: 1 (sequential). */
   maxConcurrent?: number;

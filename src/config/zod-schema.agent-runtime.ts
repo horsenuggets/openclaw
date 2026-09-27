@@ -27,6 +27,15 @@ export const HeartbeatSchema = z
     accountId: z.string().optional(),
     prompt: z.string().optional(),
     ackMaxChars: z.number().int().nonnegative().optional(),
+    jitterPct: z.number().min(0).max(1).optional(),
+    backoff: z
+      .object({
+        factor: z.number().min(1).optional(),
+        max: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+    gateUntilOnboarded: z.boolean().optional(),
   })
   .strict()
   .superRefine((val, ctx) => {
