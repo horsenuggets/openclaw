@@ -283,6 +283,39 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
+# loopback. Agent containers are host-networked, so they reach it at 127.0.0.1.
+# host.docker.internal only resolves under bridge networking and must NOT be used
+# here, or proactive/heartbeat sends silently fail at DNS resolution.
+CONTAINER_PROXY_URL="http://127.0.0.1:18800"
+
+# Seed a new instance's openclaw.json from an existing instance (if any), then
+# force the Discord proxyUrl to the correct loopback address regardless of what
+# the copy source had.
+seed_instance_config() {
+  local channelId="$1"
+  local target="$INSTANCES_DIR/$channelId/openclaw.json"
+  local dir
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}openclaw.json" ]; then
+      cp "${dir}openclaw.json" "$target"
+      echo "Copied config from $(basename "$dir")"
+      break
+    fi
+  done
+  if [ -f "$target" ]; then
+    python3 - "$target" "$CONTAINER_PROXY_URL" <<'PY'
+import json, sys
+path, url = sys.argv[1], sys.argv[2]
+cfg = json.load(open(path))
+cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = url
+json.dump(cfg, open(path, "w"), indent=2)
+PY
+    echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+  fi
+}
+
 # --- Commands ---
 
 cmd_add_dm() {
@@ -323,15 +356,8 @@ cmd_add_dm() {
   # Create instance directory
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Seed the instance config (copy from an existing instance, fix proxyUrl)
+  seed_instance_config "$channelId"
 
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
@@ -369,15 +395,8 @@ cmd_add_channel() {
 
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Seed the instance config (copy from an existing instance, fix proxyUrl)
+  seed_instance_config "$channelId"
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"

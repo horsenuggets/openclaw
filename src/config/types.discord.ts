@@ -203,10 +203,14 @@ export type DiscordAccountConfig = {
    */
   codeLangHints?: boolean;
   /**
-   * URL of the Discord router's send API (e.g. "http://host.docker.internal:18800").
-   * When set, outbound messages are POSTed to this URL instead of being sent
-   * directly via the Discord REST API. Used by Docker containers that rely on
-   * an external Discord router service.
+   * URL of the Discord router's container proxy. When set, outbound messages are
+   * POSTed here instead of being sent directly via the Discord REST API. Used by
+   * agent containers that rely on an external Discord router service.
+   *
+   * Host-networked agent containers (the default per-channel deployment) reach
+   * the router on loopback: "http://127.0.0.1:18800". Only use
+   * "http://host.docker.internal:18800" when the agent runs in a bridge network,
+   * since that name does not resolve under host networking.
    */
   proxyUrl?: string;
   /**
