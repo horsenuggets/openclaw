@@ -21,6 +21,16 @@ BASE_PORT=18789
 PORT_FILENAME=".port"
 PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
+# Locate the openclaw CLI. deploy.sh installs it alongside this script in
+# ~/deploy/bin, so prefer the sibling binary; fall back to PATH. Used for
+# JSON5-aware config edits (config set) so we don't hand-roll a JSON5 parser.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$SCRIPT_DIR/openclaw" ]; then
+  OPENCLAW_BIN="$SCRIPT_DIR/openclaw"
+else
+  OPENCLAW_BIN="$(command -v openclaw || true)"
+fi
+
 # Ensure instances directory exists
 mkdir -p "$INSTANCES_DIR"
 
@@ -283,6 +293,48 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
+# loopback. Agent containers are host-networked, so they reach it at 127.0.0.1.
+# host.docker.internal only resolves under bridge networking and must NOT be used
+# here, or proactive/heartbeat sends silently fail at DNS resolution.
+CONTAINER_PROXY_URL="http://127.0.0.1:18800"
+
+# Seed a new instance's openclaw.json from an existing instance (if any), then
+# force the Discord proxyUrl to the correct loopback address regardless of what
+# the copy source had.
+seed_instance_config() {
+  local channelId="$1"
+  local target="$INSTANCES_DIR/$channelId/openclaw.json"
+  local dir
+  for dir in "$INSTANCES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}openclaw.json" ]; then
+      cp "${dir}openclaw.json" "$target"
+      echo "Copied config from $(basename "$dir")"
+      break
+    fi
+  done
+  if [ -f "$target" ]; then
+    # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
+    # single-quoted strings), so we must not parse them with a stdlib JSON reader
+    # or a partial regex conversion. Use the CLI's own JSON5-aware `config set`
+    # against this file (OPENCLAW_CONFIG_PATH), which loads/validates/writes with
+    # the same parser the gateway uses. Guarded so a failure only warns and lets
+    # provisioning continue rather than aborting under `set -e` after the port is
+    # reserved.
+    if [ -n "$OPENCLAW_BIN" ]; then
+      if OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+        channels.discord.proxyUrl "$CONTAINER_PROXY_URL" >/dev/null 2>&1; then
+        echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+      else
+        echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
+      fi
+    else
+      echo "Warning: openclaw CLI not found; left Discord proxyUrl in $target unchanged" >&2
+    fi
+  fi
+}
+
 # --- Commands ---
 
 cmd_add_dm() {
@@ -323,15 +375,8 @@ cmd_add_dm() {
   # Create instance directory
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Seed the instance config (copy from an existing instance, fix proxyUrl)
+  seed_instance_config "$channelId"
 
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
@@ -369,15 +414,8 @@ cmd_add_channel() {
 
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Copy openclaw.json from an existing instance if available
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$INSTANCES_DIR/$channelId/openclaw.json"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
+  # Seed the instance config (copy from an existing instance, fix proxyUrl)
+  seed_instance_config "$channelId"
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
