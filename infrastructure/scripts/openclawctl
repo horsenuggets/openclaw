@@ -305,14 +305,30 @@ seed_instance_config() {
     fi
   done
   if [ -f "$target" ]; then
-    python3 - "$target" "$CONTAINER_PROXY_URL" <<'PY'
-import json, sys
+    # OpenClaw configs are JSON5 (comments + trailing commas allowed), which
+    # stdlib json.load rejects. Strip comments/trailing commas before parsing so
+    # a hand-edited source config can't abort provisioning under `set -e` (the
+    # port is already reserved by this point). If parsing still fails, warn and
+    # continue rather than killing the whole add-channel/add-dm flow.
+    if python3 - "$target" "$CONTAINER_PROXY_URL" <<'PY'
+import json, re, sys
 path, url = sys.argv[1], sys.argv[2]
-cfg = json.load(open(path))
+raw = open(path).read()
+# Strip /* */ and // comments, then trailing commas before } or ].
+no_block = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
+no_line = re.sub(r"(^|[^:])//[^\n]*", r"\1", no_block)
+no_trailing = re.sub(r",(\s*[}\]])", r"\1", no_line)
+try:
+    cfg = json.loads(no_trailing)
+except Exception as e:
+    print(f"Warning: could not parse {path} as JSON5 ({e}); left proxyUrl unchanged", file=sys.stderr)
+    sys.exit(1)
 cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = url
 json.dump(cfg, open(path, "w"), indent=2)
 PY
-    echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+    then
+      echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
+    fi
   fi
 }
 
