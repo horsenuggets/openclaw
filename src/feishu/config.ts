@@ -10,7 +10,6 @@ export type ResolvedFeishuConfig = {
   allowFrom: string[];
   groupAllowFrom: string[];
   historyLimit: number;
-  dmHistoryLimit: number;
   textChunkLimit: number;
   chunkMode: "length" | "newline";
   blockStreaming: boolean;
@@ -42,7 +41,6 @@ export function resolveFeishuConfig(params: {
     allowFrom: (accountCfg?.allowFrom ?? feishuCfg?.allowFrom ?? []).map(String),
     groupAllowFrom: (accountCfg?.groupAllowFrom ?? feishuCfg?.groupAllowFrom ?? []).map(String),
     historyLimit: firstDefined(accountCfg?.historyLimit, feishuCfg?.historyLimit) ?? 10,
-    dmHistoryLimit: firstDefined(accountCfg?.dmHistoryLimit, feishuCfg?.dmHistoryLimit) ?? 20,
     textChunkLimit: firstDefined(accountCfg?.textChunkLimit, feishuCfg?.textChunkLimit) ?? 2000,
     chunkMode: firstDefined(accountCfg?.chunkMode, feishuCfg?.chunkMode) ?? "length",
     blockStreaming: firstDefined(accountCfg?.blockStreaming, feishuCfg?.blockStreaming) ?? true,

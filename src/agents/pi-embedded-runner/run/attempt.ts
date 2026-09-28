@@ -76,7 +76,6 @@ import {
   sanitizeSessionHistory,
   sanitizeToolsForGoogle,
 } from "../google.js";
-import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "../history.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
 import {
@@ -621,14 +620,10 @@ export async function runEmbeddedAttempt(
         const validated = transcriptPolicy.validateAnthropicTurns
           ? validateAnthropicTurns(validatedGemini)
           : validatedGemini;
-        const limited = limitHistoryTurns(
-          validated,
-          getDmHistoryLimitFromSessionKey(params.sessionKey, params.config),
-        );
-        backfillAssistantUsage(limited);
-        cacheTrace?.recordStage("session:limited", { messages: limited });
-        if (limited.length > 0) {
-          activeSession.agent.replaceMessages(limited);
+        backfillAssistantUsage(validated);
+        cacheTrace?.recordStage("session:validated", { messages: validated });
+        if (validated.length > 0) {
+          activeSession.agent.replaceMessages(validated);
         }
       } catch (err) {
         sessionManager.flushPendingToolResults?.();

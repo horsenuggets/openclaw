@@ -299,7 +299,6 @@ Provider options:
 - `channels.bluebubbles.chunkMode`: `length` (default) splits only when exceeding `textChunkLimit`; `newline` splits on blank lines (paragraph boundaries) before length chunking.
 - `channels.bluebubbles.mediaMaxMb`: Inbound media cap in MB (default: 8).
 - `channels.bluebubbles.historyLimit`: Max group messages for context (0 disables).
-- `channels.bluebubbles.dmHistoryLimit`: DM history limit.
 - `channels.bluebubbles.actions`: Enable/disable specific actions.
 - `channels.bluebubbles.accounts`: Multi-account configuration.
 

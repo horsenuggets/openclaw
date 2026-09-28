@@ -286,7 +286,6 @@ This is often easier than hand-editing JSON manifests.
 
 - `channels.msteams.historyLimit` controls how many recent channel/group messages are wrapped into the prompt.
 - Falls back to `messages.groupChat.historyLimit`. Set `0` to disable (default 50).
-- DM history can be limited with `channels.msteams.dmHistoryLimit` (user turns). Per-user overrides: `channels.msteams.dms["<user_id>"].historyLimit`.
 
 ## Current Teams RSC Permissions (Manifest)
 

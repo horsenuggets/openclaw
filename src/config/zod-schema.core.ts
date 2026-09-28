@@ -88,11 +88,7 @@ export const GroupChatSchema = z
   .strict()
   .optional();
 
-export const DmConfigSchema = z
-  .object({
-    historyLimit: z.number().int().min(0).optional(),
-  })
-  .strict();
+export const DmConfigSchema = z.object({}).strict();
 
 export const IdentitySchema = z
   .object({

@@ -31,7 +31,6 @@ const FeishuAccountSchema = z
     allowFrom: z.array(allowFromEntry).optional(),
     groupAllowFrom: z.array(allowFromEntry).optional(),
     historyLimit: z.number().optional(),
-    dmHistoryLimit: z.number().optional(),
     textChunkLimit: z.number().optional(),
     chunkMode: z.enum(["length", "newline"]).optional(),
     blockStreaming: z.boolean().optional(),

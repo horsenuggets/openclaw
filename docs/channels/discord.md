@@ -345,7 +345,6 @@ ack reaction after the bot replies.
 - `maxLinesPerMessage`: soft max line count per message. Default: 17.
 - `mediaMaxMb`: clamp inbound media saved to disk.
 - `historyLimit`: number of recent guild messages to include as context when replying to a mention (default 20; falls back to `messages.groupChat.historyLimit`; `0` disables).
-- `dmHistoryLimit`: DM history limit in user turns. Per-user overrides: `dms["<user_id>"].historyLimit`.
 - `retry`: retry policy for outbound Discord API calls (attempts, minDelayMs, maxDelayMs, jitter).
 - `pluralkit`: resolve PluralKit proxied messages so system members appear as distinct senders.
 - `actions`: per-action tool gates; omit to allow all (set `false` to disable).

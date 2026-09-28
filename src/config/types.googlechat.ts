@@ -72,9 +72,7 @@ export type GoogleChatAccountConfig = {
   botUser?: string;
   /** Max space messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Max DM turns to keep as history context. */
-  dmHistoryLimit?: number;
-  /** Per-DM config overrides keyed by user id. */
+  /** Reserved per-DM map keyed by user id. Carries no per-DM settings and is not read at runtime for this channel; retained for config-shape compatibility. */
   dms?: Record<string, DmConfig>;
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;

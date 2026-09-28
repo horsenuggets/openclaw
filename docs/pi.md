@@ -54,7 +54,6 @@ src/agents/
 │   ├── extensions.ts              # Load pi extensions for embedded runs
 │   ├── extra-params.ts            # Provider-specific stream params
 │   ├── google.ts                  # Google/Gemini turn ordering fixes
-│   ├── history.ts                 # History limiting (DM vs group)
 │   ├── lanes.ts                   # Session/global command lanes
 │   ├── logger.ts                  # Subsystem logger
 │   ├── model.ts                   # Model resolution via ModelRegistry
@@ -306,10 +305,6 @@ await prewarmSessionFile(params.sessionFile);
 sessionManager = SessionManager.open(params.sessionFile);
 trackSessionManagerAccess(params.sessionFile);
 ```
-
-### History Limiting
-
-`limitHistoryTurns()` trims conversation history based on channel type (DM vs group).
 
 ### Compaction
 
@@ -567,11 +562,8 @@ All existing tests that cover the pi integration and its extensions:
 - `src/agents/pi-embedded-runner.applygoogleturnorderingfix.test.ts`
 - `src/agents/pi-embedded-runner.buildembeddedsandboxinfo.test.ts`
 - `src/agents/pi-embedded-runner.createsystempromptoverride.test.ts`
-- `src/agents/pi-embedded-runner.get-dm-history-limit-from-session-key.falls-back-provider-default-per-dm-not.test.ts`
-- `src/agents/pi-embedded-runner.get-dm-history-limit-from-session-key.returns-undefined-sessionkey-is-undefined.test.ts`
 - `src/agents/pi-embedded-runner.google-sanitize-thinking.test.ts`
 - `src/agents/pi-embedded-runner.guard.test.ts`
-- `src/agents/pi-embedded-runner.limithistoryturns.test.ts`
 - `src/agents/pi-embedded-runner.resolvesessionagentids.test.ts`
 - `src/agents/pi-embedded-runner.run-embedded-pi-agent.auth-profile-rotation.test.ts`
 - `src/agents/pi-embedded-runner.sanitize-session-history.test.ts`

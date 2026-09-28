@@ -36,7 +36,6 @@ const bluebubblesAccountSchema = z.object({
   groupAllowFrom: z.array(allowFromEntry).optional(),
   groupPolicy: z.enum(["open", "disabled", "allowlist"]).optional(),
   historyLimit: z.number().int().min(0).optional(),
-  dmHistoryLimit: z.number().int().min(0).optional(),
   textChunkLimit: z.number().int().positive().optional(),
   chunkMode: z.enum(["length", "newline"]).optional(),
   mediaMaxMb: z.number().int().positive().optional(),
