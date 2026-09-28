@@ -72,7 +72,7 @@ export type GoogleChatAccountConfig = {
   botUser?: string;
   /** Max space messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM config overrides keyed by user id. */
+  /** Per-DM directory entries keyed by user id (keys seed the known-user directory; no per-DM settings). */
   dms?: Record<string, DmConfig>;
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;

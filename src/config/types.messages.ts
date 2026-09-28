@@ -6,8 +6,9 @@ export type GroupChatConfig = {
   historyLimit?: number;
 };
 
-// `dms` is used only as a per-DM allowlist (its keys); it has no per-DM
-// settings anymore, so this is an empty object type.
+// `dms` no longer carries any per-DM settings, so this is an empty object type.
+// Its keys are still read to seed the known-user directory listing (see
+// `directory-config.ts`); DM access is governed separately by `dmPolicy`/`allowFrom`.
 export type DmConfig = Record<string, never>;
 
 export type QueueConfig = {

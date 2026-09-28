@@ -127,7 +127,7 @@ Provider options:
 - `channels.nextcloud-talk.groupAllowFrom`: group allowlist (user IDs).
 - `channels.nextcloud-talk.rooms`: per-room settings and allowlist.
 - `channels.nextcloud-talk.historyLimit`: group history limit (0 disables).
-- `channels.nextcloud-talk.dms`: per-DM allowlist (keyed by user).
+- `channels.nextcloud-talk.dms`: per-DM directory entries (keyed by user); keys seed the known-user directory. DM access is controlled by `dmPolicy`/`allowFrom`, not this map.
 - `channels.nextcloud-talk.textChunkLimit`: outbound text chunk size (chars).
 - `channels.nextcloud-talk.chunkMode`: `length` (default) or `newline` to split on blank lines (paragraph boundaries) before length chunking.
 - `channels.nextcloud-talk.blockStreaming`: disable block streaming for this channel.

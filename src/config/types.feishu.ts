@@ -60,7 +60,7 @@ export type FeishuAccountConfig = {
   groupAllowFrom?: Array<string | number>;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM config overrides keyed by user open_id. */
+  /** Per-DM directory entries keyed by user open_id (keys seed the known-user directory; no per-DM settings). */
   dms?: Record<string, DmConfig>;
   /** Per-group config keyed by chat_id (oc_xxx). */
   groups?: Record<string, FeishuGroupConfig>;

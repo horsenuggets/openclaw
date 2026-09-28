@@ -92,7 +92,7 @@ export type MSTeamsConfig = {
   requireMention?: boolean;
   /** Max group/channel messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM config overrides keyed by user ID. */
+  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
   dms?: Record<string, DmConfig>;
   /** Default reply style: "thread" replies to the message, "top-level" posts a new message. */
   replyStyle?: MSTeamsReplyStyle;

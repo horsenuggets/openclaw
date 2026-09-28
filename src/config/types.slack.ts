@@ -112,7 +112,7 @@ export type SlackAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max channel messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM config overrides keyed by user ID. */
+  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
   dms?: Record<string, DmConfig>;
   textChunkLimit?: number;
   /** Chunking mode: "length" (default) splits by size; "newline" splits on every newline. */

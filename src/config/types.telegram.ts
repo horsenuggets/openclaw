@@ -82,7 +82,7 @@ export type TelegramAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM config overrides keyed by user ID. */
+  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
   dms?: Record<string, DmConfig>;
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;
