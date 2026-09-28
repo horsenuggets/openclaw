@@ -6,9 +6,9 @@ export type GroupChatConfig = {
   historyLimit?: number;
 };
 
-export type DmConfig = {
-  historyLimit?: number;
-};
+// `dms` is used only as a per-DM allowlist (its keys); it has no per-DM
+// settings anymore, so this is an empty object type.
+export type DmConfig = Record<string, never>;
 
 export type QueueConfig = {
   mode?: QueueMode;
