@@ -7,8 +7,10 @@ export type GroupChatConfig = {
 };
 
 // `dms` no longer carries any per-DM settings, so this is an empty object type.
-// Its keys are still read to seed the known-user directory listing (see
-// `directory-config.ts`); DM access is governed separately by `dmPolicy`/`allowFrom`.
+// For Slack, Discord, Telegram, and MS Teams the map keys are read to seed the
+// known-user directory listing (see `directory-config.ts` and the Teams channel
+// adapter); for other channels the map is currently inert. In no case does it
+// govern DM access, which is handled by `dmPolicy`/`allowFrom` and the pairing store.
 export type DmConfig = Record<string, never>;
 
 export type QueueConfig = {

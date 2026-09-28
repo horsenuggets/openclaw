@@ -44,7 +44,7 @@ export type IMessageAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
+  /** Reserved per-DM map keyed by user ID. Carries no per-DM settings and is not read at runtime for this channel; retained for config-shape compatibility. */
   dms?: Record<string, DmConfig>;
   /** Include attachments + reactions in watch payloads. */
   includeAttachments?: boolean;

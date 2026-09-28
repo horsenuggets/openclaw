@@ -57,7 +57,7 @@ export type WhatsAppConfig = {
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
+  /** Reserved per-DM map keyed by user ID. Carries no per-DM settings and is not read at runtime for this channel; retained for config-shape compatibility. */
   dms?: Record<string, DmConfig>;
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;
@@ -130,7 +130,7 @@ export type WhatsAppAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
-  /** Per-DM directory entries keyed by user ID (keys seed the known-user directory; no per-DM settings). */
+  /** Reserved per-DM map keyed by user ID. Carries no per-DM settings and is not read at runtime for this channel; retained for config-shape compatibility. */
   dms?: Record<string, DmConfig>;
   textChunkLimit?: number;
   /** Chunking mode: "length" (default) splits by size; "newline" splits on every newline. */
