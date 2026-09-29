@@ -78,6 +78,7 @@ import {
 } from "../google.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
+import { buildPersonaPreambleMessage, splitPersonaContextFiles } from "../persona-preamble.js";
 import {
   clearActiveEmbeddedRun,
   type EmbeddedPiQueueHandle,
@@ -207,6 +208,14 @@ export async function runEmbeddedAttempt(
     )
       ? ["Reminder: commit your changes in this workspace after edits."]
       : undefined;
+
+    // Persona files (SOUL.md, AGENTS.md) are delivered as a leading conversation
+    // message (persona preamble) rather than the system-prompt Project Context
+    // block, so identity/persona reaches the model on the subscription path too
+    // (where the system prompt is stripped) without spilling to paid usage. The
+    // remaining files still go into the system prompt.
+    const { personaFiles, remainingFiles } = splitPersonaContextFiles(contextFiles);
+    const personaPreamble = buildPersonaPreambleMessage(personaFiles);
 
     const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
 
@@ -389,7 +398,7 @@ export async function runEmbeddedAttempt(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles,
+      contextFiles: remainingFiles,
       memoryCitationsMode: params.config?.memory?.citations,
       // Only the subscription path slices the Project Context block back out
       // (wrapForSubscription below), so only it needs the sentinel markers.
@@ -413,7 +422,7 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
-      injectedFiles: contextFiles,
+      injectedFiles: remainingFiles,
       skillsPrompt,
       tools,
     });
@@ -614,9 +623,19 @@ export async function runEmbeddedAttempt(
           policy: transcriptPolicy,
         });
         cacheTrace?.recordStage("session:sanitized", { messages: prior });
+        // Lead the conversation with the persona preamble (identity + SOUL/AGENTS)
+        // so it reaches the model on every request, on all paths. It is injected
+        // into the in-memory working set only (never appended/persisted), so it
+        // rebuilds from the current files each run, auto-refreshes, survives
+        // compaction, and never pollutes the stored transcript. When there is prior
+        // history the turn validator merges it into the first user turn; on a fresh
+        // session it leads a lone user turn ahead of the incoming prompt (the
+        // Anthropic API accepts the resulting adjacent user turns, as Claude Code's
+        // own leading `<system-reminder>` does).
+        const priorWithPersona = personaPreamble ? [personaPreamble, ...prior] : prior;
         const validatedGemini = transcriptPolicy.validateGeminiTurns
-          ? validateGeminiTurns(prior)
-          : prior;
+          ? validateGeminiTurns(priorWithPersona)
+          : priorWithPersona;
         const validated = transcriptPolicy.validateAnthropicTurns
           ? validateAnthropicTurns(validatedGemini)
           : validatedGemini;
