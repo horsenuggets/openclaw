@@ -68,20 +68,39 @@ export function splitPersonaContextFiles(contextFiles: EmbeddedContextFile[]): {
 }
 
 /**
- * Build the `<system-reminder>`-wrapped preamble content from persona files.
- * Returns undefined when there is no persona content (e.g. a brand-new workspace
- * before SOUL.md exists), so callers can skip injection entirely. Wrapped in
- * `<system-reminder>` so the model treats it as system-injected context rather
- * than words the human typed.
+ * Build the `<system-reminder>`-wrapped preamble content from persona files and,
+ * optionally, the heartbeat guidance block. Returns undefined when there is no
+ * content at all (e.g. a brand-new workspace before SOUL.md exists and no heartbeat
+ * guidance), so callers can skip injection entirely. Wrapped in `<system-reminder>`
+ * so the model treats it as system-injected context rather than words the human
+ * typed.
+ *
+ * `heartbeatGuidance` is the "## Heartbeats" block (see buildHeartbeatGuidance). On
+ * the subscription path it is delivered here as conversation content instead of in
+ * the system prompt, where its proactive-messaging content would spill the request
+ * to paid extra usage.
  */
-function buildPersonaPreambleContent(personaFiles: EmbeddedContextFile[]): string | undefined {
-  const sections = personaFiles
+function buildPersonaPreambleContent(
+  personaFiles: EmbeddedContextFile[],
+  heartbeatGuidance?: string,
+): string | undefined {
+  const personaSections = personaFiles
     .filter((file) => file.content.trim().length > 0)
     .map((file) => `## ${file.path}\n\n${file.content.trim()}`);
-  if (sections.length === 0) {
+  const blocks: string[] = [];
+  // The identity line frames the persona files ("the files below"), so only emit it
+  // when there are persona files; a heartbeat-only preamble skips it.
+  if (personaSections.length > 0) {
+    blocks.push(PERSONA_IDENTITY_LINE, ...personaSections);
+  }
+  const heartbeat = heartbeatGuidance?.trim();
+  if (heartbeat) {
+    blocks.push(heartbeat);
+  }
+  if (blocks.length === 0) {
     return undefined;
   }
-  return `<system-reminder>\n${PERSONA_IDENTITY_LINE}\n\n${sections.join("\n\n")}\n</system-reminder>`;
+  return `<system-reminder>\n${blocks.join("\n\n")}\n</system-reminder>`;
 }
 
 /**
@@ -90,13 +109,15 @@ function buildPersonaPreambleContent(personaFiles: EmbeddedContextFile[]): strin
  * consecutive-user merge in the turn validators folds it in deterministically. On
  * a fresh session it leads a lone user turn ahead of the incoming prompt; the
  * Anthropic API accepts the adjacent user turns. Returns undefined when there is
- * no persona content. It is injected into the in-memory working set only, never
- * persisted, so it rebuilds each run and does not pollute the stored transcript.
+ * no persona content and no heartbeat guidance. It is injected into the in-memory
+ * working set only, never persisted, so it rebuilds each run and does not pollute
+ * the stored transcript.
  */
 export function buildPersonaPreambleMessage(
   personaFiles: EmbeddedContextFile[],
+  opts?: { heartbeatGuidance?: string },
 ): AgentMessage | undefined {
-  const content = buildPersonaPreambleContent(personaFiles);
+  const content = buildPersonaPreambleContent(personaFiles, opts?.heartbeatGuidance);
   if (content === undefined) {
     return undefined;
   }

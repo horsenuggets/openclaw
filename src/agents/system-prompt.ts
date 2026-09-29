@@ -32,10 +32,11 @@ export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 //    ("out of extra usage"). It previously stayed off the wire only because it
 //    sits at the tail of the prompt and was truncated away by MAX_APPENDED_CHARS;
 //    raising that cap (5000 -> 8000) let it survive and reach the API, so it must
-//    be stripped deterministically rather than relying on truncation. The
-//    heartbeat instruction still reaches the model on the subscription path: a
-//    real heartbeat poll delivers the same prompt as conversation content (see
-//    heartbeat-runner), which does not affect billing.
+//    be stripped deterministically rather than relying on truncation. On the
+//    subscription path the same guidance is instead delivered inside the
+//    `<system-reminder>` persona preamble as conversation content (see
+//    buildHeartbeatGuidance / persona-preamble), which the model still sees on
+//    every turn but which does not affect billing.
 //
 // wrapForSubscription() strips these for the subscription path.
 export const REPLY_TAGS_HEADING = "## Reply Tags";
@@ -46,6 +47,28 @@ export const SUBSCRIPTION_OMIT_HEADINGS = [
   MESSAGING_HEADING,
   HEARTBEATS_HEADING,
 ] as const;
+
+/**
+ * The "## Heartbeats" guidance block, as a single string. Single source of truth
+ * shared by the system-prompt builder (which emits it for non-minimal prompts on
+ * the API path) and the subscription persona preamble (which delivers it as
+ * conversation content so it does not spill billing — see the note above and
+ * persona-preamble). `heartbeatPrompt` is the resolved per-agent prompt text;
+ * when absent the line falls back to "(configured)".
+ */
+export function buildHeartbeatGuidance(heartbeatPrompt?: string): string {
+  const trimmed = heartbeatPrompt?.trim();
+  const promptLine = trimmed ? `Heartbeat prompt: ${trimmed}` : "Heartbeat prompt: (configured)";
+  return [
+    HEARTBEATS_HEADING,
+    promptLine,
+    "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
+    "HEARTBEAT_OK",
+    "Do NOT add any other text, commentary, or status summary alongside HEARTBEAT_OK. It must be your entire response.",
+    'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it). Any message containing HEARTBEAT_OK will be suppressed from the user.',
+    'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
+  ].join("\n");
+}
 
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.
@@ -413,10 +436,6 @@ export function buildAgentSystemPrompt(params: {
   const reasoningLevel = params.reasoningLevel ?? "off";
   const userTimezone = params.userTimezone?.trim();
   const skillsPrompt = params.skillsPrompt?.trim();
-  const heartbeatPrompt = params.heartbeatPrompt?.trim();
-  const heartbeatPromptLine = heartbeatPrompt
-    ? `Heartbeat prompt: ${heartbeatPrompt}`
-    : "Heartbeat prompt: (configured)";
   const runtimeInfo = params.runtimeInfo;
   const runtimeChannel = runtimeInfo?.channel?.trim().toLowerCase();
   const runtimeCapabilities = (runtimeInfo?.capabilities ?? [])
@@ -681,18 +700,11 @@ export function buildAgentSystemPrompt(params: {
     );
   }
 
-  // Skip heartbeats for subagent/none modes
+  // Skip heartbeats for subagent/none modes. On the subscription path this section
+  // is stripped from the system prompt (it spills billing) and re-delivered via the
+  // persona preamble instead; see SUBSCRIPTION_OMIT_HEADINGS and buildHeartbeatGuidance.
   if (!isMinimal) {
-    lines.push(
-      HEARTBEATS_HEADING,
-      heartbeatPromptLine,
-      "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
-      "HEARTBEAT_OK",
-      "Do NOT add any other text, commentary, or status summary alongside HEARTBEAT_OK. It must be your entire response.",
-      'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it). Any message containing HEARTBEAT_OK will be suppressed from the user.',
-      'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
-      "",
-    );
+    lines.push(buildHeartbeatGuidance(params.heartbeatPrompt), "");
   }
 
   if (!isMinimal) {
