@@ -97,20 +97,18 @@ function isStoredMessageArray(value: unknown): value is StoredMessage[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
-    value.every(
-      (item) => {
-        if (typeof item !== "object" || item === null) {
-          return false;
-        }
-        const record = item as Record<string, unknown>;
-        return (
-          Object.keys(record).every((key) => key === "ts" || key === "from" || key === "text") &&
-          typeof record.text === "string" &&
-          (record.ts === undefined || typeof record.ts === "number") &&
-          (record.from === undefined || typeof record.from === "string")
-        );
-      },
-    )
+    value.every((item) => {
+      if (typeof item !== "object" || item === null) {
+        return false;
+      }
+      const record = item as Record<string, unknown>;
+      return (
+        Object.keys(record).every((key) => key === "ts" || key === "from" || key === "text") &&
+        typeof record.text === "string" &&
+        (record.ts === undefined || typeof record.ts === "number") &&
+        (record.from === undefined || typeof record.from === "string")
+      );
+    })
   );
 }
 
