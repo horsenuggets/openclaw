@@ -18,15 +18,57 @@ import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
-// Messaging-surface section headings. Their content (native reply/quote, routing
-// across Discord/Telegram/Signal, channel config) diverges from the Claude Code
-// identity and flips anthropic-subscription requests from free plan quota to
-// paid extra usage. Verified empirically by replaying prompts against the live
-// API: dropping the "## Reply Tags" section alone moved a spilling request back
-// onto plan quota. wrapForSubscription() strips these for the subscription path.
+// Section headings whose content diverges from the Claude Code identity and flips
+// anthropic-subscription requests from free plan quota to paid extra usage.
+// Verified empirically by replaying prompts against the live API:
+//
+//  - "## Reply Tags" / "## Messaging": messaging-surface content (native
+//    reply/quote, routing across Discord/Telegram/Signal, channel config).
+//    Dropping "## Reply Tags" alone moved a spilling request back onto plan quota.
+//  - "## Heartbeats": proactive-messaging content (heartbeat polls, HEARTBEAT_OK
+//    ack semantics, "suppressed from the user") that reads as autonomous-agent
+//    behavior rather than a coding assistant. Adding this section alone to an
+//    otherwise Claude Code-consistent prompt flips a 200 (plan quota) to a 400
+//    ("out of extra usage"). It previously stayed off the wire only because it
+//    sits at the tail of the prompt and was truncated away by MAX_APPENDED_CHARS;
+//    raising that cap (5000 -> 8000) let it survive and reach the API, so it must
+//    be stripped deterministically rather than relying on truncation. On the
+//    subscription path the same guidance is instead delivered inside the
+//    `<system-reminder>` persona preamble as conversation content (see
+//    buildHeartbeatGuidance / persona-preamble), which the model still sees on
+//    every turn but which does not affect billing.
+//
+// wrapForSubscription() strips these for the subscription path.
 export const REPLY_TAGS_HEADING = "## Reply Tags";
 export const MESSAGING_HEADING = "## Messaging";
-export const SUBSCRIPTION_OMIT_HEADINGS = [REPLY_TAGS_HEADING, MESSAGING_HEADING] as const;
+export const HEARTBEATS_HEADING = "## Heartbeats";
+export const SUBSCRIPTION_OMIT_HEADINGS = [
+  REPLY_TAGS_HEADING,
+  MESSAGING_HEADING,
+  HEARTBEATS_HEADING,
+] as const;
+
+/**
+ * The "## Heartbeats" guidance block, as a single string. Single source of truth
+ * shared by the system-prompt builder (which emits it for non-minimal prompts on
+ * the API path) and the subscription persona preamble (which delivers it as
+ * conversation content so it does not spill billing — see the note above and
+ * persona-preamble). `heartbeatPrompt` is the resolved per-agent prompt text;
+ * when absent the line falls back to "(configured)".
+ */
+export function buildHeartbeatGuidance(heartbeatPrompt?: string): string {
+  const trimmed = heartbeatPrompt?.trim();
+  const promptLine = trimmed ? `Heartbeat prompt: ${trimmed}` : "Heartbeat prompt: (configured)";
+  return [
+    HEARTBEATS_HEADING,
+    promptLine,
+    "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
+    "HEARTBEAT_OK",
+    "Do NOT add any other text, commentary, or status summary alongside HEARTBEAT_OK. It must be your entire response.",
+    'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it). Any message containing HEARTBEAT_OK will be suppressed from the user.',
+    'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
+  ].join("\n");
+}
 
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.
@@ -394,10 +436,6 @@ export function buildAgentSystemPrompt(params: {
   const reasoningLevel = params.reasoningLevel ?? "off";
   const userTimezone = params.userTimezone?.trim();
   const skillsPrompt = params.skillsPrompt?.trim();
-  const heartbeatPrompt = params.heartbeatPrompt?.trim();
-  const heartbeatPromptLine = heartbeatPrompt
-    ? `Heartbeat prompt: ${heartbeatPrompt}`
-    : "Heartbeat prompt: (configured)";
   const runtimeInfo = params.runtimeInfo;
   const runtimeChannel = runtimeInfo?.channel?.trim().toLowerCase();
   const runtimeCapabilities = (runtimeInfo?.capabilities ?? [])
@@ -662,18 +700,11 @@ export function buildAgentSystemPrompt(params: {
     );
   }
 
-  // Skip heartbeats for subagent/none modes
+  // Skip heartbeats for subagent/none modes. On the subscription path this section
+  // is stripped from the system prompt (it spills billing) and re-delivered via the
+  // persona preamble instead; see SUBSCRIPTION_OMIT_HEADINGS and buildHeartbeatGuidance.
   if (!isMinimal) {
-    lines.push(
-      "## Heartbeats",
-      heartbeatPromptLine,
-      "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
-      "HEARTBEAT_OK",
-      "Do NOT add any other text, commentary, or status summary alongside HEARTBEAT_OK. It must be your entire response.",
-      'OpenClaw treats a leading/trailing "HEARTBEAT_OK" as a heartbeat ack (and may discard it). Any message containing HEARTBEAT_OK will be suppressed from the user.',
-      'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
-      "",
-    );
+    lines.push(buildHeartbeatGuidance(params.heartbeatPrompt), "");
   }
 
   if (!isMinimal) {
