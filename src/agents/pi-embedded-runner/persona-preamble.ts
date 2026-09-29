@@ -100,9 +100,15 @@ export function buildPersonaPreambleMessage(
   if (content === undefined) {
     return undefined;
   }
+  // Content MUST be a text-content array, not a bare string. When there is prior
+  // history the turn validators merge this leading user turn into the first
+  // persisted user turn, and mergeConsecutiveUserTurns / validateGeminiTurns only
+  // preserve array-shaped content (they spread `Array.isArray(content) ? content
+  // : []`). A string preamble would be silently dropped on ongoing sessions —
+  // exactly where persona delivery matters most.
   return {
     role: "user",
-    content,
+    content: [{ type: "text", text: content }],
     timestamp: Date.now(),
   } as AgentMessage;
 }
