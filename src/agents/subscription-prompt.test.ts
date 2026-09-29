@@ -36,7 +36,7 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Be warm and concise.");
   });
 
-  it("strips messaging-surface sections that spill the request to extra usage", () => {
+  it("strips sections whose content spills the request to extra usage", () => {
     const prompt = [
       "## Persona",
       "Be warm.",
@@ -49,6 +49,9 @@ describe("wrapForSubscription", () => {
       "- Reply in current session routes to the source channel (Signal, Telegram).",
       "",
       "## Heartbeats",
+      "Any message containing HEARTBEAT_OK will be suppressed from the user.",
+      "",
+      "## Current Date & Time",
       "Keep this trailing section.",
     ].join("\n");
     const wrapped = wrapForSubscription(prompt);
@@ -56,9 +59,12 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("reply_to_current");
     expect(wrapped).not.toContain("## Messaging");
     expect(wrapped).not.toContain("routes to the source channel");
-    // Non-messaging sections before and after are preserved.
+    // Heartbeats (proactive-messaging content) also spills and is stripped.
+    expect(wrapped).not.toContain("## Heartbeats");
+    expect(wrapped).not.toContain("suppressed from the user");
+    // Non-spilling sections before and after are preserved.
     expect(wrapped).toContain("## Persona");
-    expect(wrapped).toContain("## Heartbeats");
+    expect(wrapped).toContain("## Current Date & Time");
     expect(wrapped).toContain("Keep this trailing section.");
   });
 
@@ -128,6 +134,25 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("## Runtime");
   });
 
+  // Integration test: the real builder's "## Heartbeats" section spills the
+  // subscription request to paid extra usage, so it must be stripped on the OAuth
+  // path. Regression guard for the "You're out of extra usage" outage: the section
+  // sits at the tail of the prompt and was previously masked by MAX_APPENDED_CHARS
+  // truncation, so a size-only test would not catch it.
+  it("filters the real builder's Heartbeats section out of the OAuth prompt", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      heartbeatPrompt: "Read HEARTBEAT.md if it exists.",
+    });
+    // Sanity: the raw builder output really does emit the Heartbeats section.
+    expect(prompt).toContain("## Heartbeats");
+    expect(prompt).toContain("HEARTBEAT_OK");
+
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("## Heartbeats");
+    expect(wrapped).not.toContain("suppressed from the user");
+  });
+
   // A spoofed BEGIN marker in caller-provided text emitted BEFORE the block
   // (extraSystemPrompt / Group Chat Context) must not move the real boundary:
   // the builder neutralizes sentinel literals in caller text, so the legitimate
@@ -177,8 +202,8 @@ describe("wrapForSubscription", () => {
       PROJECT_CONTEXT_END,
       "## Silent Replies",
       "When you have nothing to say, respond with ONLY: <silent>",
-      "## Heartbeats",
-      "Heartbeat handling stays.",
+      "## Current Date & Time",
+      "The current date stays.",
       "## Runtime",
       "Runtime: agent=abc",
     ].join("\n");
@@ -189,11 +214,11 @@ describe("wrapForSubscription", () => {
     expect(wrapped).not.toContain("USER_PROFILE_DETAILS");
     expect(wrapped).not.toContain("SOUL.md");
     expect(wrapped).not.toContain("USER.md");
-    // Content before the block is preserved, and every section after the block
-    // (Silent Replies, Heartbeats, Runtime) is preserved.
+    // Content before the block is preserved, and every non-spilling section after
+    // the block (Silent Replies, Current Date & Time, Runtime) is preserved.
     expect(wrapped).toContain("Be warm and concise.");
     expect(wrapped).toContain("## Silent Replies");
-    expect(wrapped).toContain("## Heartbeats");
+    expect(wrapped).toContain("## Current Date & Time");
     expect(wrapped).toContain("## Runtime");
     expect(wrapped).toContain("Runtime: agent=abc");
   });

@@ -60,6 +60,7 @@ import {
 import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
+import { buildHeartbeatGuidance } from "../../system-prompt.js";
 import {
   createToolSearchTool,
   ToolSearchState,
@@ -213,9 +214,9 @@ export async function runEmbeddedAttempt(
     // message (persona preamble) rather than the system-prompt Project Context
     // block, so identity/persona reaches the model on the subscription path too
     // (where the system prompt is stripped) without spilling to paid usage. The
-    // remaining files still go into the system prompt.
+    // remaining files still go into the system prompt. The preamble message itself
+    // is built below, once the subscription/heartbeat inputs are resolved.
     const { personaFiles, remainingFiles } = splitPersonaContextFiles(contextFiles);
-    const personaPreamble = buildPersonaPreambleMessage(personaFiles);
 
     const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
 
@@ -366,6 +367,18 @@ export async function runEmbeddedAttempt(
     });
     const isDefaultAgent = sessionAgentId === defaultAgentId;
     const promptMode = isSubagentSessionKey(params.sessionKey) ? "minimal" : "full";
+    const heartbeatPromptText = isDefaultAgent
+      ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
+      : undefined;
+    // On the subscription path the "## Heartbeats" section spills billing, so it is
+    // stripped from the system prompt (wrapForSubscription) and delivered here in the
+    // persona preamble as conversation content instead. On the API path it stays in
+    // the system prompt (no billing concern) and is not duplicated into the preamble.
+    const heartbeatGuidance =
+      needsSubscriptionPrefix && promptMode !== "minimal"
+        ? buildHeartbeatGuidance(heartbeatPromptText)
+        : undefined;
+    const personaPreamble = buildPersonaPreambleMessage(personaFiles, { heartbeatGuidance });
     const docsPath = await resolveOpenClawDocsPath({
       workspaceDir: effectiveWorkspace,
       argv1: process.argv[1],
@@ -381,9 +394,7 @@ export async function runEmbeddedAttempt(
       extraSystemPrompt: params.extraSystemPrompt,
       ownerNumbers: params.ownerNumbers,
       reasoningTagHint,
-      heartbeatPrompt: isDefaultAgent
-        ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
-        : undefined,
+      heartbeatPrompt: heartbeatPromptText,
       skillsPrompt,
       docsPath: docsPath ?? undefined,
       ttsHint,

@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentSystemPrompt,
+  buildHeartbeatGuidance,
   buildRuntimeLine,
   PROJECT_CONTEXT_BEGIN,
   PROJECT_CONTEXT_END,
 } from "./system-prompt.js";
+
+describe("buildHeartbeatGuidance", () => {
+  it("embeds the configured heartbeat prompt in the guidance", () => {
+    const guidance = buildHeartbeatGuidance("Read HEARTBEAT.md if it exists.");
+    expect(guidance).toContain("## Heartbeats");
+    expect(guidance).toContain("Heartbeat prompt: Read HEARTBEAT.md if it exists.");
+    expect(guidance).toContain("HEARTBEAT_OK");
+  });
+
+  it("falls back to a placeholder prompt line when none is configured", () => {
+    const guidance = buildHeartbeatGuidance();
+    expect(guidance).toContain("Heartbeat prompt: (configured)");
+  });
+});
 
 describe("buildAgentSystemPrompt", () => {
   it("includes owner numbers when provided", () => {

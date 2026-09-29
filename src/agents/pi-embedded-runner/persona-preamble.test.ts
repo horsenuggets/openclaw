@@ -110,4 +110,31 @@ describe("buildPersonaPreambleMessage", () => {
   it("is deterministic for the same input (stable for prompt caching)", () => {
     expect(contentOf([soul, agents])).toEqual(contentOf([soul, agents]));
   });
+
+  it("appends heartbeat guidance inside the same system-reminder as the persona", () => {
+    const guidance = "## Heartbeats\nreply with HEARTBEAT_OK when idle";
+    const content = textOf(
+      buildPersonaPreambleMessage([soul, agents], { heartbeatGuidance: guidance }),
+    );
+    expect(content).toContain("You are OpenClaw");
+    expect(content).toContain("## SOUL.md");
+    expect(content).toContain("## Heartbeats");
+    expect(content).toContain("reply with HEARTBEAT_OK when idle");
+    // Single wrapping block: the heartbeat guidance rides inside the persona reminder.
+    expect(content?.match(/<system-reminder>/g)?.length).toBe(1);
+    expect(content?.match(/<\/system-reminder>/g)?.length).toBe(1);
+  });
+
+  it("emits a heartbeat-only preamble without the persona identity line", () => {
+    const guidance = "## Heartbeats\nreply with HEARTBEAT_OK when idle";
+    const content = textOf(buildPersonaPreambleMessage([], { heartbeatGuidance: guidance }));
+    expect(content).toContain("<system-reminder>");
+    expect(content).toContain("## Heartbeats");
+    // No persona files, so the persona identity line is omitted.
+    expect(content).not.toContain("You are OpenClaw");
+  });
+
+  it("returns undefined when there is neither persona nor heartbeat content", () => {
+    expect(buildPersonaPreambleMessage([], { heartbeatGuidance: "   " })).toBeUndefined();
+  });
 });
