@@ -7,6 +7,7 @@ import { telegramPlugin } from "../../extensions/telegram/src/channel.js";
 import { setTelegramRuntime } from "../../extensions/telegram/src/runtime.js";
 import { whatsappPlugin } from "../../extensions/whatsapp/src/channel.js";
 import { setWhatsAppRuntime } from "../../extensions/whatsapp/src/runtime.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import * as replyModule from "../auto-reply/reply.js";
 import {
@@ -515,7 +516,13 @@ describe("runHeartbeatOnce", () => {
       expect(sendWhatsApp).toHaveBeenCalledTimes(1);
       expect(sendWhatsApp).toHaveBeenCalledWith("+1555", "Final alert", expect.any(Object));
       expect(replySpy).toHaveBeenCalledWith(
-        expect.objectContaining({ Body: "Ops check", SessionKey: sessionKey }),
+        // The heartbeat prompt is wrapped as a system-reminder so the model treats
+        // it as system context and the transcript classifier attributes it as
+        // `system` rather than a human `user` message.
+        expect.objectContaining({
+          Body: wrapSystemReminder("Ops check"),
+          SessionKey: sessionKey,
+        }),
         { isHeartbeat: true },
         cfg,
       );

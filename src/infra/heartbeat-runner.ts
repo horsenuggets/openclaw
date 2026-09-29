@@ -10,6 +10,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from "../agents/agent-scope.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { resolveUserTimezone } from "../agents/date-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
@@ -620,7 +621,10 @@ export async function runHeartbeatOnce(opts: {
 
   const prompt = hasExecCompletion ? EXEC_EVENT_PROMPT : resolveHeartbeatPrompt(cfg, heartbeat);
   const ctx = {
-    Body: prompt,
+    // Mark the heartbeat as a system-injected turn (not a human message): the
+    // model treats it as system context, and the transcript classifier attributes
+    // it as `system` rather than `user`. The instruction text is unchanged inside.
+    Body: wrapSystemReminder(prompt),
     From: sender,
     To: sender,
     Provider: hasExecCompletion ? "exec-event" : "heartbeat",
