@@ -139,6 +139,16 @@ describe("parseTurnContent (read storage back, fill defaults)", () => {
     expect(parseTurnContent("[1,2,3]", "user")).toEqual([{ role: "user", text: "[1,2,3]" }]);
   });
 
+  it("treats stored messages with malformed metadata as plain text", () => {
+    const content = JSON.stringify([{ text: "hi", ts: "not-a-number", from: null }]);
+    expect(parseTurnContent(content, "user")).toEqual([{ role: "user", text: content }]);
+  });
+
+  it("treats stored messages with unknown fields as plain text", () => {
+    const content = JSON.stringify([{ text: "hi", extra: "discarded" }]);
+    expect(parseTurnContent(content, "user")).toEqual([{ role: "user", text: content }]);
+  });
+
   it("round-trips a lone no-metadata message", () => {
     const msgs = [u("hi")];
     expect(parseTurnContent(serializeTurnContent(msgs), "user")).toEqual(msgs);
