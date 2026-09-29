@@ -6,6 +6,7 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
@@ -1317,7 +1318,11 @@ async function routeMessage(params: {
       // result relays below reuse agentMessage without it.
       const bootstrapDirective = readBootstrapDirective(instance);
       if (bootstrapDirective) {
-        agentMessage = `${bootstrapDirective}\n\n${agentMessage}`;
+        // Mark the first-run directive as a system-injected block so the model
+        // treats it as system context (not part of the human's message) and the
+        // transcript classifier attributes it accordingly. The real user text
+        // follows unwrapped, so the turn as a whole stays a genuine user turn.
+        agentMessage = `${wrapSystemReminder(bootstrapDirective)}\n\n${agentMessage}`;
       }
       let attachmentsForCall = gatewayAttachments;
       let commandDepth = 0;
@@ -1435,7 +1440,10 @@ async function routeMessage(params: {
           })
         ) {
           commandDepth += 1;
-          agentMessage = `[system] Command result: ${commandResult}`;
+          // Relay the host-side command result as a fully system-injected turn:
+          // the model treats it as system context, and the transcript classifier
+          // attributes it as `system` rather than a human `user` message.
+          agentMessage = wrapSystemReminder(`Command result: ${commandResult}`);
           continue;
         }
         break;

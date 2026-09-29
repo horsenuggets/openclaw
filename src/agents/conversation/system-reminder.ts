@@ -8,10 +8,11 @@
  * block as system-injected context (not words its human typed), and the
  * transcript classifier can attribute the turn as `system` rather than `user`.
  *
- * This is the shared source of truth for the marker so the write-site that
- * produces it here (the heartbeat) and the classifier that reads it can never
- * drift apart. Other pre-existing writers (`turns.ts`, the persona preamble)
- * still inline the literal and are being migrated onto this helper separately.
+ * This is the shared source of truth for the marker so the write-sites that
+ * produce it (the heartbeat prompt, the first-run bootstrap directive, and
+ * tool-relay command results) and the classifier that reads it can never drift
+ * apart. Two pre-existing writers (`turns.ts`, the persona preamble) still inline
+ * the literal and are being migrated onto this helper separately.
  */
 
 export const SYSTEM_REMINDER_OPEN = "<system-reminder>";
