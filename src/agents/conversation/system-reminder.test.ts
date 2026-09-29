@@ -28,4 +28,12 @@ describe("wrapSystemReminder / isSystemReminder", () => {
   it("does not treat the bare marker with no body as a reminder", () => {
     expect(isSystemReminder("<system-reminder></system-reminder>")).toBe(false);
   });
+
+  it("keys off the FIRST closing tag: trailing human text after it is not fully system", () => {
+    // A mixed turn whose human text itself ends with the literal closing tag
+    // must not be misclassified as fully system (the first close is not the end).
+    const mixed =
+      "<system-reminder>\ndirective\n</system-reminder>\n\nplease close the </system-reminder>";
+    expect(isSystemReminder(mixed)).toBe(false);
+  });
 });

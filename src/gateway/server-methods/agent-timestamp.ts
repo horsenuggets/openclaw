@@ -1,4 +1,8 @@
 import type { OpenClawConfig } from "../../config/types.js";
+import {
+  isSystemReminder,
+  SYSTEM_REMINDER_OPEN,
+} from "../../agents/conversation/system-reminder.js";
 import { resolveUserTimezone } from "../../agents/date-time.js";
 import { formatZonedTimestamp } from "../../auto-reply/envelope.js";
 
@@ -67,7 +71,21 @@ export function injectTimestamp(message: string, opts?: TimestampInjectionOption
     now,
   );
 
-  return `[${dow} ${formatted}] ${message}`;
+  const prefix = `[${dow} ${formatted}] `;
+
+  // For a fully system-injected turn (a `<system-reminder>` block: heartbeat,
+  // tool-relay, `/discord/system`), inject the timestamp INSIDE the block so the
+  // marker stays outermost. A leading prefix would push `<system-reminder>` off
+  // the start of the message and defeat the transcript classifier's detection.
+  if (isSystemReminder(message)) {
+    const openWithNewline = `${SYSTEM_REMINDER_OPEN}\n`;
+    if (message.startsWith(openWithNewline)) {
+      return `${openWithNewline}${prefix}${message.slice(openWithNewline.length)}`;
+    }
+    return message.replace(SYSTEM_REMINDER_OPEN, `${SYSTEM_REMINDER_OPEN}\n${prefix.trimEnd()}`);
+  }
+
+  return `${prefix}${message}`;
 }
 
 /**

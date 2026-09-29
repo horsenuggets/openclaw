@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isSystemReminder, wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
 import { formatZonedTimestamp } from "../../auto-reply/envelope.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 
@@ -117,6 +118,33 @@ describe("injectTimestamp", () => {
     });
 
     expect(result).toMatch(/^\[Fri 2025-07-04 12:00 EDT\]/);
+  });
+
+  it("injects the timestamp INSIDE a system-reminder turn so the marker stays outermost", () => {
+    const reminder = wrapSystemReminder("heartbeat: anything to do?");
+    const result = injectTimestamp(reminder, {
+      timezone: "UTC",
+      now: new Date("2026-02-01T12:00:00.000Z"),
+    });
+
+    // Marker must remain at the very start (the transcript classifier keys off it).
+    expect(result.startsWith("<system-reminder>")).toBe(true);
+    expect(isSystemReminder(result)).toBe(true);
+    // The timestamp is present, inside the block.
+    expect(result).toContain("2026-02-01 12:00");
+    expect(result).toContain("heartbeat: anything to do?");
+  });
+
+  it("prefixes (does not inject inside) a mixed turn that only starts with a reminder", () => {
+    const mixed = `${wrapSystemReminder("first-run directive")}\n\nwhat's the weather?`;
+    const result = injectTimestamp(mixed, {
+      timezone: "UTC",
+      now: new Date("2026-02-01T12:00:00.000Z"),
+    });
+
+    // A mixed turn is a genuine user turn, so the timestamp leads as normal.
+    expect(result).toMatch(/^\[Sun 2026-02-01 12:00 UTC\] <system-reminder>/);
+    expect(isSystemReminder(result)).toBe(false);
   });
 });
 

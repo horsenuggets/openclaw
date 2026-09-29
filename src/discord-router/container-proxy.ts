@@ -1,5 +1,6 @@
 import http from "node:http";
 import type { RouterRuntime } from "./router.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 
 /**
  * Container proxy server. Agent containers run without direct Discord access, so
@@ -163,8 +164,15 @@ export function startContainerProxyServer(opts: {
             color: 0x808080,
           });
 
-          // 2. Route through the same pipeline as user messages
-          void opts.routeMessage(data.userId, channelId, `[System: ${data.message}]`);
+          // 2. Route through the same pipeline as user messages. Wrap it as a
+          // system-injected turn so the model treats it as system context and the
+          // transcript classifier attributes it `system`, not a human `user`
+          // message (the gateway keeps the marker outermost when timestamping).
+          void opts.routeMessage(
+            data.userId,
+            channelId,
+            wrapSystemReminder(`System: ${data.message}`),
+          );
 
           runtime.log(
             `[system] sent system message to ${data.userId}: ${data.message.slice(0, 60)}`,

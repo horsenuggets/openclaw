@@ -24,17 +24,29 @@ export function wrapSystemReminder(text: string): string {
 }
 
 /**
- * True when text is ENTIRELY a system-reminder block — i.e. a fully
- * system-injected turn (a wrapped heartbeat/tool-relay prompt), not a real human
- * message. Text that merely STARTS with a reminder but has trailing human content
- * (e.g. a persona preamble prepended to a real user turn) is a genuine user turn
- * and returns false.
+ * True when text is ENTIRELY a single system-reminder block — i.e. a fully
+ * system-injected turn (a wrapped heartbeat/tool-relay/bootstrap-less prompt),
+ * not a real human message. Text that merely STARTS with a reminder but has
+ * trailing human content (e.g. a persona preamble or bootstrap directive
+ * prepended to a real user turn) is a genuine user turn and returns false.
+ *
+ * Detection keys off the FIRST closing tag: it must sit at the very end, so a
+ * mixed turn whose human text happens to also contain (or end with) the literal
+ * closing tag is not misclassified as fully system.
  */
 export function isSystemReminder(text: string): boolean {
   const trimmed = text.trim();
+  if (!trimmed.startsWith(SYSTEM_REMINDER_OPEN)) {
+    return false;
+  }
+  const firstClose = trimmed.indexOf(SYSTEM_REMINDER_CLOSE);
+  if (firstClose === -1) {
+    return false;
+  }
+  // The first closing tag must terminate the string — nothing (human text) may
+  // follow it — and there must be a non-empty body between the open and close.
   return (
-    trimmed.startsWith(SYSTEM_REMINDER_OPEN) &&
-    trimmed.endsWith(SYSTEM_REMINDER_CLOSE) &&
-    trimmed.length > SYSTEM_REMINDER_OPEN.length + SYSTEM_REMINDER_CLOSE.length
+    firstClose + SYSTEM_REMINDER_CLOSE.length === trimmed.length &&
+    firstClose > SYSTEM_REMINDER_OPEN.length
   );
 }

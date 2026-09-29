@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouterRuntime } from "./router.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 
 const runtime: RouterRuntime = { log: () => {}, error: () => {} };
@@ -202,8 +203,13 @@ describe("container proxy server", () => {
       description: "reboot",
       color: 0x808080,
     });
-    // 2. The message is routed through the standard pipeline, wrapped as a System note.
-    expect(routeMessage).toHaveBeenCalledWith("u-3", "chan-3", "[System: reboot]");
+    // 2. The message is routed through the standard pipeline, wrapped as a
+    // system-injected turn so it's attributed `system`, not a human message.
+    expect(routeMessage).toHaveBeenCalledWith(
+      "u-3",
+      "chan-3",
+      wrapSystemReminder("System: reboot"),
+    );
   });
 
   it("returns 503 for /discord/system when dependencies are not wired", async () => {
