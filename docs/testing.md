@@ -386,6 +386,25 @@ Useful env vars:
 - `OPENCLAW_LIVE_GATEWAY_MODELS=...` / `OPENCLAW_LIVE_MODELS=...` to narrow the run
 - `OPENCLAW_LIVE_REQUIRE_PROFILE_KEYS=1` to ensure creds come from the profile store (not env)
 
+## Local prod-mirror rig (docker-in-docker)
+
+Boots a single privileged container that mirrors the WSL prod host (Ubuntu + Docker Engine, see `infrastructure/docker/prod-mirror.Dockerfile`) and runs the real deploy pipeline (`deploy.sh` to `setup.sh` to `boot.sh`) inside it, so the discord-router + provisioner + per-channel agent containers come up exactly like prod. Because the inner Docker daemon is a real Linux daemon, `network_mode: host` works and the router/agent/proxy loopback mesh behaves like prod (unlike a bare container on macOS Docker Desktop). Use it to test the full registration lifecycle and real Discord routing end to end.
+
+Driver: `scripts/prod-mirror.sh` (staging in the gitignored `.prod-mirror/`).
+
+```bash
+scripts/prod-mirror.sh up               # build box, deploy, start provisioner (offline: blank Discord token)
+scripts/prod-mirror.sh up --live        # same, but connect the box router to real Discord
+scripts/prod-mirror.sh register <id>    # openclawctl add-channel <id> (solo test, no Discord)
+scripts/prod-mirror.sh mint             # mint a subscription token into the box (browser)
+scripts/prod-mirror.sh ps               # inner `docker ps`
+scripts/prod-mirror.sh logs [name]      # box log, or an inner container's log
+scripts/prod-mirror.sh sh               # shell into the box
+scripts/prod-mirror.sh down [--clean]   # stop the box (and wipe the rig keypair)
+```
+
+By default the box ships a blank `DISCORD_BOT_TOKEN` so it never fights prod for the same bot session; `up --live` requires `OPENCLAW_MIRROR_DISCORD_TOKEN` (a dedicated bot, not prod's) to connect to real Discord. On Apple Silicon the deploy ships `linux-arm64` binaries automatically (`OPENCLAW_DEPLOY_ARCH`).
+
 ## Docs sanity
 
 Run docs checks after doc edits: `pnpm docs:list`.

@@ -257,6 +257,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   });
 
+  // Trusted bot ids (comma-separated OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may hold
+  // normal conversations with the agent, not just run /channel commands. Intended
+  // for an automated tester bot driving end-to-end tests; every other bot stays
+  // filtered out below to prevent bot-to-bot reply loops.
+  const allowedBotIds = new Set(
+    (process.env.OPENCLAW_ROUTER_ALLOW_BOT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
   const describeInstance = (channelId: string): InstanceStatus | null => {
@@ -632,9 +643,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
-            // Normal agent messages: ignore bots and empty messages. Channel
-            // commands were already handled above so bots can still drive them.
-            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
+            // Normal agent messages: ignore untrusted bots and empty messages.
+            // Channel commands were already handled above so bots can still drive
+            // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse.
+            const botAllowed = isBot && authorId ? allowedBotIds.has(authorId) : false;
+            if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
               return;
             }
 

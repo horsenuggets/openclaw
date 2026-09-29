@@ -299,6 +299,11 @@ stop_container() {
 # here, or proactive/heartbeat sends silently fail at DNS resolution.
 CONTAINER_PROXY_URL="http://127.0.0.1:18800"
 
+# Default primary model for a freshly-bootstrapped instance, used only when there
+# is no sibling instance to copy config from. Must be a model id known to the
+# deployed binary's model catalog.
+BASE_MODEL="anthropic-subscription/claude-sonnet-4-5"
+
 # Seed a new instance's openclaw.json from an existing instance (if any), then
 # force the Discord proxyUrl to the correct loopback address regardless of what
 # the copy source had.
@@ -314,6 +319,33 @@ seed_instance_config() {
       break
     fi
   done
+
+  # Fresh host: no sibling instance to copy from, so seed a minimal valid base
+  # config. Without this the first channel on a brand-new host gets no
+  # openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
+  # gateway.mode=local). The router reads each instance's gateway.auth.token back
+  # from this file to authenticate to the agent (see src/discord-router/config.ts),
+  # so a fresh per-instance token is all that is required. Guarded like the
+  # proxyUrl edit below so a failure warns rather than aborting under set -e after
+  # the port is already reserved.
+  if [ ! -f "$target" ]; then
+    if [ -n "$OPENCLAW_BIN" ]; then
+      echo "No existing instance to copy; seeding base config for $channelId"
+      local token
+      token=$(python3 -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null || true)
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.mode local >/dev/null 2>&1 ||
+        echo "Warning: could not seed gateway.mode for $channelId" >&2
+      if [ -n "$token" ]; then
+        OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.auth.token "$token" >/dev/null 2>&1 ||
+          echo "Warning: could not seed gateway.auth.token for $channelId" >&2
+      fi
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set agents.defaults.model.primary "$BASE_MODEL" >/dev/null 2>&1 ||
+        echo "Warning: could not seed model for $channelId" >&2
+    else
+      echo "Warning: openclaw CLI not found; cannot seed base config for $channelId" >&2
+    fi
+  fi
+
   if [ -f "$target" ]; then
     # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
     # single-quoted strings), so we must not parse them with a stdlib JSON reader

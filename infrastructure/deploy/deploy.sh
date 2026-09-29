@@ -15,14 +15,41 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 INFRA_DIR="$SCRIPT_DIR/.."
 STAGING="/tmp/openclaw-deployment-staging"
 
+# Target architecture for the shipped binaries. Prod hosts are linux-x64, so
+# that stays the default; the local docker "fake prod host" rig sets
+# OPENCLAW_DEPLOY_ARCH=arm64 on Apple Silicon so the inner containers run native.
+ARCH="${OPENCLAW_DEPLOY_ARCH:-x64}"
+case "$ARCH" in
+  x64 | arm64) ;;
+  *)
+    echo "Invalid OPENCLAW_DEPLOY_ARCH \"$ARCH\" (use \"x64\" or \"arm64\")." >&2
+    exit 1
+    ;;
+esac
+
+# Optional ssh/scp overrides so this can target a non-standard host such as the
+# rig's containerised sshd (custom port, throwaway key). Empty by default, which
+# leaves prod ssh-config-alias behaviour unchanged. ssh takes -p, scp takes -P.
+SSH_PORT_FLAG=()
+SCP_PORT_FLAG=()
+if [ -n "${OPENCLAW_DEPLOY_PORT:-}" ]; then
+  SSH_PORT_FLAG=(-p "$OPENCLAW_DEPLOY_PORT")
+  SCP_PORT_FLAG=(-P "$OPENCLAW_DEPLOY_PORT")
+fi
+SSH_OPTS=()
+if [ -n "${OPENCLAW_SSH_OPTS:-}" ]; then
+  read -ra SSH_OPTS <<<"$OPENCLAW_SSH_OPTS"
+fi
+
 echo "=== OpenClaw Deploy ==="
 echo "Host: $HOST"
+echo "Arch: linux-$ARCH"
 
 # 1. Compile (unless --skip-compile)
 if [ "${1:-}" != "--skip-compile" ]; then
-  echo "[1/4] Compiling for linux-x64..."
+  echo "[1/4] Compiling for linux-$ARCH..."
   cd "$PROJECT_ROOT"
-  node scripts/compile.mjs --target linux-x64
+  node scripts/compile.mjs --target "linux-$ARCH"
 else
   echo "[1/4] Skipping compile..."
 fi
@@ -33,11 +60,11 @@ rm -rf "$STAGING"
 mkdir -p "$STAGING/deploy/bin" "$STAGING/deploy/docker"
 
 # Binaries
-cp "$PROJECT_ROOT/dist/openclaw-linux-x64" "$STAGING/deploy/bin/openclaw"
-cp "$PROJECT_ROOT/dist/discord-router-linux-x64" "$STAGING/deploy/bin/discord-router"
-cp "$PROJECT_ROOT/dist/health-monitor-linux-x64" "$STAGING/deploy/bin/health-monitor"
-cp "$PROJECT_ROOT/dist/provisioner-linux-x64" "$STAGING/deploy/bin/provisioner"
-# cp "$PROJECT_ROOT/dist/whisper-linux-x64" "$STAGING/deploy/bin/whisper"  # when available
+cp "$PROJECT_ROOT/dist/openclaw-linux-$ARCH" "$STAGING/deploy/bin/openclaw"
+cp "$PROJECT_ROOT/dist/discord-router-linux-$ARCH" "$STAGING/deploy/bin/discord-router"
+cp "$PROJECT_ROOT/dist/health-monitor-linux-$ARCH" "$STAGING/deploy/bin/health-monitor"
+cp "$PROJECT_ROOT/dist/provisioner-linux-$ARCH" "$STAGING/deploy/bin/provisioner"
+# cp "$PROJECT_ROOT/dist/whisper-linux-$ARCH" "$STAGING/deploy/bin/whisper"  # when available
 
 # Extensions (pre-compiled plugins)
 # Extensions are now embedded in the binary. Still ship them as fallback
@@ -61,11 +88,14 @@ chmod +x "$STAGING/deploy/bin/openclawctl"
 # systemd unit for the host provisioning daemon
 cp "$INFRA_DIR/systemd/openclaw-provisioner.service" "$STAGING/openclaw-provisioner.service"
 
-# Environment variables (local .env or CI-generated)
-if [ -f "$PROJECT_ROOT/.env" ]; then
-  cp "$PROJECT_ROOT/.env" "$STAGING/.env"
+# Environment variables (local .env or CI-generated). The source can be
+# overridden so the local rig can ship a variant .env (e.g. a different or blank
+# DISCORD_BOT_TOKEN so the fake host doesn't fight prod for the same bot session).
+ENV_FILE="${OPENCLAW_DEPLOY_ENV_FILE:-$PROJECT_ROOT/.env}"
+if [ -f "$ENV_FILE" ]; then
+  cp "$ENV_FILE" "$STAGING/.env"
 else
-  echo "Error: No .env file found at $PROJECT_ROOT/.env"
+  echo "Error: No .env file found at $ENV_FILE"
   exit 1
 fi
 
@@ -81,11 +111,11 @@ rm -rf "$STAGING"
 
 # 3. Ship to remote
 echo "[3/4] Uploading to $HOST..."
-scp -C /tmp/openclaw-deployment.tar.gz "$HOST:/tmp/"
+scp -C "${SCP_PORT_FLAG[@]}" "${SSH_OPTS[@]}" /tmp/openclaw-deployment.tar.gz "$HOST:/tmp/"
 
 # 4. Extract and run setup
 echo "[4/4] Running setup on $HOST..."
-ssh "$HOST" "rm -rf /tmp/openclaw-deployment && mkdir /tmp/openclaw-deployment && cd /tmp/openclaw-deployment && tar xzf /tmp/openclaw-deployment.tar.gz && bash setup.sh && rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz"
+ssh "${SSH_PORT_FLAG[@]}" "${SSH_OPTS[@]}" "$HOST" "rm -rf /tmp/openclaw-deployment && mkdir /tmp/openclaw-deployment && cd /tmp/openclaw-deployment && tar xzf /tmp/openclaw-deployment.tar.gz && bash setup.sh && rm -rf /tmp/openclaw-deployment /tmp/openclaw-deployment.tar.gz"
 
 echo ""
 echo "=== Deploy Complete ==="
