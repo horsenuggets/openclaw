@@ -300,9 +300,9 @@ stop_container() {
 CONTAINER_PROXY_URL="http://127.0.0.1:18800"
 
 # Default primary model for a freshly-bootstrapped instance, used only when there
-# is no sibling instance to copy config from. Must be a model id known to the
-# deployed binary's model catalog.
-BASE_MODEL="anthropic-subscription/claude-sonnet-4-5"
+# is no sibling instance to copy config from. Must match the model id seeded into
+# the anthropic-subscription provider block below.
+BASE_MODEL="anthropic-subscription/claude-sonnet-4-6"
 
 # Seed a new instance's openclaw.json from an existing instance (if any), then
 # force the Discord proxyUrl to the correct loopback address regardless of what
@@ -341,6 +341,45 @@ seed_instance_config() {
       fi
       OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set agents.defaults.model.primary "$BASE_MODEL" >/dev/null 2>&1 ||
         echo "Warning: could not seed model for $channelId" >&2
+      # Seed the anthropic-subscription provider definition: baseUrl, the
+      # anthropic-messages api, oauth auth, the Claude Code user-agent + beta
+      # headers that bill the request to the subscription, and the model catalog.
+      # Without this the model resolves as "Unknown model" even with a valid OAuth
+      # token, because the provider is not built into the binary. Every instance
+      # copied from an onboarded original already carries this block; a fresh host
+      # has nothing to copy, so seed it explicitly. Written with python because
+      # `config set` cannot express the nested arrays/hyphenated header keys; the
+      # file config-set just wrote is plain JSON at this point.
+      python3 - "$target" <<'PY' 2>/dev/null ||
+import json, sys
+
+with open(sys.argv[1]) as f:
+    cfg = json.load(f)
+cfg.setdefault("models", {}).setdefault("providers", {})["anthropic-subscription"] = {
+    "baseUrl": "https://api.anthropic.com",
+    "api": "anthropic-messages",
+    "auth": "oauth",
+    "headers": {
+        "user-agent": "claude-cli/2.1.119 (external, cli)",
+        "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+    },
+    "models": [
+        {
+            "id": "claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6",
+            "reasoning": False,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 64000,
+        }
+    ],
+}
+with open(sys.argv[1], "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+        echo "Warning: could not seed subscription provider for $channelId" >&2
     else
       echo "Warning: openclaw CLI not found; cannot seed base config for $channelId" >&2
     fi

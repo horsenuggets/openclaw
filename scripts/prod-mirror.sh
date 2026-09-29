@@ -117,23 +117,27 @@ run_deploy() {
 # resolved next to the binary automatically.
 start_provisioner() {
   echo "Starting the provisioner inside the box..."
-  # setsid + </dev/null fully detaches it into its own session, so it survives
-  # this transient ssh channel closing (a plain `nohup ... &` gets reaped when
-  # ssh tears the session down).
-  box_ssh 'set -a; . "$HOME/.env" 2>/dev/null; set +a;
-    pkill -f deploy/bin/provisioner 2>/dev/null || true;
-    if [ -z "${OPENCLAW_PROVISIONER_PORT:-}" ] || [ -z "${OPENCLAW_PROVISIONER_TOKEN:-}" ]; then
-      echo "  (OPENCLAW_PROVISIONER_* not set in .env; /channel register will be disabled)";
-    else
-      setsid "$HOME/deploy/bin/provisioner" </dev/null >/var/log/provisioner.log 2>&1 &
-      sleep 2;
-      if ss -ltn 2>/dev/null | grep -q ":$OPENCLAW_PROVISIONER_PORT"; then
-        echo "  provisioner listening on 127.0.0.1:$OPENCLAW_PROVISIONER_PORT";
-      else
-        echo "  WARNING: provisioner did not come up; see /var/log/provisioner.log" >&2;
-        tail -5 /var/log/provisioner.log 2>/dev/null >&2 || true;
-      fi;
-    fi'
+  # Run it FOREGROUND under a backgrounded ssh (`ssh -f`). The provisioner is a
+  # large Node single-executable that gets SIGHUP'd mid-startup if we background
+  # it remotely (setsid/nohup) and let the ssh channel close before it finishes
+  # initialising. `ssh -f` keeps the channel open in the background, so the
+  # foreground provisioner stays alive reliably.
+  pkill -f "ssh -f.*$SSH_PORT.*provisioner" 2>/dev/null || true
+  ssh -f -n -i "$KEY" -p "$SSH_PORT" "${SSH_COMMON[@]}" root@localhost \
+    'set -a; . "$HOME/.env" 2>/dev/null; set +a;
+     pkill -f deploy/bin/provisioner 2>/dev/null || true;
+     [ -n "${OPENCLAW_PROVISIONER_PORT:-}" ] && [ -n "${OPENCLAW_PROVISIONER_TOKEN:-}" ] || exit 0;
+     exec "$HOME/deploy/bin/provisioner" >/var/log/provisioner.log 2>&1'
+  local i
+  for i in $(seq 1 12); do
+    if box_ssh 'set -a; . "$HOME/.env" 2>/dev/null; set +a;
+      ss -ltn 2>/dev/null | grep -q ":${OPENCLAW_PROVISIONER_PORT:-0}"' 2>/dev/null; then
+      echo "  provisioner listening."
+      return 0
+    fi
+    sleep 1
+  done
+  echo "  WARNING: provisioner did not come up (see 'prod-mirror.sh sh' -> /var/log/provisioner.log)" >&2
 }
 
 cmd_up() {
