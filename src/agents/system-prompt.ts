@@ -18,15 +18,34 @@ import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
-// Messaging-surface section headings. Their content (native reply/quote, routing
-// across Discord/Telegram/Signal, channel config) diverges from the Claude Code
-// identity and flips anthropic-subscription requests from free plan quota to
-// paid extra usage. Verified empirically by replaying prompts against the live
-// API: dropping the "## Reply Tags" section alone moved a spilling request back
-// onto plan quota. wrapForSubscription() strips these for the subscription path.
+// Section headings whose content diverges from the Claude Code identity and flips
+// anthropic-subscription requests from free plan quota to paid extra usage.
+// Verified empirically by replaying prompts against the live API:
+//
+//  - "## Reply Tags" / "## Messaging": messaging-surface content (native
+//    reply/quote, routing across Discord/Telegram/Signal, channel config).
+//    Dropping "## Reply Tags" alone moved a spilling request back onto plan quota.
+//  - "## Heartbeats": proactive-messaging content (heartbeat polls, HEARTBEAT_OK
+//    ack semantics, "suppressed from the user") that reads as autonomous-agent
+//    behavior rather than a coding assistant. Adding this section alone to an
+//    otherwise Claude Code-consistent prompt flips a 200 (plan quota) to a 400
+//    ("out of extra usage"). It previously stayed off the wire only because it
+//    sits at the tail of the prompt and was truncated away by MAX_APPENDED_CHARS;
+//    raising that cap (5000 -> 8000) let it survive and reach the API, so it must
+//    be stripped deterministically rather than relying on truncation. The
+//    heartbeat instruction still reaches the model on the subscription path: a
+//    real heartbeat poll delivers the same prompt as conversation content (see
+//    heartbeat-runner), which does not affect billing.
+//
+// wrapForSubscription() strips these for the subscription path.
 export const REPLY_TAGS_HEADING = "## Reply Tags";
 export const MESSAGING_HEADING = "## Messaging";
-export const SUBSCRIPTION_OMIT_HEADINGS = [REPLY_TAGS_HEADING, MESSAGING_HEADING] as const;
+export const HEARTBEATS_HEADING = "## Heartbeats";
+export const SUBSCRIPTION_OMIT_HEADINGS = [
+  REPLY_TAGS_HEADING,
+  MESSAGING_HEADING,
+  HEARTBEATS_HEADING,
+] as const;
 
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.
@@ -665,7 +684,7 @@ export function buildAgentSystemPrompt(params: {
   // Skip heartbeats for subagent/none modes
   if (!isMinimal) {
     lines.push(
-      "## Heartbeats",
+      HEARTBEATS_HEADING,
       heartbeatPromptLine,
       "If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply with ONLY:",
       "HEARTBEAT_OK",
