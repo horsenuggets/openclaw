@@ -78,6 +78,7 @@ import {
 } from "../google.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
+import { buildPersonaPreambleMessage, splitPersonaContextFiles } from "../persona-preamble.js";
 import {
   clearActiveEmbeddedRun,
   type EmbeddedPiQueueHandle,
@@ -207,6 +208,14 @@ export async function runEmbeddedAttempt(
     )
       ? ["Reminder: commit your changes in this workspace after edits."]
       : undefined;
+
+    // Persona files (SOUL.md, AGENTS.md) are delivered as a leading conversation
+    // message (persona preamble) rather than the system-prompt Project Context
+    // block, so identity/persona reaches the model on the subscription path too
+    // (where the system prompt is stripped) without spilling to paid usage. The
+    // remaining files still go into the system prompt.
+    const { personaFiles, remainingFiles } = splitPersonaContextFiles(contextFiles);
+    const personaPreamble = buildPersonaPreambleMessage(personaFiles);
 
     const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
 
@@ -389,7 +398,7 @@ export async function runEmbeddedAttempt(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles,
+      contextFiles: remainingFiles,
       memoryCitationsMode: params.config?.memory?.citations,
       // Only the subscription path slices the Project Context block back out
       // (wrapForSubscription below), so only it needs the sentinel markers.
@@ -413,6 +422,10 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
+      // Report all loaded files as injected, including the persona files. They no
+      // longer live in the system-prompt Project Context block (that byte count is
+      // parsed from the prompt text and stays accurate) but they still reach the
+      // model via the conversation preamble, so /context must count their bytes.
       injectedFiles: contextFiles,
       skillsPrompt,
       tools,
@@ -449,6 +462,23 @@ export async function runEmbeddedAttempt(
         provider: params.provider,
         modelId: params.modelId,
       });
+
+      // Lead a message list with the persona preamble (identity + SOUL/AGENTS) and
+      // apply the same turn validation used on the main path. Used both on the
+      // initial working-set build and after any later replaceMessages that rebuilds
+      // from the persisted transcript (e.g. orphaned-user repair), which would
+      // otherwise drop the never-persisted preamble.
+      const applyPersonaAndValidate = (messages: AgentMessage[]): AgentMessage[] => {
+        const withPersona = personaPreamble ? [personaPreamble, ...messages] : messages;
+        const validatedGemini = transcriptPolicy.validateGeminiTurns
+          ? validateGeminiTurns(withPersona)
+          : withPersona;
+        const validated = transcriptPolicy.validateAnthropicTurns
+          ? validateAnthropicTurns(validatedGemini)
+          : validatedGemini;
+        backfillAssistantUsage(validated);
+        return validated;
+      };
 
       await prewarmSessionFile(params.sessionFile);
       sessionManager = guardSessionManager(SessionManager.open(params.sessionFile), {
@@ -614,13 +644,16 @@ export async function runEmbeddedAttempt(
           policy: transcriptPolicy,
         });
         cacheTrace?.recordStage("session:sanitized", { messages: prior });
-        const validatedGemini = transcriptPolicy.validateGeminiTurns
-          ? validateGeminiTurns(prior)
-          : prior;
-        const validated = transcriptPolicy.validateAnthropicTurns
-          ? validateAnthropicTurns(validatedGemini)
-          : validatedGemini;
-        backfillAssistantUsage(validated);
+        // Lead the conversation with the persona preamble (identity + SOUL/AGENTS)
+        // so it reaches the model on every request, on all paths. It is injected
+        // into the in-memory working set only (never appended/persisted), so it
+        // rebuilds from the current files each run, auto-refreshes, survives
+        // compaction, and never pollutes the stored transcript. When there is prior
+        // history the turn validator merges it into the first user turn; on a fresh
+        // session it leads a lone user turn ahead of the incoming prompt (the
+        // Anthropic API accepts the resulting adjacent user turns, as Claude Code's
+        // own leading `<system-reminder>` does).
+        const validated = applyPersonaAndValidate(prior);
         cacheTrace?.recordStage("session:validated", { messages: validated });
         if (validated.length > 0) {
           activeSession.agent.replaceMessages(validated);
@@ -820,7 +853,10 @@ export async function runEmbeddedAttempt(
             sessionManager.resetLeaf();
           }
           const sessionContext = sessionManager.buildSessionContext();
-          activeSession.agent.replaceMessages(sessionContext.messages);
+          // buildSessionContext rebuilds from the persisted transcript, which never
+          // contains the persona preamble; re-inject and re-validate so the repaired
+          // run still leads with SOUL.md/AGENTS.md.
+          activeSession.agent.replaceMessages(applyPersonaAndValidate(sessionContext.messages));
           log.warn(
             `Removed orphaned user message to prevent consecutive user turns. ` +
               `runId=${params.runId} sessionId=${params.sessionId}`,

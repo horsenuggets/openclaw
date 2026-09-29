@@ -63,6 +63,7 @@ import {
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { buildModelAliasLines, resolveModel } from "./model.js";
+import { splitPersonaContextFiles } from "./persona-preamble.js";
 import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
 import {
@@ -215,6 +216,10 @@ export async function compactEmbeddedPiSessionDirect(
       sessionId: params.sessionId,
       warn: makeBootstrapWarn({ sessionLabel, warn: (message) => log.warn(message) }),
     });
+    // Persona files (SOUL.md, AGENTS.md) are delivered via the persona preamble on
+    // normal runs, not the system-prompt Project Context block. Exclude them here
+    // too so the compaction request's system prompt matches the normal-run shape.
+    const { remainingFiles } = splitPersonaContextFiles(contextFiles);
     const runAbortController = new AbortController();
     const toolsRaw = createOpenClawCodingTools({
       exec: {
@@ -356,7 +361,7 @@ export async function compactEmbeddedPiSessionDirect(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles,
+      contextFiles: remainingFiles,
       memoryCitationsMode: params.config?.memory?.citations,
       wrapProjectContext: needsSubscriptionPrefix,
     });
