@@ -91,30 +91,6 @@ function hasMetadata(message: ChatMessage): boolean {
   return message.ts !== undefined || message.from !== undefined;
 }
 
-/**
- * Serialize a turn's messages to a STORAGE string (this is NOT the wire format;
- * see renderForWire). A lone message with no metadata is stored as its plain
- * text; anything stacked, or carrying a timestamp/sender, is stored as a JSON
- * array of {ts?, from?, text} so boundaries and metadata round-trip exactly.
- * Keys are emitted in a fixed order and empty fields omitted, so identical
- * inputs produce byte-identical output. Read it back with parseTurnContent.
- *
- * This JSON must never reach the model — sending it would train the model to
- * reply in JSON. renderForWire produces the natural-language content for the API.
- */
-export function serializeTurnContent(messages: ChatMessage[]): string {
-  if (messages.length === 1 && !hasMetadata(messages[0])) {
-    return messages[0].text;
-  }
-  return JSON.stringify(
-    messages.map((message) => ({
-      ...(message.ts !== undefined ? { ts: message.ts } : {}),
-      ...(message.from ? { from: message.from } : {}),
-      text: message.text,
-    })),
-  );
-}
-
 type StoredMessage = { ts?: number; from?: string; text: string };
 
 function isStoredMessageArray(value: unknown): value is StoredMessage[] {
@@ -127,6 +103,50 @@ function isStoredMessageArray(value: unknown): value is StoredMessage[] {
         item !== null &&
         typeof (item as { text?: unknown }).text === "string",
     )
+  );
+}
+
+/**
+ * True if a plain string, read back by parseTurnContent, would be misread as the
+ * JSON array form instead of a plain message — i.e. its own text happens to be a
+ * valid stored-message array like `[{"text":"..."}]`. Such a lone message must be
+ * stored as JSON (not plain) so the round-trip does not corrupt its content.
+ */
+function collidesWithStoredForm(text: string): boolean {
+  try {
+    return isStoredMessageArray(JSON.parse(text));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Serialize a turn's messages to a STORAGE string (this is NOT the wire format;
+ * see renderForWire). A lone message with no metadata is stored as its plain
+ * text; anything stacked, carrying a timestamp/sender, or whose text would
+ * itself be misread as the JSON array form, is stored as a JSON array of
+ * {ts?, from?, text} so boundaries and metadata round-trip exactly. Keys are
+ * emitted in a fixed order and defined fields preserved (including empty
+ * strings), so identical inputs produce byte-identical output. Read it back
+ * with parseTurnContent.
+ *
+ * This JSON must never reach the model — sending it would train the model to
+ * reply in JSON. renderForWire produces the natural-language content for the API.
+ */
+export function serializeTurnContent(messages: ChatMessage[]): string {
+  if (
+    messages.length === 1 &&
+    !hasMetadata(messages[0]) &&
+    !collidesWithStoredForm(messages[0].text)
+  ) {
+    return messages[0].text;
+  }
+  return JSON.stringify(
+    messages.map((message) => ({
+      ...(message.ts !== undefined ? { ts: message.ts } : {}),
+      ...(message.from !== undefined ? { from: message.from } : {}),
+      text: message.text,
+    })),
   );
 }
 

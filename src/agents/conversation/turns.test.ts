@@ -148,6 +148,24 @@ describe("parseTurnContent (read storage back, fill defaults)", () => {
     const msgs = [a("one", { ts: 1, from: "bot" }), a("two", { ts: 2 })];
     expect(parseTurnContent(serializeTurnContent(msgs), "agent")).toEqual(msgs);
   });
+
+  it("round-trips a lone message whose text is itself a stored-message array (no corruption)", () => {
+    // The text collides with the JSON storage shape; it must be stored as JSON
+    // so parsing returns the original text verbatim, not the nested payload.
+    const msgs = [u('[{"text":"nested"}]')];
+    const stored = serializeTurnContent(msgs);
+    expect(parseTurnContent(stored, "user")).toEqual(msgs);
+  });
+
+  it("round-trips a lone message whose text is a JSON array of message objects with metadata", () => {
+    const msgs = [a('[{"ts":9,"from":"x","text":"hi"}]')];
+    expect(parseTurnContent(serializeTurnContent(msgs), "agent")).toEqual(msgs);
+  });
+
+  it("round-trips an explicit empty-string from (preserves defined metadata)", () => {
+    const msgs = [u("hi", { from: "" })];
+    expect(parseTurnContent(serializeTurnContent(msgs), "user")).toEqual(msgs);
+  });
 });
 
 describe("renderForWire (natural text for the API, never JSON)", () => {
