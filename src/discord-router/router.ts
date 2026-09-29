@@ -6,7 +6,10 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
-import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
+import {
+  escapeSystemReminderMarkers,
+  wrapSystemReminder,
+} from "../agents/conversation/system-reminder.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
@@ -234,6 +237,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         agentTimeoutMs,
         inflight,
         runCommand: runAgentCommand,
+        // /discord/system messages are already wrapped system turns, not human input.
+        systemOrigin: true,
       }).then(() => {});
     },
   });
@@ -1191,6 +1196,12 @@ async function routeMessage(params: {
   inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
+  /**
+   * True when messageContent is a system-injected turn (e.g. /discord/system),
+   * already wrapped by the caller. Human turns default false and have any typed
+   * `<system-reminder>` markers neutralized so they can't forge a system turn.
+   */
+  systemOrigin?: boolean;
 }): Promise<boolean> {
   const {
     authorId,
@@ -1203,6 +1214,13 @@ async function routeMessage(params: {
     inflight,
   } = params;
   let messageContent = params.messageContent;
+  // Neutralize any <system-reminder> markers a human typed so they can't forge a
+  // system-injected turn (the model would treat it as system context and the
+  // transcript classifier would mis-attribute it). System-origin turns are
+  // already wrapped by the caller and pass through untouched.
+  if (!params.systemOrigin) {
+    messageContent = escapeSystemReminderMarkers(messageContent);
+  }
 
   // Serialize per-channel
   if (inflight.has(channelId)) {
@@ -1316,7 +1334,11 @@ async function routeMessage(params: {
       // by prepending BOOTSTRAP.md (as conversation content, to keep the system
       // prompt billing-safe). Only affects the first turn of this call; command
       // result relays below reuse agentMessage without it.
-      const bootstrapDirective = readBootstrapDirective(instance);
+      // Only steer genuine human turns through first-run setup; a system-origin
+      // turn (e.g. /discord/system) is already a complete system-reminder, and
+      // prepending another block would nest two closed markers and break
+      // detection.
+      const bootstrapDirective = params.systemOrigin ? null : readBootstrapDirective(instance);
       if (bootstrapDirective) {
         // Mark the first-run directive as a system-injected block so the model
         // treats it as system context (not part of the human's message) and the

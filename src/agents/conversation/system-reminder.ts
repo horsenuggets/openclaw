@@ -18,9 +18,29 @@
 export const SYSTEM_REMINDER_OPEN = "<system-reminder>";
 export const SYSTEM_REMINDER_CLOSE = "</system-reminder>";
 
-/** Wrap text as a system-reminder block (the form the classifier recognizes). */
+const SYSTEM_REMINDER_MARKER_RE = /<(\/?system-reminder)>/gi;
+
+/**
+ * Neutralize literal `<system-reminder>` / `</system-reminder>` markers in text
+ * so they cannot be parsed as real markers. Applied two ways:
+ *   > to HUMAN inbound text, so a user cannot forge a system-injected turn by
+ *     typing the marker (and the model never reads user text as system context);
+ *   > to a system PAYLOAD before wrapping, so a payload that happens to contain
+ *     the marker (e.g. a command result) cannot collide with the wrapper's own
+ *     open/close tags.
+ * The angle brackets become HTML entities, which the model reads as literal text.
+ */
+export function escapeSystemReminderMarkers(text: string): string {
+  return text.replace(SYSTEM_REMINDER_MARKER_RE, "&lt;$1&gt;");
+}
+
+/**
+ * Wrap text as a system-reminder block (the form the classifier recognizes). The
+ * payload is marker-escaped first so an embedded marker in the payload cannot
+ * collide with the wrapper's own tags.
+ */
 export function wrapSystemReminder(text: string): string {
-  return `${SYSTEM_REMINDER_OPEN}\n${text}\n${SYSTEM_REMINDER_CLOSE}`;
+  return `${SYSTEM_REMINDER_OPEN}\n${escapeSystemReminderMarkers(text)}\n${SYSTEM_REMINDER_CLOSE}`;
 }
 
 /**

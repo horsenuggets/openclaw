@@ -1,4 +1,5 @@
 import type { FinalizedMsgContext, MsgContext } from "../templating.js";
+import { escapeSystemReminderMarkers } from "../../agents/conversation/system-reminder.js";
 import { normalizeChatType } from "../../channels/chat-type.js";
 import { resolveConversationLabel } from "../../channels/conversation-label.js";
 import { formatInboundBodyWithSenderMeta } from "./inbound-sender-meta.js";
@@ -73,6 +74,11 @@ export function finalizeInboundContext<T extends Record<string, unknown>>(
     ctx: normalized,
     body: normalized.BodyForAgent,
   });
+
+  // Neutralize any system-reminder marker the human typed so it can't be read as
+  // system-injected context by the model or mis-attributed `system` by the
+  // transcript classifier. Only OpenClaw's own injected turns carry a real marker.
+  normalized.BodyForAgent = escapeSystemReminderMarkers(normalized.BodyForAgent);
 
   // Always set. Default-deny when upstream forgets to populate it.
   normalized.CommandAuthorized = normalized.CommandAuthorized === true;
