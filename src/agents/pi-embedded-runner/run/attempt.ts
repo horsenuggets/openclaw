@@ -422,7 +422,11 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
-      injectedFiles: remainingFiles,
+      // Report all loaded files as injected, including the persona files. They no
+      // longer live in the system-prompt Project Context block (that byte count is
+      // parsed from the prompt text and stays accurate) but they still reach the
+      // model via the conversation preamble, so /context must count their bytes.
+      injectedFiles: contextFiles,
       skillsPrompt,
       tools,
     });
@@ -458,6 +462,23 @@ export async function runEmbeddedAttempt(
         provider: params.provider,
         modelId: params.modelId,
       });
+
+      // Lead a message list with the persona preamble (identity + SOUL/AGENTS) and
+      // apply the same turn validation used on the main path. Used both on the
+      // initial working-set build and after any later replaceMessages that rebuilds
+      // from the persisted transcript (e.g. orphaned-user repair), which would
+      // otherwise drop the never-persisted preamble.
+      const applyPersonaAndValidate = (messages: AgentMessage[]): AgentMessage[] => {
+        const withPersona = personaPreamble ? [personaPreamble, ...messages] : messages;
+        const validatedGemini = transcriptPolicy.validateGeminiTurns
+          ? validateGeminiTurns(withPersona)
+          : withPersona;
+        const validated = transcriptPolicy.validateAnthropicTurns
+          ? validateAnthropicTurns(validatedGemini)
+          : validatedGemini;
+        backfillAssistantUsage(validated);
+        return validated;
+      };
 
       await prewarmSessionFile(params.sessionFile);
       sessionManager = guardSessionManager(SessionManager.open(params.sessionFile), {
@@ -632,14 +653,7 @@ export async function runEmbeddedAttempt(
         // session it leads a lone user turn ahead of the incoming prompt (the
         // Anthropic API accepts the resulting adjacent user turns, as Claude Code's
         // own leading `<system-reminder>` does).
-        const priorWithPersona = personaPreamble ? [personaPreamble, ...prior] : prior;
-        const validatedGemini = transcriptPolicy.validateGeminiTurns
-          ? validateGeminiTurns(priorWithPersona)
-          : priorWithPersona;
-        const validated = transcriptPolicy.validateAnthropicTurns
-          ? validateAnthropicTurns(validatedGemini)
-          : validatedGemini;
-        backfillAssistantUsage(validated);
+        const validated = applyPersonaAndValidate(prior);
         cacheTrace?.recordStage("session:validated", { messages: validated });
         if (validated.length > 0) {
           activeSession.agent.replaceMessages(validated);
@@ -839,7 +853,10 @@ export async function runEmbeddedAttempt(
             sessionManager.resetLeaf();
           }
           const sessionContext = sessionManager.buildSessionContext();
-          activeSession.agent.replaceMessages(sessionContext.messages);
+          // buildSessionContext rebuilds from the persisted transcript, which never
+          // contains the persona preamble; re-inject and re-validate so the repaired
+          // run still leads with SOUL.md/AGENTS.md.
+          activeSession.agent.replaceMessages(applyPersonaAndValidate(sessionContext.messages));
           log.warn(
             `Removed orphaned user message to prevent consecutive user turns. ` +
               `runId=${params.runId} sessionId=${params.sessionId}`,
