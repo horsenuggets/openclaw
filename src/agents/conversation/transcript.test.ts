@@ -86,6 +86,13 @@ describe("toChatMessages", () => {
     );
   });
 
+  it("preserves whitespace-significant assistant text without trimming", () => {
+    const code = "here you go:\n\n    const x = 1;\n";
+    expect(toChatMessages([assistantMsg([{ type: "text", text: code }], 1)])).toEqual([
+      { role: "agent", text: code, ts: 1 },
+    ]);
+  });
+
   it("produces a coherent attributed view of a mixed conversation", () => {
     const view = toChatMessages([
       userMsg("book me a table", 1),

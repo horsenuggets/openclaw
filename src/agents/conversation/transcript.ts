@@ -57,8 +57,11 @@ export function toChatMessages(messages: AgentMessage[]): ChatMessage[] {
     const timestamp = typeof ts === "number" ? ts : undefined;
 
     if (role === "assistant") {
-      const text = extractText((message as { content?: unknown }).content).trim();
-      if (text.length === 0) {
+      // Trim only for the emptiness check; preserve the original text so this view
+      // does not mutate persisted content (leading/trailing whitespace can be
+      // presentation-significant Markdown, e.g. indented code blocks).
+      const text = extractText((message as { content?: unknown }).content);
+      if (text.trim().length === 0) {
         continue;
       }
       result.push({ role: "agent", text, ...(timestamp !== undefined ? { ts: timestamp } : {}) });
