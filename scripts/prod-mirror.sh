@@ -111,27 +111,29 @@ run_deploy() {
     bash "$ROOT_DIR/infrastructure/deploy/deploy.sh" "${skip[@]}"
 }
 
-# The provisioner runs as a systemd --user unit in prod; containers have no
-# systemd, so start it as a plain background process with the same env
-# (EnvironmentFile ~/.env, ExecStart ~/deploy/bin/provisioner). openclawctl is
-# resolved next to the binary automatically.
+# The provisioner runs as a systemd --user unit in prod; the box has no systemd,
+# so start it with the same env (EnvironmentFile ~/.env, ExecStart
+# ~/deploy/bin/provisioner). openclawctl is resolved next to the binary
+# automatically.
+#
+# Start it with `docker exec -d` against the box container rather than over ssh.
+# A backgrounded ssh child (setsid/nohup/`ssh -f`) is reaped when its parent
+# process group is torn down, which killed the provisioner mid-startup. Docker's
+# native detach runs it in the box's own PID namespace (PID 1 = the box
+# entrypoint), so it survives independently of this script's ssh/exec lifetime.
 start_provisioner() {
   echo "Starting the provisioner inside the box..."
-  # Run it FOREGROUND under a backgrounded ssh (`ssh -f`). The provisioner is a
-  # large Node single-executable that gets SIGHUP'd mid-startup if we background
-  # it remotely (setsid/nohup) and let the ssh channel close before it finishes
-  # initialising. `ssh -f` keeps the channel open in the background, so the
-  # foreground provisioner stays alive reliably.
-  pkill -f "ssh -f.*$SSH_PORT.*provisioner" 2>/dev/null || true
-  ssh -f -n -i "$KEY" -p "$SSH_PORT" "${SSH_COMMON[@]}" root@localhost \
+  docker exec "$CONTAINER" bash -c \
+    'pkill -f deploy/bin/provisioner 2>/dev/null || true' >/dev/null 2>&1 || true
+  docker exec -d "$CONTAINER" bash -c \
     'set -a; . "$HOME/.env" 2>/dev/null; set +a;
-     pkill -f deploy/bin/provisioner 2>/dev/null || true;
      [ -n "${OPENCLAW_PROVISIONER_PORT:-}" ] && [ -n "${OPENCLAW_PROVISIONER_TOKEN:-}" ] || exit 0;
      exec "$HOME/deploy/bin/provisioner" >/var/log/provisioner.log 2>&1'
   local i
   for i in $(seq 1 12); do
-    if box_ssh 'set -a; . "$HOME/.env" 2>/dev/null; set +a;
-      ss -ltn 2>/dev/null | grep -q ":${OPENCLAW_PROVISIONER_PORT:-0}"' 2>/dev/null; then
+    if docker exec "$CONTAINER" bash -c \
+      'set -a; . "$HOME/.env" 2>/dev/null; set +a;
+       ss -ltn 2>/dev/null | grep -q ":${OPENCLAW_PROVISIONER_PORT:-0}"' 2>/dev/null; then
       echo "  provisioner listening."
       return 0
     fi
