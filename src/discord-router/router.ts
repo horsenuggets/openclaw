@@ -377,54 +377,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       if (!instance || !bootstrapExists(instance)) {
         return;
       }
-      // A message could already be in flight (e.g. the owner started typing
-      // immediately); that turn will drive onboarding itself, so do not kick.
-      if (inflight.has(channelId)) {
-        return;
-      }
-      // Reserve the channel before the readiness wait so a user message sent
-      // right after the register embed queues behind the kick instead of
-      // overtaking it (which would invert ordering and could double the welcome).
-      inflight.add(channelId);
-      void (async () => {
-        try {
-          // The provisioner reports the instance ready, but the agent gateway can
-          // take a moment longer to accept connections. Probe the port first:
-          // routeMessage turns an ECONNREFUSED into a one-shot error and never
-          // retries, so an un-awaited race here would silently lose the greeting.
-          let ready = false;
-          for (let i = 0; i < 20; i++) {
-            if (await probePort(instance.port)) {
-              ready = true;
-              break;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-          }
-          if (!ready) {
-            runtime.error(
-              `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
-            );
-            return;
-          }
-          runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
-          await routeMessage({
-            authorId: ownerId,
-            channelId,
+      void runOnboardingKick({
+        channelId,
+        ownerId,
+        instance,
+        inflight,
+        probe: (port) => probePort(port),
+        runtime,
+        route: ({
+          channelId: cId,
+          ownerId: oId,
+          instance: inst,
+          systemTurn,
+          preacquiredInflight,
+        }) =>
+          routeMessage({
+            authorId: oId,
+            channelId: cId,
             messageContent:
               "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
-            instance,
+            instance: inst,
             discordToken,
             runtime,
             agentTimeoutMs,
             inflight,
             runCommand: runAgentCommand,
-            systemTurn: true,
-            preacquiredInflight: true,
-          });
-        } finally {
-          inflight.delete(channelId);
-        }
-      })();
+            systemTurn,
+            preacquiredInflight,
+          }),
+      });
     },
     log: (message) => runtime.log(message),
   };
@@ -615,6 +596,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 inflight,
                 runAgentCommand,
                 recoveredMessageIds,
+                allowedBotIds,
                 // Apply the same guild access control as live messages so a
                 // non-owner's message in a shared guild channel is not replayed
                 // to the agent on restart.
@@ -1581,6 +1563,78 @@ async function routeMessage(params: {
   }
 }
 
+/** Message routed by {@link runOnboardingKick} into an agent's first turn. */
+export type OnboardingKickRoute = (params: {
+  channelId: string;
+  ownerId: string;
+  instance: InstanceConfig;
+  systemTurn: true;
+  preacquiredInflight: true;
+}) => Promise<boolean>;
+
+/**
+ * Drive the first onboarding turn for a freshly registered channel, before the
+ * owner speaks. Extracted from the router closure so its concurrency/error paths
+ * are unit-testable with injected `probe`/`route`.
+ *
+ * Serialization: reserves the channel's `inflight` slot BEFORE the readiness wait
+ * so a user message sent right after the register embed queues behind the kick
+ * instead of overtaking it (which would invert ordering and could double the
+ * welcome). If a turn is already in flight, the kick is skipped — that turn drives
+ * onboarding itself. The slot is always released.
+ *
+ * Readiness: the provisioner can report ready before the agent gateway accepts
+ * connections, and `routeMessage` turns an ECONNREFUSED into a one-shot error
+ * with no retry, so the kick is deferred until `probe` succeeds. If it never
+ * becomes ready the kick is skipped rather than firing at a dead port.
+ *
+ * @returns "busy" (already in flight), "not-ready" (gateway never came up), or
+ *          "kicked" (the onboarding turn was routed).
+ */
+export async function runOnboardingKick(params: {
+  channelId: string;
+  ownerId: string;
+  instance: InstanceConfig;
+  inflight: Set<string>;
+  probe: (port: number) => Promise<boolean>;
+  route: OnboardingKickRoute;
+  runtime: RouterRuntime;
+  attempts?: number;
+  intervalMs?: number;
+}): Promise<"busy" | "not-ready" | "kicked"> {
+  const { channelId, ownerId, instance, inflight, probe, route, runtime } = params;
+  const attempts = params.attempts ?? 20;
+  const intervalMs = params.intervalMs ?? 1000;
+
+  // A message could already be in flight (e.g. the owner started typing
+  // immediately); that turn will drive onboarding itself, so do not kick.
+  if (inflight.has(channelId)) {
+    return "busy";
+  }
+  inflight.add(channelId);
+  try {
+    let ready = false;
+    for (let i = 0; i < attempts; i++) {
+      if (await probe(instance.port)) {
+        ready = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    if (!ready) {
+      runtime.error(
+        `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
+      );
+      return "not-ready";
+    }
+    runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
+    await route({ channelId, ownerId, instance, systemTurn: true, preacquiredInflight: true });
+    return "kicked";
+  } finally {
+    inflight.delete(channelId);
+  }
+}
+
 /**
  * Detect raw JS/system errors that leaked into agent output.
  * These are tool execution errors that got captured as response text
@@ -1857,6 +1911,12 @@ async function recoverUnansweredMessages(
   runCommand: RunAgentCommand,
   /** Message IDs already attempted this process, to avoid re-recovery loops. */
   recoveredMessageIds: Set<string>,
+  /**
+   * Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) whose messages are
+   * conversational, matching the live path. Their unanswered messages are
+   * recoverable; every other bot's message is treated as a reply/banner.
+   */
+  allowedBotIds: Set<string>,
   /** Same guild access control applied to live messages (owner/admin only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
@@ -1922,7 +1982,11 @@ async function recoverUnansweredMessages(
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       for (const msg of messages) {
-        const isBotMsg = msg.author.bot || msg.author.id === botId;
+        // A trusted bot (allowlisted, and not the router itself) converses like a
+        // human on the live path, so its unanswered message is recoverable too.
+        const isSelf = msg.author.id === botId;
+        const isTrustedBot = msg.author.bot && !isSelf && allowedBotIds.has(msg.author.id);
+        const isBotMsg = (msg.author.bot || isSelf) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {
             continue;

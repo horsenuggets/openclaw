@@ -9,8 +9,8 @@
 # channel from Discord and chat in a real channel.
 #
 # Usage:
-#   scripts/prod-mirror.sh up [--live]      # build, start box, deploy, run provisioner
-#   scripts/prod-mirror.sh deploy           # re-run deploy into a running box (after code changes)
+#   scripts/prod-mirror.sh up [--live] [--build]  # build, start box, deploy, run provisioner
+#   scripts/prod-mirror.sh deploy [--build] # re-run deploy into a running box (after code changes)
 #   scripts/prod-mirror.sh register <id>    # openclawctl add-channel <id> (solo test, no Discord)
 #   scripts/prod-mirror.sh mint             # mint a subscription token into the box (browser)
 #   scripts/prod-mirror.sh inner <args...>  # run a docker command inside the box
@@ -97,9 +97,12 @@ build_box_env() {
   printf 'DISCORD_BOT_TOKEN=%s\n' "$token" >>"$BOX_ENV"
 }
 
+# $1: "build" to force a recompile, anything else to reuse existing binaries.
 run_deploy() {
+  local force_build="${1:-}"
   local skip=()
-  if [ -x "$ROOT_DIR/dist/openclaw-linux-$ARCH" ] &&
+  if [ "$force_build" != "build" ] &&
+    [ -x "$ROOT_DIR/dist/openclaw-linux-$ARCH" ] &&
     [ -x "$ROOT_DIR/dist/discord-router-linux-$ARCH" ] &&
     [ -x "$ROOT_DIR/dist/health-monitor-linux-$ARCH" ] &&
     [ -x "$ROOT_DIR/dist/provisioner-linux-$ARCH" ]; then
@@ -146,25 +149,31 @@ start_provisioner() {
 }
 
 cmd_up() {
-  local live=""
-  [ "${1:-}" = "--live" ] && live=1
+  local live="" build=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --live) live=1 ;;
+      --build) build="build" ;;
+      *) die "unknown 'up' flag: $1 (use --live and/or --build)" ;;
+    esac
+    shift
+  done
   require_docker
   ensure_image
   ensure_key
 
   local token=""
   if [ -n "$live" ]; then
-    # Prefer an explicit override (a dedicated test bot); otherwise fall back to
-    # the repo .env bot (the real OpenClaw bot). Reusing the prod bot is only safe
-    # while prod's own router is stopped, or the two fight over one gateway session.
+    # Require a dedicated mirror bot token. We deliberately do NOT fall back to
+    # the repo .env DISCORD_BOT_TOKEN: that is the production bot, and running the
+    # mirror's router on it starts a second gateway session for the same bot,
+    # which fights prod for the connection — the exact conflict this rig exists to
+    # avoid. To knowingly reuse the prod bot (only safe while prod's own router is
+    # stopped), set OPENCLAW_MIRROR_DISCORD_TOKEN to it explicitly.
     token="${OPENCLAW_MIRROR_DISCORD_TOKEN:-}"
-    if [ -n "$token" ]; then
-      echo "Live mode: using OPENCLAW_MIRROR_DISCORD_TOKEN."
-    else
-      token="$(grep -m1 '^DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" | cut -d= -f2-)"
-      [ -n "$token" ] || die "--live needs a token: set OPENCLAW_MIRROR_DISCORD_TOKEN or DISCORD_BOT_TOKEN in .env."
-      echo "Live mode: using the OpenClaw bot from .env. Make sure prod's router is stopped."
-    fi
+    [ -n "$token" ] ||
+      die "--live requires OPENCLAW_MIRROR_DISCORD_TOKEN (a dedicated bot, not the prod one)."
+    echo "Live mode: using OPENCLAW_MIRROR_DISCORD_TOKEN."
   else
     # The router requires a Discord token (loadRouterConfig throws on an empty
     # one), so with a blank token its container just crash-loops under the health
@@ -186,7 +195,7 @@ cmd_up() {
     -e AUTHORIZED_KEY="$(cat "$KEY.pub")" "$IMAGE" >/dev/null
   wait_ready || { echo "box did not become ready; see: scripts/prod-mirror.sh logs" >&2; exit 1; }
 
-  run_deploy
+  run_deploy "$build"
   start_provisioner
   echo ""
   echo "Box up. Inner containers: scripts/prod-mirror.sh ps"
@@ -194,11 +203,13 @@ cmd_up() {
 }
 
 cmd_deploy() {
+  local build=""
+  [ "${1:-}" = "--build" ] && build="build"
   require_docker
   docker inspect "$CONTAINER" >/dev/null 2>&1 || die "box not running; run 'up' first."
   # Reuse whatever token the last box.env had; regenerate from repo if missing.
   [ -f "$BOX_ENV" ] || build_box_env ""
-  run_deploy
+  run_deploy "$build"
   start_provisioner
 }
 
@@ -259,7 +270,7 @@ main() {
     sh) cmd_sh "$@" ;;
     down) cmd_down "$@" ;;
     *)
-      echo "usage: $0 {up [--live]|deploy|register <id>|mint|inner <args>|ps|logs [name]|sh|down [--clean]}" >&2
+      echo "usage: $0 {up [--live] [--build]|deploy [--build]|register <id>|mint|inner <args>|ps|logs [name]|sh|down [--clean]}" >&2
       exit 1
       ;;
   esac
