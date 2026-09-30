@@ -6,6 +6,7 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
@@ -376,19 +377,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       if (!instance || !bootstrapExists(instance)) {
         return;
       }
-      runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
-      void routeMessage({
-        authorId: ownerId,
-        channelId,
-        messageContent:
-          "[System: This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.]",
-        instance,
-        discordToken,
-        runtime,
-        agentTimeoutMs,
-        inflight,
-        runCommand: runAgentCommand,
-      });
+      void (async () => {
+        // The provisioner reports the instance ready, but the agent gateway can
+        // take a moment longer to accept connections. Probe the port first:
+        // routeMessage turns an ECONNREFUSED into a one-shot error and never
+        // retries, so an un-awaited race here would silently lose the greeting.
+        let ready = false;
+        for (let i = 0; i < 20; i++) {
+          if (await probePort(instance.port)) {
+            ready = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        if (!ready) {
+          runtime.error(
+            `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
+          );
+          return;
+        }
+        runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
+        await routeMessage({
+          authorId: ownerId,
+          channelId,
+          messageContent:
+            "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
+          instance,
+          discordToken,
+          runtime,
+          agentTimeoutMs,
+          inflight,
+          runCommand: runAgentCommand,
+          systemTurn: true,
+        });
+      })();
     },
     log: (message) => runtime.log(message),
   };
@@ -1228,6 +1250,13 @@ async function routeMessage(params: {
   inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
+  /**
+   * Mark this as a system-injected turn (not the human speaking). The assembled
+   * message is wrapped in a `<system-reminder>` block so the transcript
+   * classifier attributes it as `system` rather than `user`. Used by the
+   * onboarding kick, which has no real user message behind it.
+   */
+  systemTurn?: boolean;
 }): Promise<boolean> {
   const {
     authorId,
@@ -1356,6 +1385,14 @@ async function routeMessage(params: {
       const bootstrapDirective = readBootstrapDirective(instance);
       if (bootstrapDirective) {
         agentMessage = `${bootstrapDirective}\n\n${agentMessage}`;
+      }
+
+      // A system-injected turn (onboarding kick) carries no human message, so
+      // wrap the whole thing in a system-reminder block: the model treats it as
+      // system context and the transcript classifier attributes it as `system`
+      // instead of persisting a fake `user` turn.
+      if (params.systemTurn) {
+        agentMessage = wrapSystemReminder(agentMessage);
       }
       let attachmentsForCall = gatewayAttachments;
       let commandDepth = 0;

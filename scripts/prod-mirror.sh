@@ -54,11 +54,11 @@ require_docker() {
   docker info >/dev/null 2>&1 || die "Docker is not running (open -a Docker)."
 }
 
+# Always build so edits to the Dockerfile/entrypoint are picked up on the next
+# `up`. Docker's layer cache keeps this near-instant when nothing changed.
 ensure_image() {
-  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "Building $IMAGE image..."
-    docker build -f "$DOCKERFILE" -t "$IMAGE" "$(dirname "$DOCKERFILE")"
-  fi
+  echo "Building $IMAGE image..."
+  docker build -f "$DOCKERFILE" -t "$IMAGE" "$(dirname "$DOCKERFILE")"
 }
 
 ensure_key() {
@@ -90,6 +90,9 @@ build_box_env() {
   local token="$1"
   mkdir -p "$RIG_DIR"
   [ -f "$ROOT_DIR/.env" ] || die "repo .env not found; the box needs the provisioner + guild/role vars."
+  # box.env holds Discord + provisioner credentials; create it 0600 before
+  # writing so other local users cannot read the rig's secrets.
+  ( umask 077 && : >"$BOX_ENV" )
   grep -v '^DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$BOX_ENV"
   printf 'DISCORD_BOT_TOKEN=%s\n' "$token" >>"$BOX_ENV"
 }
@@ -163,13 +166,23 @@ cmd_up() {
       echo "Live mode: using the OpenClaw bot from .env. Make sure prod's router is stopped."
     fi
   else
-    echo "Offline mode: blank Discord token (router will idle). Use 'up --live' for real Discord."
+    # The router requires a Discord token (loadRouterConfig throws on an empty
+    # one), so with a blank token its container just crash-loops under the health
+    # monitor. Offline mode is for exercising the box + deploy + provisioner +
+    # per-channel agents via `register` (solo, no Discord); use `up --live` to
+    # bring the router up against real Discord.
+    echo "Offline mode: no Discord token. The router will not run; use 'register <id>'"
+    echo "for solo agent testing, or 'up --live' for the full stack against Discord."
   fi
   build_box_env "$token"
 
   echo "Starting the box (privileged, sshd on :$SSH_PORT)..."
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  docker run -d --privileged --name "$CONTAINER" -p "$SSH_PORT:22" \
+  # -v on removal takes the anonymous /var/lib/docker volume (multi-GB inner image
+  # store) with it, so repeated `up` runs do not orphan volumes. The sshd port is
+  # bound to loopback only: the rig is driven entirely through localhost, so there
+  # is no reason to expose root ssh to the LAN.
+  docker rm -f -v "$CONTAINER" >/dev/null 2>&1 || true
+  docker run -d --privileged --name "$CONTAINER" -p "127.0.0.1:$SSH_PORT:22" \
     -e AUTHORIZED_KEY="$(cat "$KEY.pub")" "$IMAGE" >/dev/null
   wait_ready || { echo "box did not become ready; see: scripts/prod-mirror.sh logs" >&2; exit 1; }
 
@@ -223,7 +236,8 @@ cmd_sh() {
 }
 
 cmd_down() {
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  # -v also removes the anonymous /var/lib/docker volume (inner image store).
+  docker rm -f -v "$CONTAINER" >/dev/null 2>&1 || true
   echo "Box removed."
   if [ "${1:-}" = "--clean" ]; then
     rm -rf "$RIG_DIR"

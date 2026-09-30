@@ -314,7 +314,14 @@ seed_workspace() {
     fi
     sleep 1
   done
-  echo "Warning: could not seed workspace for $channelId" >&2
+  # Explicitly fail (not the exit status of the echo above) so the caller can
+  # report the degraded state. This is not fatal to registration: the channel is
+  # already provisioned and the agent seeds the workspace lazily on the first
+  # user turn, so onboarding still runs then — only the proactive welcome-on-
+  # register is lost until that first message.
+  echo "Warning: could not seed workspace for $channelId; first-run welcome will" >&2
+  echo "  be deferred to the first user message." >&2
+  return 1
 }
 
 # The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
@@ -476,7 +483,7 @@ cmd_add_dm() {
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId"
+  seed_workspace "$channelId" || true
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -515,7 +522,7 @@ cmd_add_channel() {
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId"
+  seed_workspace "$channelId" || true
   echo "Done. Channel $channelId is now registered."
 }
 
