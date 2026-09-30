@@ -8,14 +8,53 @@
 # nothing is stored on the laptop and there is no code to copy-paste.
 #
 # Usage:
-#   OPENCLAW_DEPLOY_HOST=<host> scripts/mint-anthropic-reauth.sh [--store <target>]
+#   scripts/mint-anthropic-reauth.sh [--store shared|main]
 #
-# Env:
+# The deploy host can be any SSH-reachable box that runs openclaw, including the
+# local docker "fake prod host" rig (point OPENCLAW_DEPLOY_HOST at its sshd).
+#
+# Env (may live in the repo-root .env, which is gitignored):
 #   OPENCLAW_DEPLOY_HOST  SSH host for the deploy server (required)
 #   OPENCLAW_DEPLOY_PORT  SSH port (optional; omit to use the SSH config alias)
 #   OPENCLAW_REMOTE_BIN   Path to openclaw on the host (optional; defaults to one
 #                         on PATH, else ~/deploy/bin/openclaw)
 set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Pull a small set of deploy settings from the repo-root .env (if present) so
+# OPENCLAW_DEPLOY_HOST and friends can live there instead of being exported on
+# every run. Values already set in the environment always win. We whitelist the
+# keys and parse KEY=VALUE by hand rather than `source`-ing the file, so a value
+# with spaces/quotes (or an unrelated key) can never run as code. The .env is
+# gitignored; never commit a real host.
+ENV_FILE="$ROOT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  while IFS= read -r raw || [ -n "$raw" ]; do
+    line="${raw%$'\r'}"
+    case "$line" in
+      '' | '#'*) continue ;;
+    esac
+    key="${line%%=*}"
+    val="${line#*=}"
+    # Trim surrounding whitespace, then one layer of matching quotes.
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    val="${val#"${val%%[![:space:]]*}"}"
+    val="${val%"${val##*[![:space:]]}"}"
+    case "$val" in
+      \"*\") val="${val#\"}" && val="${val%\"}" ;;
+      \'*\') val="${val#\'}" && val="${val%\'}" ;;
+    esac
+    case "$key" in
+      OPENCLAW_DEPLOY_HOST | OPENCLAW_DEPLOY_PORT | OPENCLAW_REMOTE_BIN | OPENCLAW_SSH_OPTS)
+        if [ -z "${!key:-}" ]; then
+          export "$key=$val"
+        fi
+        ;;
+    esac
+  done <"$ENV_FILE"
+fi
 
 STORE="shared"
 while [ "$#" -gt 0 ]; do
@@ -26,7 +65,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     *)
       echo "Unknown argument: $1" >&2
-      echo "Usage: OPENCLAW_DEPLOY_HOST=<host> $0 [--store <target>]" >&2
+      echo "Usage: $0 [--store shared|main]" >&2
       exit 1
       ;;
   esac
@@ -42,7 +81,7 @@ case "$STORE" in
     ;;
 esac
 
-HOST="${OPENCLAW_DEPLOY_HOST:?Set OPENCLAW_DEPLOY_HOST}"
+HOST="${OPENCLAW_DEPLOY_HOST:?Set OPENCLAW_DEPLOY_HOST (env or repo-root .env)}"
 
 SSH_PORT_FLAG=()
 if [ -n "${OPENCLAW_DEPLOY_PORT:-}" ]; then

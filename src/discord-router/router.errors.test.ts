@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { classifyRouterError, isLifecycleBanner } from "./router.js";
+import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router.js";
+
+describe("isConversationalBot", () => {
+  const allow = new Set(["111", "222"]);
+
+  it("allows an allowlisted bot that is not the router itself", () => {
+    expect(isConversationalBot("111", "999", allow)).toBe(true);
+  });
+
+  it("rejects a bot that is not on the allowlist", () => {
+    expect(isConversationalBot("333", "999", allow)).toBe(false);
+  });
+
+  it("rejects the router's own bot id even when it is accidentally allowlisted", () => {
+    // Guard against the self-loop: our own replies must never route back in.
+    const withSelf = new Set(["111", "999"]);
+    expect(isConversationalBot("999", "999", withSelf)).toBe(false);
+  });
+
+  it("rejects a missing author id", () => {
+    expect(isConversationalBot(undefined, "999", allow)).toBe(false);
+  });
+});
 
 describe("classifyRouterError", () => {
   // The exact error the prod router logged for an instance provisioned without

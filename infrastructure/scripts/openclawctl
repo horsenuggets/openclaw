@@ -293,11 +293,47 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) inside
+# the freshly-started container. The onboarding wizard normally seeds these, but
+# the provisioning path bypasses the wizard, so the workspace would otherwise stay
+# empty until the agent's first turn seeds it lazily. That is too late for the
+# router: it reads workspace/BOOTSTRAP.md to drive the first-run welcome card on
+# registration, so a missing file means no welcome and no onboarding. Run it in
+# the container (not on the host) because only the container image ships the
+# templates next to the binary; the host deploy layout puts them elsewhere.
+# Idempotent: setup uses write-if-missing, so re-running on an existing instance
+# is a no-op.
+seed_workspace() {
+  local channelId="$1"
+  local container="agents.channel-$channelId"
+  local i
+  for i in $(seq 1 10); do
+    if docker exec "$container" sh -lc 'openclaw setup --workspace "$HOME/.openclaw/workspace"' \
+      >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  # Explicitly fail (not the exit status of the echo above) so the caller can
+  # report the degraded state. This is not fatal to registration: the channel is
+  # already provisioned and the agent seeds the workspace lazily on the first
+  # user turn, so onboarding still runs then — only the proactive welcome-on-
+  # register is lost until that first message.
+  echo "Warning: could not seed workspace for $channelId; first-run welcome will" >&2
+  echo "  be deferred to the first user message." >&2
+  return 1
+}
+
 # The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
 # loopback. Agent containers are host-networked, so they reach it at 127.0.0.1.
 # host.docker.internal only resolves under bridge networking and must NOT be used
 # here, or proactive/heartbeat sends silently fail at DNS resolution.
 CONTAINER_PROXY_URL="http://127.0.0.1:18800"
+
+# Default primary model for a freshly-bootstrapped instance, used only when there
+# is no sibling instance to copy config from. Must match the model id seeded into
+# the anthropic-subscription provider block below.
+BASE_MODEL="anthropic-subscription/claude-sonnet-4-6"
 
 # Seed a new instance's openclaw.json from an existing instance (if any), then
 # force the Discord proxyUrl to the correct loopback address regardless of what
@@ -314,6 +350,72 @@ seed_instance_config() {
       break
     fi
   done
+
+  # Fresh host: no sibling instance to copy from, so seed a minimal valid base
+  # config. Without this the first channel on a brand-new host gets no
+  # openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
+  # gateway.mode=local). The router reads each instance's gateway.auth.token back
+  # from this file to authenticate to the agent (see src/discord-router/config.ts),
+  # so a fresh per-instance token is all that is required. Guarded like the
+  # proxyUrl edit below so a failure warns rather than aborting under set -e after
+  # the port is already reserved.
+  if [ ! -f "$target" ]; then
+    if [ -n "$OPENCLAW_BIN" ]; then
+      echo "No existing instance to copy; seeding base config for $channelId"
+      local token
+      token=$(python3 -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null || true)
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.mode local >/dev/null 2>&1 ||
+        echo "Warning: could not seed gateway.mode for $channelId" >&2
+      if [ -n "$token" ]; then
+        OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.auth.token "$token" >/dev/null 2>&1 ||
+          echo "Warning: could not seed gateway.auth.token for $channelId" >&2
+      fi
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set agents.defaults.model.primary "$BASE_MODEL" >/dev/null 2>&1 ||
+        echo "Warning: could not seed model for $channelId" >&2
+      # Seed the anthropic-subscription provider definition: baseUrl, the
+      # anthropic-messages api, oauth auth, the Claude Code user-agent + beta
+      # headers that bill the request to the subscription, and the model catalog.
+      # Without this the model resolves as "Unknown model" even with a valid OAuth
+      # token, because the provider is not built into the binary. Every instance
+      # copied from an onboarded original already carries this block; a fresh host
+      # has nothing to copy, so seed it explicitly. Written with python because
+      # `config set` cannot express the nested arrays/hyphenated header keys; the
+      # file config-set just wrote is plain JSON at this point.
+      python3 - "$target" <<'PY' 2>/dev/null ||
+import json, sys
+
+with open(sys.argv[1]) as f:
+    cfg = json.load(f)
+cfg.setdefault("models", {}).setdefault("providers", {})["anthropic-subscription"] = {
+    "baseUrl": "https://api.anthropic.com",
+    "api": "anthropic-messages",
+    "auth": "oauth",
+    "headers": {
+        "user-agent": "claude-cli/2.1.119 (external, cli)",
+        "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+    },
+    "models": [
+        {
+            "id": "claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6",
+            "reasoning": False,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 64000,
+        }
+    ],
+}
+with open(sys.argv[1], "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+        echo "Warning: could not seed subscription provider for $channelId" >&2
+    else
+      echo "Warning: openclaw CLI not found; cannot seed base config for $channelId" >&2
+    fi
+  fi
+
   if [ -f "$target" ]; then
     # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
     # single-quoted strings), so we must not parse them with a stdlib JSON reader
@@ -381,6 +483,7 @@ cmd_add_dm() {
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
+  seed_workspace "$channelId" || true
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -419,6 +522,7 @@ cmd_add_channel() {
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
+  seed_workspace "$channelId" || true
   echo "Done. Channel $channelId is now registered."
 }
 

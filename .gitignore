@@ -94,3 +94,6 @@ memory/
 .pm2-ecosystem.json
 .claude/scheduled_tasks.lock
 .sea-cache/
+
+# prod-mirror rig staging (scripts/prod-mirror.sh)
+.prod-mirror/

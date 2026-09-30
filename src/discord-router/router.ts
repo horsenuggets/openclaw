@@ -6,6 +6,7 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
+import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { stripHorizontalRules } from "../discord/markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
 import { convertMarkdownTables } from "../markdown/tables.js";
@@ -110,6 +111,25 @@ export const LIFECYCLE_BANNERS = ["*Back online.*", "*Shutting down...*"];
 
 export function isLifecycleBanner(content: string | undefined): boolean {
   return LIFECYCLE_BANNERS.includes((content ?? "").trim());
+}
+
+/**
+ * Whether a bot's message may be treated as a normal conversational turn.
+ * Trusted only when the author is in the allowlist AND is not the router's own
+ * bot — routing our own replies back into the agent would be an unbounded
+ * self-loop, so self is always rejected even if it was accidentally allowlisted.
+ * Shared by the live message filter and the reconnect recovery scan so the two
+ * cannot drift.
+ */
+export function isConversationalBot(
+  authorId: string | undefined,
+  selfBotId: string | undefined,
+  allowedBotIds: Set<string>,
+): boolean {
+  if (!authorId || authorId === selfBotId) {
+    return false;
+  }
+  return allowedBotIds.has(authorId);
 }
 
 export type RouterErrorKind = "connection-refused" | "auth" | "timeout" | "generic";
@@ -257,6 +277,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   });
 
+  // Trusted bot ids (comma-separated OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may hold
+  // normal conversations with the agent, not just run /channel commands. Intended
+  // for an automated tester bot driving end-to-end tests; every other bot stays
+  // filtered out below to prevent bot-to-bot reply loops.
+  const allowedBotIds = new Set(
+    (process.env.OPENCLAW_ROUTER_ALLOW_BOT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
   const describeInstance = (channelId: string): InstanceStatus | null => {
@@ -354,6 +385,47 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     // whether the agent is actually up.
     probeRunning: (port) => probePort(port),
     provisioning,
+    // Kick the agent's first turn right after a successful register so the
+    // welcome card + greeting appear immediately, before the owner speaks.
+    // routeMessage prepends the BOOTSTRAP directive as conversation content
+    // (billing-safe) while BOOTSTRAP.md exists, so a synthetic system message is
+    // enough to drive onboarding. Fire-and-forget; the register embed was
+    // already sent by the command handler, so ordering stays correct.
+    kickOnboarding: (channelId, ownerId) => {
+      const instance = instances.get(channelId);
+      if (!instance || !bootstrapExists(instance)) {
+        return;
+      }
+      void runOnboardingKick({
+        channelId,
+        ownerId,
+        instance,
+        inflight,
+        probe: (port) => probePort(port),
+        runtime,
+        route: ({
+          channelId: cId,
+          ownerId: oId,
+          instance: inst,
+          systemTurn,
+          preacquiredInflight,
+        }) =>
+          routeMessage({
+            authorId: oId,
+            channelId: cId,
+            messageContent:
+              "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
+            instance: inst,
+            discordToken,
+            runtime,
+            agentTimeoutMs,
+            inflight,
+            runCommand: runAgentCommand,
+            systemTurn,
+            preacquiredInflight,
+          }),
+      });
+    },
     log: (message) => runtime.log(message),
   };
 
@@ -543,6 +615,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 inflight,
                 runAgentCommand,
                 recoveredMessageIds,
+                allowedBotIds,
                 // Apply the same guild access control as live messages so a
                 // non-owner's message in a shared guild channel is not replayed
                 // to the agent on restart.
@@ -632,9 +705,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               return;
             }
 
-            // Normal agent messages: ignore bots and empty messages. Channel
-            // commands were already handled above so bots can still drive them.
-            if (!authorId || isBot || (!content.trim() && !hasAttachments)) {
+            // Normal agent messages: ignore untrusted bots and empty messages.
+            // Channel commands were already handled above so bots can still drive
+            // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse, but
+            // never the router's own bot (self-routing would loop).
+            const botAllowed = isBot
+              ? isConversationalBot(authorId, applicationId, allowedBotIds)
+              : false;
+            if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
               return;
             }
 
@@ -1190,6 +1268,20 @@ async function routeMessage(params: {
   inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
+  /**
+   * Mark this as a system-injected turn (not the human speaking). The assembled
+   * message is wrapped in a `<system-reminder>` block so the transcript
+   * classifier attributes it as `system` rather than `user`. Used by the
+   * onboarding kick, which has no real user message behind it.
+   */
+  systemTurn?: boolean;
+  /**
+   * The caller already holds this channel's `inflight` slot (and will release
+   * it). Skip acquiring/releasing it here. The onboarding kick reserves the slot
+   * before its readiness wait so a user message sent right after the register
+   * embed queues behind the kick instead of overtaking it.
+   */
+  preacquiredInflight?: boolean;
 }): Promise<boolean> {
   const {
     authorId,
@@ -1201,17 +1293,19 @@ async function routeMessage(params: {
     agentTimeoutMs,
     inflight,
   } = params;
+  const preacquiredInflight = params.preacquiredInflight === true;
   let messageContent = params.messageContent;
 
-  // Serialize per-channel
-  if (inflight.has(channelId)) {
-    runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
+  // Serialize per-channel (unless the caller already holds the slot).
+  if (!preacquiredInflight) {
+    if (inflight.has(channelId)) {
+      runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
+    }
+    while (inflight.has(channelId)) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    inflight.add(channelId);
   }
-  while (inflight.has(channelId)) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  inflight.add(channelId);
   try {
     runtime.log(
       `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
@@ -1318,6 +1412,14 @@ async function routeMessage(params: {
       const bootstrapDirective = readBootstrapDirective(instance);
       if (bootstrapDirective) {
         agentMessage = `${bootstrapDirective}\n\n${agentMessage}`;
+      }
+
+      // A system-injected turn (onboarding kick) carries no human message, so
+      // wrap the whole thing in a system-reminder block: the model treats it as
+      // system context and the transcript classifier attributes it as `system`
+      // instead of persisting a fake `user` turn.
+      if (params.systemTurn) {
+        agentMessage = wrapSystemReminder(agentMessage);
       }
       let attachmentsForCall = gatewayAttachments;
       let commandDepth = 0;
@@ -1436,6 +1538,13 @@ async function routeMessage(params: {
         ) {
           commandDepth += 1;
           agentMessage = `[system] Command result: ${commandResult}`;
+          // Keep command-result relays system-attributed for a system turn (e.g.
+          // the onboarding kick relays the `send_hook_embed welcome` result).
+          // Without this only the first call is wrapped, so the relay persists as
+          // a fake `user` turn even though this flow has no human message.
+          if (params.systemTurn) {
+            agentMessage = wrapSystemReminder(agentMessage);
+          }
           continue;
         }
         break;
@@ -1476,6 +1585,80 @@ async function routeMessage(params: {
       ).catch(() => {});
     }
     return false;
+  } finally {
+    if (!preacquiredInflight) {
+      inflight.delete(channelId);
+    }
+  }
+}
+
+/** Message routed by {@link runOnboardingKick} into an agent's first turn. */
+export type OnboardingKickRoute = (params: {
+  channelId: string;
+  ownerId: string;
+  instance: InstanceConfig;
+  systemTurn: true;
+  preacquiredInflight: true;
+}) => Promise<boolean>;
+
+/**
+ * Drive the first onboarding turn for a freshly registered channel, before the
+ * owner speaks. Extracted from the router closure so its concurrency/error paths
+ * are unit-testable with injected `probe`/`route`.
+ *
+ * Serialization: reserves the channel's `inflight` slot BEFORE the readiness wait
+ * so a user message sent right after the register embed queues behind the kick
+ * instead of overtaking it (which would invert ordering and could double the
+ * welcome). If a turn is already in flight, the kick is skipped — that turn drives
+ * onboarding itself. The slot is always released.
+ *
+ * Readiness: the provisioner can report ready before the agent gateway accepts
+ * connections, and `routeMessage` turns an ECONNREFUSED into a one-shot error
+ * with no retry, so the kick is deferred until `probe` succeeds. If it never
+ * becomes ready the kick is skipped rather than firing at a dead port.
+ *
+ * @returns "busy" (already in flight), "not-ready" (gateway never came up), or
+ *          "kicked" (the onboarding turn was routed).
+ */
+export async function runOnboardingKick(params: {
+  channelId: string;
+  ownerId: string;
+  instance: InstanceConfig;
+  inflight: Set<string>;
+  probe: (port: number) => Promise<boolean>;
+  route: OnboardingKickRoute;
+  runtime: RouterRuntime;
+  attempts?: number;
+  intervalMs?: number;
+}): Promise<"busy" | "not-ready" | "kicked"> {
+  const { channelId, ownerId, instance, inflight, probe, route, runtime } = params;
+  const attempts = params.attempts ?? 20;
+  const intervalMs = params.intervalMs ?? 1000;
+
+  // A message could already be in flight (e.g. the owner started typing
+  // immediately); that turn will drive onboarding itself, so do not kick.
+  if (inflight.has(channelId)) {
+    return "busy";
+  }
+  inflight.add(channelId);
+  try {
+    let ready = false;
+    for (let i = 0; i < attempts; i++) {
+      if (await probe(instance.port)) {
+        ready = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    if (!ready) {
+      runtime.error(
+        `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
+      );
+      return "not-ready";
+    }
+    runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
+    await route({ channelId, ownerId, instance, systemTurn: true, preacquiredInflight: true });
+    return "kicked";
   } finally {
     inflight.delete(channelId);
   }
@@ -1757,6 +1940,12 @@ async function recoverUnansweredMessages(
   runCommand: RunAgentCommand,
   /** Message IDs already attempted this process, to avoid re-recovery loops. */
   recoveredMessageIds: Set<string>,
+  /**
+   * Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) whose messages are
+   * conversational, matching the live path. Their unanswered messages are
+   * recoverable; every other bot's message is treated as a reply/banner.
+   */
+  allowedBotIds: Set<string>,
   /** Same guild access control applied to live messages (owner/admin only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
@@ -1822,7 +2011,11 @@ async function recoverUnansweredMessages(
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       for (const msg of messages) {
-        const isBotMsg = msg.author.bot || msg.author.id === botId;
+        // A trusted bot (allowlisted, and not the router itself) converses like a
+        // human on the live path, so its unanswered message is recoverable too.
+        const isTrustedBot =
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
+        const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {
             continue;

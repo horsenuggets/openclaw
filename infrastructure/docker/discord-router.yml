@@ -19,6 +19,10 @@ services:
       # channel (incl. on another user's behalf) and unregister any channel.
       # Unset => nobody is admin (only owners/whitelisted-DM rules apply).
       - OPENCLAW_ADMIN_ROLE_ID=${OPENCLAW_ADMIN_ROLE_ID}
+      # Trusted bot ids (comma-separated) allowed to hold normal conversations
+      # with the agent, not just run /channel commands. For an automated tester
+      # bot driving end-to-end tests. Unset => all bots are chat-filtered.
+      - OPENCLAW_ROUTER_ALLOW_BOT_IDS=${OPENCLAW_ROUTER_ALLOW_BOT_IDS}
       # Host provisioning daemon (discord-provisioner) the router calls over
       # loopback for /channel register|unregister. Unset => those are disabled.
       - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}
