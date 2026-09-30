@@ -137,6 +137,14 @@ export type ChannelCommandDeps = {
   /** Optional live check of whether the agent container is up (TCP probe). */
   probeRunning?: (port: number) => Promise<boolean>;
   provisioning: ProvisioningClient;
+  /**
+   * Fire the agent's first onboarding turn right after a successful register, so
+   * the welcome card and greeting appear immediately without the user having to
+   * send a message first. Called after the register embed is sent (ordering:
+   * register embed, then welcome). Fire-and-forget; a slow agent turn must not
+   * block the command handler.
+   */
+  kickOnboarding?: (channelId: string, ownerId: string) => void;
   log: (message: string) => void;
 };
 
@@ -375,6 +383,11 @@ export async function handleChannelCommand(
     deps.log(
       `[channel] register ${ctx.channelId} by ${ctx.userId} owner=${ownerId}: ok=${result.ok}`,
     );
+    // Register embed is out; now kick the agent's first turn so the welcome card
+    // and greeting land immediately, before the owner says anything.
+    if (result.ok) {
+      deps.kickOnboarding?.(ctx.channelId, ownerId);
+    }
     return;
   }
 

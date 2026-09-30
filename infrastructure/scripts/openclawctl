@@ -293,6 +293,30 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) inside
+# the freshly-started container. The onboarding wizard normally seeds these, but
+# the provisioning path bypasses the wizard, so the workspace would otherwise stay
+# empty until the agent's first turn seeds it lazily. That is too late for the
+# router: it reads workspace/BOOTSTRAP.md to drive the first-run welcome card on
+# registration, so a missing file means no welcome and no onboarding. Run it in
+# the container (not on the host) because only the container image ships the
+# templates next to the binary; the host deploy layout puts them elsewhere.
+# Idempotent: setup uses write-if-missing, so re-running on an existing instance
+# is a no-op.
+seed_workspace() {
+  local channelId="$1"
+  local container="agents.channel-$channelId"
+  local i
+  for i in $(seq 1 10); do
+    if docker exec "$container" sh -lc 'openclaw setup --workspace "$HOME/.openclaw/workspace"' \
+      >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Warning: could not seed workspace for $channelId" >&2
+}
+
 # The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
 # loopback. Agent containers are host-networked, so they reach it at 127.0.0.1.
 # host.docker.internal only resolves under bridge networking and must NOT be used
@@ -452,6 +476,7 @@ cmd_add_dm() {
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
+  seed_workspace "$channelId"
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -490,6 +515,7 @@ cmd_add_channel() {
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
+  seed_workspace "$channelId"
   echo "Done. Channel $channelId is now registered."
 }
 

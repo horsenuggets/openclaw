@@ -365,6 +365,31 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     // whether the agent is actually up.
     probeRunning: (port) => probePort(port),
     provisioning,
+    // Kick the agent's first turn right after a successful register so the
+    // welcome card + greeting appear immediately, before the owner speaks.
+    // routeMessage prepends the BOOTSTRAP directive as conversation content
+    // (billing-safe) while BOOTSTRAP.md exists, so a synthetic system message is
+    // enough to drive onboarding. Fire-and-forget; the register embed was
+    // already sent by the command handler, so ordering stays correct.
+    kickOnboarding: (channelId, ownerId) => {
+      const instance = instances.get(channelId);
+      if (!instance || !bootstrapExists(instance)) {
+        return;
+      }
+      runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
+      void routeMessage({
+        authorId: ownerId,
+        channelId,
+        messageContent:
+          "[System: This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.]",
+        instance,
+        discordToken,
+        runtime,
+        agentTimeoutMs,
+        inflight,
+        runCommand: runAgentCommand,
+      });
+    },
     log: (message) => runtime.log(message),
   };
 

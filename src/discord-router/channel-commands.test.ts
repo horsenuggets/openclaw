@@ -276,6 +276,41 @@ describe("handleChannelCommand register", () => {
     expect(embedOf(replies[0].payload).embed.description).toContain("Could not register");
     expect(embedOf(replies[0].payload).embed.description).toContain("daemon down");
   });
+
+  it("kicks onboarding after a successful register, once the embed is out", async () => {
+    const register = vi.fn(async () => ({ ok: true, message: "ok" }));
+    // Both the reply and the kick push to a shared log so we can assert the
+    // welcome follows registration and never precedes it.
+    const order: string[] = [];
+    const kickArgs: string[] = [];
+    const { ctx } = makeCtx("register", [], { isDM: true, userId: "U1" });
+    ctx.reply = () => {
+      order.push("embed");
+    };
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        provisioning: { register, unregister: vi.fn() },
+        kickOnboarding: (channelId, ownerId) => {
+          order.push("kick");
+          kickArgs.push(channelId, ownerId);
+        },
+      }),
+    );
+    expect(order).toEqual(["embed", "kick"]);
+    expect(kickArgs).toEqual(["123456789012345678", "U1"]);
+  });
+
+  it("does not kick onboarding when register fails", async () => {
+    const register = vi.fn(async () => ({ ok: false, message: "daemon down" }));
+    const kickOnboarding = vi.fn();
+    const { ctx } = makeCtx("register", [], { isDM: true });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({ provisioning: { register, unregister: vi.fn() }, kickOnboarding }),
+    );
+    expect(kickOnboarding).not.toHaveBeenCalled();
+  });
 });
 
 describe("handleChannelCommand unregister", () => {
