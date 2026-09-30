@@ -44,7 +44,7 @@ export type MintAnthropicDeps = {
   promptCode?: () => Promise<string>;
 };
 
-// Resolve the per-host instances root the same way src/discord-router/config.ts
+// Resolve the per-host instances root the same way src/discord/router/config.ts
 // does, so --store shared targets the directory the router actually scans.
 export function resolveInstancesDir(override?: string): string {
   return (

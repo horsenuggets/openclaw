@@ -21,7 +21,7 @@ import {
   type ProvisionResponse,
   type RegisterRequest,
   type UnregisterRequest,
-} from "../src/discord-router/provisioning.js";
+} from "../src/discord/router/provisioning.js";
 
 const PORT = Number.parseInt(process.env.OPENCLAW_PROVISIONER_PORT ?? "", 10);
 const TOKEN = process.env.OPENCLAW_PROVISIONER_TOKEN ?? "";

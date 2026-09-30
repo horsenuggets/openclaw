@@ -1,5 +1,5 @@
 import http from "node:http";
-import type { RouterRuntime } from "./router.js";
+import type { RouterRuntime } from "./types.js";
 
 /**
  * Container proxy server. Agent containers run without direct Discord access, so

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceConfig } from "./config";
-import { runOnboardingKick } from "./router";
+import { runOnboardingKick } from "./onboarding.js";
 
 function makeInstance(port = 18790): InstanceConfig {
   return { channelId: "C1", port, instanceDir: "/tmp/does-not-matter" } as InstanceConfig;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router.js";
+import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 
 describe("isConversationalBot", () => {
   const allow = new Set(["111", "222"]);

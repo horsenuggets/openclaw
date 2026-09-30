@@ -322,7 +322,7 @@ for (const target of targets) {
 
   try {
     execSync(
-      `bun build src/discord-router/entry.ts --compile --target=${target.bunTarget} --outfile ${routerOutfile}`,
+      `bun build src/discord/router/entry.ts --compile --target=${target.bunTarget} --outfile ${routerOutfile}`,
       { stdio: "inherit" },
     );
   } catch {
