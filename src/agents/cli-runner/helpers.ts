@@ -206,6 +206,7 @@ export function buildSystemPrompt(params: {
   docsPath?: string;
   tools: AgentTool[];
   contextFiles?: EmbeddedContextFile[];
+  contextPointer?: string;
   modelDisplay: string;
   agentId?: string;
   conversationHistory?: string;
@@ -245,6 +246,7 @@ export function buildSystemPrompt(params: {
     userTime,
     userTimeFormat,
     contextFiles: params.contextFiles,
+    contextPointer: params.contextPointer,
     ttsHint,
     memoryCitationsMode: params.config?.memory?.citations,
     conversationHistory: params.conversationHistory,

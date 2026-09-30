@@ -47,6 +47,8 @@ export function buildEmbeddedSystemPrompt(params: {
   userTime?: string;
   userTimeFormat?: ResolvedTimeFormat;
   contextFiles?: EmbeddedContextFile[];
+  /** Optional pointer listing withheld ("off") workspace files (inline placement). */
+  contextPointer?: string;
   memoryCitationsMode?: MemoryCitationsMode;
   /**
    * Subscription path only: wrap the Project Context block in sentinel markers
@@ -78,6 +80,7 @@ export function buildEmbeddedSystemPrompt(params: {
     userTime: params.userTime,
     userTimeFormat: params.userTimeFormat,
     contextFiles: params.contextFiles,
+    contextPointer: params.contextPointer,
     memoryCitationsMode: params.memoryCitationsMode,
     wrapProjectContext: params.wrapProjectContext,
   });

@@ -2,45 +2,10 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { describe, expect, it } from "vitest";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
 import { validateAnthropicTurns } from "../pi-embedded-helpers.js";
-import { buildPersonaPreambleMessage, splitPersonaContextFiles } from "./persona-preamble.js";
+import { buildPersonaPreambleMessage } from "./persona-preamble.js";
 
 const soul: EmbeddedContextFile = { path: "SOUL.md", content: "be warm and casual" };
 const agents: EmbeddedContextFile = { path: "AGENTS.md", content: "this folder is home" };
-const user: EmbeddedContextFile = { path: "USER.md", content: "the owner is Alex" };
-const memory: EmbeddedContextFile = { path: "MEMORY.md", content: "remembered facts" };
-
-describe("splitPersonaContextFiles", () => {
-  it("separates SOUL.md and AGENTS.md from the remaining files", () => {
-    const { personaFiles, remainingFiles } = splitPersonaContextFiles([agents, soul, user, memory]);
-    expect(personaFiles.map((f) => f.path)).toEqual(["SOUL.md", "AGENTS.md"]);
-    expect(remainingFiles.map((f) => f.path)).toEqual(["USER.md", "MEMORY.md"]);
-  });
-
-  it("emits persona files in canonical order regardless of load order", () => {
-    // Load order here is SOUL then AGENTS; canonical order is SOUL then AGENTS too,
-    // but verify a reversed input still yields the canonical order.
-    const { personaFiles } = splitPersonaContextFiles([agents, soul]);
-    expect(personaFiles.map((f) => f.path)).toEqual(["SOUL.md", "AGENTS.md"]);
-  });
-
-  it("preserves the original order of the remaining files", () => {
-    const { remainingFiles } = splitPersonaContextFiles([user, agents, memory, soul]);
-    expect(remainingFiles.map((f) => f.path)).toEqual(["USER.md", "MEMORY.md"]);
-  });
-
-  it("matches persona files case-insensitively and by basename with directories", () => {
-    const nested: EmbeddedContextFile = { path: "workspace/soul.md", content: "nested soul" };
-    const { personaFiles, remainingFiles } = splitPersonaContextFiles([nested, user]);
-    expect(personaFiles.map((f) => f.path)).toEqual(["workspace/soul.md"]);
-    expect(remainingFiles.map((f) => f.path)).toEqual(["USER.md"]);
-  });
-
-  it("returns no persona files when none are present", () => {
-    const { personaFiles, remainingFiles } = splitPersonaContextFiles([user, memory]);
-    expect(personaFiles).toEqual([]);
-    expect(remainingFiles.map((f) => f.path)).toEqual(["USER.md", "MEMORY.md"]);
-  });
-});
 
 // The preamble content is a text-content array (never a bare string) so the turn
 // validators preserve it when merging into a persisted user turn; join the text
@@ -136,5 +101,22 @@ describe("buildPersonaPreambleMessage", () => {
 
   it("returns undefined when there is neither persona nor heartbeat content", () => {
     expect(buildPersonaPreambleMessage([], { heartbeatGuidance: "   " })).toBeUndefined();
+  });
+
+  it("renders non-persona preamble files without the identity line", () => {
+    const userFile: EmbeddedContextFile = { path: "USER.md", content: "the owner is Alex" };
+    const content = textOf(buildPersonaPreambleMessage([userFile]));
+    expect(content).toContain("## USER.md");
+    expect(content).toContain("the owner is Alex");
+    // No SOUL/AGENTS present, so the persona identity line is omitted.
+    expect(content).not.toContain("You are OpenClaw");
+  });
+
+  it("appends the pointer block inside the same system-reminder", () => {
+    const pointer = "## Workspace Files\nThese exist: TOOLS.md, MEMORY.md. Read them when needed.";
+    const content = textOf(buildPersonaPreambleMessage([soul], { pointer }));
+    expect(content).toContain("## SOUL.md");
+    expect(content).toContain("TOOLS.md, MEMORY.md");
+    expect(content?.match(/<system-reminder>/g)?.length).toBe(1);
   });
 });

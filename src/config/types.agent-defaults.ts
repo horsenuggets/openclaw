@@ -23,6 +23,36 @@ export type AgentModelListConfig = {
   fallbacks?: string[];
 };
 
+/**
+ * How a workspace context file (SOUL.md, AGENTS.md, IDENTITY.md, USER.md,
+ * TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md, MEMORY.md) reaches the model:
+ * - "inline": full content in the system-prompt Project Context block (stripped
+ *   on the subscription path, where it would spill billing).
+ * - "preamble": full content in the leading `<system-reminder>` user message
+ *   (reaches the model on every path without spilling; rides the cached prefix).
+ * - "off": content not sent; if a pointer is enabled the file is still listed by
+ *   name so the model can Read it on demand.
+ */
+export type WorkspaceContextMode = "inline" | "preamble" | "off";
+
+export type WorkspaceContextConfig = {
+  /**
+   * Fallback mode for files with no explicit `files` override. When this is set it
+   * also overrides the built-in per-file defaults. When it is omitted, each file
+   * falls back to its built-in default (persona/identity/profile files default to
+   * "preamble", TOOLS/HEARTBEAT/MEMORY to "off"), and anything with no built-in
+   * default to "inline".
+   */
+  default?: WorkspaceContextMode;
+  /** Per-file overrides keyed by lowercased basename (e.g. "memory.md"). */
+  files?: Record<string, WorkspaceContextMode>;
+  /**
+   * Where to place the pointer that lists "off" files so the model knows they
+   * exist and can Read them on demand (default: "preamble"; "off" disables it).
+   */
+  pointer?: "inline" | "preamble" | "off";
+};
+
 export type AgentContextPruningConfig = {
   mode?: "off" | "cache-ttl";
   /** TTL to consider cache expired (duration string, default unit: minutes). */
@@ -108,6 +138,8 @@ export type AgentDefaultsConfig = {
   skipBootstrap?: boolean;
   /** Max chars for injected bootstrap files before truncation (default: 20000). */
   bootstrapMaxChars?: number;
+  /** Per-file delivery mode for workspace context files (inline / preamble / off). */
+  context?: WorkspaceContextConfig;
   /** Optional IANA timezone for the user (used in system prompt; defaults to host timezone). */
   userTimezone?: string;
   /** Time format in system prompt: auto (OS preference), 12-hour, or 24-hour. */
