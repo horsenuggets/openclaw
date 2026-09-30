@@ -36,7 +36,13 @@ export type AgentModelListConfig = {
 export type WorkspaceContextMode = "inline" | "preamble" | "off";
 
 export type WorkspaceContextConfig = {
-  /** Fallback mode for files with no explicit override (default: "inline"). */
+  /**
+   * Fallback mode for files with no explicit `files` override. When this is set it
+   * also overrides the built-in per-file defaults. When it is omitted, each file
+   * falls back to its built-in default (persona/identity/profile files default to
+   * "preamble", TOOLS/HEARTBEAT/MEMORY to "off"), and anything with no built-in
+   * default to "inline".
+   */
   default?: WorkspaceContextMode;
   /** Per-file overrides keyed by lowercased basename (e.g. "memory.md"). */
   files?: Record<string, WorkspaceContextMode>;

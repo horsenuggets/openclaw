@@ -5,6 +5,7 @@ import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { resolveBootstrapMaxChars } from "../../agents/pi-embedded-helpers.js";
+import { resolveWorkspaceContextDelivery } from "../../agents/pi-embedded-runner/workspace-context.js";
 import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
@@ -59,12 +60,20 @@ async function resolveContextReport(
 
   const workspaceDir = params.workspaceDir;
   const bootstrapMaxChars = resolveBootstrapMaxChars(params.cfg);
-  const { bootstrapFiles, contextFiles: injectedFiles } = await resolveBootstrapContextForRun({
+  const { bootstrapFiles, contextFiles: allContextFiles } = await resolveBootstrapContextForRun({
     workspaceDir,
     config: params.cfg,
     sessionKey: params.sessionKey,
     sessionId: params.sessionEntry?.sessionId,
   });
+  // Route files the same way a real run does so the estimate matches: only inline
+  // files go into the system prompt, and the byte count covers files that actually
+  // reach the model (inline + preamble); "off" files are withheld (pointer only).
+  const { inlineFiles, preambleFiles } = resolveWorkspaceContextDelivery(
+    allContextFiles,
+    params.cfg?.agents?.defaults?.context,
+  );
+  const injectedFiles = [...inlineFiles, ...preambleFiles];
   const skillsSnapshot = (() => {
     try {
       return buildWorkspaceSkillSnapshot(workspaceDir, {
@@ -151,7 +160,7 @@ async function resolveContextReport(
     userTimezone,
     userTime,
     userTimeFormat,
-    contextFiles: injectedFiles,
+    contextFiles: inlineFiles,
     skillsPrompt,
     heartbeatPrompt: undefined,
     ttsHint,
