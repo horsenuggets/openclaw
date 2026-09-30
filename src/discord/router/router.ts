@@ -139,11 +139,22 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const recoveredMessageIds = new Set<string>();
 
   // --- /channel command wiring ---
+  // User/bot ids (comma-separated OPENCLAW_ADMIN_OVERRIDE_IDS) granted admin +
+  // whitelist without the auth-guild role lookup. For test/lab rigs whose router
+  // bot is not a member of the auth server; empty => no override (fail closed).
+  const overrideAdminIds = new Set(
+    (process.env.OPENCLAW_ADMIN_OVERRIDE_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+
   const whitelist = createWhitelistChecker({
     discordToken,
     guildId: process.env.OPENCLAW_AUTH_GUILD_ID,
     roleId: process.env.OPENCLAW_WHITELIST_ROLE_ID,
     adminRoleId: process.env.OPENCLAW_ADMIN_ROLE_ID,
+    overrideAdminIds,
     log: (message) => runtime.log(message),
   });
 

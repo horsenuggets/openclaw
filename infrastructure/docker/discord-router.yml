@@ -19,6 +19,11 @@ services:
       # channel (incl. on another user's behalf) and unregister any channel.
       # Unset => nobody is admin (only owners/whitelisted-DM rules apply).
       - OPENCLAW_ADMIN_ROLE_ID=${OPENCLAW_ADMIN_ROLE_ID}
+      # Comma-separated user/bot ids granted admin + whitelist without the
+      # auth-guild role lookup, for test/lab rigs whose router bot is not a
+      # member of the auth server. Unset => no override (fail closed). Do not use
+      # in production; add a real auth-server role instead.
+      - OPENCLAW_ADMIN_OVERRIDE_IDS=${OPENCLAW_ADMIN_OVERRIDE_IDS}
       # Trusted bot ids (comma-separated) allowed to hold normal conversations
       # with the agent, not just run /channel commands. For an automated tester
       # bot driving end-to-end tests. Unset => all bots are chat-filtered.
