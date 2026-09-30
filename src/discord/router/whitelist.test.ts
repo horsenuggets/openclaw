@@ -101,6 +101,74 @@ describe("createWhitelistChecker", () => {
     expect(await checker.isWhitelisted("u1")).toBe(true);
   });
 
+  it("grants admin + whitelist to an override id without any Discord call", async () => {
+    const fetchImpl = vi.fn();
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: "G",
+      roleId: "ROLE",
+      adminRoleId: "ADMIN",
+      overrideAdminIds: new Set(["botTester", "userSelf"]),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(await checker.isAdmin("botTester")).toBe(true);
+    expect(await checker.isWhitelisted("botTester")).toBe(true);
+    expect(await checker.isAdmin("userSelf")).toBe(true);
+    // The override short-circuits before the auth-guild member lookup.
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("still applies the role lookup to non-override ids", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ roles: ["ROLE"] }),
+    }));
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: "G",
+      roleId: "ROLE",
+      adminRoleId: "ADMIN",
+      overrideAdminIds: new Set(["botTester"]),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    // A user not on the override list falls through to the real role check.
+    expect(await checker.isWhitelisted("someoneElse")).toBe(true);
+    expect(await checker.isAdmin("someoneElse")).toBe(false);
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  it("reports configured when only an override list is set (no auth guild)", async () => {
+    const fetchImpl = vi.fn();
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: undefined,
+      roleId: undefined,
+      overrideAdminIds: new Set(["botTester"]),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(checker.isConfigured()).toBe(true);
+    expect(await checker.isAdmin("botTester")).toBe(true);
+    // A non-override id still fails closed, with no Discord call.
+    expect(await checker.isWhitelisted("nobody")).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("an empty override set has no effect (fails closed)", async () => {
+    const fetchImpl = vi.fn();
+    const checker = createWhitelistChecker({
+      discordToken: "t",
+      guildId: undefined,
+      roleId: undefined,
+      overrideAdminIds: new Set(),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(checker.isConfigured()).toBe(false);
+    expect(await checker.isAdmin("u1")).toBe(false);
+    expect(await checker.isWhitelisted("u1")).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("caches results within the TTL", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

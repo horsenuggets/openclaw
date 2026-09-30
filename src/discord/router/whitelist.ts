@@ -31,6 +31,16 @@ export type WhitelistDeps = {
   roleId: string | undefined;
   /** Admin role id; from OPENCLAW_ADMIN_ROLE_ID. Unset => nobody is admin. */
   adminRoleId?: string | undefined;
+  /**
+   * User/bot ids granted admin (and therefore whitelist) unconditionally,
+   * skipping the auth-guild role lookup. From OPENCLAW_ADMIN_OVERRIDE_IDS. For
+   * test/lab rigs whose router bot is not a member of the auth server, so it
+   * cannot read roles there. Operator-controlled and fail-closed (empty => no
+   * override); Discord author ids are authoritative, so listed ids cannot be
+   * spoofed. Do not use this to grant access in the production auth server —
+   * add a real role there instead.
+   */
+  overrideAdminIds?: Set<string>;
   fetchImpl?: typeof fetch;
   now?: () => number;
   log?: (message: string) => void;
@@ -58,7 +68,10 @@ export function createWhitelistChecker(deps: WhitelistDeps): WhitelistChecker {
   const now = deps.now ?? Date.now;
   const cache = new Map<string, { roles: string[]; at: number }>();
 
-  const isConfigured = () => Boolean(deps.guildId && deps.roleId);
+  // `/channel` management is available when the auth guild/role is configured OR
+  // an override list is present (a lab rig may rely solely on the override).
+  const isConfigured = () =>
+    Boolean((deps.guildId && deps.roleId) || (deps.overrideAdminIds && deps.overrideAdminIds.size));
 
   // Fetch (and briefly cache) the member's role ids in the auth guild. Both the
   // whitelist and admin checks read from this single lookup so a `/channel`
@@ -99,6 +112,9 @@ export function createWhitelistChecker(deps: WhitelistDeps): WhitelistChecker {
   }
 
   async function isWhitelisted(userId: string): Promise<boolean> {
+    if (deps.overrideAdminIds?.has(userId)) {
+      return true; // override grants admin, which implies whitelist
+    }
     if (!deps.roleId) {
       return false; // fail closed
     }
@@ -106,6 +122,9 @@ export function createWhitelistChecker(deps: WhitelistDeps): WhitelistChecker {
   }
 
   async function isAdmin(userId: string): Promise<boolean> {
+    if (deps.overrideAdminIds?.has(userId)) {
+      return true;
+    }
     if (!deps.adminRoleId) {
       return false; // admin role not configured => nobody is admin
     }
