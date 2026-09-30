@@ -38,6 +38,10 @@ import { formatToolStatusLabel, runStreamingCli } from "./cli-runner/streaming.j
 import { resolveOpenClawDocsPath } from "./docs-path.js";
 import { FailoverError, resolveFailoverStatus } from "./failover-error.js";
 import { classifyFailoverReason, isFailoverErrorMessage } from "./pi-embedded-helpers.js";
+import {
+  buildWorkspaceContextPointer,
+  resolveWorkspaceContextDelivery,
+} from "./pi-embedded-runner/workspace-context.js";
 
 export type CliToolStatusCallback = (info: {
   toolName: string;
@@ -159,6 +163,15 @@ export async function runCliAgent(params: {
     sessionId: params.sessionId,
     warn: makeBootstrapWarn({ sessionLabel, warn: (message) => log.warn(message) }),
   });
+  // Honor the per-file context config. CLI backends have no conversation preamble,
+  // so "preamble" files are inlined alongside "inline" files; only "off" files are
+  // withheld and surfaced via the pointer instead.
+  const contextDelivery = resolveWorkspaceContextDelivery(
+    contextFiles,
+    params.config?.agents?.defaults?.context,
+  );
+  const cliContextFiles = [...contextDelivery.inlineFiles, ...contextDelivery.preambleFiles];
+  const cliContextPointer = buildWorkspaceContextPointer(contextDelivery.offFiles);
   const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
     sessionKey: params.sessionKey,
     config: params.config,
@@ -193,7 +206,8 @@ export async function runCliAgent(params: {
     heartbeatPrompt,
     docsPath: docsPath ?? undefined,
     tools: [],
-    contextFiles,
+    contextFiles: cliContextFiles,
+    contextPointer: cliContextPointer,
     modelDisplay,
     agentId: sessionAgentId,
   });
