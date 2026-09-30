@@ -377,39 +377,53 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       if (!instance || !bootstrapExists(instance)) {
         return;
       }
+      // A message could already be in flight (e.g. the owner started typing
+      // immediately); that turn will drive onboarding itself, so do not kick.
+      if (inflight.has(channelId)) {
+        return;
+      }
+      // Reserve the channel before the readiness wait so a user message sent
+      // right after the register embed queues behind the kick instead of
+      // overtaking it (which would invert ordering and could double the welcome).
+      inflight.add(channelId);
       void (async () => {
-        // The provisioner reports the instance ready, but the agent gateway can
-        // take a moment longer to accept connections. Probe the port first:
-        // routeMessage turns an ECONNREFUSED into a one-shot error and never
-        // retries, so an un-awaited race here would silently lose the greeting.
-        let ready = false;
-        for (let i = 0; i < 20; i++) {
-          if (await probePort(instance.port)) {
-            ready = true;
-            break;
+        try {
+          // The provisioner reports the instance ready, but the agent gateway can
+          // take a moment longer to accept connections. Probe the port first:
+          // routeMessage turns an ECONNREFUSED into a one-shot error and never
+          // retries, so an un-awaited race here would silently lose the greeting.
+          let ready = false;
+          for (let i = 0; i < 20; i++) {
+            if (await probePort(instance.port)) {
+              ready = true;
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (!ready) {
+            runtime.error(
+              `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
+            );
+            return;
+          }
+          runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
+          await routeMessage({
+            authorId: ownerId,
+            channelId,
+            messageContent:
+              "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
+            instance,
+            discordToken,
+            runtime,
+            agentTimeoutMs,
+            inflight,
+            runCommand: runAgentCommand,
+            systemTurn: true,
+            preacquiredInflight: true,
+          });
+        } finally {
+          inflight.delete(channelId);
         }
-        if (!ready) {
-          runtime.error(
-            `[router] onboarding kick skipped: agent for channel ${channelId} never became ready`,
-          );
-          return;
-        }
-        runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
-        await routeMessage({
-          authorId: ownerId,
-          channelId,
-          messageContent:
-            "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
-          instance,
-          discordToken,
-          runtime,
-          agentTimeoutMs,
-          inflight,
-          runCommand: runAgentCommand,
-          systemTurn: true,
-        });
       })();
     },
     log: (message) => runtime.log(message),
@@ -1257,6 +1271,13 @@ async function routeMessage(params: {
    * onboarding kick, which has no real user message behind it.
    */
   systemTurn?: boolean;
+  /**
+   * The caller already holds this channel's `inflight` slot (and will release
+   * it). Skip acquiring/releasing it here. The onboarding kick reserves the slot
+   * before its readiness wait so a user message sent right after the register
+   * embed queues behind the kick instead of overtaking it.
+   */
+  preacquiredInflight?: boolean;
 }): Promise<boolean> {
   const {
     authorId,
@@ -1268,17 +1289,19 @@ async function routeMessage(params: {
     agentTimeoutMs,
     inflight,
   } = params;
+  const preacquiredInflight = params.preacquiredInflight === true;
   let messageContent = params.messageContent;
 
-  // Serialize per-channel
-  if (inflight.has(channelId)) {
-    runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
+  // Serialize per-channel (unless the caller already holds the slot).
+  if (!preacquiredInflight) {
+    if (inflight.has(channelId)) {
+      runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
+    }
+    while (inflight.has(channelId)) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    inflight.add(channelId);
   }
-  while (inflight.has(channelId)) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  inflight.add(channelId);
   try {
     runtime.log(
       `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
@@ -1552,7 +1575,9 @@ async function routeMessage(params: {
     }
     return false;
   } finally {
-    inflight.delete(channelId);
+    if (!preacquiredInflight) {
+      inflight.delete(channelId);
+    }
   }
 }
 

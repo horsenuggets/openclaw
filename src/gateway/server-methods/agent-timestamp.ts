@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../../config/types.js";
+import { SYSTEM_REMINDER_OPEN } from "../../agents/conversation/system-reminder.js";
 import { resolveUserTimezone } from "../../agents/date-time.js";
 import { formatZonedTimestamp } from "../../auto-reply/envelope.js";
 
@@ -66,8 +67,22 @@ export function injectTimestamp(message: string, opts?: TimestampInjectionOption
   const dow = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(
     now,
   );
+  const prefix = `[${dow} ${formatted}] `;
 
-  return `[${dow} ${formatted}] ${message}`;
+  // A fully system-reminder-wrapped turn (heartbeat, onboarding kick, ...) must
+  // keep the `<system-reminder>` marker as the outermost block, or the transcript
+  // classifier stops recognizing it as system-injected and attributes it to the
+  // human. Inject the timestamp just inside the opening marker instead of before
+  // it, so the block stays outermost and the turn keeps its date/time awareness.
+  const lead = message.slice(0, message.length - message.trimStart().length);
+  const body = message.slice(lead.length);
+  if (body.startsWith(SYSTEM_REMINDER_OPEN)) {
+    const afterOpen = body.slice(SYSTEM_REMINDER_OPEN.length);
+    const nl = afterOpen.startsWith("\n") ? "\n" : "";
+    return `${lead}${SYSTEM_REMINDER_OPEN}${nl}${prefix}${afterOpen.slice(nl.length)}`;
+  }
+
+  return `${prefix}${message}`;
 }
 
 /**

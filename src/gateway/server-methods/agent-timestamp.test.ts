@@ -118,6 +118,19 @@ describe("injectTimestamp", () => {
 
     expect(result).toMatch(/^\[Fri 2025-07-04 12:00 EDT\]/);
   });
+
+  it("keeps a system-reminder block outermost, injecting the timestamp inside", () => {
+    const message = "<system-reminder>\nHeartbeat: anything to do?\n</system-reminder>";
+    const result = injectTimestamp(message, { timezone: "America/New_York" });
+
+    // The marker must stay the outermost wrapper so the transcript classifier
+    // still recognizes the turn as system-injected; the timestamp goes inside.
+    expect(result).toBe(
+      "<system-reminder>\n[Wed 2026-01-28 20:30 EST] Heartbeat: anything to do?\n</system-reminder>",
+    );
+    expect(result.startsWith("<system-reminder>")).toBe(true);
+    expect(result.endsWith("</system-reminder>")).toBe(true);
+  });
 });
 
 describe("timestampOptsFromConfig", () => {
