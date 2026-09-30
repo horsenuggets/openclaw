@@ -77,4 +77,21 @@ describe("buildWorkspaceContextPointer", () => {
   it("returns undefined when there are no off files", () => {
     expect(buildWorkspaceContextPointer([])).toBeUndefined();
   });
+
+  it("excludes missing-file marker entries from the pointer", () => {
+    const pointer = buildWorkspaceContextPointer([
+      file("TOOLS.md"),
+      { path: "HEARTBEAT.md", content: "[MISSING] Expected at: /ws/HEARTBEAT.md" },
+    ]);
+    expect(pointer).toContain("TOOLS.md");
+    expect(pointer).not.toContain("HEARTBEAT.md");
+  });
+
+  it("returns undefined when every off file is missing", () => {
+    expect(
+      buildWorkspaceContextPointer([
+        { path: "MEMORY.md", content: "[MISSING] Expected at: /ws/MEMORY.md" },
+      ]),
+    ).toBeUndefined();
+  });
 });

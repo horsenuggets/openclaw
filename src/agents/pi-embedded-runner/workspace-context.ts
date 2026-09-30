@@ -106,12 +106,25 @@ export function resolveWorkspaceContextDelivery(
 }
 
 /**
+ * A context file synthesized by buildBootstrapContextFiles for a file that does
+ * not exist on disk (content is a `[MISSING] Expected at: ...` marker). Such
+ * entries must never be advertised by the pointer as files to read.
+ */
+function isMissingMarker(file: EmbeddedContextFile): boolean {
+  return file.content.trimStart().startsWith("[MISSING]");
+}
+
+/**
  * Build the pointer block listing withheld ("off") files by name so the model
- * knows they exist and can Read them on demand. Returns undefined when there are
- * no off files (nothing to point at).
+ * knows they exist and can Read them on demand. Missing files (marker entries)
+ * are excluded so the model is not told to read files that do not exist. Returns
+ * undefined when there is nothing to point at.
  */
 export function buildWorkspaceContextPointer(offFiles: EmbeddedContextFile[]): string | undefined {
-  const names = offFiles.map((file) => normalizedBase(file.path)).filter((name) => name.length > 0);
+  const names = offFiles
+    .filter((file) => !isMissingMarker(file))
+    .map((file) => normalizedBase(file.path))
+    .filter((name) => name.length > 0);
   if (names.length === 0) {
     return undefined;
   }

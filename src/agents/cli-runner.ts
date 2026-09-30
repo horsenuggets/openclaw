@@ -164,14 +164,22 @@ export async function runCliAgent(params: {
     warn: makeBootstrapWarn({ sessionLabel, warn: (message) => log.warn(message) }),
   });
   // Honor the per-file context config. CLI backends have no conversation preamble,
-  // so "preamble" files are inlined alongside "inline" files; only "off" files are
-  // withheld and surfaced via the pointer instead.
+  // so "preamble" files are inlined alongside "inline" files. "off" files are
+  // pointed at (read on demand) only when tools are available; with tools disabled
+  // (non-streaming) the model cannot follow a pointer, so inline them instead of
+  // making them unreachable.
   const contextDelivery = resolveWorkspaceContextDelivery(
     contextFiles,
     params.config?.agents?.defaults?.context,
   );
-  const cliContextFiles = [...contextDelivery.inlineFiles, ...contextDelivery.preambleFiles];
-  const cliContextPointer = buildWorkspaceContextPointer(contextDelivery.offFiles);
+  const cliContextFiles = [
+    ...contextDelivery.inlineFiles,
+    ...contextDelivery.preambleFiles,
+    ...(useStreaming ? [] : contextDelivery.offFiles),
+  ];
+  const cliContextPointer = useStreaming
+    ? buildWorkspaceContextPointer(contextDelivery.offFiles)
+    : undefined;
   const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
     sessionKey: params.sessionKey,
     config: params.config,
