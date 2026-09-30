@@ -32,6 +32,10 @@ services:
       # loopback for /channel register|unregister. Unset => those are disabled.
       - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}
       - OPENCLAW_PROVISIONER_TOKEN=${OPENCLAW_PROVISIONER_TOKEN}
+      # Loopback port of the whisper speech-to-text server for voice-message
+      # transcription. boot.sh exports WHISPER_PORT (the same value whisper.yml
+      # binds) so the router always targets the running server.
+      - OPENCLAW_WHISPER_PORT=${WHISPER_PORT}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
     healthcheck:

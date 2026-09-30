@@ -19,6 +19,7 @@ import {
 import { callGatewaySimple } from "./gateway-call.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
+import { resolveWhisperUrl } from "./whisper-url.js";
 
 type DiscordAttachment = {
   id: string;
@@ -116,7 +117,7 @@ export async function routeMessage(params: {
 
     try {
       // Process attachments: transcribe audio locally, pass images to gateway
-      const WHISPER_URL = process.env.OPENCLAW_WHISPER_URL ?? "http://127.0.0.1:8787/inference";
+      const WHISPER_URL = resolveWhisperUrl();
       let gatewayAttachments: Array<{
         type: string;
         mimeType: string;
