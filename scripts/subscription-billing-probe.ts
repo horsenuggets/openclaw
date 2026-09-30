@@ -40,10 +40,13 @@
  */
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { resolveOpenClawAgentDir } from "../src/agents/agent-paths.js";
 import { wrapForSubscription } from "../src/agents/subscription-prompt.js";
 import { buildAgentSystemPrompt } from "../src/agents/system-prompt.js";
+import { resolveStateDir } from "../src/config/paths.js";
+import { DEFAULT_AGENT_ID } from "../src/routing/session-key.js";
+import { resolveUserPath } from "../src/utils.js";
 
 const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-6";
@@ -77,13 +80,13 @@ type Args = {
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
-  const args: Args = { agent: "main", assertOnly: false, list: false, json: false };
+  const args: Args = { agent: DEFAULT_AGENT_ID, assertOnly: false, list: false, json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--token" && argv[i + 1]) {
       args.token = String(argv[++i]).trim();
     } else if (arg === "--agent" && argv[i + 1]) {
-      args.agent = String(argv[++i]).trim() || "main";
+      args.agent = String(argv[++i]).trim() || DEFAULT_AGENT_ID;
     } else if (arg === "--assert-only") {
       args.assertOnly = true;
     } else if (arg === "--list") {
@@ -103,11 +106,14 @@ function resolveToken(args: Args): string {
   if (envToken) {
     return envToken;
   }
-  const stateRoot =
-    process.env.OPENCLAW_STATE_DIR?.trim() ||
-    process.env.CLAWDBOT_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".openclaw");
-  const authPath = path.join(stateRoot, "agents", args.agent, "agent", "auth-profiles.json");
+  // Resolve the agent dir with the same rules the runtime uses: the default agent
+  // honors OPENCLAW_AGENT_DIR / PI_CODING_AGENT_DIR, and resolveStateDir handles ~
+  // expansion, OPENCLAW_STATE_DIR/CLAWDBOT_STATE_DIR, and the legacy state dir.
+  const agentDir =
+    args.agent === DEFAULT_AGENT_ID
+      ? resolveOpenClawAgentDir()
+      : resolveUserPath(path.join(resolveStateDir(), "agents", args.agent, "agent"));
+  const authPath = path.join(agentDir, "auth-profiles.json");
   if (!fs.existsSync(authPath)) {
     throw new Error(
       `No token: pass --token, set OPENCLAW_OAUTH_TOKEN, or provide ${authPath} (missing).`,
@@ -313,24 +319,30 @@ async function main() {
   const token = resolveToken(args);
   const results: Array<{ c: Case; outcome: Outcome; detail: string; ok: boolean }> = [];
   let assertionFailures = 0;
+  // Precondition: a 200 only proves plan quota if the account has NO extra-usage
+  // budget. If a known-spill assertion comes back as plan (200), the account still
+  // has budget and EVERY plan-quota result in this run is untrustworthy (a paid
+  // spill also returns 200), so the whole run is invalid rather than passing.
+  let spillControlBilledPlan = false;
 
   for (const c of cases) {
     const { outcome, detail } = await runCase(c, token);
-    // A spill-expected case that returns plan may just mean the account still has
-    // extra-usage budget (unreliable signal), not that the prompt is safe.
-    const unreliable = c.expect === "spill" && outcome === "plan";
     const ok = outcome === c.expect;
-    if (c.group === "assertion" && !ok && !unreliable) {
-      assertionFailures += 1;
+    if (c.group === "assertion") {
+      if (c.expect === "spill" && outcome === "plan") {
+        spillControlBilledPlan = true;
+      }
+      if (!ok) {
+        assertionFailures += 1;
+      }
     }
-    results.push({ c, outcome, detail, ok: ok || unreliable });
+    results.push({ c, outcome, detail, ok });
     if (!args.json) {
       // Probes are exploratory and never gate the run, so they print as INFO
       // rather than OK/FAIL even when the observed outcome differs from the guess.
-      const status = c.group === "probe" ? "INFO" : ok ? "OK  " : unreliable ? "WARN" : "FAIL";
+      const status = c.group === "probe" ? "INFO" : ok ? "OK  " : "FAIL";
       console.log(
-        `${status}  [${c.group}] ${c.name.padEnd(28)} expect=${c.expect.padEnd(5)} got=${outcome.padEnd(5)} ${detail}` +
-          (unreliable ? "  (extra-usage balance may be >0; signal unreliable)" : ""),
+        `${status}  [${c.group}] ${c.name.padEnd(28)} expect=${c.expect.padEnd(5)} got=${outcome.padEnd(5)} ${detail}`,
       );
     }
     // Space out requests to stay clear of the API's short-window rate limit.
@@ -352,6 +364,15 @@ async function main() {
         2,
       ),
     );
+  }
+
+  if (spillControlBilledPlan) {
+    console.error(
+      "\nA known-spill assertion billed to plan quota (200). This account still has " +
+        "extra-usage budget, so plan-quota 200s cannot be trusted (a paid spill also returns " +
+        "200). Re-run against an account whose extra-usage balance is exhausted or disabled.",
+    );
+    process.exit(1);
   }
 
   if (assertionFailures > 0) {
