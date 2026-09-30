@@ -31,7 +31,11 @@
  *      <state dir>/agents/<agent>/agent/, state dir from OPENCLAW_STATE_DIR or
  *      ~/.openclaw, agent from --agent (default "main").
  * Access tokens are short-lived; if you get 401, mint a fresh one with
- * scripts/mint-anthropic-reauth.sh and retry.
+ * scripts/mint-anthropic-reauth.sh and retry. Note that on a deploy host that
+ * helper writes to the shared store (<instances dir>/shared/auth/), which is only
+ * mounted at the agent path inside channel containers. To probe there, run inside
+ * a channel container, or point OPENCLAW_AGENT_DIR at the shared auth directory,
+ * or just export OPENCLAW_OAUTH_TOKEN.
  *
  * Usage:
  *   bun scripts/subscription-billing-probe.ts               # all cases
@@ -40,14 +44,12 @@
  *   bun scripts/subscription-billing-probe.ts --json
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { resolveOpenClawAgentDir } from "../src/agents/agent-paths.js";
+import { resolveAgentDir } from "../src/agents/agent-scope.js";
+import { ensureAuthProfileStore } from "../src/agents/auth-profiles/store.js";
 import { wrapForSubscription } from "../src/agents/subscription-prompt.js";
 import { buildAgentSystemPrompt } from "../src/agents/system-prompt.js";
-import { resolveStateDir } from "../src/config/paths.js";
+import { loadConfig } from "../src/config/config.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../src/routing/session-key.js";
-import { resolveUserPath } from "../src/utils.js";
 
 const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-6";
@@ -101,26 +103,24 @@ function resolveToken(args: Args): string {
   if (envToken) {
     return envToken;
   }
-  // Resolve the agent dir with the same rules the runtime uses: normalize the id
-  // (so "MAIN"/"MyAgent" match), the default agent honors OPENCLAW_AGENT_DIR /
-  // PI_CODING_AGENT_DIR, and resolveStateDir handles ~ expansion,
-  // OPENCLAW_STATE_DIR/CLAWDBOT_STATE_DIR, and the legacy state dir.
+  // Resolve the token through the runtime's own loaders so the probe matches what a
+  // real run would use: the default agent uses the main store (honoring the
+  // OPENCLAW_AGENT_DIR / PI_CODING_AGENT_DIR override), a non-default agent uses its
+  // configured agentDir (resolveAgentDir), and ensureAuthProfileStore inherits the
+  // subscription profile from the main agent when the selected agent lacks it.
   const agentId = normalizeAgentId(args.agent);
-  const agentDir =
-    agentId === DEFAULT_AGENT_ID
-      ? resolveOpenClawAgentDir()
-      : resolveUserPath(path.join(resolveStateDir(), "agents", agentId, "agent"));
-  const authPath = path.join(agentDir, "auth-profiles.json");
-  if (!fs.existsSync(authPath)) {
-    throw new Error(`No token: set OPENCLAW_OAUTH_TOKEN, or provide ${authPath} (missing).`);
-  }
-  const store = JSON.parse(fs.readFileSync(authPath, "utf8")) as {
-    profiles?: Record<string, { access?: string; expires?: number }>;
-  };
-  const profile = store.profiles?.["anthropic-subscription:default"];
+  const cfg = loadConfig();
+  const agentDir = agentId === DEFAULT_AGENT_ID ? undefined : resolveAgentDir(cfg, agentId);
+  const store = ensureAuthProfileStore(agentDir);
+  const profile = store.profiles?.["anthropic-subscription:default"] as
+    | { access?: string; expires?: number }
+    | undefined;
   const token = profile?.access?.trim();
   if (!token) {
-    throw new Error(`No "anthropic-subscription:default" access token in ${authPath}.`);
+    throw new Error(
+      `No "anthropic-subscription:default" access token for agent "${agentId}". ` +
+        "Set OPENCLAW_OAUTH_TOKEN or mint one with scripts/mint-anthropic-reauth.sh.",
+    );
   }
   if (typeof profile?.expires === "number" && profile.expires < Date.now()) {
     console.warn(
