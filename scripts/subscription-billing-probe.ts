@@ -45,7 +45,7 @@ import { resolveOpenClawAgentDir } from "../src/agents/agent-paths.js";
 import { wrapForSubscription } from "../src/agents/subscription-prompt.js";
 import { buildAgentSystemPrompt } from "../src/agents/system-prompt.js";
 import { resolveStateDir } from "../src/config/paths.js";
-import { DEFAULT_AGENT_ID } from "../src/routing/session-key.js";
+import { DEFAULT_AGENT_ID, normalizeAgentId } from "../src/routing/session-key.js";
 import { resolveUserPath } from "../src/utils.js";
 
 const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
@@ -106,13 +106,15 @@ function resolveToken(args: Args): string {
   if (envToken) {
     return envToken;
   }
-  // Resolve the agent dir with the same rules the runtime uses: the default agent
-  // honors OPENCLAW_AGENT_DIR / PI_CODING_AGENT_DIR, and resolveStateDir handles ~
-  // expansion, OPENCLAW_STATE_DIR/CLAWDBOT_STATE_DIR, and the legacy state dir.
+  // Resolve the agent dir with the same rules the runtime uses: normalize the id
+  // (so "MAIN"/"MyAgent" match), the default agent honors OPENCLAW_AGENT_DIR /
+  // PI_CODING_AGENT_DIR, and resolveStateDir handles ~ expansion,
+  // OPENCLAW_STATE_DIR/CLAWDBOT_STATE_DIR, and the legacy state dir.
+  const agentId = normalizeAgentId(args.agent);
   const agentDir =
-    args.agent === DEFAULT_AGENT_ID
+    agentId === DEFAULT_AGENT_ID
       ? resolveOpenClawAgentDir()
-      : resolveUserPath(path.join(resolveStateDir(), "agents", args.agent, "agent"));
+      : resolveUserPath(path.join(resolveStateDir(), "agents", agentId, "agent"));
   const authPath = path.join(agentDir, "auth-profiles.json");
   if (!fs.existsSync(authPath)) {
     throw new Error(
@@ -318,35 +320,62 @@ async function main() {
 
   const token = resolveToken(args);
   const results: Array<{ c: Case; outcome: Outcome; detail: string; ok: boolean }> = [];
-  let assertionFailures = 0;
-  // Precondition: a 200 only proves plan quota if the account has NO extra-usage
-  // budget. If a known-spill assertion comes back as plan (200), the account still
-  // has budget and EVERY plan-quota result in this run is untrustworthy (a paid
-  // spill also returns 200), so the whole run is invalid rather than passing.
-  let spillControlBilledPlan = false;
 
-  for (const c of cases) {
+  const printRow = (c: Case, outcome: Outcome, detail: string, ok: boolean) => {
+    if (args.json) {
+      return;
+    }
+    // Probes are exploratory and never gate the run, so they print as INFO rather
+    // than OK/FAIL even when the observed outcome differs from the guess.
+    const status = c.group === "probe" ? "INFO" : ok ? "OK  " : "FAIL";
+    console.log(
+      `${status}  [${c.group}] ${c.name.padEnd(28)} expect=${c.expect.padEnd(5)} got=${outcome.padEnd(5)} ${detail}`,
+    );
+  };
+  const runAndRecord = async (c: Case) => {
     const { outcome, detail } = await runCase(c, token);
     const ok = outcome === c.expect;
-    if (c.group === "assertion") {
-      if (c.expect === "spill" && outcome === "plan") {
-        spillControlBilledPlan = true;
-      }
-      if (!ok) {
-        assertionFailures += 1;
-      }
-    }
     results.push({ c, outcome, detail, ok });
-    if (!args.json) {
-      // Probes are exploratory and never gate the run, so they print as INFO
-      // rather than OK/FAIL even when the observed outcome differs from the guess.
-      const status = c.group === "probe" ? "INFO" : ok ? "OK  " : "FAIL";
-      console.log(
-        `${status}  [${c.group}] ${c.name.padEnd(28)} expect=${c.expect.padEnd(5)} got=${outcome.padEnd(5)} ${detail}`,
-      );
-    }
+    printRow(c, outcome, detail, ok);
     // Space out requests to stay clear of the API's short-window rate limit.
     await new Promise((r) => setTimeout(r, 1500));
+    return outcome;
+  };
+
+  // Run the known-spill controls FIRST. A 200 only proves plan quota when the
+  // account has zero extra-usage budget; running the controls up front confirms
+  // that (they must return the 400 "out of extra usage" spill). If a control does
+  // not spill, the account still has budget — so a regressed plan case could also
+  // return 200 by charging that budget, and every plan 200 is untrustworthy. Abort
+  // before running/printing any plan case rather than risk a false pass.
+  const spillControls = cases.filter((c) => c.group === "assertion" && c.expect === "spill");
+  const remaining = cases.filter((c) => !(c.group === "assertion" && c.expect === "spill"));
+  let controlFailure = false;
+  for (const c of spillControls) {
+    const outcome = await runAndRecord(c);
+    if (outcome !== "spill") {
+      controlFailure = true;
+    }
+  }
+  if (controlFailure) {
+    if (args.json) {
+      console.log(JSON.stringify(results, null, 2));
+    }
+    console.error(
+      "\nA known-spill control did not return the 400 spill signal. This account still has " +
+        "extra-usage budget (or the request errored), so plan-quota 200s cannot be trusted " +
+        "(a paid spill also returns 200). Re-run against an account whose extra-usage balance " +
+        "is exhausted or disabled. Skipped the plan-expected cases to avoid a false pass.",
+    );
+    process.exit(1);
+  }
+
+  let assertionFailures = 0;
+  for (const c of remaining) {
+    const outcome = await runAndRecord(c);
+    if (c.group === "assertion" && outcome !== c.expect) {
+      assertionFailures += 1;
+    }
   }
 
   if (args.json) {
@@ -364,15 +393,6 @@ async function main() {
         2,
       ),
     );
-  }
-
-  if (spillControlBilledPlan) {
-    console.error(
-      "\nA known-spill assertion billed to plan quota (200). This account still has " +
-        "extra-usage budget, so plan-quota 200s cannot be trusted (a paid spill also returns " +
-        "200). Re-run against an account whose extra-usage balance is exhausted or disabled.",
-    );
-    process.exit(1);
   }
 
   if (assertionFailures > 0) {
