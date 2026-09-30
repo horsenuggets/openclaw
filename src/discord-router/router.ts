@@ -113,6 +113,25 @@ export function isLifecycleBanner(content: string | undefined): boolean {
   return LIFECYCLE_BANNERS.includes((content ?? "").trim());
 }
 
+/**
+ * Whether a bot's message may be treated as a normal conversational turn.
+ * Trusted only when the author is in the allowlist AND is not the router's own
+ * bot — routing our own replies back into the agent would be an unbounded
+ * self-loop, so self is always rejected even if it was accidentally allowlisted.
+ * Shared by the live message filter and the reconnect recovery scan so the two
+ * cannot drift.
+ */
+export function isConversationalBot(
+  authorId: string | undefined,
+  selfBotId: string | undefined,
+  allowedBotIds: Set<string>,
+): boolean {
+  if (!authorId || authorId === selfBotId) {
+    return false;
+  }
+  return allowedBotIds.has(authorId);
+}
+
 export type RouterErrorKind = "connection-refused" | "auth" | "timeout" | "generic";
 
 /**
@@ -688,8 +707,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
             // Normal agent messages: ignore untrusted bots and empty messages.
             // Channel commands were already handled above so bots can still drive
-            // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse.
-            const botAllowed = isBot && authorId ? allowedBotIds.has(authorId) : false;
+            // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse, but
+            // never the router's own bot (self-routing would loop).
+            const botAllowed = isBot
+              ? isConversationalBot(authorId, applicationId, allowedBotIds)
+              : false;
             if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
               return;
             }
@@ -1516,6 +1538,13 @@ async function routeMessage(params: {
         ) {
           commandDepth += 1;
           agentMessage = `[system] Command result: ${commandResult}`;
+          // Keep command-result relays system-attributed for a system turn (e.g.
+          // the onboarding kick relays the `send_hook_embed welcome` result).
+          // Without this only the first call is wrapped, so the relay persists as
+          // a fake `user` turn even though this flow has no human message.
+          if (params.systemTurn) {
+            agentMessage = wrapSystemReminder(agentMessage);
+          }
           continue;
         }
         break;
@@ -1984,9 +2013,9 @@ async function recoverUnansweredMessages(
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
-        const isSelf = msg.author.id === botId;
-        const isTrustedBot = msg.author.bot && !isSelf && allowedBotIds.has(msg.author.id);
-        const isBotMsg = (msg.author.bot || isSelf) && !isTrustedBot;
+        const isTrustedBot =
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
+        const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {
             continue;
