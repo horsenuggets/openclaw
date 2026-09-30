@@ -9,19 +9,21 @@ title: "API Usage and Costs"
 
 # API usage & costs
 
-This doc lists **features that can invoke API keys** and where their costs show up. It focuses on
-OpenClaw features that can generate provider usage or paid API calls.
+This doc lists **features that can invoke API keys** and where their costs show up. It
+focuses on OpenClaw features that can generate provider usage or paid API calls.
 
 ## Where costs show up (chat + CLI)
 
 **Per-session cost snapshot**
 
 - `/status` shows the current session model, context usage, and last response tokens.
-- If the model uses **API-key auth**, `/status` also shows **estimated cost** for the last reply.
+- If the model uses **API-key auth**, `/status` also shows **estimated cost** for the last
+  reply.
 
 **Per-message cost footer**
 
-- `/usage full` appends a usage footer to every reply, including **estimated cost** (API-key only).
+- `/usage full` appends a usage footer to every reply, including **estimated cost**
+  (API-key only).
 - `/usage tokens` shows tokens only; OAuth flows hide dollar cost.
 
 **CLI usage windows (provider quotas)**
@@ -37,22 +39,25 @@ OpenClaw can pick up credentials from:
 
 - **Auth profiles** (per-agent, stored in `auth-profiles.json`).
 - **Environment variables** (e.g. `OPENAI_API_KEY`, `BRAVE_API_KEY`, `FIRECRAWL_API_KEY`).
-- **Config** (`models.providers.*.apiKey`, `tools.web.search.*`, `tools.web.fetch.firecrawl.*`,
-  `memorySearch.*`, `talk.apiKey`).
-- **Skills** (`skills.entries.<name>.apiKey`) which may export keys to the skill process env.
+- **Config** (`models.providers.*.apiKey`, `tools.web.search.*`,
+  `tools.web.fetch.firecrawl.*`, `memorySearch.*`, `talk.apiKey`).
+- **Skills** (`skills.entries.<name>.apiKey`) which may export keys to the skill process
+  env.
 
 ## Features that can spend keys
 
 ### 1) Core model responses (chat + tools)
 
-Every reply or tool call uses the **current model provider** (OpenAI, Anthropic, etc). This is the
-primary source of usage and cost.
+Every reply or tool call uses the **current model provider** (OpenAI, Anthropic, etc).
+This is the primary source of usage and cost.
 
-See [Models](/providers/models) for pricing config and [Token use & costs](/token-use) for display.
+See [Models](/providers/models) for pricing config and [Token use & costs](/token-use) for
+display.
 
 ### 2) Media understanding (audio/image/video)
 
-Inbound media can be summarized/transcribed before the reply runs. This uses model/provider APIs.
+Inbound media can be summarized/transcribed before the reply runs. This uses
+model/provider APIs.
 
 - Audio: OpenAI / Groq / Deepgram (now **auto-enabled** when keys exist).
 - Image: OpenAI / Anthropic / Google.
@@ -93,14 +98,15 @@ See [Web tools](/tools/web).
 
 - `FIRECRAWL_API_KEY` or `tools.web.fetch.firecrawl.apiKey`
 
-If Firecrawl isn’t configured, the tool falls back to direct fetch + readability (no paid API).
+If Firecrawl isn’t configured, the tool falls back to direct fetch + readability (no paid
+API).
 
 See [Web tools](/tools/web).
 
 ### 6) Provider usage snapshots (status/health)
 
-Some status commands call **provider usage endpoints** to display quota windows or auth health.
-These are typically low-volume calls but still hit provider APIs:
+Some status commands call **provider usage endpoints** to display quota windows or auth
+health. These are typically low-volume calls but still hit provider APIs:
 
 - `openclaw status --usage`
 - `openclaw models status --json`
@@ -131,7 +137,7 @@ See [Talk mode](/nodes/talk).
 
 ### 10) Skills (third-party APIs)
 
-Skills can store `apiKey` in `skills.entries.<name>.apiKey`. If a skill uses that key for external
-APIs, it can incur costs according to the skill’s provider.
+Skills can store `apiKey` in `skills.entries.<name>.apiKey`. If a skill uses that key for
+external APIs, it can incur costs according to the skill’s provider.
 
 See [Skills](/tools/skills).

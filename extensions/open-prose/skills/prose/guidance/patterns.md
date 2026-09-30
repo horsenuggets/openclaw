@@ -11,7 +11,9 @@ see-also:
 
 # OpenProse Design Patterns
 
-This document catalogs proven patterns for orchestrating AI agents effectively. Each pattern addresses specific concerns: robustness, cost efficiency, speed, maintainability, or self-improvement capability.
+This document catalogs proven patterns for orchestrating AI agents effectively. Each
+pattern addresses specific concerns: robustness, cost efficiency, speed, maintainability,
+or self-improvement capability.
 
 ---
 
@@ -19,7 +21,8 @@ This document catalogs proven patterns for orchestrating AI agents effectively. 
 
 #### parallel-independent-work
 
-When tasks have no data dependencies, execute them concurrently. This maximizes throughput and minimizes wall-clock time.
+When tasks have no data dependencies, execute them concurrently. This maximizes throughput
+and minimizes wall-clock time.
 
 ```prose
 # Good: Independent research runs in parallel
@@ -32,11 +35,13 @@ session "Synthesize findings"
   context: { market, tech, competition }
 ```
 
-The synthesis session waits for all branches, but total time equals the longest branch rather than the sum of all branches.
+The synthesis session waits for all branches, but total time equals the longest branch
+rather than the sum of all branches.
 
 #### fan-out-fan-in
 
-For processing collections, fan out to parallel workers then collect results. Use `parallel for` instead of manual parallel branches.
+For processing collections, fan out to parallel workers then collect results. Use
+`parallel for` instead of manual parallel branches.
 
 ```prose
 let topics = ["AI safety", "interpretability", "alignment", "robustness"]
@@ -51,7 +56,8 @@ This scales naturally with collection size and keeps code DRY.
 
 #### pipeline-composition
 
-Chain transformations using pipe operators for readable data flow. Each stage has a single responsibility.
+Chain transformations using pipe operators for readable data flow. Each stage has a single
+responsibility.
 
 ```prose
 let candidates = session "Generate 10 startup ideas"
@@ -70,7 +76,8 @@ let result = candidates
 
 #### agent-specialization
 
-Define agents with focused expertise. Specialized agents produce better results than generalist prompts.
+Define agents with focused expertise. Specialized agents produce better results than
+generalist prompts.
 
 ```prose
 agent security-reviewer:
@@ -96,7 +103,8 @@ agent performance-reviewer:
 
 #### reusable-blocks
 
-Extract repeated workflows into parameterized blocks. Blocks are the functions of OpenProse.
+Extract repeated workflows into parameterized blocks. Blocks are the functions of
+OpenProse.
 
 ```prose
 block review-and-revise(artifact, criteria):
@@ -116,7 +124,8 @@ do review-and-revise("the test plan", "coverage and edge cases")
 
 #### bounded-iteration
 
-Always constrain loops with `max:` to prevent runaway execution. Even well-crafted conditions can fail to terminate.
+Always constrain loops with `max:` to prevent runaway execution. Even well-crafted
+conditions can fail to terminate.
 
 ```prose
 # Good: Explicit upper bound
@@ -128,7 +137,8 @@ loop until **all tests pass** (max: 20):
 
 #### graceful-degradation
 
-Use `on-fail: "continue"` when partial results are acceptable. Collect what you can rather than failing entirely.
+Use `on-fail: "continue"` when partial results are acceptable. Collect what you can rather
+than failing entirely.
 
 ```prose
 parallel (on-fail: "continue"):
@@ -143,7 +153,8 @@ session "Merge available data"
 
 #### retry-with-backoff
 
-External services fail transiently. Retry with exponential backoff to handle rate limits and temporary outages.
+External services fail transiently. Retry with exponential backoff to handle rate limits
+and temporary outages.
 
 ```prose
 session "Call external API"
@@ -164,7 +175,8 @@ catch:
 
 #### error-context-capture
 
-Capture error context for intelligent recovery. The error variable provides information for diagnostic or remediation sessions.
+Capture error context for intelligent recovery. The error variable provides information
+for diagnostic or remediation sessions.
 
 ```prose
 try:
@@ -206,7 +218,11 @@ Match model capability to task complexity:
 | **Opus 4.5**   | Hard/difficult work requiring deep reasoning | Complex analysis, strategic decisions, novel problem-solving |
 | **Haiku**      | Simple, self-evident tasks (use sparingly)   | Classification, summarization, formatting                    |
 
-**Key insight:** Sonnet 4.5 excels at _orchestrating_ agents and managing control flow—it's the ideal model for the OpenProse VM itself and for "captain" agents that coordinate work. Opus 4.5 should be reserved for agents doing genuinely difficult intellectual work. Haiku can handle simple tasks but should generally be avoided where quality matters.
+**Key insight:** Sonnet 4.5 excels at _orchestrating_ agents and managing control
+flow—it's the ideal model for the OpenProse VM itself and for "captain" agents that
+coordinate work. Opus 4.5 should be reserved for agents doing genuinely difficult
+intellectual work. Haiku can handle simple tasks but should generally be avoided where
+quality matters.
 
 **Detailed task-to-model mapping:**
 
@@ -221,7 +237,8 @@ Match model capability to task complexity:
 | Novel architecture, strategic planning   | Opus   | Requires creative problem-solving         |
 | Ambiguous problems, unclear requirements | Opus   | Needs to reason through uncertainty       |
 
-**Rule of thumb:** If you can write a checklist for the task, Sonnet can do it. If the task requires genuine creativity or navigating ambiguity, use Opus.
+**Rule of thumb:** If you can write a checklist for the task, Sonnet can do it. If the
+task requires genuine creativity or navigating ambiguity, use Opus.
 
 ```prose
 agent captain:
@@ -285,7 +302,8 @@ loop until **solution found and verified** (max: 10):
 
 #### early-signal-exit
 
-When observing or monitoring, exit as soon as you have a definitive answer—don't wait for the full observation window.
+When observing or monitoring, exit as soon as you have a definitive answer—don't wait for
+the full observation window.
 
 ```prose
 # Good: Exit on signal
@@ -304,7 +322,8 @@ This respects signals when they arrive rather than waiting for arbitrary timeout
 
 #### defaults-over-prompts
 
-For standard configuration, use constants or environment variables. Only prompt when genuinely variable.
+For standard configuration, use constants or environment variables. Only prompt when
+genuinely variable.
 
 ```prose
 # Good: Sensible defaults
@@ -334,7 +353,8 @@ session "Use winning result"
 
 #### batch-similar-work
 
-Group similar operations to amortize overhead. One session with structured output beats many small sessions.
+Group similar operations to amortize overhead. One session with structured output beats
+many small sessions.
 
 ```prose
 # Inefficient: Many small sessions
@@ -352,7 +372,8 @@ session "Analyze all files and return structured findings for each"
 
 #### self-verification-in-prompt
 
-For tasks that would otherwise require a separate verifier, include verification as the final step in the prompt. This saves a round-trip while maintaining rigor.
+For tasks that would otherwise require a separate verifier, include verification as the
+final step in the prompt. This saves a round-trip while maintaining rigor.
 
 ```prose
 # Good: Combined work + self-verification
@@ -374,11 +395,13 @@ let verification = session: verifier
   context: diagnosis
 ```
 
-Use a separate verifier when you need genuine adversarial review (different perspective), but for self-consistency checks, bake verification into the prompt.
+Use a separate verifier when you need genuine adversarial review (different perspective),
+but for self-consistency checks, bake verification into the prompt.
 
 #### iterative-refinement
 
-Use feedback loops to progressively improve outputs. Each iteration builds on the previous.
+Use feedback loops to progressively improve outputs. Each iteration builds on the
+previous.
 
 ```prose
 let draft = session "Create initial draft"
@@ -471,7 +494,8 @@ agent helper:
 
 #### prompt-as-contract
 
-Write prompts that specify expected inputs and outputs. Clear contracts prevent misunderstandings.
+Write prompts that specify expected inputs and outputs. Clear contracts prevent
+misunderstandings.
 
 ```prose
 agent json-extractor:
@@ -489,7 +513,8 @@ agent json-extractor:
 
 #### separation-of-concerns
 
-Each session should do one thing well. Combine simple sessions rather than creating complex ones.
+Each session should do one thing well. Combine simple sessions rather than creating
+complex ones.
 
 ```prose
 # Good: Single responsibility per session
@@ -507,7 +532,8 @@ session "Fetch data, analyze it, generate recommendations, and format a report"
 
 #### explicit-context-flow
 
-Make data flow visible through explicit context passing. Avoid relying on implicit conversation history.
+Make data flow visible through explicit context passing. Avoid relying on implicit
+conversation history.
 
 ```prose
 # Good: Explicit flow
@@ -529,7 +555,8 @@ session "Third step using all previous"
 
 #### lazy-evaluation
 
-Defer expensive operations until their results are needed. Don't compute what might not be used.
+Defer expensive operations until their results are needed. Don't compute what might not be
+used.
 
 ```prose
 session "Assess situation"
@@ -571,7 +598,8 @@ if **needs deeper review**:
 
 #### work-stealing
 
-Use `parallel ("any", count: N)` to get results as fast as possible from a pool of workers.
+Use `parallel ("any", count: N)` to get results as fast as possible from a pool of
+workers.
 
 ```prose
 # Get 3 good ideas as fast as possible from 5 parallel attempts
@@ -697,4 +725,6 @@ The most effective OpenProse programs combine these patterns:
 4. **Quality**: Iterate, get multiple perspectives, validate adversarially
 5. **Maintainability**: Name clearly, separate concerns, make flow explicit
 
-Choose patterns based on your specific constraints. A quick prototype prioritizes speed over robustness. A production workflow prioritizes reliability over cost. A research exploration prioritizes thoroughness over efficiency.
+Choose patterns based on your specific constraints. A quick prototype prioritizes speed
+over robustness. A production workflow prioritizes reliability over cost. A research
+exploration prioritizes thoroughness over efficiency.

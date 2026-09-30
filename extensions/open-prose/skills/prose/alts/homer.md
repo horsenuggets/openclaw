@@ -9,9 +9,13 @@ requires: prose.md
 
 # OpenProse Homeric Register
 
-> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution semantics, state management, and VM behavior are defined there. This file only provides keyword translations.
+> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution
+> semantics, state management, and VM behavior are defined there. This file only provides
+> keyword translations.
 
-An alternative register for OpenProse that draws from Greek epic poetry—the Iliad, the Odyssey, and the heroic tradition. Programs become quests. Agents become heroes. Outputs become glory won.
+An alternative register for OpenProse that draws from Greek epic poetry—the Iliad, the
+Odyssey, and the heroic tradition. Programs become quests. Agents become heroes. Outputs
+become glory won.
 
 ## How to Use
 
@@ -20,7 +24,8 @@ An alternative register for OpenProse that draws from Greek epic poetry—the Il
 3. When parsing `.prose` files, accept Homeric keywords as aliases for functional keywords
 4. All execution behavior remains identical—only surface syntax changes
 
-> **Design constraint:** Still aims to be "structured but self-evident" per the language tenets—just self-evident through an epic lens.
+> **Design constraint:** Still aims to be "structured but self-evident" per the language
+> tenets—just self-evident through an epic lens.
 
 ---
 
@@ -281,9 +286,11 @@ fate config = { muse: "opus", persist: 3 }
 
 1. **Universal recognition.** Greek epics are foundational to Western literature.
 2. **Heroic framing.** Transforms mundane tasks into glorious trials.
-3. **Natural fit.** Heroes face trials, receive tidings, win glory—maps cleanly to agent/session/output.
+3. **Natural fit.** Heroes face trials, receive tidings, win glory—maps cleanly to
+   agent/session/output.
 4. **Gravitas.** When you want programs to feel epic and consequential.
-5. **Fate vs decree.** `const` as `fate` (unchangeable) vs `let` as `decree` (declared but mutable) is intuitive.
+5. **Fate vs decree.** `const` as `fate` (unchangeable) vs `let` as `decree` (declared but
+   mutable) is intuitive.
 
 ## The Case Against Homeric
 
@@ -337,7 +344,8 @@ fate config = { muse: "opus", persist: 3 }
 
 ## Verdict
 
-Preserved for benchmarking. The Homeric register offers gravitas and heroic framing. Best suited for:
+Preserved for benchmarking. The Homeric register offers gravitas and heroic framing. Best
+suited for:
 
 - Programs that feel like epic undertakings
 - Users who enjoy classical references

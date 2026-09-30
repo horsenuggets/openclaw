@@ -45,8 +45,9 @@ Minimal config:
 
 ## What it is
 
-Zalo is a Vietnam-focused messaging app; its Bot API lets the Gateway run a bot for 1:1 conversations.
-It is a good fit for support or notifications where you want deterministic routing back to Zalo.
+Zalo is a Vietnam-focused messaging app; its Bot API lets the Gateway run a bot for 1:1
+conversations. It is a good fit for support or notifications where you want deterministic
+routing back to Zalo.
 
 - A Zalo Bot API channel owned by the Gateway.
 - Deterministic routing: replies go back to Zalo; the model never chooses channels.
@@ -79,14 +80,16 @@ Example:
 
 Env option: `ZALO_BOT_TOKEN=...` (works for the default account only).
 
-Multi-account support: use `channels.zalo.accounts` with per-account tokens and optional `name`.
+Multi-account support: use `channels.zalo.accounts` with per-account tokens and optional
+`name`.
 
 3. Restart the gateway. Zalo starts when a token is resolved (env or config).
 4. DM access defaults to pairing. Approve the code when the bot is first contacted.
 
 ## How it works (behavior)
 
-- Inbound messages are normalized into the shared channel envelope with media placeholders.
+- Inbound messages are normalized into the shared channel envelope with media
+  placeholders.
 - Replies always route back to the same Zalo chat.
 - Long-polling by default; webhook mode available with `channels.zalo.webhookUrl`.
 
@@ -100,7 +103,8 @@ Multi-account support: use `channels.zalo.accounts` with per-account tokens and 
 
 ### DM access
 
-- Default: `channels.zalo.dmPolicy = "pairing"`. Unknown senders receive a pairing code; messages are ignored until approved (codes expire after 1 hour).
+- Default: `channels.zalo.dmPolicy = "pairing"`. Unknown senders receive a pairing code;
+  messages are ignored until approved (codes expire after 1 hour).
 - Approve via:
   - `openclaw pairing list zalo`
   - `openclaw pairing approve zalo <CODE>`
@@ -114,7 +118,8 @@ Multi-account support: use `channels.zalo.accounts` with per-account tokens and 
   - The webhook secret must be 8-256 characters.
   - Webhook URL must use HTTPS.
   - Zalo sends events with `X-Bot-Api-Secret-Token` header for verification.
-  - Gateway HTTP handles webhook requests at `channels.zalo.webhookPath` (defaults to the webhook URL path).
+  - Gateway HTTP handles webhook requests at `channels.zalo.webhookPath` (defaults to the
+    webhook URL path).
 
 **Note:** getUpdates (polling) and webhook are mutually exclusive per Zalo API docs.
 
@@ -168,7 +173,8 @@ Provider options:
 - `channels.zalo.botToken`: bot token from Zalo Bot Platform.
 - `channels.zalo.tokenFile`: read token from file path.
 - `channels.zalo.dmPolicy`: `pairing | allowlist | open | disabled` (default: pairing).
-- `channels.zalo.allowFrom`: DM allowlist (user IDs). `open` requires `"*"`. The wizard will ask for numeric IDs.
+- `channels.zalo.allowFrom`: DM allowlist (user IDs). `open` requires `"*"`. The wizard
+  will ask for numeric IDs.
 - `channels.zalo.mediaMaxMb`: inbound/outbound media cap (MB, default 5).
 - `channels.zalo.webhookUrl`: enable webhook mode (HTTPS required).
 - `channels.zalo.webhookSecret`: webhook secret (8-256 chars).

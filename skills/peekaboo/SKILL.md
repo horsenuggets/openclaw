@@ -25,11 +25,11 @@ metadata:
 
 # Peekaboo
 
-Peekaboo is a full macOS UI automation CLI: capture/inspect screens, target UI
-elements, drive input, and manage apps/windows/menus. Commands share a snapshot
-cache and support `--json`/`-j` for scripting. Run `peekaboo` or
-`peekaboo <cmd> --help` for flags; `peekaboo --version` prints build metadata.
-Tip: run via `polter peekaboo` to ensure fresh builds.
+Peekaboo is a full macOS UI automation CLI: capture/inspect screens, target UI elements,
+drive input, and manage apps/windows/menus. Commands share a snapshot cache and support
+`--json`/`-j` for scripting. Run `peekaboo` or `peekaboo <cmd> --help` for flags;
+`peekaboo --version` prints build metadata. Tip: run via `polter peekaboo` to ensure fresh
+builds.
 
 ## Features (all CLI capabilities, excluding agent/MCP)
 
@@ -102,8 +102,8 @@ peekaboo type "Hello" --return
 ## Common capture parameters
 
 - Output: `--path`, `--format png|jpg`, `--retina`
-- Targeting: `--mode screen|window|frontmost`, `--screen-index`,
-  `--window-title`, `--window-id`
+- Targeting: `--mode screen|window|frontmost`, `--screen-index`, `--window-title`,
+  `--window-id`
 - Analysis: `--analyze "prompt"`, `--annotate`
 - Capture engine: `--capture-engine auto|classic|cg|modern|sckit`
 

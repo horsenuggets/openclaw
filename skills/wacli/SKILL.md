@@ -1,6 +1,8 @@
 ---
 name: wacli
-description: Send WhatsApp messages to other people or search/sync WhatsApp history via the wacli CLI (not for normal user chats).
+description:
+  Send WhatsApp messages to other people or search/sync WhatsApp history via the wacli CLI
+  (not for normal user chats).
 homepage: https://wacli.sh
 metadata:
   {
@@ -31,9 +33,10 @@ metadata:
 
 # wacli
 
-Use `wacli` only when the user explicitly asks you to message someone else on WhatsApp or when they ask to sync/search WhatsApp history.
-Do NOT use `wacli` for normal user chats; OpenClaw routes WhatsApp conversations automatically.
-If the user is chatting with you on WhatsApp, you should not reach for this tool unless they ask you to contact a third party.
+Use `wacli` only when the user explicitly asks you to message someone else on WhatsApp or
+when they ask to sync/search WhatsApp history. Do NOT use `wacli` for normal user chats;
+OpenClaw routes WhatsApp conversations automatically. If the user is chatting with you on
+WhatsApp, you should not reach for this tool unless they ask you to contact a third party.
 
 Safety
 
@@ -60,7 +63,8 @@ History backfill
 Send
 
 - Text: `wacli send text --to "+14155551212" --message "Hello! Are you free at 3pm?"`
-- Group: `wacli send text --to "1234567890-123456789@g.us" --message "Running 5 min late."`
+- Group:
+  `wacli send text --to "1234567890-123456789@g.us" --message "Running 5 min late."`
 - File: `wacli send file --to "+14155551212" --file /path/agenda.pdf --caption "Agenda"`
 
 Notes
@@ -69,4 +73,5 @@ Notes
 - Use `--json` for machine-readable output when parsing.
 - Backfill requires your phone online; results are best-effort.
 - WhatsApp CLI is not needed for routine user chats; it’s for messaging other people.
-- JIDs: direct chats look like `<number>@s.whatsapp.net`; groups look like `<id>@g.us` (use `wacli chats list` to find).
+- JIDs: direct chats look like `<number>@s.whatsapp.net`; groups look like `<id>@g.us`
+  (use `wacli chats list` to find).

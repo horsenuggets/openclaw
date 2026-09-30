@@ -9,14 +9,14 @@ title: "Debugging"
 
 # Debugging
 
-This page covers debugging helpers for streaming output, especially when a
-provider mixes reasoning into normal text.
+This page covers debugging helpers for streaming output, especially when a provider mixes
+reasoning into normal text.
 
 ## Runtime debug overrides
 
-Use `/debug` in chat to set **runtime-only** config overrides (memory, not disk).
-`/debug` is disabled by default; enable with `commands.debug: true`.
-This is handy when you need to toggle obscure settings without editing `openclaw.json`.
+Use `/debug` in chat to set **runtime-only** config overrides (memory, not disk). `/debug`
+is disabled by default; enable with `commands.debug: true`. This is handy when you need to
+toggle obscure settings without editing `openclaw.json`.
 
 Examples:
 
@@ -43,18 +43,18 @@ This maps to:
 tsx watch src/entry.ts gateway --force
 ```
 
-Add any gateway CLI flags after `gateway:watch` and they will be passed through
-on each restart.
+Add any gateway CLI flags after `gateway:watch` and they will be passed through on each
+restart.
 
 ## Dev profile + dev gateway (--dev)
 
-Use the dev profile to isolate state and spin up a safe, disposable setup for
-debugging. There are **two** `--dev` flags:
+Use the dev profile to isolate state and spin up a safe, disposable setup for debugging.
+There are **two** `--dev` flags:
 
-- **Global `--dev` (profile):** isolates state under `~/.openclaw-dev` and
-  defaults the gateway port to `19001` (derived ports shift with it).
-- **`gateway --dev`: tells the Gateway to auto-create a default config +
-  workspace** when missing (and skip BOOTSTRAP.md).
+- **Global `--dev` (profile):** isolates state under `~/.openclaw-dev` and defaults the
+  gateway port to `19001` (derived ports shift with it).
+- **`gateway --dev`: tells the Gateway to auto-create a default config + workspace** when
+  missing (and skip BOOTSTRAP.md).
 
 Recommended flow (dev profile + dev bootstrap):
 
@@ -77,8 +77,8 @@ What this does:
    - Writes a minimal config if missing (`gateway.mode=local`, bind loopback).
    - Sets `agent.workspace` to the dev workspace.
    - Sets `agent.skipBootstrap=true` (no BOOTSTRAP.md).
-   - Seeds the workspace files if missing:
-     `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`.
+   - Seeds the workspace files if missing: `AGENTS.md`, `SOUL.md`, `TOOLS.md`,
+     `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`.
    - Default identity: **C3‑PO** (protocol droid).
    - Skips channel providers in dev mode (`OPENCLAW_SKIP_CHANNELS=1`).
 
@@ -88,15 +88,15 @@ Reset flow (fresh start):
 pnpm gateway:dev:reset
 ```
 
-Note: `--dev` is a **global** profile flag and gets eaten by some runners.
-If you need to spell it out, use the env var form:
+Note: `--dev` is a **global** profile flag and gets eaten by some runners. If you need to
+spell it out, use the env var form:
 
 ```bash
 OPENCLAW_PROFILE=dev openclaw gateway --dev --reset
 ```
 
-`--reset` wipes config, credentials, sessions, and the dev workspace (using
-`trash`, not `rm`), then recreates the default dev setup.
+`--reset` wipes config, credentials, sessions, and the dev workspace (using `trash`, not
+`rm`), then recreates the default dev setup.
 
 Tip: if a non‑dev gateway is already running (launchd/systemd), stop it first:
 
@@ -106,9 +106,9 @@ openclaw gateway stop
 
 ## Raw stream logging (OpenClaw)
 
-OpenClaw can log the **raw assistant stream** before any filtering/formatting.
-This is the best way to see whether reasoning is arriving as plain text deltas
-(or as separate thinking blocks).
+OpenClaw can log the **raw assistant stream** before any filtering/formatting. This is the
+best way to see whether reasoning is arriving as plain text deltas (or as separate
+thinking blocks).
 
 Enable it via CLI:
 
@@ -135,8 +135,8 @@ Default file:
 
 ## Raw chunk logging (pi-mono)
 
-To capture **raw OpenAI-compat chunks** before they are parsed into blocks,
-pi-mono exposes a separate logger:
+To capture **raw OpenAI-compat chunks** before they are parsed into blocks, pi-mono
+exposes a separate logger:
 
 ```bash
 PI_RAW_STREAM=1
@@ -152,8 +152,7 @@ Default file:
 
 `~/.pi-mono/logs/raw-openai-completions.jsonl`
 
-> Note: this is only emitted by processes using pi-mono’s
-> `openai-completions` provider.
+> Note: this is only emitted by processes using pi-mono’s `openai-completions` provider.
 
 ## Safety notes
 

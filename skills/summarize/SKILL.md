@@ -1,6 +1,8 @@
 ---
 name: summarize
-description: Summarize or extract text/transcripts from URLs, podcasts, and local files (great fallback for “transcribe this YouTube/video”).
+description:
+  Summarize or extract text/transcripts from URLs, podcasts, and local files (great
+  fallback for “transcribe this YouTube/video”).
 homepage: https://summarize.sh
 metadata:
   {
@@ -51,7 +53,8 @@ Best-effort transcript (URLs only):
 summarize "https://youtu.be/dQw4w9WgXcQ" --youtube auto --extract-only
 ```
 
-If the user asked for a transcript but it’s huge, return a tight summary first, then ask which section/time range to expand.
+If the user asked for a transcript but it’s huge, return a tight summary first, then ask
+which section/time range to expand.
 
 ## Model + keys
 

@@ -1,6 +1,8 @@
 ---
 name: apple-reminders
-description: Manage Apple Reminders via the `remindctl` CLI on macOS (list, add, edit, complete, delete). Supports lists, date filters, and JSON/plain output.
+description:
+  Manage Apple Reminders via the `remindctl` CLI on macOS (list, add, edit, complete,
+  delete). Supports lists, date filters, and JSON/plain output.
 homepage: https://github.com/steipete/remindctl
 metadata:
   {
@@ -25,7 +27,8 @@ metadata:
 
 # Apple Reminders CLI (remindctl)
 
-Use `remindctl` to manage Apple Reminders directly from the terminal. It supports list filtering, date-based views, and scripting output.
+Use `remindctl` to manage Apple Reminders directly from the terminal. It supports list
+filtering, date-based views, and scripting output.
 
 Setup
 
@@ -81,8 +84,7 @@ Output Formats
 - Plain TSV: `remindctl today --plain`
 - Counts only: `remindctl today --quiet`
 
-Date Formats
-Accepted by `--due` and date filters:
+Date Formats Accepted by `--due` and date filters:
 
 - `today`, `tomorrow`, `yesterday`
 - `YYYY-MM-DD`
@@ -92,5 +94,6 @@ Accepted by `--due` and date filters:
 Notes
 
 - macOS-only.
-- If access is denied, enable Terminal/remindctl in System Settings → Privacy & Security → Reminders.
+- If access is denied, enable Terminal/remindctl in System Settings → Privacy & Security →
+  Reminders.
 - If running over SSH, grant access on the Mac that runs the command.

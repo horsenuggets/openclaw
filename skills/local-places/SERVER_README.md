@@ -2,10 +2,13 @@
 
 This repo is a fusion of two pieces:
 
-- A FastAPI server that exposes endpoints for searching and resolving places via the Google Maps Places API.
-- A companion agent skill that explains how to use the API and can call it to find places efficiently.
+- A FastAPI server that exposes endpoints for searching and resolving places via the
+  Google Maps Places API.
+- A companion agent skill that explains how to use the API and can call it to find places
+  efficiently.
 
-Together, the skill and server let an agent turn natural-language place queries into structured results quickly.
+Together, the skill and server let an agent turn natural-language place queries into
+structured results quickly.
 
 ## Run locally
 

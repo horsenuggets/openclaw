@@ -8,7 +8,8 @@ title: "hooks"
 
 # `openclaw hooks`
 
-Manage agent hooks (event-driven automations for commands like `/new`, `/reset`, and gateway startup).
+Manage agent hooks (event-driven automations for commands like `/new`, `/reset`, and
+gateway startup).
 
 Related:
 
@@ -127,8 +128,8 @@ openclaw hooks enable <name>
 
 Enable a specific hook by adding it to your config (`~/.openclaw/config.json`).
 
-**Note:** Hooks managed by plugins show `plugin:<id>` in `openclaw hooks list` and
-can’t be enabled/disabled here. Enable/disable the plugin instead.
+**Note:** Hooks managed by plugins show `plugin:<id>` in `openclaw hooks list` and can’t
+be enabled/disabled here. Enable/disable the plugin instead.
 
 **Arguments:**
 
@@ -154,7 +155,8 @@ openclaw hooks enable session-memory
 
 **After enabling:**
 
-- Restart the gateway so hooks reload (menu bar app restart on macOS, or restart your gateway process in dev).
+- Restart the gateway so hooks reload (menu bar app restart on macOS, or restart your
+  gateway process in dev).
 
 ## Disable a Hook
 
@@ -200,7 +202,8 @@ Install a hook pack from a local folder/archive or npm.
 
 **Options:**
 
-- `-l, --link`: Link a local directory instead of copying (adds it to `hooks.internal.load.extraDirs`)
+- `-l, --link`: Link a local directory instead of copying (adds it to
+  `hooks.internal.load.extraDirs`)
 
 **Supported archives:** `.zip`, `.tgz`, `.tar.gz`, `.tar`
 
@@ -279,7 +282,8 @@ grep '"action":"new"' ~/.openclaw/logs/commands.log | jq .
 
 ### soul-evil
 
-Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random chance.
+Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random
+chance.
 
 **Enable:**
 

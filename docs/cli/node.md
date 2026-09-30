@@ -13,8 +13,8 @@ Run a **headless node host** that connects to the Gateway WebSocket and exposes
 
 ## Why use a node host?
 
-Use a node host when you want agents to **run commands on other machines** in your
-network without installing a full macOS companion app there.
+Use a node host when you want agents to **run commands on other machines** in your network
+without installing a full macOS companion app there.
 
 Common use cases:
 
@@ -22,14 +22,14 @@ Common use cases:
 - Keep exec **sandboxed** on the gateway, but delegate approved runs to other hosts.
 - Provide a lightweight, headless execution target for automation or CI nodes.
 
-Execution is still guarded by **exec approvals** and per‑agent allowlists on the
-node host, so you can keep command access scoped and explicit.
+Execution is still guarded by **exec approvals** and per‑agent allowlists on the node
+host, so you can keep command access scoped and explicit.
 
 ## Browser proxy (zero-config)
 
-Node hosts automatically advertise a browser proxy if `browser.enabled` is not
-disabled on the node. This lets the agent use browser automation on that node
-without extra configuration.
+Node hosts automatically advertise a browser proxy if `browser.enabled` is not disabled on
+the node. This lets the agent use browser automation on that node without extra
+configuration.
 
 Disable it on the node if needed:
 
@@ -92,8 +92,7 @@ Service commands accept `--json` for machine-readable output.
 
 ## Pairing
 
-The first connection creates a pending node pair request on the Gateway.
-Approve it via:
+The first connection creates a pending node pair request on the Gateway. Approve it via:
 
 ```bash
 openclaw nodes pending

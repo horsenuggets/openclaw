@@ -9,7 +9,10 @@ title: "ClawHub"
 
 # ClawHub
 
-ClawHub is the **public skill registry for OpenClaw**. It is a free service: all skills are public, open, and visible to everyone for sharing and reuse. A skill is just a folder with a `SKILL.md` file (plus supporting text files). You can browse skills in the web app or use the CLI to search, install, update, and publish skills.
+ClawHub is the **public skill registry for OpenClaw**. It is a free service: all skills
+are public, open, and visible to everyone for sharing and reuse. A skill is just a folder
+with a `SKILL.md` file (plus supporting text files). You can browse skills in the web app
+or use the CLI to search, install, update, and publish skills.
 
 Site: [clawhub.ai](https://clawhub.ai)
 
@@ -36,7 +39,8 @@ Site: [clawhub.ai](https://clawhub.ai)
 
 ## Who this is for (beginner-friendly)
 
-If you want to add new capabilities to your OpenClaw agent, ClawHub is the easiest way to find and install skills. You do not need to know how the backend works. You can:
+If you want to add new capabilities to your OpenClaw agent, ClawHub is the easiest way to
+find and install skills. You do not need to know how the backend works. You can:
 
 - Search for skills by plain language.
 - Install a skill into your workspace.
@@ -66,16 +70,19 @@ pnpm add -g clawhub
 
 ## How it fits into OpenClaw
 
-By default, the CLI installs skills into `./skills` under your current working directory. If a OpenClaw workspace is configured, `clawhub` falls back to that workspace unless you override `--workdir` (or `CLAWHUB_WORKDIR`). OpenClaw loads workspace skills from `<workspace>/skills` and will pick them up in the **next** session. If you already use `~/.openclaw/skills` or bundled skills, workspace skills take precedence.
+By default, the CLI installs skills into `./skills` under your current working directory.
+If a OpenClaw workspace is configured, `clawhub` falls back to that workspace unless you
+override `--workdir` (or `CLAWHUB_WORKDIR`). OpenClaw loads workspace skills from
+`<workspace>/skills` and will pick them up in the **next** session. If you already use
+`~/.openclaw/skills` or bundled skills, workspace skills take precedence.
 
-For more detail on how skills are loaded, shared, and gated, see
-[Skills](/tools/skills).
+For more detail on how skills are loaded, shared, and gated, see [Skills](/tools/skills).
 
 ## Skill system overview
 
-A skill is a versioned bundle of files that teaches OpenClaw how to perform a
-specific task. Each publish creates a new version, and the registry keeps a
-history of versions so users can audit changes.
+A skill is a versioned bundle of files that teaches OpenClaw how to perform a specific
+task. Each publish creates a new version, and the registry keeps a history of versions so
+users can audit changes.
 
 A typical skill includes:
 
@@ -83,9 +90,9 @@ A typical skill includes:
 - Optional configs, scripts, or supporting files used by the skill.
 - Metadata such as tags, summary, and install requirements.
 
-ClawHub uses metadata to power discovery and safely expose skill capabilities.
-The registry also tracks usage signals (such as stars and downloads) to improve
-ranking and visibility.
+ClawHub uses metadata to power discovery and safely expose skill capabilities. The
+registry also tracks usage signals (such as stars and downloads) to improve ranking and
+visibility.
 
 ## What the service provides (features)
 
@@ -99,9 +106,9 @@ ranking and visibility.
 
 ## Security and moderation
 
-ClawHub is open by default. Anyone can upload skills, but a GitHub account must
-be at least one week old to publish. This helps slow down abuse without blocking
-legitimate contributors.
+ClawHub is open by default. Anyone can upload skills, but a GitHub account must be at
+least one week old to publish. This helps slow down abuse without blocking legitimate
+contributors.
 
 Reporting and moderation:
 
@@ -112,14 +119,15 @@ Reporting and moderation:
 - Moderators can view hidden skills, unhide them, delete them, or ban users.
 - Abusing the report feature can result in account bans.
 
-Interested in becoming a moderator? Ask in the OpenClaw Discord and contact a
-moderator or maintainer.
+Interested in becoming a moderator? Ask in the OpenClaw Discord and contact a moderator or
+maintainer.
 
 ## CLI commands and parameters
 
 Global options (apply to all commands):
 
-- `--workdir <dir>`: Working directory (default: current dir; falls back to OpenClaw workspace).
+- `--workdir <dir>`: Working directory (default: current dir; falls back to OpenClaw
+  workspace).
 - `--dir <dir>`: Skills directory, relative to workdir (default: `skills`).
 - `--site <url>`: Site base URL (browser login).
 - `--registry <url>`: Registry API base URL.
@@ -229,20 +237,26 @@ clawhub sync --all
 
 ### Local changes vs registry versions
 
-Updates compare the local skill contents to registry versions using a content hash. If local files do not match any published version, the CLI asks before overwriting (or requires `--force` in non-interactive runs).
+Updates compare the local skill contents to registry versions using a content hash. If
+local files do not match any published version, the CLI asks before overwriting (or
+requires `--force` in non-interactive runs).
 
 ### Sync scanning and fallback roots
 
-`clawhub sync` scans your current workdir first. If no skills are found, it falls back to known legacy locations (for example `~/openclaw/skills` and `~/.openclaw/skills`). This is designed to find older skill installs without extra flags.
+`clawhub sync` scans your current workdir first. If no skills are found, it falls back to
+known legacy locations (for example `~/openclaw/skills` and `~/.openclaw/skills`). This is
+designed to find older skill installs without extra flags.
 
 ### Storage and lockfile
 
 - Installed skills are recorded in `.clawhub/lock.json` under your workdir.
-- Auth tokens are stored in the ClawHub CLI config file (override via `CLAWHUB_CONFIG_PATH`).
+- Auth tokens are stored in the ClawHub CLI config file (override via
+  `CLAWHUB_CONFIG_PATH`).
 
 ### Telemetry (install counts)
 
-When you run `clawhub sync` while logged in, the CLI sends a minimal snapshot to compute install counts. You can disable this entirely:
+When you run `clawhub sync` while logged in, the CLI sends a minimal snapshot to compute
+install counts. You can disable this entirely:
 
 ```bash
 export CLAWHUB_DISABLE_TELEMETRY=1

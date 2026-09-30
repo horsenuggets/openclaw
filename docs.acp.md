@@ -1,14 +1,13 @@
 # OpenClaw ACP Bridge
 
-This document describes how the OpenClaw ACP (Agent Client Protocol) bridge works,
-how it maps ACP sessions to Gateway sessions, and how IDEs should invoke it.
+This document describes how the OpenClaw ACP (Agent Client Protocol) bridge works, how it
+maps ACP sessions to Gateway sessions, and how IDEs should invoke it.
 
 ## Overview
 
-`openclaw acp` exposes an ACP agent over stdio and forwards prompts to a running
-OpenClaw Gateway over WebSocket. It keeps ACP session ids mapped to Gateway
-session keys so IDEs can reconnect to the same agent transcript or reset it on
-request.
+`openclaw acp` exposes an ACP agent over stdio and forwards prompts to a running OpenClaw
+Gateway over WebSocket. It keeps ACP session ids mapped to Gateway session keys so IDEs
+can reconnect to the same agent transcript or reset it on request.
 
 Key goals:
 
@@ -19,8 +18,8 @@ Key goals:
 
 ## How can I use this
 
-Use ACP when an IDE or tooling speaks Agent Client Protocol and you want it to
-drive a OpenClaw Gateway session.
+Use ACP when an IDE or tooling speaks Agent Client Protocol and you want it to drive a
+OpenClaw Gateway session.
 
 Quick steps:
 
@@ -53,9 +52,8 @@ openclaw acp --session agent:design:main
 openclaw acp --session agent:qa:bug-123
 ```
 
-Each ACP session maps to a single Gateway session key. One agent can have many
-sessions; ACP defaults to an isolated `acp:<uuid>` session unless you override
-the key or label.
+Each ACP session maps to a single Gateway session key. One agent can have many sessions;
+ACP defaults to an isolated `acp:<uuid>` session unless you override the key or label.
 
 ## Zed editor setup
 
@@ -145,9 +143,8 @@ Rules:
 
 ### Session Listing
 
-ACP `listSessions` maps to Gateway `sessions.list` and returns a filtered
-summary suitable for IDE session pickers. `_meta.limit` can cap the number of
-sessions returned.
+ACP `listSessions` maps to Gateway `sessions.list` and returns a filtered summary suitable
+for IDE session pickers. `_meta.limit` can cap the number of sessions returned.
 
 ## Prompt Translation
 
@@ -155,11 +152,11 @@ ACP prompt inputs are converted into a Gateway `chat.send`:
 
 - `text` and `resource` blocks become prompt text.
 - `resource_link` with image mime types become attachments.
-- The working directory can be prefixed into the prompt (default on, can be
-  disabled with `--no-prefix-cwd`).
+- The working directory can be prefixed into the prompt (default on, can be disabled with
+  `--no-prefix-cwd`).
 
-Gateway streaming events are translated into ACP `message` and `tool_call`
-updates. Terminal Gateway states map to ACP `done` with stop reasons:
+Gateway streaming events are translated into ACP `message` and `tool_call` updates.
+Terminal Gateway states map to ACP `done` with stop reasons:
 
 - `complete` -> `stop`
 - `aborted` -> `cancel`
@@ -182,8 +179,8 @@ updates. Terminal Gateway states map to ACP `done` with stop reasons:
 ## Compatibility
 
 - ACP bridge uses `@agentclientprotocol/sdk` (currently 0.13.x).
-- Works with ACP clients that implement `initialize`, `newSession`,
-  `loadSession`, `prompt`, `cancel`, and `listSessions`.
+- Works with ACP clients that implement `initialize`, `newSession`, `loadSession`,
+  `prompt`, `cancel`, and `listSessions`.
 
 ## Testing
 

@@ -10,14 +10,16 @@ title: "OAuth"
 
 # OAuth
 
-OpenClaw supports “subscription auth” via OAuth for providers that offer it (notably **OpenAI Codex (ChatGPT OAuth)**). For Anthropic subscriptions, use the **setup-token** flow. This page explains:
+OpenClaw supports “subscription auth” via OAuth for providers that offer it (notably
+**OpenAI Codex (ChatGPT OAuth)**). For Anthropic subscriptions, use the **setup-token**
+flow. This page explains:
 
 - how the OAuth **token exchange** works (PKCE)
 - where tokens are **stored** (and why)
 - how to handle **multiple accounts** (profiles + per-session overrides)
 
-OpenClaw also supports **provider plugins** that ship their own OAuth or API‑key
-flows. Run them via:
+OpenClaw also supports **provider plugins** that ship their own OAuth or API‑key flows.
+Run them via:
 
 ```bash
 openclaw models auth login --provider <id>
@@ -25,11 +27,14 @@ openclaw models auth login --provider <id>
 
 ## The token sink (why it exists)
 
-OAuth providers commonly mint a **new refresh token** during login/refresh flows. Some providers (or OAuth clients) can invalidate older refresh tokens when a new one is issued for the same user/app.
+OAuth providers commonly mint a **new refresh token** during login/refresh flows. Some
+providers (or OAuth clients) can invalidate older refresh tokens when a new one is issued
+for the same user/app.
 
 Practical symptom:
 
-- you log in via OpenClaw _and_ via Claude Code / Codex CLI → one of them randomly gets “logged out” later
+- you log in via OpenClaw _and_ via Claude Code / Codex CLI → one of them randomly gets
+  “logged out” later
 
 To reduce that, OpenClaw treats `auth-profiles.json` as a **token sink**:
 
@@ -40,14 +45,17 @@ To reduce that, OpenClaw treats `auth-profiles.json` as a **token sink**:
 
 Secrets are stored **per-agent**:
 
-- Auth profiles (OAuth + API keys): `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
-- Runtime cache (managed automatically; don’t edit): `~/.openclaw/agents/<agentId>/agent/auth.json`
+- Auth profiles (OAuth + API keys):
+  `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- Runtime cache (managed automatically; don’t edit):
+  `~/.openclaw/agents/<agentId>/agent/auth.json`
 
 Legacy import-only file (still supported, but not the main store):
 
 - `~/.openclaw/credentials/oauth.json` (imported into `auth-profiles.json` on first use)
 
-All of the above also respect `$OPENCLAW_STATE_DIR` (state dir override). Full reference: [/gateway/configuration](/gateway/configuration#auth-storage-oauth--api-keys)
+All of the above also respect `$OPENCLAW_STATE_DIR` (state dir override). Full reference:
+[/gateway/configuration](/gateway/configuration#auth-storage-oauth--api-keys)
 
 ## Anthropic setup-token (subscription auth)
 
@@ -71,7 +79,8 @@ openclaw models status
 
 ## OAuth exchange (how login works)
 
-OpenClaw’s interactive login flows are implemented in `@mariozechner/pi-ai` and wired into the wizards/commands.
+OpenClaw’s interactive login flows are implemented in `@mariozechner/pi-ai` and wired into
+the wizards/commands.
 
 ### Anthropic (Claude Pro/Max) setup-token
 
@@ -92,7 +101,8 @@ Flow shape (PKCE):
 3. try to capture callback on `http://127.0.0.1:1455/auth/callback`
 4. if callback can’t bind (or you’re remote/headless), paste the redirect URL/code
 5. exchange at `https://auth.openai.com/oauth/token`
-6. extract `accountId` from the access token and store `{ access, refresh, expires, accountId }`
+6. extract `accountId` from the access token and store
+   `{ access, refresh, expires, accountId }`
 
 Wizard path is `openclaw onboard` → auth choice `openai-codex`.
 
@@ -113,7 +123,8 @@ Two patterns:
 
 ### 1) Preferred: separate agents
 
-If you want “personal” and “work” to never interact, use isolated agents (separate sessions + credentials + workspace):
+If you want “personal” and “work” to never interact, use isolated agents (separate
+sessions + credentials + workspace):
 
 ```bash
 openclaw agents add work

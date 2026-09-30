@@ -8,8 +8,9 @@ Input
   - If missing: use the most recent PR mentioned in the conversation.
   - If ambiguous: ask.
 
-Do (review-only)
-Goal: produce a thorough review and a clear recommendation (READY for /landpr vs NEEDS WORK). Do NOT merge, do NOT push, do NOT make changes in the repo as part of this command.
+Do (review-only) Goal: produce a thorough review and a clear recommendation (READY for
+/landpr vs NEEDS WORK). Do NOT merge, do NOT push, do NOT make changes in the repo as part
+of this command.
 
 1. Identify PR meta + context
 
@@ -19,7 +20,8 @@ Goal: produce a thorough review and a clear recommendation (READY for /landpr vs
 
 2. Read the PR description carefully
    - Summarize the stated goal, scope, and any "why now?" rationale.
-   - Call out any missing context: motivation, alternatives considered, rollout/compat notes, risk.
+   - Call out any missing context: motivation, alternatives considered, rollout/compat
+     notes, risk.
 
 3. Read the diff thoroughly (prefer full diff)
 
@@ -48,7 +50,8 @@ Goal: produce a thorough review and a clear recommendation (READY for /landpr vs
    - Identify what's covered by tests (unit/integration/e2e).
    - Are there regression tests for the bug fixed / scenario added?
    - Missing tests? Call out exact cases that should be added.
-   - If tests are present, do they actually assert the important behavior (not just snapshots / happy path)?
+   - If tests are present, do they actually assert the important behavior (not just
+     snapshots / happy path)?
 
 7. Follow-up refactors / cleanup suggestions
    - Any code that should be simplified before merge?
@@ -56,12 +59,12 @@ Goal: produce a thorough review and a clear recommendation (READY for /landpr vs
    - Any deprecations, docs, types, or lint rules we should adjust?
 
 8. Key questions to answer explicitly
-   - Can we fix everything ourselves in a follow-up, or does the contributor need to update this PR?
+   - Can we fix everything ourselves in a follow-up, or does the contributor need to
+     update this PR?
    - Any blocking concerns (must-fix before merge)?
    - Is this PR ready to land, or does it need work?
 
-9. Output (structured)
-   Produce a review with these sections:
+9. Output (structured) Produce a review with these sections:
 
 A) TL;DR recommendation
 

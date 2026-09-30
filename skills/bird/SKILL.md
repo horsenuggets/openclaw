@@ -51,9 +51,11 @@ bunx @steipete/bird whoami
 
 `bird` uses cookie-based auth.
 
-Use `--auth-token` / `--ct0` to pass cookies directly, or `--cookie-source` for browser cookies.
+Use `--auth-token` / `--ct0` to pass cookies directly, or `--cookie-source` for browser
+cookies.
 
-Run `bird check` to see which source is active. For Arc/Brave, use `--chrome-profile-dir <path>`.
+Run `bird check` to see which source is active. For Arc/Brave, use
+`--chrome-profile-dir <path>`.
 
 ## Commands
 
@@ -145,7 +147,8 @@ bird reply <url-or-id> "nice thread!"
 bird tweet "check this out" --media image.png --alt "description"
 ```
 
-**⚠️ Posting risks**: Posting is more likely to be rate limited; if blocked, use the browser tool instead.
+**⚠️ Posting risks**: Posting is more likely to be rate limited; if blocked, use the
+browser tool instead.
 
 ## Media Uploads
 
@@ -157,7 +160,8 @@ bird tweet "video" --media clip.mp4            # Or 1 video
 
 ## Pagination
 
-Commands supporting pagination: `replies`, `thread`, `search`, `bookmarks`, `likes`, `list-timeline`, `following`, `followers`, `user-tweets`
+Commands supporting pagination: `replies`, `thread`, `search`, `bookmarks`, `likes`,
+`list-timeline`, `following`, `followers`, `user-tweets`
 
 ```bash
 bird bookmarks --all                    # Fetch all pages

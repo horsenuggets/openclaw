@@ -1,6 +1,7 @@
 # OpenProse Standard Library
 
-Core programs that ship with OpenProse. Production-quality, well-tested programs for common tasks.
+Core programs that ship with OpenProse. Production-quality, well-tested programs for
+common tasks.
 
 ## Programs
 

@@ -14,11 +14,14 @@ see-also:
 
 # In-Context State Management
 
-This document describes how the OpenProse VM tracks execution state using **structured narration** in the conversation history. This is one of two state management approaches (the other being file-based state in `filesystem.md`).
+This document describes how the OpenProse VM tracks execution state using **structured
+narration** in the conversation history. This is one of two state management approaches
+(the other being file-based state in `filesystem.md`).
 
 ## Overview
 
-In-context state uses text-prefixed markers to persist state within the conversation. The VM "thinks aloud" about execution—what you say becomes what you remember.
+In-context state uses text-prefixed markers to persist state within the conversation. The
+VM "thinks aloud" about execution—what you say becomes what you remember.
 
 **Key principle:** Your conversation history IS the VM's working memory.
 
@@ -233,7 +236,9 @@ For variable resolution across scopes:
 
 ## Context Serialization
 
-**In-context state passes values, not references.** This is the key difference from file-based and PostgreSQL state. The VM holds binding values directly in conversation history.
+**In-context state passes values, not references.** This is the key difference from
+file-based and PostgreSQL state. The VM holds binding values directly in conversation
+history.
 
 When passing context to sessions, format appropriately:
 
@@ -253,7 +258,9 @@ analysis: "Risk assessment shows..."
 ---
 ```
 
-**Limitation:** In-context state cannot support RLM-style "environment as variable" patterns where agents query arbitrarily large bindings. For programs with large intermediate values, use file-based or PostgreSQL state instead.
+**Limitation:** In-context state cannot support RLM-style "environment as variable"
+patterns where agents query arbitrarily large bindings. For programs with large
+intermediate values, use file-based or PostgreSQL state instead.
 
 ---
 
@@ -362,7 +369,8 @@ Each frame tracks:
 
 ## Independence from File-Based State
 
-In-context state and file-based state (`filesystem.md`) are **independent approaches**. You choose one or the other based on program complexity.
+In-context state and file-based state (`filesystem.md`) are **independent approaches**.
+You choose one or the other based on program complexity.
 
 - **In-context**: State lives in conversation history
 - **File-based**: State lives in `.prose/runs/{id}/`
@@ -381,4 +389,5 @@ In-context state management:
 4. Requires **consistent narration** throughout execution
 5. Makes state **visible** in the conversation itself
 
-The narration protocol ensures that the VM can recover its execution state by reading its own prior messages. What you say becomes what you remember.
+The narration protocol ensures that the VM can recover its execution state by reading its
+own prior messages. What you say becomes what you remember.

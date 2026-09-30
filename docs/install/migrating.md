@@ -8,14 +8,18 @@ title: "Migration Guide"
 
 # Migrating OpenClaw to a new machine
 
-This guide migrates a OpenClaw Gateway from one machine to another **without redoing onboarding**.
+This guide migrates a OpenClaw Gateway from one machine to another **without redoing
+onboarding**.
 
 The migration is simple conceptually:
 
-- Copy the **state directory** (`$OPENCLAW_STATE_DIR`, default: `~/.openclaw/`) — this includes config, auth, sessions, and channel state.
-- Copy your **workspace** (`~/.openclaw/workspace/` by default) — this includes your agent files (memory, prompts, etc.).
+- Copy the **state directory** (`$OPENCLAW_STATE_DIR`, default: `~/.openclaw/`) — this
+  includes config, auth, sessions, and channel state.
+- Copy your **workspace** (`~/.openclaw/workspace/` by default) — this includes your agent
+  files (memory, prompts, etc.).
 
-But there are common footguns around **profiles**, **permissions**, and **partial copies**.
+But there are common footguns around **profiles**, **permissions**, and **partial
+copies**.
 
 ## Before you start (what you are migrating)
 
@@ -36,7 +40,8 @@ If you’re not sure, run on the **old** machine:
 openclaw status
 ```
 
-Look for mentions of `OPENCLAW_STATE_DIR` / profile in the output. If you run multiple gateways, repeat for each profile.
+Look for mentions of `OPENCLAW_STATE_DIR` / profile in the output. If you run multiple
+gateways, repeat for each profile.
 
 ### 2) Identify your workspace
 
@@ -85,7 +90,8 @@ tar -czf openclaw-state.tgz .openclaw
 tar -czf openclaw-workspace.tgz .openclaw/workspace
 ```
 
-If you have multiple profiles/state dirs (e.g. `~/.openclaw-main`, `~/.openclaw-work`), archive each.
+If you have multiple profiles/state dirs (e.g. `~/.openclaw-main`, `~/.openclaw-work`),
+archive each.
 
 ### Step 1 — Install OpenClaw on the new machine
 
@@ -93,7 +99,8 @@ On the **new** machine, install the CLI (and Node if needed):
 
 - See: [Install](/install)
 
-At this stage, it’s OK if onboarding creates a fresh `~/.openclaw/` — you will overwrite it in the next step.
+At this stage, it’s OK if onboarding creates a fresh `~/.openclaw/` — you will overwrite
+it in the next step.
 
 ### Step 2 — Copy the state dir + workspace to the new machine
 
@@ -121,7 +128,8 @@ On the **new** machine:
 openclaw doctor
 ```
 
-Doctor is the “safe boring” command. It repairs services, applies config migrations, and warns about mismatches.
+Doctor is the “safe boring” command. It repairs services, applies config migrations, and
+warns about mismatches.
 
 Then:
 
@@ -134,13 +142,15 @@ openclaw status
 
 ### Footgun: profile / state-dir mismatch
 
-If you ran the old gateway with a profile (or `OPENCLAW_STATE_DIR`), and the new gateway uses a different one, you’ll see symptoms like:
+If you ran the old gateway with a profile (or `OPENCLAW_STATE_DIR`), and the new gateway
+uses a different one, you’ll see symptoms like:
 
 - config changes not taking effect
 - channels missing / logged out
 - empty session history
 
-Fix: run the gateway/service using the **same** profile/state dir you migrated, then rerun:
+Fix: run the gateway/service using the **same** profile/state dir you migrated, then
+rerun:
 
 ```bash
 openclaw doctor
@@ -163,14 +173,16 @@ Fix: ensure the state dir + workspace are owned by the user running the gateway.
 
 ### Footgun: migrating between remote/local modes
 
-- If your UI (WebUI/TUI) points at a **remote** gateway, the remote host owns the session store + workspace.
+- If your UI (WebUI/TUI) points at a **remote** gateway, the remote host owns the session
+  store + workspace.
 - Migrating your laptop won’t move the remote gateway’s state.
 
 If you’re in remote mode, migrate the **gateway host**.
 
 ### Footgun: secrets in backups
 
-`$OPENCLAW_STATE_DIR` contains secrets (API keys, OAuth tokens, WhatsApp creds). Treat backups like production secrets:
+`$OPENCLAW_STATE_DIR` contains secrets (API keys, OAuth tokens, WhatsApp creds). Treat
+backups like production secrets:
 
 - store encrypted
 - avoid sharing over insecure channels

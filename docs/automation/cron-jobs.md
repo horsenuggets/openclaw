@@ -9,13 +9,14 @@ title: "Cron Jobs"
 
 # Cron jobs (Gateway scheduler)
 
-> **Cron vs Heartbeat?** See [Cron vs Heartbeat](/automation/cron-vs-heartbeat) for guidance on when to use each.
+> **Cron vs Heartbeat?** See [Cron vs Heartbeat](/automation/cron-vs-heartbeat) for
+> guidance on when to use each.
 
-Cron is the Gateway’s built-in scheduler. It persists jobs, wakes the agent at
-the right time, and can optionally deliver output back to a chat.
+Cron is the Gateway’s built-in scheduler. It persists jobs, wakes the agent at the right
+time, and can optionally deliver output back to a chat.
 
-If you want _“run this every morning”_ or _“poke the agent in 20 minutes”_,
-cron is the mechanism.
+If you want _“run this every morning”_ or _“poke the agent in 20 minutes”_, cron is the
+mechanism.
 
 ## TL;DR
 
@@ -23,7 +24,8 @@ cron is the mechanism.
 - Jobs persist under `~/.openclaw/cron/` so restarts don’t lose schedules.
 - Two execution styles:
   - **Main session**: enqueue a system event, then run on the next heartbeat.
-  - **Isolated**: run a dedicated agent turn in `cron:<jobId>`, with delivery (announce by default or none).
+  - **Isolated**: run a dedicated agent turn in `cron:<jobId>`, with delivery (announce by
+    default or none).
 - Wakeups are first-class: a job can request “wake now” vs “next heartbeat”.
 
 ## Quick start (actionable)
@@ -60,14 +62,15 @@ openclaw cron add \
 
 ## Tool-call equivalents (Gateway cron tool)
 
-For the canonical JSON shapes and examples, see [JSON schema for tool calls](/automation/cron-jobs#json-schema-for-tool-calls).
+For the canonical JSON shapes and examples, see
+[JSON schema for tool calls](/automation/cron-jobs#json-schema-for-tool-calls).
 
 ## Where cron jobs are stored
 
 Cron jobs are persisted on the Gateway host at `~/.openclaw/cron/jobs.json` by default.
-The Gateway loads the file into memory and writes it back on changes, so manual edits
-are only safe when the Gateway is stopped. Prefer `openclaw cron add/edit` or the cron
-tool call API for changes.
+The Gateway loads the file into memory and writes it back on changes, so manual edits are
+only safe when the Gateway is stopped. Prefer `openclaw cron add/edit` or the cron tool
+call API for changes.
 
 ## Beginner-friendly overview
 
@@ -98,12 +101,12 @@ A cron job is a stored record with:
 - a **schedule** (when it should run),
 - a **payload** (what it should do),
 - optional **delivery mode** (announce or none).
-- optional **agent binding** (`agentId`): run the job under a specific agent; if
-  missing or unknown, the gateway falls back to the default agent.
+- optional **agent binding** (`agentId`): run the job under a specific agent; if missing
+  or unknown, the gateway falls back to the default agent.
 
-Jobs are identified by a stable `jobId` (used by CLI/Gateway APIs).
-In agent tool calls, `jobId` is canonical; legacy `id` is accepted for compatibility.
-One-shot jobs auto-delete after success by default; set `deleteAfterRun: false` to keep them.
+Jobs are identified by a stable `jobId` (used by CLI/Gateway APIs). In agent tool calls,
+`jobId` is canonical; legacy `id` is accepted for compatibility. One-shot jobs auto-delete
+after success by default; set `deleteAfterRun: false` to keep them.
 
 ### Schedules
 
@@ -113,21 +116,21 @@ Cron supports three schedule kinds:
 - `every`: fixed interval (ms).
 - `cron`: 5-field cron expression with optional IANA timezone.
 
-Cron expressions use `croner`. If a timezone is omitted, the Gateway host’s
-local timezone is used.
+Cron expressions use `croner`. If a timezone is omitted, the Gateway host’s local timezone
+is used.
 
 ### Main vs isolated execution
 
 #### Main session jobs (system events)
 
-Main jobs enqueue a system event and optionally wake the heartbeat runner.
-They must use `payload.kind = "systemEvent"`.
+Main jobs enqueue a system event and optionally wake the heartbeat runner. They must use
+`payload.kind = "systemEvent"`.
 
 - `wakeMode: "next-heartbeat"` (default): event waits for the next scheduled heartbeat.
 - `wakeMode: "now"`: event triggers an immediate heartbeat run.
 
-This is the best fit when you want the normal heartbeat prompt + main-session context.
-See [Heartbeat](/gateway/heartbeat).
+This is the best fit when you want the normal heartbeat prompt + main-session context. See
+[Heartbeat](/gateway/heartbeat).
 
 #### Isolated jobs (dedicated cron sessions)
 
@@ -137,16 +140,18 @@ Key behaviors:
 
 - Prompt is prefixed with `[cron:<jobId> <job name>]` for traceability.
 - Each run starts a **fresh session id** (no prior conversation carry-over).
-- Default behavior: if `delivery` is omitted, isolated jobs announce a summary (`delivery.mode = "announce"`).
+- Default behavior: if `delivery` is omitted, isolated jobs announce a summary
+  (`delivery.mode = "announce"`).
 - `delivery.mode` (isolated-only) chooses what happens:
-  - `announce`: deliver a summary to the target channel and post a brief summary to the main session.
+  - `announce`: deliver a summary to the target channel and post a brief summary to the
+    main session.
   - `none`: internal only (no delivery, no main-session summary).
 - `wakeMode` controls when the main-session summary posts:
   - `now`: immediate heartbeat.
   - `next-heartbeat`: waits for the next scheduled heartbeat.
 
-Use isolated jobs for noisy, frequent, or "background chores" that shouldn't spam
-your main chat history.
+Use isolated jobs for noisy, frequent, or "background chores" that shouldn't spam your
+main chat history.
 
 ### Payload shapes (what runs)
 
@@ -168,23 +173,24 @@ Delivery config (isolated jobs only):
 - `delivery.to`: channel-specific target (phone/chat/channel id).
 - `delivery.bestEffort`: avoid failing the job if announce delivery fails.
 
-Announce delivery suppresses messaging tool sends for the run; use `delivery.channel`/`delivery.to`
-to target the chat instead. When `delivery.mode = "none"`, no summary is posted to the main session.
+Announce delivery suppresses messaging tool sends for the run; use
+`delivery.channel`/`delivery.to` to target the chat instead. When
+`delivery.mode = "none"`, no summary is posted to the main session.
 
 If `delivery` is omitted for isolated jobs, OpenClaw defaults to `announce`.
 
 #### Announce delivery flow
 
-When `delivery.mode = "announce"`, cron delivers directly via the outbound channel adapters.
-The main agent is not spun up to craft or forward the message.
+When `delivery.mode = "announce"`, cron delivers directly via the outbound channel
+adapters. The main agent is not spun up to craft or forward the message.
 
 Behavior details:
 
-- Content: delivery uses the isolated run's outbound payloads (text/media) with normal chunking and
-  channel formatting.
+- Content: delivery uses the isolated run's outbound payloads (text/media) with normal
+  chunking and channel formatting.
 - Heartbeat-only responses (`HEARTBEAT_OK` with no real content) are not delivered.
-- If the isolated run already sent a message to the same target via the message tool, delivery is
-  skipped to avoid duplicates.
+- If the isolated run already sent a message to the same target via the message tool,
+  delivery is skipped to avoid duplicates.
 - Missing or invalid delivery targets fail the job unless `delivery.bestEffort = true`.
 - A short summary is posted to the main session only when `delivery.mode = "announce"`.
 - The main-session summary respects `wakeMode`: `now` triggers an immediate heartbeat and
@@ -194,12 +200,14 @@ Behavior details:
 
 Isolated jobs (`agentTurn`) can override the model and thinking level:
 
-- `model`: Provider/model string (e.g., `anthropic/claude-sonnet-4-20250514`) or alias (e.g., `opus`)
-- `thinking`: Thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`; GPT-5.2 + Codex models only)
+- `model`: Provider/model string (e.g., `anthropic/claude-sonnet-4-20250514`) or alias
+  (e.g., `opus`)
+- `thinking`: Thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`;
+  GPT-5.2 + Codex models only)
 
-Note: You can set `model` on main-session jobs too, but it changes the shared main
-session model. We recommend model overrides only for isolated jobs to avoid
-unexpected context shifts.
+Note: You can set `model` on main-session jobs too, but it changes the shared main session
+model. We recommend model overrides only for isolated jobs to avoid unexpected context
+shifts.
 
 Resolution priority:
 
@@ -212,17 +220,19 @@ Resolution priority:
 Isolated jobs can deliver output to a channel via the top-level `delivery` config:
 
 - `delivery.mode`: `announce` (deliver a summary) or `none`.
-- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `mattermost` (plugin) / `signal` / `imessage` / `last`.
+- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `mattermost`
+  (plugin) / `signal` / `imessage` / `last`.
 - `delivery.to`: channel-specific recipient target.
 
 Delivery config is only valid for isolated jobs (`sessionTarget: "isolated"`).
 
-If `delivery.channel` or `delivery.to` is omitted, cron can fall back to the main session’s
-“last route” (the last place the agent replied).
+If `delivery.channel` or `delivery.to` is omitted, cron can fall back to the main
+session’s “last route” (the last place the agent replied).
 
 Target format reminders:
 
-- Slack/Discord/Mattermost (plugin) targets should use explicit prefixes (e.g. `channel:<id>`, `user:<id>`) to avoid ambiguity.
+- Slack/Discord/Mattermost (plugin) targets should use explicit prefixes (e.g.
+  `channel:<id>`, `user:<id>`) to avoid ambiguity.
 - Telegram topics should use the `:topic:` form (see below).
 
 #### Telegram delivery targets (topics / forum threads)
@@ -286,8 +296,8 @@ Notes:
 - `schedule.at` accepts ISO 8601 (timezone optional; treated as UTC when omitted).
 - `everyMs` is milliseconds.
 - `sessionTarget` must be `"main"` or `"isolated"` and must match `payload.kind`.
-- Optional fields: `agentId`, `description`, `enabled`, `deleteAfterRun` (defaults to true for `at`),
-  `delivery`.
+- Optional fields: `agentId`, `description`, `enabled`, `deleteAfterRun` (defaults to true
+  for `at`), `delivery`.
 - `wakeMode` defaults to `"next-heartbeat"` when omitted.
 
 ### cron.update params
@@ -450,8 +460,8 @@ openclaw system event --mode now --text "Next heartbeat: check battery."
 ## Gateway API surface
 
 - `cron.list`, `cron.status`, `cron.add`, `cron.update`, `cron.remove`
-- `cron.run` (force or due), `cron.runs`
-  For immediate system events without a job, use [`openclaw system event`](/cli/system).
+- `cron.run` (force or due), `cron.runs` For immediate system events without a job, use
+  [`openclaw system event`](/cli/system).
 
 ## Troubleshooting
 
@@ -464,5 +474,5 @@ openclaw system event --mode now --text "Next heartbeat: check battery."
 ### Telegram delivers to the wrong place
 
 - For forum topics, use `-100…:topic:<id>` so it’s explicit and unambiguous.
-- If you see `telegram:...` prefixes in logs or stored “last route” targets, that’s normal;
-  cron delivery accepts them and still parses topic IDs correctly.
+- If you see `telegram:...` prefixes in logs or stored “last route” targets, that’s
+  normal; cron delivery accepts them and still parses topic IDs correctly.

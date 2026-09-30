@@ -9,7 +9,9 @@ status: draft
 
 # OpenProse Borges Alternative
 
-A potential alternative register for OpenProse that draws from Jorge Luis Borges's literary universe: infinite libraries, forking paths, circular dreams, and metaphysical labyrinths. Preserved for future benchmarking against the functional language.
+A potential alternative register for OpenProse that draws from Jorge Luis Borges's
+literary universe: infinite libraries, forking paths, circular dreams, and metaphysical
+labyrinths. Preserved for future benchmarking against the functional language.
 
 ## Keyword Translations
 
@@ -93,8 +95,10 @@ captain "Review this"    # librarian invocation (same pattern)
 
 ## The Case For Borges
 
-1. **Infinite recursion**: Borges's themes align with computational recursion (`circular`, `fork`)
-2. **Metaphysical precision**: Concepts like `aleph` (all context) are philosophically rich
+1. **Infinite recursion**: Borges's themes align with computational recursion (`circular`,
+   `fork`)
+2. **Metaphysical precision**: Concepts like `aleph` (all context) are philosophically
+   rich
 3. **Library metaphor**: `librarian` perfectly captures persistent knowledge
 4. **Forking paths**: `fork` / `path` naturally express parallel execution and choice
 5. **Dream logic**: `dreamer` suggests creation and ephemerality
@@ -126,7 +130,9 @@ captain "Review this"    # librarian invocation (same pattern)
 
 ## Verdict
 
-Preserved for benchmarking. The functional language (`agent` / `keeper`) is the primary path for now. Borges offers rich metaphors but at the cost of accessibility and self-evidence.
+Preserved for benchmarking. The functional language (`agent` / `keeper`) is the primary
+path for now. Borges offers rich metaphors but at the cost of accessibility and
+self-evidence.
 
 ## Notes on Borges's Influence
 
@@ -138,4 +144,5 @@ Borges's work anticipates many computational concepts:
 - **Information theory**: Library of Babel as infinite information space
 - **Combinatorics**: All possible books in the Library
 
-This alternative honors that connection while recognizing it may be too esoteric for practical use.
+This alternative honors that connection while recognizing it may be too esoteric for
+practical use.

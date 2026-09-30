@@ -32,7 +32,8 @@ title: "Retry Policy"
 
 ### Telegram
 
-- Retries on transient errors (429, timeout, connect/reset/closed, temporarily unavailable).
+- Retries on transient errors (429, timeout, connect/reset/closed, temporarily
+  unavailable).
 - Uses `retry_after` when available, otherwise exponential backoff.
 - Markdown parse errors are not retried; they fall back to plain text.
 

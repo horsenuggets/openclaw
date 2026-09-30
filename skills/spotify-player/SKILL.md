@@ -32,7 +32,8 @@ metadata:
 
 # spogo / spotify_player
 
-Use `spogo` **(preferred)** for Spotify playback/search. Fall back to `spotify_player` if needed.
+Use `spogo` **(preferred)** for Spotify playback/search. Fall back to `spotify_player` if
+needed.
 
 Requirements
 

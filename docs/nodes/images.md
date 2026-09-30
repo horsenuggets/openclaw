@@ -7,7 +7,8 @@ title: "Image and Media Support"
 
 # Image & Media Support — 2025-12-05
 
-The WhatsApp channel runs via **Baileys Web**. This document captures the current media handling rules for send, gateway, and agent replies.
+The WhatsApp channel runs via **Baileys Web**. This document captures the current media
+handling rules for send, gateway, and agent replies.
 
 ## Goals
 
@@ -19,16 +20,20 @@ The WhatsApp channel runs via **Baileys Web**. This document captures the curren
 
 - `openclaw message send --media <path-or-url> [--message <caption>]`
   - `--media` optional; caption can be empty for media-only sends.
-  - `--dry-run` prints the resolved payload; `--json` emits `{ channel, to, messageId, mediaUrl, caption }`.
+  - `--dry-run` prints the resolved payload; `--json` emits
+    `{ channel, to, messageId, mediaUrl, caption }`.
 
 ## WhatsApp Web channel behavior
 
 - Input: local file path **or** HTTP(S) URL.
 - Flow: load into a Buffer, detect media kind, and build the correct payload:
-  - **Images:** resize & recompress to JPEG (max side 2048px) targeting `agents.defaults.mediaMaxMb` (default 5 MB), capped at 6 MB.
-  - **Audio/Voice/Video:** pass-through up to 16 MB; audio is sent as a voice note (`ptt: true`).
+  - **Images:** resize & recompress to JPEG (max side 2048px) targeting
+    `agents.defaults.mediaMaxMb` (default 5 MB), capped at 6 MB.
+  - **Audio/Voice/Video:** pass-through up to 16 MB; audio is sent as a voice note
+    (`ptt: true`).
   - **Documents:** anything else, up to 100 MB, with filename preserved when available.
-- WhatsApp GIF-style playback: send an MP4 with `gifPlayback: true` (CLI: `--gif-playback`) so mobile clients loop inline.
+- WhatsApp GIF-style playback: send an MP4 with `gifPlayback: true` (CLI:
+  `--gif-playback`) so mobile clients loop inline.
 - MIME detection prefers magic bytes, then headers, then file extension.
 - Caption comes from `--message` or `reply.text`; empty caption is allowed.
 - Logging: non-verbose shows `↩️`/`✅`; verbose includes size and source path/URL.
@@ -36,19 +41,27 @@ The WhatsApp channel runs via **Baileys Web**. This document captures the curren
 ## Auto-Reply Pipeline
 
 - `getReplyFromConfig` returns `{ text?, mediaUrl?, mediaUrls? }`.
-- When media is present, the web sender resolves local paths or URLs using the same pipeline as `openclaw message send`.
+- When media is present, the web sender resolves local paths or URLs using the same
+  pipeline as `openclaw message send`.
 - Multiple media entries are sent sequentially if provided.
 
 ## Inbound Media to Commands (Pi)
 
-- When inbound web messages include media, OpenClaw downloads to a temp file and exposes templating variables:
+- When inbound web messages include media, OpenClaw downloads to a temp file and exposes
+  templating variables:
   - `{{MediaUrl}}` pseudo-URL for the inbound media.
   - `{{MediaPath}}` local temp path written before running the command.
-- When a per-session Docker sandbox is enabled, inbound media is copied into the sandbox workspace and `MediaPath`/`MediaUrl` are rewritten to a relative path like `media/inbound/<filename>`.
-- Media understanding (if configured via `tools.media.*` or shared `tools.media.models`) runs before templating and can insert `[Image]`, `[Audio]`, and `[Video]` blocks into `Body`.
-  - Audio sets `{{Transcript}}` and uses the transcript for command parsing so slash commands still work.
+- When a per-session Docker sandbox is enabled, inbound media is copied into the sandbox
+  workspace and `MediaPath`/`MediaUrl` are rewritten to a relative path like
+  `media/inbound/<filename>`.
+- Media understanding (if configured via `tools.media.*` or shared `tools.media.models`)
+  runs before templating and can insert `[Image]`, `[Audio]`, and `[Video]` blocks into
+  `Body`.
+  - Audio sets `{{Transcript}}` and uses the transcript for command parsing so slash
+    commands still work.
   - Video and image descriptions preserve any caption text for command parsing.
-- By default only the first matching image/audio/video attachment is processed; set `tools.media.<cap>.attachments` to process multiple attachments.
+- By default only the first matching image/audio/video attachment is processed; set
+  `tools.media.<cap>.attachments` to process multiple attachments.
 
 ## Limits & Errors
 

@@ -11,7 +11,9 @@ read_when:
 
 OpenClaw’s runtime baseline is **Node 22+**.
 
-If you can run `npm install -g openclaw@latest` but later see `openclaw: command not found`, it’s almost always a **PATH** issue: the directory where npm puts global binaries isn’t on your shell’s PATH.
+If you can run `npm install -g openclaw@latest` but later see
+`openclaw: command not found`, it’s almost always a **PATH** issue: the directory where
+npm puts global binaries isn’t on your shell’s PATH.
 
 ## Quick diagnosis
 
@@ -24,7 +26,8 @@ npm prefix -g
 echo "$PATH"
 ```
 
-If `$(npm prefix -g)/bin` (macOS/Linux) or `$(npm prefix -g)` (Windows) is **not** present inside `echo "$PATH"`, your shell can’t find global npm binaries (including `openclaw`).
+If `$(npm prefix -g)/bin` (macOS/Linux) or `$(npm prefix -g)` (Windows) is **not** present
+inside `echo "$PATH"`, your shell can’t find global npm binaries (including `openclaw`).
 
 ## Fix: put npm’s global bin dir on PATH
 
@@ -52,7 +55,8 @@ On Windows, add the output of `npm prefix -g` to your PATH.
 
 ## Fix: avoid `sudo npm install -g` / permission errors (Linux)
 
-If `npm install -g ...` fails with `EACCES`, switch npm’s global prefix to a user-writable directory:
+If `npm install -g ...` fails with `EACCES`, switch npm’s global prefix to a user-writable
+directory:
 
 ```bash
 mkdir -p "$HOME/.npm-global"
@@ -72,7 +76,9 @@ You’ll have the fewest surprises if Node/npm are installed in a way that:
 Common choices:
 
 - macOS: Homebrew (`brew install node`) or a version manager
-- Linux: your preferred version manager, or a distro-supported install that provides Node 22+
+- Linux: your preferred version manager, or a distro-supported install that provides Node
+  22+
 - Windows: official Node installer, `winget`, or a Windows Node version manager
 
-If you use a version manager (nvm/fnm/asdf/etc), ensure it’s initialized in the shell you use day-to-day (zsh vs bash) so the PATH it sets is present when you run installers.
+If you use a version manager (nvm/fnm/asdf/etc), ensure it’s initialized in the shell you
+use day-to-day (zsh vs bash) so the PATH it sets is present when you run installers.

@@ -7,7 +7,8 @@ title: "Nextcloud Talk"
 
 # Nextcloud Talk (plugin)
 
-Status: supported via plugin (webhook bot). Direct messages, rooms, reactions, and markdown messages are supported.
+Status: supported via plugin (webhook bot). Direct messages, rooms, reactions, and
+markdown messages are supported.
 
 ## Plugin required
 
@@ -63,15 +64,18 @@ Minimal config:
 - Bots cannot initiate DMs. The user must message the bot first.
 - Webhook URL must be reachable by the Gateway; set `webhookPublicUrl` if behind a proxy.
 - Media uploads are not supported by the bot API; media is sent as URLs.
-- The webhook payload does not distinguish DMs vs rooms; set `apiUser` + `apiPassword` to enable room-type lookups (otherwise DMs are treated as rooms).
+- The webhook payload does not distinguish DMs vs rooms; set `apiUser` + `apiPassword` to
+  enable room-type lookups (otherwise DMs are treated as rooms).
 
 ## Access control (DMs)
 
-- Default: `channels.nextcloud-talk.dmPolicy = "pairing"`. Unknown senders get a pairing code.
+- Default: `channels.nextcloud-talk.dmPolicy = "pairing"`. Unknown senders get a pairing
+  code.
 - Approve via:
   - `openclaw pairing list nextcloud-talk`
   - `openclaw pairing approve nextcloud-talk <CODE>`
-- Public DMs: `channels.nextcloud-talk.dmPolicy="open"` plus `channels.nextcloud-talk.allowFrom=["*"]`.
+- Public DMs: `channels.nextcloud-talk.dmPolicy="open"` plus
+  `channels.nextcloud-talk.allowFrom=["*"]`.
 - `allowFrom` matches Nextcloud user IDs only; display names are ignored.
 
 ## Rooms (groups)
@@ -91,7 +95,8 @@ Minimal config:
 }
 ```
 
-- To allow no rooms, keep the allowlist empty or set `channels.nextcloud-talk.groupPolicy="disabled"`.
+- To allow no rooms, keep the allowlist empty or set
+  `channels.nextcloud-talk.groupPolicy="disabled"`.
 
 ## Capabilities
 
@@ -127,9 +132,12 @@ Provider options:
 - `channels.nextcloud-talk.groupAllowFrom`: group allowlist (user IDs).
 - `channels.nextcloud-talk.rooms`: per-room settings and allowlist.
 - `channels.nextcloud-talk.historyLimit`: group history limit (0 disables).
-- `channels.nextcloud-talk.dms`: reserved per-DM map (keyed by user). Currently inert for Nextcloud Talk and does not affect DM access, which is controlled by `dmPolicy`/`allowFrom`.
+- `channels.nextcloud-talk.dms`: reserved per-DM map (keyed by user). Currently inert for
+  Nextcloud Talk and does not affect DM access, which is controlled by
+  `dmPolicy`/`allowFrom`.
 - `channels.nextcloud-talk.textChunkLimit`: outbound text chunk size (chars).
-- `channels.nextcloud-talk.chunkMode`: `length` (default) or `newline` to split on blank lines (paragraph boundaries) before length chunking.
+- `channels.nextcloud-talk.chunkMode`: `length` (default) or `newline` to split on blank
+  lines (paragraph boundaries) before length chunking.
 - `channels.nextcloud-talk.blockStreaming`: disable block streaming for this channel.
 - `channels.nextcloud-talk.blockStreamingCoalesce`: block streaming coalesce tuning.
 - `channels.nextcloud-talk.mediaMaxMb`: inbound media cap (MB).

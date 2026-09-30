@@ -1,20 +1,24 @@
 ---
 name: session-logs
-description: Search and analyze your own session logs (older/parent conversations) using jq.
+description:
+  Search and analyze your own session logs (older/parent conversations) using jq.
 metadata: { "openclaw": { "emoji": "📜", "requires": { "bins": ["jq", "rg"] } } }
 ---
 
 # session-logs
 
-Search your complete conversation history stored in session JSONL files. Use this when a user references older/parent conversations or asks what was said before.
+Search your complete conversation history stored in session JSONL files. Use this when a
+user references older/parent conversations or asks what was said before.
 
 ## Trigger
 
-Use this skill when the user asks about prior chats, parent conversations, or historical context that isn't in memory files.
+Use this skill when the user asks about prior chats, parent conversations, or historical
+context that isn't in memory files.
 
 ## Location
 
-Session logs live at: `~/.openclaw/agents/<agentId>/sessions/` (use the `agent=<id>` value from the system prompt Runtime line).
+Session logs live at: `~/.openclaw/agents/<agentId>/sessions/` (use the `agent=<id>` value
+from the system prompt Runtime line).
 
 - **`sessions.json`** - Index mapping session keys to session IDs
 - **`<session-id>.jsonl`** - Full conversation transcript per session
@@ -26,7 +30,8 @@ Each `.jsonl` file contains messages with:
 - `type`: "session" (metadata) or "message"
 - `timestamp`: ISO timestamp
 - `message.role`: "user", "assistant", or "toolResult"
-- `message.content[]`: Text, thinking, or tool calls (filter `type=="text"` for human-readable content)
+- `message.content[]`: Text, thinking, or tool calls (filter `type=="text"` for
+  human-readable content)
 - `message.usage.cost.total`: Cost per response
 
 ## Common Queries

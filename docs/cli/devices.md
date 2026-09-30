@@ -1,5 +1,6 @@
 ---
-summary: "CLI reference for `openclaw devices` (device pairing + token rotation/revocation)"
+summary:
+  "CLI reference for `openclaw devices` (device pairing + token rotation/revocation)"
 read_when:
   - You are approving device pairing requests
   - You need to rotate or revoke device tokens
@@ -61,8 +62,9 @@ openclaw devices revoke --device <deviceId> --role node
 - `--timeout <ms>`: RPC timeout.
 - `--json`: JSON output (recommended for scripting).
 
-Note: when you set `--url`, the CLI does not fall back to config or environment credentials.
-Pass `--token` or `--password` explicitly. Missing explicit credentials is an error.
+Note: when you set `--url`, the CLI does not fall back to config or environment
+credentials. Pass `--token` or `--password` explicitly. Missing explicit credentials is an
+error.
 
 ## Notes
 

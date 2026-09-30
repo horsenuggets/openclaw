@@ -1,5 +1,7 @@
 ---
-summary: "Camera capture (iOS node + macOS app) for agent use: photos (jpg) and short video clips (mp4)"
+summary:
+  "Camera capture (iOS node + macOS app) for agent use: photos (jpg) and short video clips
+  (mp4)"
 read_when:
   - Adding or modifying camera capture on iOS nodes or macOS
   - Extending agent-accessible MEDIA temp-file workflows
@@ -10,9 +12,12 @@ title: "Camera Capture"
 
 OpenClaw supports **camera capture** for agent workflows:
 
-- **iOS node** (paired via Gateway): capture a **photo** (`jpg`) or **short video clip** (`mp4`, with optional audio) via `node.invoke`.
-- **Android node** (paired via Gateway): capture a **photo** (`jpg`) or **short video clip** (`mp4`, with optional audio) via `node.invoke`.
-- **macOS app** (node via Gateway): capture a **photo** (`jpg`) or **short video clip** (`mp4`, with optional audio) via `node.invoke`.
+- **iOS node** (paired via Gateway): capture a **photo** (`jpg`) or **short video clip**
+  (`mp4`, with optional audio) via `node.invoke`.
+- **Android node** (paired via Gateway): capture a **photo** (`jpg`) or **short video
+  clip** (`mp4`, with optional audio) via `node.invoke`.
+- **macOS app** (node via Gateway): capture a **photo** (`jpg`) or **short video clip**
+  (`mp4`, with optional audio) via `node.invoke`.
 
 All camera access is gated behind **user-controlled settings**.
 
@@ -59,11 +64,13 @@ All camera access is gated behind **user-controlled settings**.
 
 ### Foreground requirement
 
-Like `canvas.*`, the iOS node only allows `camera.*` commands in the **foreground**. Background invocations return `NODE_BACKGROUND_UNAVAILABLE`.
+Like `canvas.*`, the iOS node only allows `camera.*` commands in the **foreground**.
+Background invocations return `NODE_BACKGROUND_UNAVAILABLE`.
 
 ### CLI helper (temp files + MEDIA)
 
-The easiest way to get attachments is via the CLI helper, which writes decoded media to a temp file and prints `MEDIA:<path>`.
+The easiest way to get attachments is via the CLI helper, which writes decoded media to a
+temp file and prints `MEDIA:<path>`.
 
 Examples:
 
@@ -93,12 +100,13 @@ Notes:
   - `CAMERA` for both `camera.snap` and `camera.clip`.
   - `RECORD_AUDIO` for `camera.clip` when `includeAudio=true`.
 
-If permissions are missing, the app will prompt when possible; if denied, `camera.*` requests fail with a
-`*_PERMISSION_REQUIRED` error.
+If permissions are missing, the app will prompt when possible; if denied, `camera.*`
+requests fail with a `*_PERMISSION_REQUIRED` error.
 
 ### Foreground requirement
 
-Like `canvas.*`, the Android node only allows `camera.*` commands in the **foreground**. Background invocations return `NODE_BACKGROUND_UNAVAILABLE`.
+Like `canvas.*`, the Android node only allows `camera.*` commands in the **foreground**.
+Background invocations return `NODE_BACKGROUND_UNAVAILABLE`.
 
 ### Payload guard
 
@@ -135,13 +143,16 @@ openclaw nodes camera clip --node <id> --no-audio
 Notes:
 
 - `openclaw nodes camera snap` defaults to `maxWidth=1600` unless overridden.
-- On macOS, `camera.snap` waits `delayMs` (default 2000ms) after warm-up/exposure settle before capturing.
+- On macOS, `camera.snap` waits `delayMs` (default 2000ms) after warm-up/exposure settle
+  before capturing.
 - Photo payloads are recompressed to keep base64 under 5 MB.
 
 ## Safety + practical limits
 
-- Camera and microphone access trigger the usual OS permission prompts (and require usage strings in Info.plist).
-- Video clips are capped (currently `<= 60s`) to avoid oversized node payloads (base64 overhead + message limits).
+- Camera and microphone access trigger the usual OS permission prompts (and require usage
+  strings in Info.plist).
+- Video clips are capped (currently `<= 60s`) to avoid oversized node payloads (base64
+  overhead + message limits).
 
 ## macOS screen video (OS-level)
 

@@ -1,5 +1,7 @@
 ---
-summary: "Voice Call plugin: outbound + inbound calls via Twilio/Telnyx/Plivo (plugin install + config + CLI)"
+summary:
+  "Voice Call plugin: outbound + inbound calls via Twilio/Telnyx/Plivo (plugin install +
+  config + CLI)"
 read_when:
   - You want to place an outbound voice call from OpenClaw
   - You are configuring or developing the voice-call plugin
@@ -8,8 +10,8 @@ title: "Voice Call Plugin"
 
 # Voice Call (plugin)
 
-Voice calls for OpenClaw via a plugin. Supports outbound notifications and
-multi-turn conversations with inbound policies.
+Voice calls for OpenClaw via a plugin. Supports outbound notifications and multi-turn
+conversations with inbound policies.
 
 Current providers:
 
@@ -29,7 +31,8 @@ Quick mental model:
 
 The Voice Call plugin runs **inside the Gateway process**.
 
-If you use a remote Gateway, install/configure the plugin on the **machine running the Gateway**, then restart the Gateway to load it.
+If you use a remote Gateway, install/configure the plugin on the **machine running the
+Gateway**, then restart the Gateway to load it.
 
 ## Install
 
@@ -113,22 +116,25 @@ Notes:
 - Plivo requires a **publicly reachable** webhook URL.
 - `mock` is a local dev provider (no network calls).
 - `skipSignatureVerification` is for local testing only.
-- If you use ngrok free tier, set `publicUrl` to the exact ngrok URL; signature verification is always enforced.
-- `tunnel.allowNgrokFreeTierLoopbackBypass: true` allows Twilio webhooks with invalid signatures **only** when `tunnel.provider="ngrok"` and `serve.bind` is loopback (ngrok local agent). Use for local dev only.
-- Ngrok free tier URLs can change or add interstitial behavior; if `publicUrl` drifts, Twilio signatures will fail. For production, prefer a stable domain or Tailscale funnel.
+- If you use ngrok free tier, set `publicUrl` to the exact ngrok URL; signature
+  verification is always enforced.
+- `tunnel.allowNgrokFreeTierLoopbackBypass: true` allows Twilio webhooks with invalid
+  signatures **only** when `tunnel.provider="ngrok"` and `serve.bind` is loopback (ngrok
+  local agent). Use for local dev only.
+- Ngrok free tier URLs can change or add interstitial behavior; if `publicUrl` drifts,
+  Twilio signatures will fail. For production, prefer a stable domain or Tailscale funnel.
 
 ## Webhook Security
 
-When a proxy or tunnel sits in front of the Gateway, the plugin reconstructs the
-public URL for signature verification. These options control which forwarded
-headers are trusted.
+When a proxy or tunnel sits in front of the Gateway, the plugin reconstructs the public
+URL for signature verification. These options control which forwarded headers are trusted.
 
 `webhookSecurity.allowedHosts` allowlists hosts from forwarding headers.
 
 `webhookSecurity.trustForwardingHeaders` trusts forwarded headers without an allowlist.
 
-`webhookSecurity.trustedProxyIPs` only trusts forwarded headers when the request
-remote IP matches the list.
+`webhookSecurity.trustedProxyIPs` only trusts forwarded headers when the request remote IP
+matches the list.
 
 Example with a stable public host:
 
@@ -151,9 +157,9 @@ Example with a stable public host:
 
 ## TTS for calls
 
-Voice Call uses the core `messages.tts` configuration (OpenAI or ElevenLabs) for
-streaming speech on calls. You can override it under the plugin config with the
-**same shape** — it deep‑merges with `messages.tts`.
+Voice Call uses the core `messages.tts` configuration (OpenAI or ElevenLabs) for streaming
+speech on calls. You can override it under the plugin config with the **same shape** — it
+deep‑merges with `messages.tts`.
 
 ```json5
 {
@@ -169,8 +175,10 @@ streaming speech on calls. You can override it under the plugin config with the
 
 Notes:
 
-- **Edge TTS is ignored for voice calls** (telephony audio needs PCM; Edge output is unreliable).
-- Core TTS is used when Twilio media streaming is enabled; otherwise calls fall back to provider native voices.
+- **Edge TTS is ignored for voice calls** (telephony audio needs PCM; Edge output is
+  unreliable).
+- Core TTS is used when Twilio media streaming is enabled; otherwise calls fall back to
+  provider native voices.
 
 ### More examples
 

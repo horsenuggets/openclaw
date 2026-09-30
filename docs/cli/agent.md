@@ -7,8 +7,8 @@ title: "agent"
 
 # `openclaw agent`
 
-Run an agent turn via the Gateway (use `--local` for embedded).
-Use `--agent <id>` to target a configured agent directly.
+Run an agent turn via the Gateway (use `--local` for embedded). Use `--agent <id>` to
+target a configured agent directly.
 
 Related:
 

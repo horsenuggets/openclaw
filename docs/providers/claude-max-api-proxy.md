@@ -9,7 +9,9 @@ title: "Claude Max API Proxy"
 
 # Claude Max API Proxy
 
-**claude-max-api-proxy** is a community tool that exposes your Claude Max/Pro subscription as an OpenAI-compatible API endpoint. This allows you to use your subscription with any tool that supports the OpenAI API format.
+**claude-max-api-proxy** is a community tool that exposes your Claude Max/Pro subscription
+as an OpenAI-compatible API endpoint. This allows you to use your subscription with any
+tool that supports the OpenAI API format.
 
 ## Why Use This?
 
@@ -18,7 +20,8 @@ title: "Claude Max API Proxy"
 | Anthropic API           | Pay per token (~$15/M input, $75/M output for Opus) | Production apps, high volume               |
 | Claude Max subscription | $200/month flat                                     | Personal use, development, unlimited usage |
 
-If you have a Claude Max subscription and want to use it with OpenAI-compatible tools, this proxy can save you significant money.
+If you have a Claude Max subscription and want to use it with OpenAI-compatible tools,
+this proxy can save you significant money.
 
 ## How It Works
 
@@ -144,5 +147,6 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.claude-max-api.plist
 
 ## See Also
 
-- [Anthropic provider](/providers/anthropic) - Native OpenClaw integration with Claude setup-token or API keys
+- [Anthropic provider](/providers/anthropic) - Native OpenClaw integration with Claude
+  setup-token or API keys
 - [OpenAI provider](/providers/openai) - For OpenAI/Codex subscriptions

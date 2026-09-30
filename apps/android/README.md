@@ -1,13 +1,18 @@
 ## OpenClaw Node (Android) (internal)
 
-Modern Android node app: connects to the **Gateway WebSocket** (`_openclaw-gw._tcp`) and exposes **Canvas + Chat + Camera**.
+Modern Android node app: connects to the **Gateway WebSocket** (`_openclaw-gw._tcp`) and
+exposes **Canvas + Chat + Camera**.
 
 Notes:
-- The node keeps the connection alive via a **foreground service** (persistent notification with a Disconnect action).
-- Chat always uses the shared session key **`main`** (same session across iOS/macOS/WebChat/Android).
+
+- The node keeps the connection alive via a **foreground service** (persistent
+  notification with a Disconnect action).
+- Chat always uses the shared session key **`main`** (same session across
+  iOS/macOS/WebChat/Android).
 - Supports modern Android only (`minSdk 31`, Kotlin + Jetpack Compose).
 
 ## Open in Android Studio
+
 - Open the folder `apps/android`.
 
 ## Build / Run
@@ -19,20 +24,25 @@ cd apps/android
 ./gradlew :app:testDebugUnitTest
 ```
 
-`gradlew` auto-detects the Android SDK at `~/Library/Android/sdk` (macOS default) if `ANDROID_SDK_ROOT` / `ANDROID_HOME` are unset.
+`gradlew` auto-detects the Android SDK at `~/Library/Android/sdk` (macOS default) if
+`ANDROID_SDK_ROOT` / `ANDROID_HOME` are unset.
 
 ## Connect / Pair
 
-1) Start the gateway (on your “master” machine):
+1. Start the gateway (on your “master” machine):
+
 ```bash
 pnpm openclaw gateway --port 18789 --verbose
 ```
 
-2) In the Android app:
-- Open **Settings**
-- Either select a discovered gateway under **Discovered Gateways**, or use **Advanced → Manual Gateway** (host + port).
+2. In the Android app:
 
-3) Approve pairing (on the gateway machine):
+- Open **Settings**
+- Either select a discovered gateway under **Discovered Gateways**, or use **Advanced →
+  Manual Gateway** (host + port).
+
+3. Approve pairing (on the gateway machine):
+
 ```bash
 openclaw nodes pending
 openclaw nodes approve <requestId>

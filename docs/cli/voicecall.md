@@ -8,7 +8,8 @@ title: "voicecall"
 
 # `openclaw voicecall`
 
-`voicecall` is a plugin-provided command. It only appears if the voice-call plugin is installed and enabled.
+`voicecall` is a plugin-provided command. It only appears if the voice-call plugin is
+installed and enabled.
 
 Primary doc:
 
@@ -31,4 +32,5 @@ openclaw voicecall expose --mode funnel
 openclaw voicecall unexpose
 ```
 
-Security note: only expose the webhook endpoint to networks you trust. Prefer Tailscale Serve over Funnel when possible.
+Security note: only expose the webhook endpoint to networks you trust. Prefer Tailscale
+Serve over Funnel when possible.

@@ -8,9 +8,9 @@ title: "OpenCode Zen"
 
 # OpenCode Zen
 
-OpenCode Zen is a **curated list of models** recommended by the OpenCode team for coding agents.
-It is an optional, hosted model access path that uses an API key and the `opencode` provider.
-Zen is currently in beta.
+OpenCode Zen is a **curated list of models** recommended by the OpenCode team for coding
+agents. It is an optional, hosted model access path that uses an API key and the
+`opencode` provider. Zen is currently in beta.
 
 ## CLI setup
 

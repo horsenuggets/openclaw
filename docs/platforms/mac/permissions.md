@@ -9,20 +9,20 @@ title: "macOS Permissions"
 
 # macOS permissions (TCC)
 
-macOS permission grants are fragile. TCC associates a permission grant with the
-app's code signature, bundle identifier, and on-disk path. If any of those change,
-macOS treats the app as new and may drop or hide prompts.
+macOS permission grants are fragile. TCC associates a permission grant with the app's code
+signature, bundle identifier, and on-disk path. If any of those change, macOS treats the
+app as new and may drop or hide prompts.
 
 ## Requirements for stable permissions
 
 - Same path: run the app from a fixed location (for OpenClaw, `dist/OpenClaw.app`).
 - Same bundle identifier: changing the bundle ID creates a new permission identity.
 - Signed app: unsigned or ad-hoc signed builds do not persist permissions.
-- Consistent signature: use a real Apple Development or Developer ID certificate
-  so the signature stays stable across rebuilds.
+- Consistent signature: use a real Apple Development or Developer ID certificate so the
+  signature stays stable across rebuilds.
 
-Ad-hoc signatures generate a new identity every build. macOS will forget previous
-grants, and prompts can disappear entirely until the stale entries are cleared.
+Ad-hoc signatures generate a new identity every build. macOS will forget previous grants,
+and prompts can disappear entirely until the stale entries are cleared.
 
 ## Recovery checklist when prompts disappear
 
@@ -40,5 +40,5 @@ sudo tccutil reset ScreenCapture bot.molt.mac
 sudo tccutil reset AppleEvents
 ```
 
-If you are testing permissions, always sign with a real certificate. Ad-hoc
-builds are only acceptable for quick local runs where permissions do not matter.
+If you are testing permissions, always sign with a real certificate. Ad-hoc builds are
+only acceptable for quick local runs where permissions do not matter.

@@ -2,19 +2,28 @@
 
 ## Problem
 
-1. **Discord shows "Claude Code" as tool feedback** — when the agent calls `mcp__claude-code-mcp__claude_code`, the tool feedback displays "🤖 Claude Code: ..." in Discord. The user wants to see _inner_ tool names (Read, Bash, Edit) but these are architecturally invisible — the Claude CLI only reports top-level tool calls via `AgentStreamEvent`. Inner MCP tool calls are a black box.
+1. **Discord shows "Claude Code" as tool feedback** — when the agent calls
+   `mcp__claude-code-mcp__claude_code`, the tool feedback displays "🤖 Claude Code: ..."
+   in Discord. The user wants to see _inner_ tool names (Read, Bash, Edit) but these are
+   architecturally invisible — the Claude CLI only reports top-level tool calls via
+   `AgentStreamEvent`. Inner MCP tool calls are a black box.
 
-2. **Watchdog terminal is flooded with raw tool output** — `process-monitor.mjs` pipes ALL gateway stdout/stderr directly to the terminal. When `OPENCLAW_CLAUDE_CLI_LOG_OUTPUT=1` is set, raw subprocess output (ps listings, file contents, etc.) clutters the terminal. Real log lines have ISO timestamps; raw output does not.
+2. **Watchdog terminal is flooded with raw tool output** — `process-monitor.mjs` pipes ALL
+   gateway stdout/stderr directly to the terminal. When `OPENCLAW_CLAUDE_CLI_LOG_OUTPUT=1`
+   is set, raw subprocess output (ps listings, file contents, etc.) clutters the terminal.
+   Real log lines have ISO timestamps; raw output does not.
 
 ## Fix 1: Suppress Tool Feedback for Wrapper MCP Tools
 
-Since inner tool calls are invisible, the pragmatic fix is to suppress the unhelpful "Claude Code" wrapper feedback entirely. Add a `suppress` flag to the tool display system.
+Since inner tool calls are invisible, the pragmatic fix is to suppress the unhelpful
+"Claude Code" wrapper feedback entirely. Add a `suppress` flag to the tool display system.
 
 ### 1a. Add `suppress` to types in `src/agents/tool-display.ts`
 
 - Add `suppress?: boolean` to `ToolDisplaySpec` type (line 10-16)
 - Add `suppress: boolean` to `ToolDisplay` return type (line 24-31)
-- Set `suppress: spec?.suppress ?? false` in `resolveToolDisplay()` return object (line 270-278)
+- Set `suppress: spec?.suppress ?? false` in `resolveToolDisplay()` return object (line
+  270-278)
 
 ### 1b. Add `suppress: true` in `src/agents/tool-display.json`
 
@@ -60,9 +69,11 @@ it("does not suppress regular tools", () => {
 
 ### 2a. Add line-based filtering in `watchdog/process-monitor.mjs`
 
-Replace raw `process.stdout.write(chunk)` (line 301) with line-buffered filtering that only forwards gateway log lines to the terminal. All output still goes to the log file.
+Replace raw `process.stdout.write(chunk)` (line 301) with line-buffered filtering that
+only forwards gateway log lines to the terminal. All output still goes to the log file.
 
-Gateway log lines match: `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z` (ISO 8601 timestamp at start of line).
+Gateway log lines match: `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z` (ISO 8601
+timestamp at start of line).
 
 ```javascript
 // Replace lines 299-307 with:
@@ -106,7 +117,9 @@ Stderr is always shown since it contains errors/warnings that should be visible.
 ## Verification
 
 1. `pnpm test src/agents/tool-display.test.ts` — tool display tests pass
-2. `pnpm test src/auto-reply/reply/dispatch-from-config.test.ts` — existing dispatch tests pass
+2. `pnpm test src/auto-reply/reply/dispatch-from-config.test.ts` — existing dispatch tests
+   pass
 3. `pnpm build` — type-checks clean
 4. `pnpm check` — lint/format clean
-5. Manual: run `pnpm watchdog:run`, trigger a tool call — no "Claude Code" feedback in Discord, terminal shows only timestamped log lines
+5. Manual: run `pnpm watchdog:run`, trigger a tool call — no "Claude Code" feedback in
+   Discord, terminal shows only timestamped log lines

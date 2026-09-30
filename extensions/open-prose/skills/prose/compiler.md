@@ -13,7 +13,9 @@ see-also:
 
 # OpenProse Language Reference
 
-OpenProse is a programming language for AI sessions. An AI session is a Turing-complete computer; this document provides complete documentation for the language syntax, semantics, and execution model.
+OpenProse is a programming language for AI sessions. An AI session is a Turing-complete
+computer; this document provides complete documentation for the language syntax,
+semantics, and execution model.
 
 ---
 
@@ -34,7 +36,8 @@ When asked to "compile" a `.prose` file, use this specification to:
 
 ### As Validator
 
-The validation criterion: **Would a blank agent with only `prose.md` understand this program as self-evident?**
+The validation criterion: **Would a blank agent with only `prose.md` understand this
+program as self-evident?**
 
 When validating, check:
 
@@ -42,7 +45,8 @@ When validating, check:
 - Semantic validity (references resolve, types match)
 - Self-evidence (program is clear without this full spec)
 
-If a construct is ambiguous or non-obvious, it should be flagged or transformed into a clearer form.
+If a construct is ambiguous or non-obvious, it should be flagged or transformed into a
+clearer form.
 
 ### When to Read This Document
 
@@ -84,11 +88,14 @@ If a construct is ambiguous or non-obvious, it should be flagged or transformed 
 
 ## Overview
 
-OpenProse provides a declarative syntax for defining multi-agent workflows. Programs consist of statements that are executed sequentially, with each `session` statement spawning a subagent to complete a task.
+OpenProse provides a declarative syntax for defining multi-agent workflows. Programs
+consist of statements that are executed sequentially, with each `session` statement
+spawning a subagent to complete a task.
 
 ### Design Principles
 
-- **Pattern over framework**: The simplest solution is barely anything at all—just structure for English
+- **Pattern over framework**: The simplest solution is barely anything at all—just
+  structure for English
 - **Self-evident**: Programs should be understandable with minimal documentation
 - **The OpenProse VM is intelligent**: Design for understanding, not parsing
 - **Framework-agnostic**: Works with Claude Code, OpenCode, and any future agent framework
@@ -199,7 +206,8 @@ session "Do another thing"
 
 ### Compilation Behavior
 
-Comments are **stripped during compilation**. The OpenProse VM never sees them. They have no effect on execution and exist purely for human documentation.
+Comments are **stripped during compilation**. The OpenProse VM never sees them. They have
+no effect on execution and exist purely for human documentation.
 
 ### Important Notes
 
@@ -262,7 +270,8 @@ session "Column1\tColumn2"
 
 ### Multi-line Strings
 
-Multi-line strings use triple double-quotes (`"""`) and preserve internal whitespace and newlines:
+Multi-line strings use triple double-quotes (`"""`) and preserve internal whitespace and
+newlines:
 
 ```prose
 session """
@@ -339,7 +348,8 @@ Please provide final recommendations.
 
 ## Use Statements (Program Composition)
 
-Use statements import other OpenProse programs from the registry at `p.prose.md`, enabling modular workflows.
+Use statements import other OpenProse programs from the registry at `p.prose.md`, enabling
+modular workflows.
 
 ### Syntax
 
@@ -532,7 +542,8 @@ The imported program runs in its own execution context but shares the same VM se
 
 ## Agent Definitions
 
-Agents are reusable templates that configure subagent behavior. Once defined, agents can be referenced in session statements.
+Agents are reusable templates that configure subagent behavior. Once defined, agents can
+be referenced in session statements.
 
 ### Syntax
 
@@ -598,7 +609,8 @@ agent researcher:
   skills: ["web-search", "summarizer"]
 ```
 
-Skills must be imported before they can be assigned. Referencing an unimported skill generates a warning.
+Skills must be imported before they can be assigned. Referencing an unimported skill
+generates a warning.
 
 ### Permissions Property
 
@@ -695,7 +707,8 @@ When a session references an agent:
 
 ## Session Statement
 
-The session statement is the primary executable construct in OpenProse. It spawns a subagent to complete a task.
+The session statement is the primary executable construct in OpenProse. It spawns a
+subagent to complete a task.
 
 ### Syntax Variants
 
@@ -916,7 +929,8 @@ let review = resume: captain
 
 ## Variables & Context
 
-Variables allow you to capture the results of sessions and pass them as context to subsequent sessions.
+Variables allow you to capture the results of sessions and pass them as context to
+subsequent sessions.
 
 ### Let Binding
 
@@ -983,7 +997,8 @@ session "Independent task"
 
 #### Object Context Shorthand
 
-For passing multiple named results (especially from parallel blocks), use object shorthand:
+For passing multiple named results (especially from parallel blocks), use object
+shorthand:
 
 ```prose
 parallel:
@@ -1035,7 +1050,8 @@ const report = session: writer
 
 ### Flat Namespace Requirement
 
-All variable names must be **unique within a program**. No shadowing is allowed across scopes.
+All variable names must be **unique within a program**. No shadowing is allowed across
+scopes.
 
 **This is a compile error:**
 
@@ -1047,7 +1063,9 @@ for item in items:
     context: item
 ```
 
-**Why this constraint:** Since bindings are stored as `bindings/{name}.md`, two variables with the same name would collide on the filesystem. Rather than introduce complex scoping rules, we enforce uniqueness.
+**Why this constraint:** Since bindings are stored as `bindings/{name}.md`, two variables
+with the same name would collide on the filesystem. Rather than introduce complex scoping
+rules, we enforce uniqueness.
 
 **Collision scenarios this prevents:**
 
@@ -1056,17 +1074,21 @@ for item in items:
 3. Block parameters shadowing outer variables
 4. Parallel branches reusing outer variable names
 
-**Exception:** Imported programs run in isolated namespaces. A variable `result` in the main program does not collide with `result` in an imported program (they write to different `imports/{handle}--{slug}/bindings/` directories).
+**Exception:** Imported programs run in isolated namespaces. A variable `result` in the
+main program does not collide with `result` in an imported program (they write to
+different `imports/{handle}--{slug}/bindings/` directories).
 
 ---
 
 ## Composition Blocks
 
-Composition blocks allow you to structure programs into reusable, named units and express sequences of operations inline.
+Composition blocks allow you to structure programs into reusable, named units and express
+sequences of operations inline.
 
 ### do: Block (Anonymous Sequential Block)
 
-The `do:` keyword creates an explicit sequential block. All statements in the block execute in order.
+The `do:` keyword creates an explicit sequential block. All statements in the block
+execute in order.
 
 #### Syntax
 
@@ -1195,7 +1217,8 @@ do process-item("config.json", "lenient")
 
 ### Inline Sequence (Arrow Operator)
 
-The `->` operator chains sessions into a sequence on a single line. This is syntactic sugar for sequential execution.
+The `->` operator chains sessions into a sequence on a single line. This is syntactic
+sugar for sequential execution.
 
 #### Syntax
 
@@ -1280,7 +1303,8 @@ session "Write report"
 
 ## Parallel Blocks
 
-Parallel blocks allow multiple sessions to run concurrently. All branches execute simultaneously, and the block waits for all to complete before continuing.
+Parallel blocks allow multiple sessions to run concurrently. All branches execute
+simultaneously, and the block waits for all to complete before continuing.
 
 ### Basic Syntax
 
@@ -1291,7 +1315,8 @@ parallel:
   session "Style review"
 ```
 
-All three sessions start at the same time and run concurrently. The program waits for all of them to complete before proceeding.
+All three sessions start at the same time and run concurrently. The program waits for all
+of them to complete before proceeding.
 
 ### Named Parallel Results
 
@@ -1320,7 +1345,8 @@ session "Synthesize all reviews"
   context: { security, perf, style }
 ```
 
-The object shorthand `{ a, b, c }` is equivalent to passing an object with properties `a`, `b`, and `c` where each property's value is the corresponding variable.
+The object shorthand `{ a, b, c }` is equivalent to passing an object with properties `a`,
+`b`, and `c` where each property's value is the corresponding variable.
 
 ### Mixed Composition
 
@@ -1381,7 +1407,8 @@ session "Create unified review report"
 
 ### Join Strategies
 
-By default, parallel blocks wait for all branches to complete. You can specify alternative join strategies:
+By default, parallel blocks wait for all branches to complete. You can specify alternative
+join strategies:
 
 #### First (Race)
 
@@ -1677,11 +1704,15 @@ session "Synthesize all research into a business plan"
 
 ## Unbounded Loops
 
-Unbounded loops provide iteration with AI-evaluated termination conditions. Unlike fixed loops, the iteration count is not known ahead of time - the OpenProse VM evaluates conditions at runtime using its intelligence to determine when to stop.
+Unbounded loops provide iteration with AI-evaluated termination conditions. Unlike fixed
+loops, the iteration count is not known ahead of time - the OpenProse VM evaluates
+conditions at runtime using its intelligence to determine when to stop.
 
 ### Discretion Markers
 
-Unbounded loops use **discretion markers** (`**...**`) to wrap AI-evaluated conditions. These markers signal that the enclosed text should be interpreted intelligently by the OpenProse VM at runtime, not as a literal boolean expression.
+Unbounded loops use **discretion markers** (`**...**`) to wrap AI-evaluated conditions.
+These markers signal that the enclosed text should be interpreted intelligently by the
+OpenProse VM at runtime, not as a literal boolean expression.
 
 ```prose
 # The text inside **...** is evaluated by the AI
@@ -1709,7 +1740,8 @@ loop:
   session "Process next item"
 ```
 
-**Warning**: Loops without termination conditions or max iterations generate a warning. Always include a safety limit:
+**Warning**: Loops without termination conditions or max iterations generate a warning.
+Always include a safety limit:
 
 ```prose
 loop (max: 50):
@@ -1725,7 +1757,8 @@ loop until **the task is complete**:
   session "Continue working on the task"
 ```
 
-The OpenProse VM evaluates the discretion condition after each iteration and exits when it determines the condition is satisfied.
+The OpenProse VM evaluates the discretion condition after each iteration and exits when it
+determines the condition is satisfied.
 
 ### Loop While
 
@@ -1859,8 +1892,10 @@ For basic `loop:` without conditions:
 
 The OpenProse VM uses its intelligence to evaluate discretion conditions:
 
-1. **Context Awareness**: The condition is evaluated in the context of what has happened so far in the session
-2. **Semantic Understanding**: The condition text is interpreted semantically, not literally
+1. **Context Awareness**: The condition is evaluated in the context of what has happened
+   so far in the session
+2. **Semantic Understanding**: The condition text is interpreted semantically, not
+   literally
 3. **Uncertainty Handling**: When uncertain, the OpenProse VM may:
    - Continue iterating if progress is being made
    - Exit early if diminishing returns are detected
@@ -1917,7 +1952,8 @@ session "use outer i"
 
 ## Pipeline Operations
 
-Pipeline operations provide functional-style collection transformations. They allow you to chain operations like map, filter, and reduce using the pipe operator (`|`).
+Pipeline operations provide functional-style collection transformations. They allow you to
+chain operations like map, filter, and reduce using the pipe operator (`|`).
 
 ### Pipe Operator
 
@@ -1942,7 +1978,8 @@ let summaries = articles | map:
     context: item
 ```
 
-Inside a map body, the implicit variable `item` refers to the current element being processed.
+Inside a map body, the implicit variable `item` refers to the current element being
+processed.
 
 ### Filter
 
@@ -1956,7 +1993,8 @@ let short = items | filter:
     context: item
 ```
 
-The session in a filter body should return something the OpenProse VM can interpret as truthy/falsy (like "yes"/"no").
+The session in a filter body should return something the OpenProse VM can interpret as
+truthy/falsy (like "yes"/"no").
 
 ### Reduce
 
@@ -2090,7 +2128,8 @@ session "use outer"
 
 ## Error Handling
 
-OpenProse provides structured error handling with try/catch/finally blocks, throw statements, and retry mechanisms for resilient workflows.
+OpenProse provides structured error handling with try/catch/finally blocks, throw
+statements, and retry mechanisms for resilient workflows.
 
 ### Try/Catch Blocks
 
@@ -2115,7 +2154,8 @@ catch as err:
     context: err
 ```
 
-The error variable (`err`) contains contextual information about what went wrong and is only accessible within the catch block.
+The error variable (`err`) contains contextual information about what went wrong and is
+only accessible within the catch block.
 
 ### Try/Catch/Finally
 
@@ -2152,7 +2192,8 @@ The `throw` statement raises or re-raises errors.
 
 #### Rethrow
 
-Inside a catch block, `throw` without arguments re-raises the caught error to outer handlers:
+Inside a catch block, `throw` without arguments re-raises the caught error to outer
+handlers:
 
 ```prose
 try:
@@ -2176,7 +2217,8 @@ throw "Precondition not met"
 
 ### Nested Error Handling
 
-Try blocks can be nested. Inner catch blocks don't trigger outer handlers unless they rethrow:
+Try blocks can be nested. Inner catch blocks don't trigger outer handlers unless they
+rethrow:
 
 ```prose
 try:
@@ -2208,7 +2250,8 @@ parallel:
 session "Continue with recovered results"
 ```
 
-This differs from the `on-fail:` policy which controls behavior when unhandled errors occur.
+This differs from the `on-fail:` policy which controls behavior when unhandled errors
+occur.
 
 ### Retry Property
 
@@ -2297,7 +2340,9 @@ backoff_property ::= "backoff" ":" ( "none" | "linear" | "exponential" )
 
 ## Choice Blocks
 
-Choice blocks allow the OpenProse VM to select from multiple labeled options based on criteria. This is useful for branching workflows where the best path depends on runtime analysis.
+Choice blocks allow the OpenProse VM to select from multiple labeled options based on
+criteria. This is useful for branching workflows where the best path depends on runtime
+analysis.
 
 ### Syntax
 
@@ -2311,7 +2356,8 @@ choice **criteria**:
 
 ### Criteria
 
-The criteria is wrapped in discretion markers (`**...**`) and is evaluated by the OpenProse VM to select which option to execute:
+The criteria is wrapped in discretion markers (`**...**`) and is evaluated by the
+OpenProse VM to select which option to execute:
 
 ```prose
 choice **the best approach for the current situation**:
@@ -2416,7 +2462,8 @@ discretion ::= "**" text "**" | "***" text "***"
 
 ## Conditional Statements
 
-If/elif/else statements provide conditional branching based on AI-evaluated conditions using discretion markers.
+If/elif/else statements provide conditional branching based on AI-evaluated conditions
+using discretion markers.
 
 ### If Statement
 
@@ -2962,10 +3009,12 @@ escape      → "\\" | "\"" | "\n" | "\t"
 
 When a user invokes `/prose-compile` or asks you to compile a `.prose` file:
 
-1. **Read this document** (`compiler.md`) fully to understand all syntax and validation rules
+1. **Read this document** (`compiler.md`) fully to understand all syntax and validation
+   rules
 2. **Parse** the program according to the syntax grammar
 3. **Validate** syntax correctness, semantic validity, and self-evidence
 4. **Transform** to canonical form (expand syntax sugar, normalize structure)
 5. **Output** the compiled program or report errors/warnings with line numbers
 
-For direct interpretation without compilation, read `prose.md` and execute statements as described in the Session Statement section.
+For direct interpretation without compilation, read `prose.md` and execute statements as
+described in the Session Statement section.

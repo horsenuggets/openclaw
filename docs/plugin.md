@@ -10,12 +10,11 @@ title: "Plugins"
 
 ## Quick start (new to plugins?)
 
-A plugin is just a **small code module** that extends OpenClaw with extra
-features (commands, tools, and Gateway RPC).
+A plugin is just a **small code module** that extends OpenClaw with extra features
+(commands, tools, and Gateway RPC).
 
-Most of the time, you’ll use plugins when you want a feature that’s not built
-into core OpenClaw yet (or you want to keep optional features out of your main
-install).
+Most of the time, you’ll use plugins when you want a feature that’s not built into core
+OpenClaw yet (or you want to keep optional features out of your main install).
 
 Fast path:
 
@@ -37,23 +36,29 @@ See [Voice Call](/plugins/voice-call) for a concrete example plugin.
 
 ## Available plugins (official)
 
-- Microsoft Teams is plugin-only as of 2026.1.15; install `@openclaw/msteams` if you use Teams.
-- Memory (Core) — bundled memory search plugin (enabled by default via `plugins.slots.memory`)
-- Memory (LanceDB) — bundled long-term memory plugin (auto-recall/capture; set `plugins.slots.memory = "memory-lancedb"`)
+- Microsoft Teams is plugin-only as of 2026.1.15; install `@openclaw/msteams` if you use
+  Teams.
+- Memory (Core) — bundled memory search plugin (enabled by default via
+  `plugins.slots.memory`)
+- Memory (LanceDB) — bundled long-term memory plugin (auto-recall/capture; set
+  `plugins.slots.memory = "memory-lancedb"`)
 - [Voice Call](/plugins/voice-call) — `@openclaw/voice-call`
 - [Zalo Personal](/plugins/zalouser) — `@openclaw/zalouser`
 - [Matrix](/channels/matrix) — `@openclaw/matrix`
 - [Nostr](/channels/nostr) — `@openclaw/nostr`
 - [Zalo](/channels/zalo) — `@openclaw/zalo`
 - [Microsoft Teams](/channels/msteams) — `@openclaw/msteams`
-- Google Antigravity OAuth (provider auth) — bundled as `google-antigravity-auth` (disabled by default)
-- Gemini CLI OAuth (provider auth) — bundled as `google-gemini-cli-auth` (disabled by default)
+- Google Antigravity OAuth (provider auth) — bundled as `google-antigravity-auth`
+  (disabled by default)
+- Gemini CLI OAuth (provider auth) — bundled as `google-gemini-cli-auth` (disabled by
+  default)
 - Qwen OAuth (provider auth) — bundled as `qwen-portal-auth` (disabled by default)
-- Copilot Proxy (provider auth) — local VS Code Copilot Proxy bridge; distinct from built-in `github-copilot` device login (bundled, disabled by default)
+- Copilot Proxy (provider auth) — local VS Code Copilot Proxy bridge; distinct from
+  built-in `github-copilot` device login (bundled, disabled by default)
 
 OpenClaw plugins are **TypeScript modules** loaded at runtime via jiti. **Config
-validation does not execute plugin code**; it uses the plugin manifest and JSON
-Schema instead. See [Plugin manifest](/plugins/manifest).
+validation does not execute plugin code**; it uses the plugin manifest and JSON Schema
+instead. See [Plugin manifest](/plugins/manifest).
 
 Plugins can register:
 
@@ -66,8 +71,8 @@ Plugins can register:
 - **Skills** (by listing `skills` directories in the plugin manifest)
 - **Auto-reply commands** (execute without invoking the AI agent)
 
-Plugins run **in‑process** with the Gateway, so treat them as trusted code.
-Tool authoring guide: [Plugin agent tools](/plugins/agent-tools).
+Plugins run **in‑process** with the Gateway, so treat them as trusted code. Tool authoring
+guide: [Plugin agent tools](/plugins/agent-tools).
 
 ## Runtime helpers
 
@@ -108,16 +113,15 @@ OpenClaw scans, in order:
 
 - `<openclaw>/extensions/*`
 
-Bundled plugins must be enabled explicitly via `plugins.entries.<id>.enabled`
-or `openclaw plugins enable <id>`. Installed plugins are enabled by default,
-but can be disabled the same way.
+Bundled plugins must be enabled explicitly via `plugins.entries.<id>.enabled` or
+`openclaw plugins enable <id>`. Installed plugins are enabled by default, but can be
+disabled the same way.
 
-Each plugin must include a `openclaw.plugin.json` file in its root. If a path
-points at a file, the plugin root is the file's directory and must contain the
-manifest.
+Each plugin must include a `openclaw.plugin.json` file in its root. If a path points at a
+file, the plugin root is the file's directory and must contain the manifest.
 
-If multiple plugins resolve to the same id, the first match in the order above
-wins and lower-precedence copies are ignored.
+If multiple plugins resolve to the same id, the first match in the order above wins and
+lower-precedence copies are ignored.
 
 ### Package packs
 
@@ -132,16 +136,16 @@ A plugin directory may include a `package.json` with `openclaw.extensions`:
 }
 ```
 
-Each entry becomes a plugin. If the pack lists multiple extensions, the plugin id
-becomes `name/<fileBase>`.
+Each entry becomes a plugin. If the pack lists multiple extensions, the plugin id becomes
+`name/<fileBase>`.
 
-If your plugin imports npm deps, install them in that directory so
-`node_modules` is available (`npm install` / `pnpm install`).
+If your plugin imports npm deps, install them in that directory so `node_modules` is
+available (`npm install` / `pnpm install`).
 
 ### Channel catalog metadata
 
-Channel plugins can advertise onboarding metadata via `openclaw.channel` and
-install hints via `openclaw.install`. This keeps the core catalog data-free.
+Channel plugins can advertise onboarding metadata via `openclaw.channel` and install hints
+via `openclaw.install`. This keeps the core catalog data-free.
 
 Example:
 
@@ -169,16 +173,16 @@ Example:
 }
 ```
 
-OpenClaw can also merge **external channel catalogs** (for example, an MPM
-registry export). Drop a JSON file at one of:
+OpenClaw can also merge **external channel catalogs** (for example, an MPM registry
+export). Drop a JSON file at one of:
 
 - `~/.openclaw/mpm/plugins.json`
 - `~/.openclaw/mpm/catalog.json`
 - `~/.openclaw/plugins/catalog.json`
 
-Or point `OPENCLAW_PLUGIN_CATALOG_PATHS` (or `OPENCLAW_MPM_CATALOG_PATHS`) at
-one or more JSON files (comma/semicolon/`PATH`-delimited). Each file should
-contain `{ "entries": [ { "name": "@scope/pkg", "openclaw": { "channel": {...}, "install": {...} } } ] }`.
+Or point `OPENCLAW_PLUGIN_CATALOG_PATHS` (or `OPENCLAW_MPM_CATALOG_PATHS`) at one or more
+JSON files (comma/semicolon/`PATH`-delimited). Each file should contain
+`{ "entries": [ { "name": "@scope/pkg", "openclaw": { "channel": {...}, "install": {...} } } ] }`.
 
 ## Plugin IDs
 
@@ -187,8 +191,8 @@ Default plugin ids:
 - Package packs: `package.json` `name`
 - Standalone file: file base name (`~/.../voice-call.ts` → `voice-call`)
 
-If a plugin exports `id`, OpenClaw uses it but warns when it doesn’t match the
-configured id.
+If a plugin exports `id`, OpenClaw uses it but warns when it doesn’t match the configured
+id.
 
 ## Config
 
@@ -219,16 +223,16 @@ Config changes **require a gateway restart**.
 Validation rules (strict):
 
 - Unknown plugin ids in `entries`, `allow`, `deny`, or `slots` are **errors**.
-- Unknown `channels.<id>` keys are **errors** unless a plugin manifest declares
-  the channel id.
-- Plugin config is validated using the JSON Schema embedded in
-  `openclaw.plugin.json` (`configSchema`).
+- Unknown `channels.<id>` keys are **errors** unless a plugin manifest declares the
+  channel id.
+- Plugin config is validated using the JSON Schema embedded in `openclaw.plugin.json`
+  (`configSchema`).
 - If a plugin is disabled, its config is preserved and a **warning** is emitted.
 
 ## Plugin slots (exclusive categories)
 
-Some plugin categories are **exclusive** (only one active at a time). Use
-`plugins.slots` to select which plugin owns the slot:
+Some plugin categories are **exclusive** (only one active at a time). Use `plugins.slots`
+to select which plugin owns the slot:
 
 ```json5
 {
@@ -240,8 +244,8 @@ Some plugin categories are **exclusive** (only one active at a time). Use
 }
 ```
 
-If multiple plugins declare `kind: "memory"`, only the selected one loads. Others
-are disabled with diagnostics.
+If multiple plugins declare `kind: "memory"`, only the selected one loads. Others are
+disabled with diagnostics.
 
 ## Control UI (schema + labels)
 
@@ -253,8 +257,8 @@ OpenClaw augments `uiHints` at runtime based on discovered plugins:
 - Merges optional plugin-provided config field hints under:
   `plugins.entries.<id>.config.<field>`
 
-If you want your plugin config fields to show good labels/placeholders (and mark secrets as sensitive),
-provide `uiHints` alongside your JSON Schema in the plugin manifest.
+If you want your plugin config fields to show good labels/placeholders (and mark secrets
+as sensitive), provide `uiHints` alongside your JSON Schema in the plugin manifest.
 
 Example:
 
@@ -325,15 +329,16 @@ Notes:
 - Hook directories follow the normal hook structure (`HOOK.md` + `handler.ts`).
 - Hook eligibility rules still apply (OS/bins/env/config requirements).
 - Plugin-managed hooks show up in `openclaw hooks list` with `plugin:<id>`.
-- You cannot enable/disable plugin-managed hooks via `openclaw hooks`; enable/disable the plugin instead.
+- You cannot enable/disable plugin-managed hooks via `openclaw hooks`; enable/disable the
+  plugin instead.
 
 ## Provider plugins (model auth)
 
-Plugins can register **model provider auth** flows so users can run OAuth or
-API-key setup inside OpenClaw (no external scripts needed).
+Plugins can register **model provider auth** flows so users can run OAuth or API-key setup
+inside OpenClaw (no external scripts needed).
 
-Register a provider via `api.registerProvider(...)`. Each provider exposes one
-or more auth methods (OAuth, API key, device code, etc.). These methods power:
+Register a provider via `api.registerProvider(...)`. Each provider exposes one or more
+auth methods (OAuth, API key, device code, etc.). These methods power:
 
 - `openclaw models auth login --provider <id> [--method <id>]`
 
@@ -373,16 +378,16 @@ api.registerProvider({
 
 Notes:
 
-- `run` receives a `ProviderAuthContext` with `prompter`, `runtime`,
-  `openUrl`, and `oauth.createVpsAwareHandlers` helpers.
+- `run` receives a `ProviderAuthContext` with `prompter`, `runtime`, `openUrl`, and
+  `oauth.createVpsAwareHandlers` helpers.
 - Return `configPatch` when you need to add default models or provider config.
 - Return `defaultModel` so `--set-default` can update agent defaults.
 
 ### Register a messaging channel
 
-Plugins can register **channel plugins** that behave like built‑in channels
-(WhatsApp, Telegram, etc.). Channel config lives under `channels.<id>` and is
-validated by your channel plugin code.
+Plugins can register **channel plugins** that behave like built‑in channels (WhatsApp,
+Telegram, etc.). Channel config lives under `channels.<id>` and is validated by your
+channel plugin code.
 
 ```ts
 const myChannel = {
@@ -424,8 +429,8 @@ Notes:
 
 ### Write a new messaging channel (step‑by‑step)
 
-Use this when you want a **new chat surface** (a “messaging channel”), not a model provider.
-Model provider docs live under `/providers/*`.
+Use this when you want a **new chat surface** (a “messaging channel”), not a model
+provider. Model provider docs live under `/providers/*`.
 
 1. Pick an id + config shape
 
@@ -504,8 +509,8 @@ export default function (api) {
 }
 ```
 
-Load the plugin (extensions dir or `plugins.load.paths`), restart the gateway,
-then configure `channels.<id>` in your config.
+Load the plugin (extensions dir or `plugins.load.paths`), restart the gateway, then
+configure `channels.<id>` in your config.
 
 ### Agent tools
 
@@ -538,9 +543,9 @@ export default function (api) {
 
 ### Register auto-reply commands
 
-Plugins can register custom slash commands that execute **without invoking the
-AI agent**. This is useful for toggle commands, status checks, or quick actions
-that don't need LLM processing.
+Plugins can register custom slash commands that execute **without invoking the AI agent**.
+This is useful for toggle commands, status checks, or quick actions that don't need LLM
+processing.
 
 ```ts
 export default function (api) {
@@ -567,7 +572,9 @@ Command options:
 
 - `name`: Command name (without the leading `/`)
 - `description`: Help text shown in command lists
-- `acceptsArgs`: Whether the command accepts arguments (default: false). If false and arguments are provided, the command won't match and the message falls through to other handlers
+- `acceptsArgs`: Whether the command accepts arguments (default: false). If false and
+  arguments are provided, the command won't match and the message falls through to other
+  handlers
 - `requireAuth`: Whether to require authorized sender (default: true)
 - `handler`: Function that returns `{ text: string }` (can be async)
 
@@ -592,8 +599,10 @@ Notes:
 - Plugin commands are processed **before** built-in commands and the AI agent
 - Commands are registered globally and work across all channels
 - Command names are case-insensitive (`/MyStatus` matches `/mystatus`)
-- Command names must start with a letter and contain only letters, numbers, hyphens, and underscores
-- Reserved command names (like `help`, `status`, `reset`, etc.) cannot be overridden by plugins
+- Command names must start with a letter and contain only letters, numbers, hyphens, and
+  underscores
+- Reserved command names (like `help`, `status`, `reset`, etc.) cannot be overridden by
+  plugins
 - Duplicate command registration across plugins will fail with a diagnostic error
 
 ### Register background services
@@ -616,9 +625,9 @@ export default function (api) {
 
 ## Skills
 
-Plugins can ship a skill in the repo (`skills/<name>/SKILL.md`).
-Enable it with `plugins.entries.<id>.enabled` (or other config gates) and ensure
-it’s present in your workspace/managed skills locations.
+Plugins can ship a skill in the repo (`skills/<name>/SKILL.md`). Enable it with
+`plugins.entries.<id>.enabled` (or other config gates) and ensure it’s present in your
+workspace/managed skills locations.
 
 ## Distribution (npm)
 
@@ -631,8 +640,10 @@ Publishing contract:
 
 - Plugin `package.json` must include `openclaw.extensions` with one or more entry files.
 - Entry files can be `.js` or `.ts` (jiti loads TS at runtime).
-- `openclaw plugins install <npm-spec>` uses `npm pack`, extracts into `~/.openclaw/extensions/<id>/`, and enables it in config.
-- Config key stability: scoped packages are normalized to the **unscoped** id for `plugins.entries.*`.
+- `openclaw plugins install <npm-spec>` uses `npm pack`, extracts into
+  `~/.openclaw/extensions/<id>/`, and enables it in config.
+- Config key stability: scoped packages are normalized to the **unscoped** id for
+  `plugins.entries.*`.
 
 ## Example plugin: Voice Call
 
@@ -643,10 +654,12 @@ This repo includes a voice‑call plugin (Twilio or log fallback):
 - CLI: `openclaw voicecall start|status`
 - Tool: `voice_call`
 - RPC: `voicecall.start`, `voicecall.status`
-- Config (twilio): `provider: "twilio"` + `twilio.accountSid/authToken/from` (optional `statusCallbackUrl`, `twimlUrl`)
+- Config (twilio): `provider: "twilio"` + `twilio.accountSid/authToken/from` (optional
+  `statusCallbackUrl`, `twimlUrl`)
 - Config (dev): `provider: "log"` (no network)
 
-See [Voice Call](/plugins/voice-call) and `extensions/voice-call/README.md` for setup and usage.
+See [Voice Call](/plugins/voice-call) and `extensions/voice-call/README.md` for setup and
+usage.
 
 ## Safety notes
 
@@ -660,5 +673,7 @@ Plugins run in-process with the Gateway. Treat them as trusted code:
 
 Plugins can (and should) ship tests:
 
-- In-repo plugins can keep Vitest tests under `src/**` (example: `src/plugins/voice-call.plugin.test.ts`).
-- Separately published plugins should run their own CI (lint/build/test) and validate `openclaw.extensions` points at the built entrypoint (`dist/index.js`).
+- In-repo plugins can keep Vitest tests under `src/**` (example:
+  `src/plugins/voice-call.plugin.test.ts`).
+- Separately published plugins should run their own CI (lint/build/test) and validate
+  `openclaw.extensions` points at the built entrypoint (`dist/index.js`).

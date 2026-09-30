@@ -9,22 +9,27 @@ metadata:
         "emoji": "💾",
         "events": ["command:new"],
         "requires": { "config": ["workspace.dir"] },
-        "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
+        "install":
+          [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
       },
   }
 ---
 
 # Session Memory Hook
 
-Automatically saves session context to your workspace memory when you issue the `/new` command.
+Automatically saves session context to your workspace memory when you issue the `/new`
+command.
 
 ## What It Does
 
 When you run `/new` to start a fresh session:
 
-1. **Finds the previous session** - Uses the pre-reset session entry to locate the correct transcript
-2. **Extracts conversation** - Reads the last N user/assistant messages from the session (default: 15, configurable)
-3. **Generates descriptive slug** - Uses LLM to create a meaningful filename slug based on conversation content
+1. **Finds the previous session** - Uses the pre-reset session entry to locate the correct
+   transcript
+2. **Extracts conversation** - Reads the last N user/assistant messages from the session
+   (default: 15, configurable)
+3. **Generates descriptive slug** - Uses LLM to create a meaningful filename slug based on
+   conversation content
 4. **Saves to memory** - Creates a new file at `<workspace>/memory/YYYY-MM-DD-slug.md`
 5. **Sends confirmation** - Notifies you with the file path
 
@@ -53,7 +58,8 @@ The LLM generates descriptive slugs based on your conversation:
 
 - **Config**: `workspace.dir` must be set (automatically configured during onboarding)
 
-The hook uses your configured LLM provider to generate slugs, so it works with any provider (Anthropic, OpenAI, etc.).
+The hook uses your configured LLM provider to generate slugs, so it works with any
+provider (Anthropic, OpenAI, etc.).
 
 ## Configuration
 

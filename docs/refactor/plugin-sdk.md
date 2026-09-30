@@ -8,12 +8,13 @@ title: "Plugin SDK Refactor"
 
 # Plugin SDK + Runtime Refactor Plan
 
-Goal: every messaging connector is a plugin (bundled or external) using one stable API.
-No plugin imports from `src/**` directly. All dependencies go through the SDK or runtime.
+Goal: every messaging connector is a plugin (bundled or external) using one stable API. No
+plugin imports from `src/**` directly. All dependencies go through the SDK or runtime.
 
 ## Why now
 
-- Current connectors mix patterns: direct core imports, dist-only bridges, and custom helpers.
+- Current connectors mix patterns: direct core imports, dist-only bridges, and custom
+  helpers.
 - This makes upgrades brittle and blocks a clean external plugin surface.
 
 ## Target architecture (two layers)
@@ -24,12 +25,15 @@ Scope: types, helpers, and config utilities. No runtime state, no side effects.
 
 Contents (examples):
 
-- Types: `ChannelPlugin`, adapters, `ChannelMeta`, `ChannelCapabilities`, `ChannelDirectoryEntry`.
-- Config helpers: `buildChannelConfigSchema`, `setAccountEnabledInConfigSection`, `deleteAccountFromConfigSection`,
-  `applyAccountNameToChannelSection`.
+- Types: `ChannelPlugin`, adapters, `ChannelMeta`, `ChannelCapabilities`,
+  `ChannelDirectoryEntry`.
+- Config helpers: `buildChannelConfigSchema`, `setAccountEnabledInConfigSection`,
+  `deleteAccountFromConfigSection`, `applyAccountNameToChannelSection`.
 - Pairing helpers: `PAIRING_APPROVED_MESSAGE`, `formatPairingApproveHint`.
-- Onboarding helpers: `promptChannelAccessConfig`, `addWildcardAllowFrom`, onboarding types.
-- Tool param helpers: `createActionGate`, `readStringParam`, `readNumberParam`, `readReactionParams`, `jsonResult`.
+- Onboarding helpers: `promptChannelAccessConfig`, `addWildcardAllowFrom`, onboarding
+  types.
+- Tool param helpers: `createActionGate`, `readStringParam`, `readNumberParam`,
+  `readReactionParams`, `jsonResult`.
 - Docs link helper: `formatDocsLink`.
 
 Delivery:
@@ -39,8 +43,8 @@ Delivery:
 
 ### 2) Plugin Runtime (execution surface, injected)
 
-Scope: everything that touches core runtime behavior.
-Accessed via `OpenClawPluginApi.runtime` so plugins never import `src/**`.
+Scope: everything that touches core runtime behavior. Accessed via
+`OpenClawPluginApi.runtime` so plugins never import `src/**`.
 
 Proposed surface (minimal but complete):
 
@@ -49,7 +53,11 @@ export type PluginRuntime = {
   channel: {
     text: {
       chunkMarkdownText(text: string, limit: number): string[];
-      resolveTextChunkLimit(cfg: OpenClawConfig, channel: string, accountId?: string): number;
+      resolveTextChunkLimit(
+        cfg: OpenClawConfig,
+        channel: string,
+        accountId?: string,
+      ): number;
       hasControlCommand(text: string, cfg: OpenClawConfig): boolean;
     };
     reply: {
@@ -76,7 +84,11 @@ export type PluginRuntime = {
       }): { sessionKey: string; accountId: string };
     };
     pairing: {
-      buildPairingReply(params: { channel: string; idLine: string; code: string }): string;
+      buildPairingReply(params: {
+        channel: string;
+        idLine: string;
+        code: string;
+      }): string;
       readAllowFromStore(channel: string): Promise<string[]>;
       upsertPairingRequest(params: {
         channel: string;
@@ -85,7 +97,9 @@ export type PluginRuntime = {
       }): Promise<{ code: string; created: boolean }>;
     };
     media: {
-      fetchRemoteMedia(params: { url: string }): Promise<{ buffer: Buffer; contentType?: string }>;
+      fetchRemoteMedia(params: {
+        url: string;
+      }): Promise<{ buffer: Buffer; contentType?: string }>;
       saveMediaBuffer(
         buffer: Uint8Array,
         contentType: string | undefined,
@@ -194,7 +208,8 @@ Notes:
 ## Testing strategy
 
 - Adapter-level unit tests (runtime functions exercised with real core implementation).
-- Golden tests per plugin: ensure no behavior drift (routing, pairing, allowlist, mention gating).
+- Golden tests per plugin: ensure no behavior drift (routing, pairing, allowlist, mention
+  gating).
 - A single end-to-end plugin sample used in CI (install + run + smoke).
 
 ## Open questions
@@ -211,4 +226,5 @@ Notes:
 - New connector templates depend only on SDK + runtime.
 - External plugins can be developed and updated without core source access.
 
-Related docs: [Plugins](/plugin), [Channels](/channels/index), [Configuration](/gateway/configuration).
+Related docs: [Plugins](/plugin), [Channels](/channels/index),
+[Configuration](/gateway/configuration).

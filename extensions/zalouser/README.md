@@ -2,7 +2,8 @@
 
 OpenClaw extension for Zalo Personal Account messaging via [zca-cli](https://zca-cli.dev).
 
-> **Warning:** Using Zalo automation may result in account suspension or ban. Use at your own risk. This is an unofficial integration.
+> **Warning:** Using Zalo automation may result in account suspension or ban. Use at your
+> own risk. This is an unofficial integration.
 
 ## Features
 
@@ -70,7 +71,8 @@ Available binaries:
 - `zca-linux-x64` - Linux x86_64
 - `zca-windows-x64.exe` - Windows
 
-See [zca-cli](https://zca-cli.dev) for manual download (binaries for macOS/Linux/Windows) or building from source.
+See [zca-cli](https://zca-cli.dev) for manual download (binaries for macOS/Linux/Windows)
+or building from source.
 
 ## Quick Start
 
@@ -164,8 +166,8 @@ openclaw message send --channel zalouser --target <threadId> --message "caption"
 
 ### Listener
 
-The listener runs inside the Gateway when the channel is enabled. For debugging,
-use `openclaw channels logs --channel zalouser` or run `zca listen` directly.
+The listener runs inside the Gateway when the channel is enabled. For debugging, use
+`openclaw channels logs --channel zalouser` or run `zca listen` directly.
 
 ### Data Access
 
@@ -222,4 +224,5 @@ Available actions: `send`, `image`, `link`, `friends`, `groups`, `me`, `status`
 
 ## Credits
 
-Built on [zca-cli](https://zca-cli.dev) which uses [zca-js](https://github.com/RFS-ADRENO/zca-js).
+Built on [zca-cli](https://zca-cli.dev) which uses
+[zca-js](https://github.com/RFS-ADRENO/zca-js).

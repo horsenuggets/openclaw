@@ -8,8 +8,8 @@ title: "Qwen"
 
 # Qwen
 
-Qwen provides a free-tier OAuth flow for Qwen Coder and Qwen Vision models
-(2,000 requests/day, subject to Qwen rate limits).
+Qwen provides a free-tier OAuth flow for Qwen Coder and Qwen Vision models (2,000
+requests/day, subject to Qwen rate limits).
 
 ## Enable the plugin
 
@@ -41,8 +41,8 @@ openclaw models set qwen-portal/coder-model
 
 ## Reuse Qwen Code CLI login
 
-If you already logged in with the Qwen Code CLI, OpenClaw will sync credentials
-from `~/.qwen/oauth_creds.json` when it loads the auth store. You still need a
+If you already logged in with the Qwen Code CLI, OpenClaw will sync credentials from
+`~/.qwen/oauth_creds.json` when it loads the auth store. You still need a
 `models.providers.qwen-portal` entry (use the login command above to create one).
 
 ## Notes

@@ -11,7 +11,8 @@ title: "Web Tools"
 
 OpenClaw ships two lightweight web tools:
 
-- `web_search` — Search the web via Brave Search API (default) or Perplexity Sonar (direct or via OpenRouter).
+- `web_search` — Search the web via Brave Search API (default) or Perplexity Sonar (direct
+  or via OpenRouter).
 - `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text).
 
 These are **not** browser automation. For JS-heavy sites or logins, use the
@@ -21,10 +22,11 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 
 - `web_search` calls your configured provider and returns results.
   - **Brave** (default): returns structured results (title, URL, snippet).
-  - **Perplexity**: returns AI-synthesized answers with citations from real-time web search.
+  - **Perplexity**: returns AI-synthesized answers with citations from real-time web
+    search.
 - Results are cached by query for 15 minutes (configurable).
-- `web_fetch` does a plain HTTP GET and extracts readable content
-  (HTML → markdown/text). It does **not** execute JavaScript.
+- `web_fetch` does a plain HTTP GET and extracts readable content (HTML → markdown/text).
+  It does **not** execute JavaScript.
 - `web_fetch` is enabled by default (unless explicitly disabled).
 
 ## Choosing a search provider
@@ -34,7 +36,8 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 | **Brave** (default) | Fast, structured results, free tier          | Traditional search results               | `BRAVE_API_KEY`                              |
 | **Perplexity**      | AI-synthesized answers, citations, real-time | Requires Perplexity or OpenRouter access | `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` |
 
-See [Brave Search setup](/brave-search) and [Perplexity Sonar](/perplexity) for provider-specific details.
+See [Brave Search setup](/brave-search) and [Perplexity Sonar](/perplexity) for
+provider-specific details.
 
 Set the provider in config:
 
@@ -72,26 +75,28 @@ Example: switch to Perplexity Sonar (direct API):
 ## Getting a Brave API key
 
 1. Create a Brave Search API account at https://brave.com/search/api/
-2. In the dashboard, choose the **Data for Search** plan (not “Data for AI”) and generate an API key.
-3. Run `openclaw configure --section web` to store the key in config (recommended), or set `BRAVE_API_KEY` in your environment.
+2. In the dashboard, choose the **Data for Search** plan (not “Data for AI”) and generate
+   an API key.
+3. Run `openclaw configure --section web` to store the key in config (recommended), or set
+   `BRAVE_API_KEY` in your environment.
 
-Brave provides a free tier plus paid plans; check the Brave API portal for the
-current limits and pricing.
+Brave provides a free tier plus paid plans; check the Brave API portal for the current
+limits and pricing.
 
 ### Where to set the key (recommended)
 
 **Recommended:** run `openclaw configure --section web`. It stores the key in
 `~/.openclaw/openclaw.json` under `tools.web.search.apiKey`.
 
-**Environment alternative:** set `BRAVE_API_KEY` in the Gateway process
-environment. For a gateway install, put it in `~/.openclaw/.env` (or your
-service environment). See [Env vars](/help/faq#how-does-openclaw-load-environment-variables).
+**Environment alternative:** set `BRAVE_API_KEY` in the Gateway process environment. For a
+gateway install, put it in `~/.openclaw/.env` (or your service environment). See
+[Env vars](/help/faq#how-does-openclaw-load-environment-variables).
 
 ## Using Perplexity (direct or via OpenRouter)
 
 Perplexity Sonar models have built-in web search capabilities and return AI-synthesized
-answers with citations. You can use them via OpenRouter (no credit card required - supports
-crypto/prepaid).
+answers with citations. You can use them via OpenRouter (no credit card required -
+supports crypto/prepaid).
 
 ### Getting an OpenRouter API key
 
@@ -122,8 +127,8 @@ crypto/prepaid).
 }
 ```
 
-**Environment alternative:** set `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` in the Gateway
-environment. For a gateway install, put it in `~/.openclaw/.env`.
+**Environment alternative:** set `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` in the
+Gateway environment. For a gateway install, put it in `~/.openclaw/.env`.
 
 If no base URL is set, OpenClaw chooses a default based on the API key source:
 
@@ -148,7 +153,8 @@ Search the web using your configured provider.
 - `tools.web.search.enabled` must not be `false` (default: enabled)
 - API key for your chosen provider:
   - **Brave**: `BRAVE_API_KEY` or `tools.web.search.apiKey`
-  - **Perplexity**: `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, or `tools.web.search.perplexity.apiKey`
+  - **Perplexity**: `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, or
+    `tools.web.search.perplexity.apiKey`
 
 ### Config
 
@@ -172,10 +178,12 @@ Search the web using your configured provider.
 
 - `query` (required)
 - `count` (1–10; default from config)
-- `country` (optional): 2-letter country code for region-specific results (e.g., "DE", "US", "ALL"). If omitted, Brave chooses its default region.
+- `country` (optional): 2-letter country code for region-specific results (e.g., "DE",
+  "US", "ALL"). If omitted, Brave chooses its default region.
 - `search_lang` (optional): ISO language code for search results (e.g., "de", "en", "fr")
 - `ui_lang` (optional): ISO language code for UI elements
-- `freshness` (optional, Brave only): filter by discovery time (`pd`, `pw`, `pm`, `py`, or `YYYY-MM-DDtoYYYY-MM-DD`)
+- `freshness` (optional, Brave only): filter by discovery time (`pd`, `pw`, `pm`, `py`, or
+  `YYYY-MM-DDtoYYYY-MM-DD`)
 
 **Examples:**
 
@@ -210,7 +218,8 @@ Fetch a URL and extract readable content.
 ### Requirements
 
 - `tools.web.fetch.enabled` must not be `false` (default: enabled)
-- Optional Firecrawl fallback: set `tools.web.fetch.firecrawl.apiKey` or `FIRECRAWL_API_KEY`.
+- Optional Firecrawl fallback: set `tools.web.fetch.firecrawl.apiKey` or
+  `FIRECRAWL_API_KEY`.
 
 ### Config
 
@@ -249,10 +258,13 @@ Fetch a URL and extract readable content.
 
 Notes:
 
-- `web_fetch` uses Readability (main-content extraction) first, then Firecrawl (if configured). If both fail, the tool returns an error.
+- `web_fetch` uses Readability (main-content extraction) first, then Firecrawl (if
+  configured). If both fail, the tool returns an error.
 - Firecrawl requests use bot-circumvention mode and cache results by default.
-- `web_fetch` sends a Chrome-like User-Agent and `Accept-Language` by default; override `userAgent` if needed.
-- `web_fetch` blocks private/internal hostnames and re-checks redirects (limit with `maxRedirects`).
+- `web_fetch` sends a Chrome-like User-Agent and `Accept-Language` by default; override
+  `userAgent` if needed.
+- `web_fetch` blocks private/internal hostnames and re-checks redirects (limit with
+  `maxRedirects`).
 - `maxChars` is clamped to `tools.web.fetch.maxCharsCap`.
 - `web_fetch` is best-effort extraction; some sites will need the browser tool.
 - See [Firecrawl](/tools/firecrawl) for key setup and service details.

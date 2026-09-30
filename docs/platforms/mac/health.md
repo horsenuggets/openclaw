@@ -20,15 +20,21 @@ How to see whether the linked channel is healthy from the menu bar app.
 
 ## Settings
 
-- General tab gains a Health card showing: linked auth age, session-store path/count, last check time, last error/status code, and buttons for Run Health Check / Reveal Logs.
+- General tab gains a Health card showing: linked auth age, session-store path/count, last
+  check time, last error/status code, and buttons for Run Health Check / Reveal Logs.
 - Uses a cached snapshot so the UI loads instantly and falls back gracefully when offline.
-- **Channels tab** surfaces channel status + controls for WhatsApp/Telegram (login QR, logout, probe, last disconnect/error).
+- **Channels tab** surfaces channel status + controls for WhatsApp/Telegram (login QR,
+  logout, probe, last disconnect/error).
 
 ## How the probe works
 
-- App runs `openclaw health --json` via `ShellExecutor` every ~60s and on demand. The probe loads creds and reports status without sending messages.
-- Cache the last good snapshot and the last error separately to avoid flicker; show the timestamp of each.
+- App runs `openclaw health --json` via `ShellExecutor` every ~60s and on demand. The
+  probe loads creds and reports status without sending messages.
+- Cache the last good snapshot and the last error separately to avoid flicker; show the
+  timestamp of each.
 
 ## When in doubt
 
-- You can still use the CLI flow in [Gateway health](/gateway/health) (`openclaw status`, `openclaw status --deep`, `openclaw health --json`) and tail `/tmp/openclaw/openclaw-*.log` for `web-heartbeat` / `web-reconnect`.
+- You can still use the CLI flow in [Gateway health](/gateway/health) (`openclaw status`,
+  `openclaw status --deep`, `openclaw health --json`) and tail
+  `/tmp/openclaw/openclaw-*.log` for `web-heartbeat` / `web-reconnect`.

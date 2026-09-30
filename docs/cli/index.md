@@ -63,7 +63,8 @@ This page describes the current CLI behavior. If commands change, update this do
 ## Output styling
 
 - ANSI colors and progress indicators only render in TTY sessions.
-- OSC-8 hyperlinks render as clickable links in supported terminals; otherwise we fall back to plain URLs.
+- OSC-8 hyperlinks render as clickable links in supported terminals; otherwise we fall
+  back to plain URLs.
 - `--json` (and `--plain` where supported) disables styling for clean output.
 - `--no-color` disables ANSI styling; `NO_COLOR=1` is also respected.
 - Long-running commands show a progress indicator (OSC 9;4 when supported).
@@ -251,7 +252,8 @@ Manage extensions and their config:
 
 - `openclaw plugins list` — discover plugins (use `--json` for machine output).
 - `openclaw plugins info <id>` — show details for a plugin.
-- `openclaw plugins install <path|.tgz|npm-spec>` — install a plugin (or add a plugin path to `plugins.load.paths`).
+- `openclaw plugins install <path|.tgz|npm-spec>` — install a plugin (or add a plugin path
+  to `plugins.load.paths`).
 - `openclaw plugins enable <id>` / `disable <id>` — toggle `plugins.entries.<id>.enabled`.
 - `openclaw plugins doctor` — report plugin load errors.
 
@@ -267,13 +269,15 @@ Vector search over `MEMORY.md` + `memory/*.md`:
 
 ## Chat slash commands
 
-Chat messages support `/...` commands (text and native). See [/tools/slash-commands](/tools/slash-commands).
+Chat messages support `/...` commands (text and native). See
+[/tools/slash-commands](/tools/slash-commands).
 
 Highlights:
 
 - `/status` for quick diagnostics.
 - `/config` for persisted config changes.
-- `/debug` for runtime-only config overrides (memory, not disk; requires `commands.debug: true`).
+- `/debug` for runtime-only config overrides (memory, not disk; requires
+  `commands.debug: true`).
 
 ## Setup + onboarding
 
@@ -290,7 +294,8 @@ Options:
 - `--remote-url <url>`: remote Gateway URL.
 - `--remote-token <token>`: remote Gateway token.
 
-Wizard auto-runs when any wizard flags are present (`--non-interactive`, `--mode`, `--remote-url`, `--remote-token`).
+Wizard auto-runs when any wizard flags are present (`--non-interactive`, `--mode`,
+`--remote-url`, `--remote-token`).
 
 ### `onboard`
 
@@ -334,7 +339,8 @@ Options:
 - `--skip-skills`
 - `--skip-health`
 - `--skip-ui`
-- `--node-manager <npm|pnpm|bun>` (pnpm recommended; bun not recommended for Gateway runtime)
+- `--node-manager <npm|pnpm|bun>` (pnpm recommended; bun not recommended for Gateway
+  runtime)
 - `--json`
 
 ### `configure`
@@ -367,22 +373,28 @@ Options:
 
 ### `channels`
 
-Manage chat channel accounts (WhatsApp/Telegram/Discord/Google Chat/Slack/Mattermost (plugin)/Signal/iMessage/MS Teams).
+Manage chat channel accounts (WhatsApp/Telegram/Discord/Google Chat/Slack/Mattermost
+(plugin)/Signal/iMessage/MS Teams).
 
 Subcommands:
 
 - `channels list`: show configured channels and auth profiles.
-- `channels status`: check gateway reachability and channel health (`--probe` runs extra checks; use `openclaw health` or `openclaw status --deep` for gateway health probes).
-- Tip: `channels status` prints warnings with suggested fixes when it can detect common misconfigurations (then points you to `openclaw doctor`).
+- `channels status`: check gateway reachability and channel health (`--probe` runs extra
+  checks; use `openclaw health` or `openclaw status --deep` for gateway health probes).
+- Tip: `channels status` prints warnings with suggested fixes when it can detect common
+  misconfigurations (then points you to `openclaw doctor`).
 - `channels logs`: show recent channel logs from the gateway log file.
-- `channels add`: wizard-style setup when no flags are passed; flags switch to non-interactive mode.
-- `channels remove`: disable by default; pass `--delete` to remove config entries without prompts.
+- `channels add`: wizard-style setup when no flags are passed; flags switch to
+  non-interactive mode.
+- `channels remove`: disable by default; pass `--delete` to remove config entries without
+  prompts.
 - `channels login`: interactive channel login (WhatsApp Web only).
 - `channels logout`: log out of a channel session (if supported).
 
 Common options:
 
-- `--channel <name>`: `whatsapp|telegram|discord|googlechat|slack|mattermost|signal|imessage|msteams`
+- `--channel <name>`:
+  `whatsapp|telegram|discord|googlechat|slack|mattermost|signal|imessage|msteams`
 - `--account <id>`: channel account id (default `default`)
 - `--name <label>`: display name for the account
 
@@ -449,16 +461,21 @@ Subcommands:
 
 ### `webhooks gmail`
 
-Gmail Pub/Sub hook setup + runner. See [/automation/gmail-pubsub](/automation/gmail-pubsub).
+Gmail Pub/Sub hook setup + runner. See
+[/automation/gmail-pubsub](/automation/gmail-pubsub).
 
 Subcommands:
 
-- `webhooks gmail setup` (requires `--account <email>`; supports `--project`, `--topic`, `--subscription`, `--label`, `--hook-url`, `--hook-token`, `--push-token`, `--bind`, `--port`, `--path`, `--include-body`, `--max-bytes`, `--renew-minutes`, `--tailscale`, `--tailscale-path`, `--tailscale-target`, `--push-endpoint`, `--json`)
+- `webhooks gmail setup` (requires `--account <email>`; supports `--project`, `--topic`,
+  `--subscription`, `--label`, `--hook-url`, `--hook-token`, `--push-token`, `--bind`,
+  `--port`, `--path`, `--include-body`, `--max-bytes`, `--renew-minutes`, `--tailscale`,
+  `--tailscale-path`, `--tailscale-target`, `--push-endpoint`, `--json`)
 - `webhooks gmail run` (runtime overrides for the same flags)
 
 ### `dns setup`
 
-Wide-area discovery DNS helper (CoreDNS + Tailscale). See [/gateway/discovery](/gateway/discovery).
+Wide-area discovery DNS helper (CoreDNS + Tailscale). See
+[/gateway/discovery](/gateway/discovery).
 
 Options:
 
@@ -524,7 +541,8 @@ Options:
 
 #### `agents add [name]`
 
-Add a new isolated agent. Runs the guided wizard unless flags (or `--non-interactive`) are passed; `--workspace` is required in non-interactive mode.
+Add a new isolated agent. Runs the guided wizard unless flags (or `--non-interactive`) are
+passed; `--workspace` is required in non-interactive mode.
 
 Options:
 
@@ -535,7 +553,8 @@ Options:
 - `--non-interactive`
 - `--json`
 
-Binding specs use `channel[:accountId]`. When `accountId` is omitted for WhatsApp, the default account id is used.
+Binding specs use `channel[:accountId]`. When `accountId` is omitted for WhatsApp, the
+default account id is used.
 
 #### `agents delete <id>`
 
@@ -583,7 +602,8 @@ Surfaces:
 Notes:
 
 - Data comes directly from provider usage endpoints (no estimates).
-- Providers: Anthropic, GitHub Copilot, OpenAI Codex OAuth, plus Gemini CLI/Antigravity when those provider plugins are enabled.
+- Providers: Anthropic, GitHub Copilot, OpenAI Codex OAuth, plus Gemini CLI/Antigravity
+  when those provider plugins are enabled.
 - If no matching credentials exist, usage is hidden.
 - Details: see [Usage tracking](/concepts/usage-tracking).
 
@@ -685,12 +705,18 @@ Subcommands:
 
 Notes:
 
-- `gateway status` probes the Gateway RPC by default using the service’s resolved port/config (override with `--url/--token/--password`).
+- `gateway status` probes the Gateway RPC by default using the service’s resolved
+  port/config (override with `--url/--token/--password`).
 - `gateway status` supports `--no-probe`, `--deep`, and `--json` for scripting.
-- `gateway status` also surfaces legacy or extra gateway services when it can detect them (`--deep` adds system-level scans). Profile-named OpenClaw services are treated as first-class and aren't flagged as "extra".
-- `gateway status` prints which config path the CLI uses vs which config the service likely uses (service env), plus the resolved probe target URL.
-- `gateway install|uninstall|start|stop|restart` support `--json` for scripting (default output stays human-friendly).
-- `gateway install` defaults to Node runtime; bun is **not recommended** (WhatsApp/Telegram bugs).
+- `gateway status` also surfaces legacy or extra gateway services when it can detect them
+  (`--deep` adds system-level scans). Profile-named OpenClaw services are treated as
+  first-class and aren't flagged as "extra".
+- `gateway status` prints which config path the CLI uses vs which config the service
+  likely uses (service env), plus the resolved probe target URL.
+- `gateway install|uninstall|start|stop|restart` support `--json` for scripting (default
+  output stays human-friendly).
+- `gateway install` defaults to Node runtime; bun is **not recommended**
+  (WhatsApp/Telegram bugs).
 - `gateway install` options: `--port`, `--runtime`, `--token`, `--force`, `--json`.
 
 ### `logs`
@@ -714,9 +740,10 @@ openclaw logs --no-color
 
 ### `gateway <subcommand>`
 
-Gateway CLI helpers (use `--url`, `--token`, `--password`, `--timeout`, `--expect-final` for RPC subcommands).
-When you pass `--url`, the CLI does not auto-apply config or environment credentials.
-Include `--token` or `--password` explicitly. Missing explicit credentials is an error.
+Gateway CLI helpers (use `--url`, `--token`, `--password`, `--timeout`, `--expect-final`
+for RPC subcommands). When you pass `--url`, the CLI does not auto-apply config or
+environment credentials. Include `--token` or `--password` explicitly. Missing explicit
+credentials is an error.
 
 Subcommands:
 
@@ -734,8 +761,8 @@ Common RPCs:
 - `config.patch` (merge a partial update + restart + wake)
 - `update.run` (run update + restart + wake)
 
-Tip: when calling `config.set`/`config.apply`/`config.patch` directly, pass `baseHash` from
-`config.get` if a config already exists.
+Tip: when calling `config.set`/`config.apply`/`config.patch` directly, pass `baseHash`
+from `config.get` if a config already exists.
 
 ## Models
 
@@ -894,7 +921,8 @@ Subcommands:
 
 - `cron status [--json]`
 - `cron list [--all] [--json]` (table output by default; use `--json` for raw)
-- `cron add` (alias: `create`; requires `--name` and exactly one of `--at` | `--every` | `--cron`, and exactly one payload of `--system-event` | `--message`)
+- `cron add` (alias: `create`; requires `--name` and exactly one of `--at` | `--every` |
+  `--cron`, and exactly one payload of `--system-event` | `--message`)
 - `cron edit <id>` (patch fields)
 - `cron rm <id>` (aliases: `remove`, `delete`)
 - `cron enable <id>`
@@ -936,8 +964,10 @@ Subcommands:
 - `nodes reject <requestId>`
 - `nodes rename --node <id|name|ip> --name <displayName>`
 - `nodes invoke --node <id|name|ip> --command <command> [--params <json>] [--invoke-timeout <ms>] [--idempotency-key <key>]`
-- `nodes run --node <id|name|ip> [--cwd <path>] [--env KEY=VAL] [--command-timeout <ms>] [--needs-screen-recording] [--invoke-timeout <ms>] <command...>` (mac node or headless node host)
-- `nodes notify --node <id|name|ip> [--title <text>] [--body <text>] [--sound <name>] [--priority <passive|active|timeSensitive>] [--delivery <system|overlay|auto>] [--invoke-timeout <ms>]` (mac only)
+- `nodes run --node <id|name|ip> [--cwd <path>] [--env KEY=VAL] [--command-timeout <ms>] [--needs-screen-recording] [--invoke-timeout <ms>] <command...>`
+  (mac node or headless node host)
+- `nodes notify --node <id|name|ip> [--title <text>] [--body <text>] [--sound <name>] [--priority <passive|active|timeSensitive>] [--delivery <system|overlay|auto>] [--invoke-timeout <ms>]`
+  (mac only)
 
 Camera:
 
@@ -962,7 +992,8 @@ Location:
 
 ## Browser
 
-Browser control CLI (dedicated Chrome/Brave/Edge/Chromium). See [`openclaw browser`](/cli/browser) and the [Browser tool](/tools/browser).
+Browser control CLI (dedicated Chrome/Brave/Edge/Chromium). See
+[`openclaw browser`](/cli/browser) and the [Browser tool](/tools/browser).
 
 Common options:
 

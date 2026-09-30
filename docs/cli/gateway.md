@@ -35,10 +35,14 @@ openclaw gateway run
 
 Notes:
 
-- By default, the Gateway refuses to start unless `gateway.mode=local` is set in `~/.openclaw/openclaw.json`. Use `--allow-unconfigured` for ad-hoc/dev runs.
+- By default, the Gateway refuses to start unless `gateway.mode=local` is set in
+  `~/.openclaw/openclaw.json`. Use `--allow-unconfigured` for ad-hoc/dev runs.
 - Binding beyond loopback without auth is blocked (safety guardrail).
-- `SIGUSR1` triggers an in-process restart when authorized (enable `commands.restart` or use the gateway tool/config apply/update).
-- `SIGINT`/`SIGTERM` handlers stop the gateway process, but they don’t restore any custom terminal state. If you wrap the CLI with a TUI or raw-mode input, restore the terminal before exit.
+- `SIGUSR1` triggers an in-process restart when authorized (enable `commands.restart` or
+  use the gateway tool/config apply/update).
+- `SIGINT`/`SIGTERM` handlers stop the gateway process, but they don’t restore any custom
+  terminal state. If you wrap the CLI with a TUI or raw-mode input, restore the terminal
+  before exit.
 
 ### Options
 
@@ -46,7 +50,8 @@ Notes:
 - `--bind <loopback|lan|tailnet|auto|custom>`: listener bind mode.
 - `--auth <token|password>`: auth mode override.
 - `--token <token>`: token override (also sets `OPENCLAW_GATEWAY_TOKEN` for the process).
-- `--password <password>`: password override (also sets `OPENCLAW_GATEWAY_PASSWORD` for the process).
+- `--password <password>`: password override (also sets `OPENCLAW_GATEWAY_PASSWORD` for
+  the process).
 - `--tailscale <off|serve|funnel>`: expose the Gateway via Tailscale.
 - `--tailscale-reset-on-exit`: reset Tailscale serve/funnel config on shutdown.
 - `--allow-unconfigured`: allow gateway start without `gateway.mode=local` in config.
@@ -54,7 +59,8 @@ Notes:
 - `--reset`: reset dev config + credentials + sessions + workspace (requires `--dev`).
 - `--force`: kill any existing listener on the selected port before starting.
 - `--verbose`: verbose logs.
-- `--claude-cli-logs`: only show claude-cli logs in the console (and enable its stdout/stderr).
+- `--claude-cli-logs`: only show claude-cli logs in the console (and enable its
+  stdout/stderr).
 - `--ws-log <auto|full|compact>`: websocket log style (default `auto`).
 - `--compact`: alias for `--ws-log compact`.
 - `--raw-stream`: log raw model stream events to jsonl.
@@ -78,8 +84,9 @@ Shared options (where supported):
 - `--timeout <ms>`: timeout/budget (varies per command).
 - `--expect-final`: wait for a “final” response (agent calls).
 
-Note: when you set `--url`, the CLI does not fall back to config or environment credentials.
-Pass `--token` or `--password` explicitly. Missing explicit credentials is an error.
+Note: when you set `--url`, the CLI does not fall back to config or environment
+credentials. Pass `--token` or `--password` explicitly. Missing explicit credentials is an
+error.
 
 ### `gateway health`
 
@@ -89,7 +96,8 @@ openclaw gateway health --url ws://127.0.0.1:18789
 
 ### `gateway status`
 
-`gateway status` shows the Gateway service (launchd/systemd/schtasks) plus an optional RPC probe.
+`gateway status` shows the Gateway service (launchd/systemd/schtasks) plus an optional RPC
+probe.
 
 ```bash
 openclaw gateway status
@@ -112,7 +120,9 @@ Options:
 - your configured remote gateway (if set), and
 - localhost (loopback) **even if remote is configured**.
 
-If multiple gateways are reachable, it prints all of them. Multiple gateways are supported when you use isolated profiles/ports (e.g., a rescue bot), but most installs still run a single gateway.
+If multiple gateways are reachable, it prints all of them. Multiple gateways are supported
+when you use isolated profiles/ports (e.g., a rescue bot), but most installs still run a
+single gateway.
 
 ```bash
 openclaw gateway probe
@@ -121,7 +131,8 @@ openclaw gateway probe --json
 
 #### Remote over SSH (Mac app parity)
 
-The macOS app “Remote over SSH” mode uses a local port-forward so the remote gateway (which may be bound to loopback only) becomes reachable at `ws://127.0.0.1:<port>`.
+The macOS app “Remote over SSH” mode uses a local port-forward so the remote gateway
+(which may be bound to loopback only) becomes reachable at `ws://127.0.0.1:<port>`.
 
 CLI equivalent:
 
@@ -169,7 +180,8 @@ Notes:
 `gateway discover` scans for Gateway beacons (`_openclaw-gw._tcp`).
 
 - Multicast DNS-SD: `local.`
-- Unicast DNS-SD (Wide-Area Bonjour): choose a domain (example: `openclaw.internal.`) and set up split DNS + a DNS server; see [/gateway/bonjour](/gateway/bonjour)
+- Unicast DNS-SD (Wide-Area Bonjour): choose a domain (example: `openclaw.internal.`) and
+  set up split DNS + a DNS server; see [/gateway/bonjour](/gateway/bonjour)
 
 Only gateways with Bonjour discovery enabled (default) advertise the beacon.
 

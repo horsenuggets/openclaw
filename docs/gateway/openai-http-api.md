@@ -12,9 +12,11 @@ OpenClaw’s Gateway can serve a small OpenAI-compatible Chat Completions endpoi
 This endpoint is **disabled by default**. Enable it in config first.
 
 - `POST /v1/chat/completions`
-- Same port as the Gateway (WS + HTTP multiplex): `http://<gateway-host>:<port>/v1/chat/completions`
+- Same port as the Gateway (WS + HTTP multiplex):
+  `http://<gateway-host>:<port>/v1/chat/completions`
 
-Under the hood, requests are executed as a normal Gateway agent run (same codepath as `openclaw agent`), so routing/permissions/config match your Gateway.
+Under the hood, requests are executed as a normal Gateway agent run (same codepath as
+`openclaw agent`), so routing/permissions/config match your Gateway.
 
 ## Authentication
 
@@ -24,8 +26,10 @@ Uses the Gateway auth configuration. Send a bearer token:
 
 Notes:
 
-- When `gateway.auth.mode="token"`, use `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`).
-- When `gateway.auth.mode="password"`, use `gateway.auth.password` (or `OPENCLAW_GATEWAY_PASSWORD`).
+- When `gateway.auth.mode="token"`, use `gateway.auth.token` (or
+  `OPENCLAW_GATEWAY_TOKEN`).
+- When `gateway.auth.mode="password"`, use `gateway.auth.password` (or
+  `OPENCLAW_GATEWAY_PASSWORD`).
 
 ## Choosing an agent
 
@@ -76,9 +80,11 @@ Set `gateway.http.endpoints.chatCompletions.enabled` to `false`:
 
 ## Session behavior
 
-By default the endpoint is **stateless per request** (a new session key is generated each call).
+By default the endpoint is **stateless per request** (a new session key is generated each
+call).
 
-If the request includes an OpenAI `user` string, the Gateway derives a stable session key from it, so repeated calls can share an agent session.
+If the request includes an OpenAI `user` string, the Gateway derives a stable session key
+from it, so repeated calls can share an agent session.
 
 ## Streaming (SSE)
 

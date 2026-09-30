@@ -1,5 +1,6 @@
 ---
-summary: "Bonjour/mDNS discovery + debugging (Gateway beacons, clients, and common failure modes)"
+summary:
+  "Bonjour/mDNS discovery + debugging (Gateway beacons, clients, and common failure modes)"
 read_when:
   - Debugging Bonjour discovery issues on macOS/iOS
   - Changing mDNS service types, TXT records, or discovery UX
@@ -8,8 +9,8 @@ title: "Bonjour Discovery"
 
 # Bonjour / mDNS discovery
 
-OpenClaw uses Bonjour (mDNS / DNS‑SD) as a **LAN‑only convenience** to discover
-an active Gateway (WebSocket endpoint). It is best‑effort and does **not** replace SSH or
+OpenClaw uses Bonjour (mDNS / DNS‑SD) as a **LAN‑only convenience** to discover an active
+Gateway (WebSocket endpoint). It is best‑effort and does **not** replace SSH or
 Tailnet-based connectivity.
 
 ## Wide‑area Bonjour (Unicast DNS‑SD) over Tailscale
@@ -21,10 +22,10 @@ boundary. You can keep the same discovery UX by switching to **unicast DNS‑SD*
 High‑level steps:
 
 1. Run a DNS server on the gateway host (reachable over Tailnet).
-2. Publish DNS‑SD records for `_openclaw-gw._tcp` under a dedicated zone
-   (example: `openclaw.internal.`).
-3. Configure Tailscale **split DNS** so your chosen domain resolves via that
-   DNS server for clients (including iOS).
+2. Publish DNS‑SD records for `_openclaw-gw._tcp` under a dedicated zone (example:
+   `openclaw.internal.`).
+3. Configure Tailscale **split DNS** so your chosen domain resolves via that DNS server
+   for clients (including iOS).
 
 OpenClaw supports any discovery domain; `openclaw.internal.` is just an example.
 iOS/Android nodes browse both `local.` and your configured wide‑area domain.
@@ -47,7 +48,8 @@ openclaw dns setup --apply
 This installs CoreDNS and configures it to:
 
 - listen on port 53 only on the gateway’s Tailscale interfaces
-- serve your chosen domain (example: `openclaw.internal.`) from `~/.openclaw/dns/<domain>.db`
+- serve your chosen domain (example: `openclaw.internal.`) from
+  `~/.openclaw/dns/<domain>.db`
 
 Validate from a tailnet‑connected machine:
 
@@ -63,8 +65,8 @@ In the Tailscale admin console:
 - Add a nameserver pointing at the gateway’s tailnet IP (UDP/TCP 53).
 - Add split DNS so your discovery domain uses that nameserver.
 
-Once clients accept tailnet DNS, iOS nodes can browse
-`_openclaw-gw._tcp` in your discovery domain without multicast.
+Once clients accept tailnet DNS, iOS nodes can browse `_openclaw-gw._tcp` in your
+discovery domain without multicast.
 
 ### Gateway listener security (recommended)
 
@@ -113,13 +115,13 @@ Useful built‑in tools:
   dns-sd -L "<instance>" _openclaw-gw._tcp local.
   ```
 
-If browsing works but resolving fails, you’re usually hitting a LAN policy or
-mDNS resolver issue.
+If browsing works but resolving fails, you’re usually hitting a LAN policy or mDNS
+resolver issue.
 
 ## Debugging in Gateway logs
 
-The Gateway writes a rolling log file (printed on startup as
-`gateway log file: ...`). Look for `bonjour:` lines, especially:
+The Gateway writes a rolling log file (printed on startup as `gateway log file: ...`).
+Look for `bonjour:` lines, especially:
 
 - `bonjour: advertise failed ...`
 - `bonjour: ... name conflict resolved` / `hostname conflict resolved`
@@ -142,13 +144,13 @@ The log includes browser state transitions and result‑set changes.
 - **Multicast blocked**: some Wi‑Fi networks disable mDNS.
 - **Sleep / interface churn**: macOS may temporarily drop mDNS results; retry.
 - **Browse works but resolve fails**: keep machine names simple (avoid emojis or
-  punctuation), then restart the Gateway. The service instance name derives from
-  the host name, so overly complex names can confuse some resolvers.
+  punctuation), then restart the Gateway. The service instance name derives from the host
+  name, so overly complex names can confuse some resolvers.
 
 ## Escaped instance names (`\032`)
 
-Bonjour/DNS‑SD often escapes bytes in service instance names as decimal `\DDD`
-sequences (e.g. spaces become `\032`).
+Bonjour/DNS‑SD often escapes bytes in service instance names as decimal `\DDD` sequences
+(e.g. spaces become `\032`).
 
 - This is normal at the protocol level.
 - UIs should decode for display (iOS uses `BonjourEscapes.decode`).
@@ -157,8 +159,10 @@ sequences (e.g. spaces become `\032`).
 
 - `OPENCLAW_DISABLE_BONJOUR=1` disables advertising (legacy: `OPENCLAW_DISABLE_BONJOUR`).
 - `gateway.bind` in `~/.openclaw/openclaw.json` controls the Gateway bind mode.
-- `OPENCLAW_SSH_PORT` overrides the SSH port advertised in TXT (legacy: `OPENCLAW_SSH_PORT`).
-- `OPENCLAW_TAILNET_DNS` publishes a MagicDNS hint in TXT (legacy: `OPENCLAW_TAILNET_DNS`).
+- `OPENCLAW_SSH_PORT` overrides the SSH port advertised in TXT (legacy:
+  `OPENCLAW_SSH_PORT`).
+- `OPENCLAW_TAILNET_DNS` publishes a MagicDNS hint in TXT (legacy:
+  `OPENCLAW_TAILNET_DNS`).
 - `OPENCLAW_CLI_PATH` overrides the advertised CLI path (legacy: `OPENCLAW_CLI_PATH`).
 
 ## Related docs

@@ -10,9 +10,14 @@ requires: prose.md
 
 # OpenProse Borges Register
 
-> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution semantics, state management, and VM behavior are defined there. This file only provides keyword translations.
+> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution
+> semantics, state management, and VM behavior are defined there. This file only provides
+> keyword translations.
 
-An alternative register for OpenProse that draws from the works of Jorge Luis Borges. Where the functional register is utilitarian and the folk register is whimsical, the Borges register is scholarly and metaphysical—everything feels like a citation from a fictional encyclopedia.
+An alternative register for OpenProse that draws from the works of Jorge Luis Borges.
+Where the functional register is utilitarian and the folk register is whimsical, the
+Borges register is scholarly and metaphysical—everything feels like a citation from a
+fictional encyclopedia.
 
 ## How to Use
 
@@ -21,7 +26,8 @@ An alternative register for OpenProse that draws from the works of Jorge Luis Bo
 3. When parsing `.prose` files, accept Borges keywords as aliases for functional keywords
 4. All execution behavior remains identical—only surface syntax changes
 
-> **Design constraint:** Still aims to be "structured but self-evident" per the language tenets—just self-evident through a Borgesian lens.
+> **Design constraint:** Still aims to be "structured but self-evident" per the language
+> tenets—just self-evident through a Borgesian lens.
 
 ---
 
@@ -280,15 +286,19 @@ zahir config = { author: "opus", recur: 3 }
 
 ## The Case For Borges
 
-1. **Metaphysical resonance.** AI sessions dreaming subagents into existence mirrors "The Circular Ruins."
+1. **Metaphysical resonance.** AI sessions dreaming subagents into existence mirrors "The
+   Circular Ruins."
 2. **Scholarly tone.** `axiom`/`theorem` frame programs as logical derivations.
-3. **Memorable metaphors.** The zahir you cannot change. The labyrinth you cannot escape. The library you retrieve from.
-4. **Thematic coherence.** Borges wrote about infinity, recursion, and branching time—all core to computation.
+3. **Memorable metaphors.** The zahir you cannot change. The labyrinth you cannot escape.
+   The library you retrieve from.
+4. **Thematic coherence.** Borges wrote about infinity, recursion, and branching time—all
+   core to computation.
 5. **Literary prestige.** Borges is widely read; references land for many users.
 
 ## The Case Against Borges
 
-1. **Requires familiarity.** "Zahir" and "Funes" are obscure to those who haven't read Borges.
+1. **Requires familiarity.** "Zahir" and "Funes" are obscure to those who haven't read
+   Borges.
 2. **Potentially pretentious.** May feel like showing off rather than communicating.
 3. **Translation overhead.** Users must map `labyrinth` → `loop` mentally.
 4. **Cultural specificity.** Less universal than folk/fairy tale tropes.
@@ -349,7 +359,9 @@ For those unfamiliar with the source material:
 
 ## Verdict
 
-Preserved for benchmarking against the functional and folk registers. The Borges register offers a distinctly intellectual/metaphysical flavor that may resonate with users who appreciate literary computing.
+Preserved for benchmarking against the functional and folk registers. The Borges register
+offers a distinctly intellectual/metaphysical flavor that may resonate with users who
+appreciate literary computing.
 
 Potential benchmarking questions:
 

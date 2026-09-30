@@ -8,7 +8,10 @@ title: "Ollama"
 
 # Ollama
 
-Ollama is a local LLM runtime that makes it easy to run open-source models on your machine. OpenClaw integrates with Ollama's OpenAI-compatible API and can **auto-discover tool-capable models** when you opt in with `OLLAMA_API_KEY` (or an auth profile) and do not define an explicit `models.providers.ollama` entry.
+Ollama is a local LLM runtime that makes it easy to run open-source models on your
+machine. OpenClaw integrates with Ollama's OpenAI-compatible API and can **auto-discover
+tool-capable models** when you opt in with `OLLAMA_API_KEY` (or an auth profile) and do
+not define an explicit `models.providers.ollama` entry.
 
 ## Quick start
 
@@ -48,7 +51,9 @@ openclaw config set models.providers.ollama.apiKey "ollama-local"
 
 ## Model discovery (implicit provider)
 
-When you set `OLLAMA_API_KEY` (or an auth profile) and **do not** define `models.providers.ollama`, OpenClaw discovers models from the local Ollama instance at `http://127.0.0.1:11434`:
+When you set `OLLAMA_API_KEY` (or an auth profile) and **do not** define
+`models.providers.ollama`, OpenClaw discovers models from the local Ollama instance at
+`http://127.0.0.1:11434`:
 
 - Queries `/api/tags` and `/api/show`
 - Keeps only models that report `tools` capability
@@ -57,7 +62,8 @@ When you set `OLLAMA_API_KEY` (or an auth profile) and **do not** define `models
 - Sets `maxTokens` to 10× the context window
 - Sets all costs to `0`
 
-This avoids manual model entries while keeping the catalog aligned with Ollama's capabilities.
+This avoids manual model entries while keeping the catalog aligned with Ollama's
+capabilities.
 
 To see what models are available:
 
@@ -74,7 +80,8 @@ ollama pull mistral
 
 The new model will be automatically discovered and available to use.
 
-If you set `models.providers.ollama` explicitly, auto-discovery is skipped and you must define models manually (see below).
+If you set `models.providers.ollama` explicitly, auto-discovery is skipped and you must
+define models manually (see below).
 
 ## Configuration
 
@@ -120,11 +127,13 @@ Use explicit config when:
 }
 ```
 
-If `OLLAMA_API_KEY` is set, you can omit `apiKey` in the provider entry and OpenClaw will fill it for availability checks.
+If `OLLAMA_API_KEY` is set, you can omit `apiKey` in the provider entry and OpenClaw will
+fill it for availability checks.
 
 ### Custom base URL (explicit config)
 
-If Ollama is running on a different host or port (explicit config disables auto-discovery, so define models manually):
+If Ollama is running on a different host or port (explicit config disables auto-discovery,
+so define models manually):
 
 ```json5
 {
@@ -172,13 +181,16 @@ Ollama is free and runs locally, so all model costs are set to $0.
 
 ### Context windows
 
-For auto-discovered models, OpenClaw uses the context window reported by Ollama when available, otherwise it defaults to `8192`. You can override `contextWindow` and `maxTokens` in explicit provider config.
+For auto-discovered models, OpenClaw uses the context window reported by Ollama when
+available, otherwise it defaults to `8192`. You can override `contextWindow` and
+`maxTokens` in explicit provider config.
 
 ## Troubleshooting
 
 ### Ollama not detected
 
-Make sure Ollama is running and that you set `OLLAMA_API_KEY` (or an auth profile), and that you did **not** define an explicit `models.providers.ollama` entry:
+Make sure Ollama is running and that you set `OLLAMA_API_KEY` (or an auth profile), and
+that you did **not** define an explicit `models.providers.ollama` entry:
 
 ```bash
 ollama serve
@@ -192,7 +204,8 @@ curl http://localhost:11434/api/tags
 
 ### No models available
 
-OpenClaw only auto-discovers models that report tool support. If your model isn't listed, either:
+OpenClaw only auto-discovers models that report tool support. If your model isn't listed,
+either:
 
 - Pull a tool-capable model, or
 - Define the model explicitly in `models.providers.ollama`.

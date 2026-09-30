@@ -17,7 +17,8 @@ OpenClaw has two log “surfaces”:
 
 ## File-based logger
 
-- Default rolling log file is under `/tmp/openclaw/` (one file per day): `openclaw-YYYY-MM-DD.log`
+- Default rolling log file is under `/tmp/openclaw/` (one file per day):
+  `openclaw-YYYY-MM-DD.log`
   - Date uses the gateway host's local timezone.
 - The log file path and level can be configured via `~/.openclaw/openclaw.json`:
   - `logging.file`
@@ -25,8 +26,8 @@ OpenClaw has two log “surfaces”:
 
 The file format is one JSON object per line.
 
-The Control UI Logs tab tails this file via the gateway (`logs.tail`).
-CLI can do the same:
+The Control UI Logs tab tails this file via the gateway (`logs.tail`). CLI can do the
+same:
 
 ```bash
 openclaw logs --follow
@@ -35,10 +36,9 @@ openclaw logs --follow
 **Verbose vs. log levels**
 
 - **File logs** are controlled exclusively by `logging.level`.
-- `--verbose` only affects **console verbosity** (and WS log style); it does **not**
-  raise the file log level.
-- To capture verbose-only details in file logs, set `logging.level` to `debug` or
-  `trace`.
+- `--verbose` only affects **console verbosity** (and WS log style); it does **not** raise
+  the file log level.
+- To capture verbose-only details in file logs, set `logging.level` to `debug` or `trace`.
 
 ## Console capture
 
@@ -58,8 +58,10 @@ console stream. This is **tools-only** and does not alter file logs.
 - `logging.redactSensitive`: `off` | `tools` (default: `tools`)
 - `logging.redactPatterns`: array of regex strings (overrides defaults)
   - Use raw regex strings (auto `gi`), or `/pattern/flags` if you need custom flags.
-  - Matches are masked by keeping the first 6 + last 4 chars (length >= 18), otherwise `***`.
-  - Defaults cover common key assignments, CLI flags, JSON fields, bearer headers, PEM blocks, and popular token prefixes.
+  - Matches are masked by keeping the first 6 + last 4 chars (length >= 18), otherwise
+    `***`.
+  - Defaults cover common key assignments, CLI flags, JSON fields, bearer headers, PEM
+    blocks, and popular token prefixes.
 
 ## Gateway WebSocket logs
 
@@ -95,19 +97,22 @@ openclaw gateway --verbose --ws-log full
 
 ## Console formatting (subsystem logging)
 
-The console formatter is **TTY-aware** and prints consistent, prefixed lines.
-Subsystem loggers keep output grouped and scannable.
+The console formatter is **TTY-aware** and prints consistent, prefixed lines. Subsystem
+loggers keep output grouped and scannable.
 
 Behavior:
 
 - **Subsystem prefixes** on every line (e.g. `[gateway]`, `[canvas]`, `[tailscale]`)
 - **Subsystem colors** (stable per subsystem) plus level coloring
-- **Color when output is a TTY or the environment looks like a rich terminal** (`TERM`/`COLORTERM`/`TERM_PROGRAM`), respects `NO_COLOR`
-- **Shortened subsystem prefixes**: drops leading `gateway/` + `channels/`, keeps last 2 segments (e.g. `whatsapp/outbound`)
+- **Color when output is a TTY or the environment looks like a rich terminal**
+  (`TERM`/`COLORTERM`/`TERM_PROGRAM`), respects `NO_COLOR`
+- **Shortened subsystem prefixes**: drops leading `gateway/` + `channels/`, keeps last 2
+  segments (e.g. `whatsapp/outbound`)
 - **Sub-loggers by subsystem** (auto prefix + structured field `{ subsystem }`)
 - **`logRaw()`** for QR/UX output (no prefix, no formatting)
 - **Console styles** (e.g. `pretty | compact | json`)
-- **Console log level** separate from file log level (file keeps full detail when `logging.level` is set to `debug`/`trace`)
+- **Console log level** separate from file log level (file keeps full detail when
+  `logging.level` is set to `debug`/`trace`)
 - **WhatsApp message bodies** are logged at `debug` (use `--verbose` to see them)
 
 This keeps existing file logs stable while making interactive output scannable.

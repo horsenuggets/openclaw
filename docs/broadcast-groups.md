@@ -14,11 +14,15 @@ title: "Broadcast Groups"
 
 ## Overview
 
-Broadcast Groups enable multiple agents to process and respond to the same message simultaneously. This allows you to create specialized agent teams that work together in a single WhatsApp group or DM — all using one phone number.
+Broadcast Groups enable multiple agents to process and respond to the same message
+simultaneously. This allows you to create specialized agent teams that work together in a
+single WhatsApp group or DM — all using one phone number.
 
 Current scope: **WhatsApp only** (web channel).
 
-Broadcast groups are evaluated after channel allowlists and group activation rules. In WhatsApp groups, this means broadcasts happen when OpenClaw would normally reply (for example: on mention, depending on your group settings).
+Broadcast groups are evaluated after channel allowlists and group activation rules. In
+WhatsApp groups, this means broadcasts happen when OpenClaw would normally reply (for
+example: on mention, depending on your group settings).
 
 ## Use Cases
 
@@ -163,18 +167,22 @@ Agents process in order (one waits for previous to finish):
 4. **If not in broadcast list**:
    - Normal routing applies (first matching binding)
 
-Note: broadcast groups do not bypass channel allowlists or group activation rules (mentions/commands/etc). They only change _which agents run_ when a message is eligible for processing.
+Note: broadcast groups do not bypass channel allowlists or group activation rules
+(mentions/commands/etc). They only change _which agents run_ when a message is eligible
+for processing.
 
 ### Session Isolation
 
 Each agent in a broadcast group maintains completely separate:
 
-- **Session keys** (`agent:alfred:whatsapp:group:120363...` vs `agent:baerbel:whatsapp:group:120363...`)
+- **Session keys** (`agent:alfred:whatsapp:group:120363...` vs
+  `agent:baerbel:whatsapp:group:120363...`)
 - **Conversation history** (agent doesn't see other agents' messages)
 - **Workspace** (separate sandboxes if configured)
 - **Tool access** (different allow/deny lists)
 - **Memory/context** (separate IDENTITY.md, SOUL.md, etc.)
-- **Group context buffer** (recent group messages used for context) is shared per peer, so all broadcast agents see the same context when triggered
+- **Group context buffer** (recent group messages used for context) is shared per peer, so
+  all broadcast agents see the same context when triggered
 
 This allows each agent to have:
 
@@ -366,7 +374,11 @@ tail -f ~/.openclaw/logs/gateway.log | grep broadcast
         "workspace": "~/agents/testing",
         "tools": { "allow": ["read", "exec"] }
       },
-      { "id": "docs-checker", "workspace": "~/agents/docs", "tools": { "allow": ["read"] } }
+      {
+        "id": "docs-checker",
+        "workspace": "~/agents/docs",
+        "tools": { "allow": ["read"] }
+      }
     ]
   }
 }

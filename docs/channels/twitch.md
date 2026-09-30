@@ -7,7 +7,8 @@ title: "Twitch"
 
 # Twitch (plugin)
 
-Twitch chat support via IRC connection. OpenClaw connects as a Twitch user (bot account) to receive and send messages in channels.
+Twitch chat support via IRC connection. OpenClaw connects as a Twitch user (bot account)
+to receive and send messages in channels.
 
 ## Plugin required
 
@@ -34,14 +35,16 @@ Details: [Plugins](/plugin)
    - Select **Bot Token**
    - Verify scopes `chat:read` and `chat:write` are selected
    - Copy the **Client ID** and **Access Token**
-3. Find your Twitch user ID: https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/
+3. Find your Twitch user ID:
+   https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/
 4. Configure the token:
    - Env: `OPENCLAW_TWITCH_ACCESS_TOKEN=...` (default account only)
    - Or config: `channels.twitch.accessToken`
    - If both are set, config takes precedence (env fallback is default-account only).
 5. Start the gateway.
 
-**⚠️ Important:** Add access control (`allowFrom` or `allowedRoles`) to prevent unauthorized users from triggering the bot. `requireMention` defaults to `true`.
+**⚠️ Important:** Add access control (`allowFrom` or `allowedRoles`) to prevent
+unauthorized users from triggering the bot. `requireMention` defaults to `true`.
 
 Minimal config:
 
@@ -65,7 +68,8 @@ Minimal config:
 - A Twitch channel owned by the Gateway.
 - Deterministic routing: replies always go back to Twitch.
 - Each account maps to an isolated session key `agent:<agentId>:twitch:<accountName>`.
-- `username` is the bot's account (who authenticates), `channel` is which chat room to join.
+- `username` is the bot's account (who authenticates), `channel` is which chat room to
+  join.
 
 ## Setup (detailed)
 
@@ -117,19 +121,24 @@ If both env and config are set, config takes precedence.
 }
 ```
 
-Prefer `allowFrom` for a hard allowlist. Use `allowedRoles` instead if you want role-based access.
+Prefer `allowFrom` for a hard allowlist. Use `allowedRoles` instead if you want role-based
+access.
 
 **Available roles:** `"moderator"`, `"owner"`, `"vip"`, `"subscriber"`, `"all"`.
 
 **Why user IDs?** Usernames can change, allowing impersonation. User IDs are permanent.
 
-Find your Twitch user ID: https://www.streamweasels.com/tools/convert-twitch-username-%20to-user-id/ (Convert your Twitch username to ID)
+Find your Twitch user ID:
+https://www.streamweasels.com/tools/convert-twitch-username-%20to-user-id/ (Convert your
+Twitch username to ID)
 
 ## Token refresh (optional)
 
-Tokens from [Twitch Token Generator](https://twitchtokengenerator.com/) cannot be automatically refreshed - regenerate when expired.
+Tokens from [Twitch Token Generator](https://twitchtokengenerator.com/) cannot be
+automatically refreshed - regenerate when expired.
 
-For automatic token refresh, create your own Twitch application at [Twitch Developer Console](https://dev.twitch.tv/console) and add to config:
+For automatic token refresh, create your own Twitch application at
+[Twitch Developer Console](https://dev.twitch.tv/console) and add to config:
 
 ```json5
 {
@@ -146,7 +155,8 @@ The bot automatically refreshes tokens before expiration and logs refresh events
 
 ## Multi-account support
 
-Use `channels.twitch.accounts` with per-account tokens. See [`gateway/configuration`](/gateway/configuration) for the shared pattern.
+Use `channels.twitch.accounts` with per-account tokens. See
+[`gateway/configuration`](/gateway/configuration) for the shared pattern.
 
 Example (one bot account in two channels):
 
@@ -211,8 +221,8 @@ Example (one bot account in two channels):
 
 ### Role-based access (alternative)
 
-`allowFrom` is a hard allowlist. When set, only those user IDs are allowed.
-If you want role-based access, leave `allowFrom` unset and configure `allowedRoles` instead:
+`allowFrom` is a hard allowlist. When set, only those user IDs are allowed. If you want
+role-based access, leave `allowFrom` unset and configure `allowedRoles` instead:
 
 ```json5
 {
@@ -266,7 +276,8 @@ openclaw channels status --probe
 
 **"Failed to connect" or authentication errors:**
 
-- Verify `accessToken` is the OAuth access token value (typically starts with `oauth:` prefix)
+- Verify `accessToken` is the OAuth access token value (typically starts with `oauth:`
+  prefix)
 - Check token has `chat:read` and `chat:write` scopes
 - If using token refresh, verify `clientSecret` and `refreshToken` are set
 
@@ -298,7 +309,8 @@ If you see "token refresh disabled (no refresh token)":
 - `expiresIn` - Token expiry in seconds
 - `obtainmentTimestamp` - Token obtained timestamp
 - `allowFrom` - User ID allowlist
-- `allowedRoles` - Role-based access control (`"moderator" | "owner" | "vip" | "subscriber" | "all"`)
+- `allowedRoles` - Role-based access control
+  (`"moderator" | "owner" | "vip" | "subscriber" | "all"`)
 - `requireMention` - Require @mention (default: `true`)
 
 **Provider options:**
@@ -308,7 +320,8 @@ If you see "token refresh disabled (no refresh token)":
 - `channels.twitch.accessToken` - OAuth access token (simplified single-account config)
 - `channels.twitch.clientId` - Twitch Client ID (simplified single-account config)
 - `channels.twitch.channel` - Channel to join (simplified single-account config)
-- `channels.twitch.accounts.<accountName>` - Multi-account config (all account fields above)
+- `channels.twitch.accounts.<accountName>` - Multi-account config (all account fields
+  above)
 
 Full example:
 

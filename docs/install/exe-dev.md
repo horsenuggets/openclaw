@@ -8,9 +8,11 @@ title: "exe.dev"
 
 # exe.dev
 
-Goal: OpenClaw Gateway running on an exe.dev VM, reachable from your laptop via: `https://<vm-name>.exe.xyz`
+Goal: OpenClaw Gateway running on an exe.dev VM, reachable from your laptop via:
+`https://<vm-name>.exe.xyz`
 
-This page assumes exe.dev's default **exeuntu** image. If you picked a different distro, map packages accordingly.
+This page assumes exe.dev's default **exeuntu** image. If you picked a different distro,
+map packages accordingly.
 
 ## Beginner quick path
 
@@ -50,7 +52,8 @@ Then connect:
 ssh <vm-name>.exe.xyz
 ```
 
-Tip: keep this VM **stateful**. OpenClaw stores state under `~/.openclaw/` and `~/.openclaw/workspace/`.
+Tip: keep this VM **stateful**. OpenClaw stores state under `~/.openclaw/` and
+`~/.openclaw/workspace/`.
 
 ## 2) Install prerequisites (on the VM)
 
@@ -103,15 +106,14 @@ server {
 
 ## 5) Access OpenClaw and grant privileges
 
-Access `https://<vm-name>.exe.xyz/?token=YOUR-TOKEN-FROM-TERMINAL` (see the Control UI output from onboarding). Approve
-devices with `openclaw devices list` and `openclaw devices approve <requestId>`. When in doubt,
-use Shelley from your browser!
+Access `https://<vm-name>.exe.xyz/?token=YOUR-TOKEN-FROM-TERMINAL` (see the Control UI
+output from onboarding). Approve devices with `openclaw devices list` and
+`openclaw devices approve <requestId>`. When in doubt, use Shelley from your browser!
 
 ## Remote Access
 
-Remote access is handled by [exe.dev](https://exe.dev)'s authentication. By
-default, HTTP traffic from port 8000 is forwarded to `https://<vm-name>.exe.xyz`
-with email auth.
+Remote access is handled by [exe.dev](https://exe.dev)'s authentication. By default, HTTP
+traffic from port 8000 is forwarded to `https://<vm-name>.exe.xyz` with email auth.
 
 ## Updating
 

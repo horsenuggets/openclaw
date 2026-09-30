@@ -15,7 +15,10 @@ All skills-related configuration lives under `skills` in `~/.openclaw/openclaw.j
   skills: {
     allowBundled: ["gemini", "peekaboo"],
     load: {
-      extraDirs: ["~/Projects/agent-scripts/skills", "~/Projects/oss/some-skill-pack/skills"],
+      extraDirs: [
+        "~/Projects/agent-scripts/skills",
+        "~/Projects/oss/some-skill-pack/skills",
+      ],
       watch: true,
       watchDebounceMs: 250,
     },
@@ -40,15 +43,16 @@ All skills-related configuration lives under `skills` in `~/.openclaw/openclaw.j
 
 ## Fields
 
-- `allowBundled`: optional allowlist for **bundled** skills only. When set, only
-  bundled skills in the list are eligible (managed/workspace skills unaffected).
+- `allowBundled`: optional allowlist for **bundled** skills only. When set, only bundled
+  skills in the list are eligible (managed/workspace skills unaffected).
 - `load.extraDirs`: additional skill directories to scan (lowest precedence).
 - `load.watch`: watch skill folders and refresh the skills snapshot (default: true).
-- `load.watchDebounceMs`: debounce for skill watcher events in milliseconds (default: 250).
+- `load.watchDebounceMs`: debounce for skill watcher events in milliseconds (default:
+  250).
 - `install.preferBrew`: prefer brew installers when available (default: true).
-- `install.nodeManager`: node installer preference (`npm` | `pnpm` | `yarn` | `bun`, default: npm).
-  This only affects **skill installs**; the Gateway runtime should still be Node
-  (Bun not recommended for WhatsApp/Telegram).
+- `install.nodeManager`: node installer preference (`npm` | `pnpm` | `yarn` | `bun`,
+  default: npm). This only affects **skill installs**; the Gateway runtime should still be
+  Node (Bun not recommended for WhatsApp/Telegram).
 - `entries.<skillKey>`: per-skill overrides.
 
 Per-skill fields:
@@ -65,8 +69,8 @@ Per-skill fields:
 
 ### Sandboxed skills + env vars
 
-When a session is **sandboxed**, skill processes run inside Docker. The sandbox
-does **not** inherit the host `process.env`.
+When a session is **sandboxed**, skill processes run inside Docker. The sandbox does
+**not** inherit the host `process.env`.
 
 Use one of:
 

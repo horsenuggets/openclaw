@@ -15,7 +15,9 @@ see-also:
 
 # SQLite State Management (Experimental)
 
-This document describes how the OpenProse VM tracks execution state using a **SQLite database**. This is an experimental alternative to file-based state (`filesystem.md`) and in-context state (`in-context.md`).
+This document describes how the OpenProse VM tracks execution state using a **SQLite
+database**. This is an experimental alternative to file-based state (`filesystem.md`) and
+in-context state (`in-context.md`).
 
 ## Prerequisites
 
@@ -27,7 +29,8 @@ This document describes how the OpenProse VM tracks execution state using a **SQ
 | Linux    | `apt install sqlite3` / `dnf install sqlite3` / etc.       |
 | Windows  | `winget install SQLite.SQLite` or download from sqlite.org |
 
-If `sqlite3` is not available, the VM will fall back to filesystem state and warn the user.
+If `sqlite3` is not available, the VM will fall back to filesystem state and warn the
+user.
 
 ---
 
@@ -41,7 +44,8 @@ SQLite state provides:
 - **Single-file portability**: The entire run state is one `.db` file
 - **Concurrent access**: SQLite handles locking automatically
 
-**Key principle:** The database is a flexible workspace. The VM and subagents share it as a coordination mechanism, not a rigid contract.
+**Key principle:** The database is a flexible workspace. The VM and subagents share it as
+a coordination mechanism, not a rigid contract.
 
 ---
 
@@ -62,7 +66,9 @@ Example: `.prose/runs/20260116-143052-a7b3c9/state.db`
 
 ### Project-Scoped and User-Scoped Agents
 
-Execution-scoped agents (the default) live in the per-run `state.db`. However, **project-scoped agents** (`persist: project`) and **user-scoped agents** (`persist: user`) must survive across runs.
+Execution-scoped agents (the default) live in the per-run `state.db`. However,
+**project-scoped agents** (`persist: project`) and **user-scoped agents**
+(`persist: user`) must survive across runs.
 
 For project-scoped agents, use a separate database:
 
@@ -81,7 +87,9 @@ For user-scoped agents, use a database in the home directory:
 └── agents.db                 # User-scoped agent memory (survives across projects)
 ```
 
-The `agents` and `agent_segments` tables for project-scoped agents live in `.prose/agents.db`, and for user-scoped agents live in `~/.prose/agents.db`. The VM initializes these databases on first use and provides the correct path to subagents.
+The `agents` and `agent_segments` tables for project-scoped agents live in
+`.prose/agents.db`, and for user-scoped agents live in `~/.prose/agents.db`. The VM
+initializes these databases on first use and provides the correct path to subagents.
 
 ---
 
@@ -105,7 +113,9 @@ The VM (the orchestrating agent running the .prose program) is responsible for:
 | **Context preservation**  | Maintain sufficient narration in the main conversation thread so execution can be understood and resumed |
 | **Completion detection**  | Mark the run as complete when finished                                                                   |
 
-**Critical:** The VM must preserve enough context in its own conversation to understand execution state without re-reading the entire database. The database is for coordination and persistence, not a replacement for working memory.
+**Critical:** The VM must preserve enough context in its own conversation to understand
+execution state without re-reading the entire database. The database is for coordination
+and persistence, not a replacement for working memory.
 
 ### Subagent Responsibilities
 
@@ -119,11 +129,15 @@ Subagents (sessions spawned by the VM) are responsible for:
 | **Attachment handling** | Write large outputs to `attachments/` directory, store path in DB |
 | **Atomic writes**       | Use transactions when updating multiple related records           |
 
-**Critical:** Subagents write ONLY to `bindings`, `agents`, and `agent_segments` tables. The VM owns the `execution` table entirely. Completion signaling happens through the substrate (Task tool return), not database updates.
+**Critical:** Subagents write ONLY to `bindings`, `agents`, and `agent_segments` tables.
+The VM owns the `execution` table entirely. Completion signaling happens through the
+substrate (Task tool return), not database updates.
 
-**Critical:** Subagents must write their outputs directly to the database. The VM does not write subagent outputs—it only reads them after the subagent completes.
+**Critical:** Subagents must write their outputs directly to the database. The VM does not
+write subagent outputs—it only reads them after the subagent completes.
 
-**What subagents return to the VM:** A confirmation message with the binding location—not the full content:
+**What subagents return to the VM:** A confirmation message with the binding location—not
+the full content:
 
 **Root scope:**
 
@@ -142,7 +156,8 @@ Execution ID: 43
 Summary: Processed chunk into 3 sub-parts for recursive processing.
 ```
 
-The VM tracks locations, not values. This keeps the VM's context lean and enables arbitrarily large intermediate values.
+The VM tracks locations, not values. This keeps the VM's context lean and enables
+arbitrarily large intermediate values.
 
 ### Shared Concerns
 
@@ -231,15 +246,20 @@ CREATE TABLE IF NOT EXISTS imports (
 
 - **Timestamps**: Use ISO 8601 format (`datetime('now')`)
 - **JSON fields**: Store structured data as JSON text in `metadata`, `*_schema` columns
-- **Large values**: If a binding value exceeds ~100KB, write to `attachments/{name}.md` and store path
+- **Large values**: If a binding value exceeds ~100KB, write to `attachments/{name}.md`
+  and store path
 - **Extension tables**: Prefix with `x_` (e.g., `x_metrics`, `x_audit_log`)
-- **Anonymous bindings**: Sessions without explicit capture (`session "..."` without `let x =`) use auto-generated names: `anon_001`, `anon_002`, etc.
-- **Import bindings**: Prefix with import alias for scoping: `research.findings`, `research.sources`
-- **Scoped bindings**: Use `execution_id` column—NULL for root scope, non-null for block invocations
+- **Anonymous bindings**: Sessions without explicit capture (`session "..."` without
+  `let x =`) use auto-generated names: `anon_001`, `anon_002`, etc.
+- **Import bindings**: Prefix with import alias for scoping: `research.findings`,
+  `research.sources`
+- **Scoped bindings**: Use `execution_id` column—NULL for root scope, non-null for block
+  invocations
 
 ### Scope Resolution Query
 
-For recursive blocks, bindings are scoped to their execution frame. Resolve variables by walking up the call stack:
+For recursive blocks, bindings are scoped to their execution frame. Resolve variables by
+walking up the call stack:
 
 ```sql
 -- Find binding 'result' starting from execution_id 43
@@ -370,13 +390,15 @@ Record this segment:
   sqlite3 .prose/runs/20260116-143052-a7b3c9/state.db "INSERT INTO agent_segments (agent_name, segment_number, prompt, summary) VALUES ('captain', 3, '...', '...')"
 ```
 
-For project-scoped agents, use `.prose/agents.db`. For user-scoped agents, use `~/.prose/agents.db`.
+For project-scoped agents, use `.prose/agents.db`. For user-scoped agents, use
+`~/.prose/agents.db`.
 
 ---
 
 ## Context Preservation in Main Thread
 
-**This is critical.** The database is for persistence and coordination, but the VM must still maintain conversational context.
+**This is critical.** The database is for persistence and coordination, but the VM must
+still maintain conversational context.
 
 ### What the VM Must Narrate
 
@@ -399,13 +421,15 @@ Even with SQLite state, the VM should narrate key events in its conversation:
 | **Subagent coordination** | SQLite database (shared access point)                                |
 | **Debugging/inspection**  | SQLite database (queryable history)                                  |
 
-The narration is the VM's "mental model" of execution. The database is the "source of truth" for resumption and inspection.
+The narration is the VM's "mental model" of execution. The database is the "source of
+truth" for resumption and inspection.
 
 ---
 
 ## Parallel Execution
 
-For parallel blocks, the VM uses the `metadata` JSON field to track branches. **Only the VM writes to the `execution` table.**
+For parallel blocks, the VM uses the `metadata` JSON field to track branches. **Only the
+VM writes to the `execution` table.**
 
 ```sql
 -- VM marks parallel start
@@ -514,7 +538,8 @@ WHERE json_extract(metadata, '$.parallel_id') IS NOT NULL
 
 ## Flexibility Encouragement
 
-Unlike filesystem state, SQLite state is intentionally **less prescriptive**. The core schema is a starting point. You are encouraged to:
+Unlike filesystem state, SQLite state is intentionally **less prescriptive**. The core
+schema is a starting point. You are encouraged to:
 
 - **Add columns** to existing tables as needed
 - **Create extension tables** (prefix with `x_`)
@@ -571,4 +596,6 @@ SQLite state management:
 6. Requires the **sqlite3 CLI** tool
 7. Is **experimental**—expect changes
 
-The core contract: the VM manages execution flow and spawns subagents; subagents write their own outputs directly to the database. Both maintain the principle that what happens is recorded, and what is recorded can be queried.
+The core contract: the VM manages execution flow and spawns subagents; subagents write
+their own outputs directly to the database. Both maintain the principle that what happens
+is recorded, and what is recorded can be queried.

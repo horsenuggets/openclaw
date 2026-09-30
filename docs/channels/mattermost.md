@@ -8,8 +8,8 @@ title: "Mattermost"
 
 # Mattermost (plugin)
 
-Status: supported via plugin (bot token + WebSocket events). Channels, groups, and DMs are supported.
-Mattermost is a self-hostable team messaging platform; see the official site at
+Status: supported via plugin (bot token + WebSocket events). Channels, groups, and DMs are
+supported. Mattermost is a self-hostable team messaging platform; see the official site at
 [mattermost.com](https://mattermost.com) for product details and downloads.
 
 ## Plugin required
@@ -62,7 +62,8 @@ Set these on the gateway host if you prefer env vars:
 - `MATTERMOST_BOT_TOKEN=...`
 - `MATTERMOST_URL=https://chat.example.com`
 
-Env vars apply only to the **default** account (`default`). Other accounts must use config values.
+Env vars apply only to the **default** account (`default`). Other accounts must use config
+values.
 
 ## Chat modes
 
@@ -88,15 +89,18 @@ Config example:
 Notes:
 
 - `onchar` still responds to explicit @mentions.
-- `channels.mattermost.requireMention` is honored for legacy configs but `chatmode` is preferred.
+- `channels.mattermost.requireMention` is honored for legacy configs but `chatmode` is
+  preferred.
 
 ## Access control (DMs)
 
-- Default: `channels.mattermost.dmPolicy = "pairing"` (unknown senders get a pairing code).
+- Default: `channels.mattermost.dmPolicy = "pairing"` (unknown senders get a pairing
+  code).
 - Approve via:
   - `openclaw pairing list mattermost`
   - `openclaw pairing approve mattermost <CODE>`
-- Public DMs: `channels.mattermost.dmPolicy="open"` plus `channels.mattermost.allowFrom=["*"]`.
+- Public DMs: `channels.mattermost.dmPolicy="open"` plus
+  `channels.mattermost.allowFrom=["*"]`.
 
 ## Channels (groups)
 
@@ -123,8 +127,16 @@ Mattermost supports multiple accounts under `channels.mattermost.accounts`:
   channels: {
     mattermost: {
       accounts: {
-        default: { name: "Primary", botToken: "mm-token", baseUrl: "https://chat.example.com" },
-        alerts: { name: "Alerts", botToken: "mm-token-2", baseUrl: "https://alerts.example.com" },
+        default: {
+          name: "Primary",
+          botToken: "mm-token",
+          baseUrl: "https://chat.example.com",
+        },
+        alerts: {
+          name: "Alerts",
+          botToken: "mm-token-2",
+          baseUrl: "https://alerts.example.com",
+        },
       },
     },
   },
@@ -133,6 +145,7 @@ Mattermost supports multiple accounts under `channels.mattermost.accounts`:
 
 ## Troubleshooting
 
-- No replies in channels: ensure the bot is in the channel and mention it (oncall), use a trigger prefix (onchar), or set `chatmode: "onmessage"`.
+- No replies in channels: ensure the bot is in the channel and mention it (oncall), use a
+  trigger prefix (onchar), or set `chatmode: "onmessage"`.
 - Auth errors: check the bot token, base URL, and whether the account is enabled.
 - Multi-account issues: env vars only apply to the `default` account.

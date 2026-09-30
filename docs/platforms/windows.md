@@ -8,11 +8,10 @@ title: "Windows (WSL2)"
 
 # Windows (WSL2)
 
-OpenClaw on Windows is recommended **via WSL2** (Ubuntu recommended). The
-CLI + Gateway run inside Linux, which keeps the runtime consistent and makes
-tooling far more compatible (Node/Bun/pnpm, Linux binaries, skills). Native
-Windows might be trickier. WSL2 gives you the full Linux experience — one command
-to install: `wsl --install`.
+OpenClaw on Windows is recommended **via WSL2** (Ubuntu recommended). The CLI + Gateway
+run inside Linux, which keeps the runtime consistent and makes tooling far more compatible
+(Node/Bun/pnpm, Linux binaries, skills). Native Windows might be trickier. WSL2 gives you
+the full Linux experience — one command to install: `wsl --install`.
 
 Native Windows companion apps are planned.
 
@@ -57,10 +56,10 @@ openclaw doctor
 
 ## Advanced: expose WSL services over LAN (portproxy)
 
-WSL has its own virtual network. If another machine needs to reach a service
-running **inside WSL** (SSH, a local TTS server, or the Gateway), you must
-forward a Windows port to the current WSL IP. The WSL IP changes after restarts,
-so you may need to refresh the forwarding rule.
+WSL has its own virtual network. If another machine needs to reach a service running
+**inside WSL** (SSH, a local TTS server, or the Gateway), you must forward a Windows port
+to the current WSL IP. The WSL IP changes after restarts, so you may need to refresh the
+forwarding rule.
 
 Example (PowerShell **as Administrator**):
 
@@ -93,12 +92,12 @@ netsh interface portproxy add v4tov4 listenport=$ListenPort listenaddress=0.0.0.
 
 Notes:
 
-- SSH from another machine targets the **Windows host IP** (example: `ssh user@windows-host -p 2222`).
+- SSH from another machine targets the **Windows host IP** (example:
+  `ssh user@windows-host -p 2222`).
 - Remote nodes must point at a **reachable** Gateway URL (not `127.0.0.1`); use
   `openclaw status --all` to confirm.
 - Use `listenaddress=0.0.0.0` for LAN access; `127.0.0.1` keeps it local only.
-- If you want this automatic, register a Scheduled Task to run the refresh
-  step at login.
+- If you want this automatic, register a Scheduled Task to run the refresh step at login.
 
 ## Step-by-step WSL2 install
 

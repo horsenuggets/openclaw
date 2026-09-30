@@ -13,8 +13,9 @@ title: "Telegram Allowlist Hardening"
 
 ## Summary
 
-Telegram allowlists now accept `telegram:` and `tg:` prefixes case-insensitively, and tolerate
-accidental whitespace. This aligns inbound allowlist checks with outbound send normalization.
+Telegram allowlists now accept `telegram:` and `tg:` prefixes case-insensitively, and
+tolerate accidental whitespace. This aligns inbound allowlist checks with outbound send
+normalization.
 
 ## What changed
 
@@ -31,8 +32,8 @@ All of these are accepted for the same ID:
 
 ## Why it matters
 
-Copy/paste from logs or chat IDs often includes prefixes and whitespace. Normalizing avoids
-false negatives when deciding whether to respond in DMs or groups.
+Copy/paste from logs or chat IDs often includes prefixes and whitespace. Normalizing
+avoids false negatives when deciding whether to respond in DMs or groups.
 
 ## Related docs
 

@@ -9,23 +9,24 @@ title: "Bridge Protocol"
 
 # Bridge protocol (legacy node transport)
 
-The Bridge protocol is a **legacy** node transport (TCP JSONL). New node clients
-should use the unified Gateway WebSocket protocol instead.
+The Bridge protocol is a **legacy** node transport (TCP JSONL). New node clients should
+use the unified Gateway WebSocket protocol instead.
 
 If you are building an operator or node client, use the
 [Gateway protocol](/gateway/protocol).
 
-**Note:** Current OpenClaw builds no longer ship the TCP bridge listener; this document is kept for historical reference.
-Legacy `bridge.*` config keys are no longer part of the config schema.
+**Note:** Current OpenClaw builds no longer ship the TCP bridge listener; this document is
+kept for historical reference. Legacy `bridge.*` config keys are no longer part of the
+config schema.
 
 ## Why we have both
 
-- **Security boundary**: the bridge exposes a small allowlist instead of the
-  full gateway API surface.
-- **Pairing + node identity**: node admission is owned by the gateway and tied
-  to a per-node token.
-- **Discovery UX**: nodes can discover gateways via Bonjour on LAN, or connect
-  directly over a tailnet.
+- **Security boundary**: the bridge exposes a small allowlist instead of the full gateway
+  API surface.
+- **Pairing + node identity**: node admission is owned by the gateway and tied to a
+  per-node token.
+- **Discovery UX**: nodes can discover gateways via Bonjour on LAN, or connect directly
+  over a tailnet.
 - **Loopback WS**: the full WS control plane stays local unless tunneled via SSH.
 
 ## Transport
@@ -34,8 +35,8 @@ Legacy `bridge.*` config keys are no longer part of the config schema.
 - Optional TLS (when `bridge.tls.enabled` is true).
 - Legacy default listener port was `18790` (current builds do not start a TCP bridge).
 
-When TLS is enabled, discovery TXT records include `bridgeTls=1` plus
-`bridgeTlsSha256` so nodes can pin the certificate.
+When TLS is enabled, discovery TXT records include `bridgeTls=1` plus `bridgeTlsSha256` so
+nodes can pin the certificate.
 
 ## Handshake + pairing
 
@@ -50,7 +51,8 @@ When TLS is enabled, discovery TXT records include `bridgeTls=1` plus
 
 Client → Gateway:
 
-- `req` / `res`: scoped gateway RPC (chat, sessions, config, health, voicewake, skills.bins)
+- `req` / `res`: scoped gateway RPC (chat, sessions, config, health, voicewake,
+  skills.bins)
 - `event`: node signals (voice transcript, agent request, chat subscribe, exec lifecycle)
 
 Gateway → Client:
@@ -65,7 +67,8 @@ Legacy allowlist enforcement lived in `src/gateway/server-bridge.ts` (removed).
 ## Exec lifecycle events
 
 Nodes can emit `exec.finished` or `exec.denied` events to surface system.run activity.
-These are mapped to system events in the gateway. (Legacy nodes may still emit `exec.started`.)
+These are mapped to system events in the gateway. (Legacy nodes may still emit
+`exec.started`.)
 
 Payload fields (all optional unless noted):
 
@@ -80,10 +83,10 @@ Payload fields (all optional unless noted):
 - Bind the bridge to a tailnet IP: `bridge.bind: "tailnet"` in
   `~/.openclaw/openclaw.json`.
 - Clients connect via MagicDNS name or tailnet IP.
-- Bonjour does **not** cross networks; use manual host/port or wide-area DNS‑SD
-  when needed.
+- Bonjour does **not** cross networks; use manual host/port or wide-area DNS‑SD when
+  needed.
 
 ## Versioning
 
-Bridge is currently **implicit v1** (no min/max negotiation). Backward‑compat
-is expected; add a bridge protocol version field before any breaking changes.
+Bridge is currently **implicit v1** (no min/max negotiation). Backward‑compat is expected;
+add a bridge protocol version field before any breaking changes.

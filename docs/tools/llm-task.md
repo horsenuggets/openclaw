@@ -8,11 +8,11 @@ title: "LLM Task"
 
 # LLM Task
 
-`llm-task` is an **optional plugin tool** that runs a JSON-only LLM task and
-returns structured output (optionally validated against JSON Schema).
+`llm-task` is an **optional plugin tool** that runs a JSON-only LLM task and returns
+structured output (optionally validated against JSON Schema).
 
-This is ideal for workflow engines like Lobster: you can add a single LLM step
-without writing custom OpenClaw code for each workflow.
+This is ideal for workflow engines like Lobster: you can add a single LLM step without
+writing custom OpenClaw code for each workflow.
 
 ## Enable the plugin
 
@@ -65,8 +65,8 @@ without writing custom OpenClaw code for each workflow.
 }
 ```
 
-`allowedModels` is an allowlist of `provider/model` strings. If set, any request
-outside the list is rejected.
+`allowedModels` is an allowlist of `provider/model` strings. If set, any request outside
+the list is rejected.
 
 ## Tool parameters
 
@@ -82,8 +82,8 @@ outside the list is rejected.
 
 ## Output
 
-Returns `details.json` containing the parsed JSON (and validates against
-`schema` when provided).
+Returns `details.json` containing the parsed JSON (and validates against `schema` when
+provided).
 
 ## Example: Lobster workflow step
 
@@ -108,8 +108,8 @@ openclaw.invoke --tool llm-task --action json --args-json '{
 
 ## Safety notes
 
-- The tool is **JSON-only** and instructs the model to output only JSON (no
-  code fences, no commentary).
+- The tool is **JSON-only** and instructs the model to output only JSON (no code fences,
+  no commentary).
 - No tools are exposed to the model for this run.
 - Treat output as untrusted unless you validate with `schema`.
 - Put approvals before any side-effecting step (send, post, exec).

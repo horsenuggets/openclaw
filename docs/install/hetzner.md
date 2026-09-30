@@ -1,5 +1,7 @@
 ---
-summary: "Run OpenClaw Gateway 24/7 on a cheap Hetzner VPS (Docker) with durable state and baked-in binaries"
+summary:
+  "Run OpenClaw Gateway 24/7 on a cheap Hetzner VPS (Docker) with durable state and
+  baked-in binaries"
 read_when:
   - You want OpenClaw running 24/7 on a cloud VPS (not your laptop)
   - You want a production-grade, always-on Gateway on your own VPS
@@ -12,10 +14,11 @@ title: "Hetzner"
 
 ## Goal
 
-Run a persistent OpenClaw Gateway on a Hetzner VPS using Docker, with durable state, baked-in binaries, and safe restart behavior.
+Run a persistent OpenClaw Gateway on a Hetzner VPS using Docker, with durable state,
+baked-in binaries, and safe restart behavior.
 
-If you want “OpenClaw 24/7 for ~$5”, this is the simplest reliable setup.
-Hetzner pricing changes; pick the smallest Debian/Ubuntu VPS and scale up if you hit OOMs.
+If you want “OpenClaw 24/7 for ~$5”, this is the simplest reliable setup. Hetzner pricing
+changes; pick the smallest Debian/Ubuntu VPS and scale up if you hit OOMs.
 
 ## What are we doing (simple terms)?
 
@@ -31,8 +34,8 @@ The Gateway can be accessed via:
 - Direct port exposure if you manage firewalling and tokens yourself
 
 This guide assumes Ubuntu or Debian on Hetzner.  
-If you are on another Linux VPS, map packages accordingly.
-For the generic Docker flow, see [Docker](/install/docker).
+If you are on another Linux VPS, map packages accordingly. For the generic Docker flow,
+see [Docker](/install/docker).
 
 ---
 
@@ -74,8 +77,7 @@ Connect as root:
 ssh root@YOUR_VPS_IP
 ```
 
-This guide assumes the VPS is stateful.
-Do not treat it as disposable infrastructure.
+This guide assumes the VPS is stateful. Do not treat it as disposable infrastructure.
 
 ---
 
@@ -109,8 +111,7 @@ This guide assumes you will build a custom image to guarantee binary persistence
 
 ## 4) Create persistent host directories
 
-Docker containers are ephemeral.
-All long-lived state must live on the host.
+Docker containers are ephemeral. All long-lived state must live on the host.
 
 ```bash
 mkdir -p /root/.openclaw
@@ -199,8 +200,8 @@ services:
 
 ## 7) Bake required binaries into the image (critical)
 
-Installing binaries inside a running container is a trap.
-Anything installed at runtime will be lost on restart.
+Installing binaries inside a running container is a trap. Anything installed at runtime
+will be lost on restart.
 
 All external binaries required by skills must be installed at image build time.
 
@@ -210,8 +211,8 @@ The examples below show three common binaries only:
 - `goplaces` for Google Places
 - `wacli` for WhatsApp
 
-These are examples, not a complete list.
-You may install as many binaries as needed using the same pattern.
+These are examples, not a complete list. You may install as many binaries as needed using
+the same pattern.
 
 If you add new skills later that depend on additional binaries, you must:
 
@@ -313,8 +314,8 @@ Paste your gateway token.
 
 ## What persists where (source of truth)
 
-OpenClaw runs in Docker, but Docker is not the source of truth.
-All long-lived state must survive restarts, rebuilds, and reboots.
+OpenClaw runs in Docker, but Docker is not the source of truth. All long-lived state must
+survive restarts, rebuilds, and reboots.
 
 | Component           | Location                          | Persistence mechanism  | Notes                            |
 | ------------------- | --------------------------------- | ---------------------- | -------------------------------- |

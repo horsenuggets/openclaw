@@ -8,14 +8,19 @@ title: "Hooks"
 
 # Hooks
 
-Hooks provide an extensible event-driven system for automating actions in response to agent commands and events. Hooks are automatically discovered from directories and can be managed via CLI commands, similar to how skills work in OpenClaw.
+Hooks provide an extensible event-driven system for automating actions in response to
+agent commands and events. Hooks are automatically discovered from directories and can be
+managed via CLI commands, similar to how skills work in OpenClaw.
 
 ## Getting Oriented
 
 Hooks are small scripts that run when something happens. There are two kinds:
 
-- **Hooks** (this page): run inside the Gateway when agent events fire, like `/new`, `/reset`, `/stop`, or lifecycle events.
-- **Webhooks**: external HTTP webhooks that let other systems trigger work in OpenClaw. See [Webhook Hooks](/automation/webhook) or use `openclaw webhooks` for Gmail helper commands.
+- **Hooks** (this page): run inside the Gateway when agent events fire, like `/new`,
+  `/reset`, `/stop`, or lifecycle events.
+- **Webhooks**: external HTTP webhooks that let other systems trigger work in OpenClaw.
+  See [Webhook Hooks](/automation/webhook) or use `openclaw webhooks` for Gmail helper
+  commands.
 
 Hooks can also be bundled inside plugins; see [Plugins](/plugin#plugin-hooks).
 
@@ -26,7 +31,8 @@ Common uses:
 - Trigger follow-up automation when a session starts or ends
 - Write files into the agent workspace or call external APIs when events fire
 
-If you can write a small TypeScript function, you can write a hook. Hooks are discovered automatically, and you enable or disable them via the CLI.
+If you can write a small TypeScript function, you can write a hook. Hooks are discovered
+automatically, and you enable or disable them via the CLI.
 
 ## Overview
 
@@ -43,10 +49,12 @@ The hooks system allows you to:
 
 OpenClaw ships with four bundled hooks that are automatically discovered:
 
-- **💾 session-memory**: Saves session context to your agent workspace (default `~/.openclaw/workspace/memory/`) when you issue `/new`
+- **💾 session-memory**: Saves session context to your agent workspace (default
+  `~/.openclaw/workspace/memory/`) when you issue `/new`
 - **📝 command-logger**: Logs all command events to `~/.openclaw/logs/commands.log`
 - **🚀 boot-md**: Runs `BOOT.md` when the gateway starts (requires internal hooks enabled)
-- **😈 soul-evil**: Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random chance
+- **😈 soul-evil**: Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge
+  window or by random chance
 
 List available hooks:
 
@@ -74,7 +82,8 @@ openclaw hooks info session-memory
 
 ### Onboarding
 
-During onboarding (`openclaw onboard`), you'll be prompted to enable recommended hooks. The wizard automatically discovers eligible hooks and presents them for selection.
+During onboarding (`openclaw onboard`), you'll be prompted to enable recommended hooks.
+The wizard automatically discovers eligible hooks and presents them for selection.
 
 ## Hook Discovery
 
@@ -84,7 +93,8 @@ Hooks are automatically discovered from three directories (in order of precedenc
 2. **Managed hooks**: `~/.openclaw/hooks/` (user-installed, shared across workspaces)
 3. **Bundled hooks**: `<openclaw>/dist/hooks/bundled/` (shipped with OpenClaw)
 
-Managed hook directories can be either a **single hook** or a **hook pack** (package directory).
+Managed hook directories can be either a **single hook** or a **hook pack** (package
+directory).
 
 Each hook is a directory containing:
 
@@ -115,8 +125,9 @@ Example `package.json`:
 }
 ```
 
-Each entry points to a hook directory containing `HOOK.md` and `handler.ts` (or `index.ts`).
-Hook packs can ship dependencies; they will be installed under `~/.openclaw/hooks/<id>`.
+Each entry points to a hook directory containing `HOOK.md` and `handler.ts` (or
+`index.ts`). Hook packs can ship dependencies; they will be installed under
+`~/.openclaw/hooks/<id>`.
 
 ## Hook Structure
 
@@ -130,7 +141,10 @@ name: my-hook
 description: "Short description of what this hook does"
 homepage: https://docs.openclaw.ai/hooks#my-hook
 metadata:
-  { "openclaw": { "emoji": "🔗", "events": ["command:new"], "requires": { "bins": ["node"] } } }
+  {
+    "openclaw":
+      { "emoji": "🔗", "events": ["command:new"], "requires": { "bins": ["node"] } },
+  }
 ---
 
 # My Hook
@@ -167,7 +181,8 @@ The `metadata.openclaw` object supports:
   - **`config`**: Required config paths (e.g., `["workspace.dir"]`)
   - **`os`**: Required platforms (e.g., `["darwin", "linux"]`)
 - **`always`**: Bypass eligibility checks (boolean)
-- **`install`**: Installation methods (for bundled hooks: `[{"id":"bundled","kind":"bundled"}]`)
+- **`install`**: Installation methods (for bundled hooks:
+  `[{"id":"bundled","kind":"bundled"}]`)
 
 ### Handler Implementation
 
@@ -232,7 +247,8 @@ Triggered when agent commands are issued:
 
 ### Agent Events
 
-- **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
+- **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate
+  `context.bootstrapFiles`)
 
 ### Gateway Events
 
@@ -242,9 +258,12 @@ Triggered when the gateway starts:
 
 ### Tool Result Hooks (Plugin API)
 
-These hooks are not event-stream listeners; they let plugins synchronously adjust tool results before OpenClaw persists them.
+These hooks are not event-stream listeners; they let plugins synchronously adjust tool
+results before OpenClaw persists them.
 
-- **`tool_result_persist`**: transform tool results before they are written to the session transcript. Must be synchronous; return the updated tool result payload or `undefined` to keep it as-is. See [Agent Loop](/concepts/agent-loop).
+- **`tool_result_persist`**: transform tool results before they are written to the session
+  transcript. Must be synchronous; return the updated tool result payload or `undefined`
+  to keep it as-is. See [Agent Loop](/concepts/agent-loop).
 
 ### Future Events
 
@@ -394,7 +413,8 @@ The old config format still works for backwards compatibility:
 }
 ```
 
-**Migration**: Use the new discovery-based system for new hooks. Legacy handlers are loaded after directory-based hooks.
+**Migration**: Use the new discovery-based system for new hooks. Legacy handlers are
+loaded after directory-based hooks.
 
 ## CLI Commands
 
@@ -529,7 +549,8 @@ openclaw hooks enable command-logger
 
 ### soul-evil
 
-Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random chance.
+Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random
+chance.
 
 **Events**: `agent:bootstrap`
 
@@ -565,8 +586,8 @@ openclaw hooks enable soul-evil
 
 ### boot-md
 
-Runs `BOOT.md` when the gateway starts (after channels start).
-Internal hooks must be enabled for this to run.
+Runs `BOOT.md` when the gateway starts (after channels start). Internal hooks must be
+enabled for this to run.
 
 **Events**: `gateway:startup`
 
@@ -612,7 +633,10 @@ const handler: HookHandler = async (event) => {
   try {
     await riskyOperation(event);
   } catch (err) {
-    console.error("[my-handler] Failed:", err instanceof Error ? err.message : String(err));
+    console.error(
+      "[my-handler] Failed:",
+      err instanceof Error ? err.message : String(err),
+    );
     // Don't throw - let other handlers run
   }
 };

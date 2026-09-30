@@ -43,15 +43,22 @@ title: "OpenClaw"
 
 ## What is OpenClaw?
 
-OpenClaw is a **self-hosted gateway** that connects your favorite chat apps — WhatsApp, Telegram, Discord, iMessage, and more — to AI coding agents like Pi. You run a single Gateway process on your own machine (or a server), and it becomes the bridge between your messaging apps and an always-available AI assistant.
+OpenClaw is a **self-hosted gateway** that connects your favorite chat apps — WhatsApp,
+Telegram, Discord, iMessage, and more — to AI coding agents like Pi. You run a single
+Gateway process on your own machine (or a server), and it becomes the bridge between your
+messaging apps and an always-available AI assistant.
 
-**Who is it for?** Developers and power users who want a personal AI assistant they can message from anywhere — without giving up control of their data or relying on a hosted service.
+**Who is it for?** Developers and power users who want a personal AI assistant they can
+message from anywhere — without giving up control of their data or relying on a hosted
+service.
 
 **What makes it different?**
 
 - **Self-hosted**: runs on your hardware, your rules
-- **Multi-channel**: one Gateway serves WhatsApp, Telegram, Discord, and more simultaneously
-- **Agent-native**: built for coding agents with tool use, sessions, memory, and multi-agent routing
+- **Multi-channel**: one Gateway serves WhatsApp, Telegram, Discord, and more
+  simultaneously
+- **Agent-native**: built for coding agents with tool use, sessions, memory, and
+  multi-agent routing
 - **Open source**: MIT licensed, community-driven
 
 **What do you need?** Node 22+, an API key (Anthropic recommended), and 5 minutes.
@@ -131,8 +138,10 @@ Open the browser Control UI after the Gateway starts.
 
 Config lives at `~/.openclaw/openclaw.json`.
 
-- If you **do nothing**, OpenClaw uses the bundled Pi binary in RPC mode with per-sender sessions.
-- If you want to lock it down, start with `channels.whatsapp.allowFrom` and (for groups) mention rules.
+- If you **do nothing**, OpenClaw uses the bundled Pi binary in RPC mode with per-sender
+  sessions.
+- If you want to lock it down, start with `channels.whatsapp.allowFrom` and (for groups)
+  mention rules.
 
 Example:
 

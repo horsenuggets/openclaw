@@ -126,7 +126,8 @@ Single WS protocol with role + scope.
 **Node**
 
 - Can register capabilities (`caps`, `commands`, permissions).
-- Can receive `invoke` commands (`system.run`, `camera.*`, `canvas.*`, `screen.record`, etc).
+- Can receive `invoke` commands (`system.run`, `camera.*`, `canvas.*`, `screen.record`,
+  etc).
 - Can send events: `voice.transcript`, `agent.request`, `chat.subscribe`.
 - Cannot call config/models/channels/sessions/agent control plane APIs.
 
@@ -184,7 +185,8 @@ Define it precisely to avoid a weak link. Prefer one:
 
 - **Local‑only**: auto‑pair when client connects via loopback/Unix socket.
 - **Challenge via SSH**: gateway issues nonce; client proves SSH by fetching it.
-- **Physical presence window**: after a local approval on gateway host UI, allow auto‑pair for a short window (e.g. 10 minutes).
+- **Physical presence window**: after a local approval on gateway host UI, allow auto‑pair
+  for a short window (e.g. 10 minutes).
 
 Always log + record auto‑approvals.
 
@@ -276,8 +278,7 @@ Approval is **gateway‑hosted**, UI delivered to operator clients.
 
 ## Stable ID
 
-Required for auth; never changes.
-Preferred:
+Required for auth; never changes. Preferred:
 
 - Keypair fingerprint (public key hash).
 
@@ -413,5 +414,6 @@ Pick one before implementation to avoid drift.
 
 - Today: WS control plane + Bridge node transport.
 - Pain: approvals + duplication + two stacks.
-- Proposal: one WS protocol with explicit roles + scopes, unified pairing + TLS pinning, gateway‑hosted approvals, stable device IDs + cute slugs.
+- Proposal: one WS protocol with explicit roles + scopes, unified pairing + TLS pinning,
+  gateway‑hosted approvals, stable device IDs + cute slugs.
 - Outcome: simpler UX, stronger security, less duplication, better mobile routing.

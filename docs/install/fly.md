@@ -5,7 +5,8 @@ description: Deploy OpenClaw on Fly.io
 
 # Fly.io Deployment
 
-**Goal:** OpenClaw Gateway running on a [Fly.io](https://fly.io) machine with persistent storage, automatic HTTPS, and Discord/channel access.
+**Goal:** OpenClaw Gateway running on a [Fly.io](https://fly.io) machine with persistent
+storage, automatic HTTPS, and Discord/channel access.
 
 ## What you need
 
@@ -35,13 +36,16 @@ fly apps create my-openclaw
 fly volumes create openclaw_data --size 1 --region iad
 ```
 
-**Tip:** Choose a region close to you. Common options: `lhr` (London), `iad` (Virginia), `sjc` (San Jose).
+**Tip:** Choose a region close to you. Common options: `lhr` (London), `iad` (Virginia),
+`sjc` (San Jose).
 
 ## 2) Configure fly.toml
 
 Edit `fly.toml` to match your app name and requirements.
 
-**Security note:** The default config exposes a public URL. For a hardened deployment with no public IP, see [Private Deployment](#private-deployment-hardened) or use `fly.private.toml`.
+**Security note:** The default config exposes a public URL. For a hardened deployment with
+no public IP, see [Private Deployment](#private-deployment-hardened) or use
+`fly.private.toml`.
 
 ```toml
 app = "my-openclaw"  # Your app name
@@ -107,7 +111,8 @@ fly secrets set DISCORD_BOT_TOKEN=MTQ...
 
 - Non-loopback binds (`--bind lan`) require `OPENCLAW_GATEWAY_TOKEN` for security.
 - Treat these tokens like passwords.
-- **Prefer env vars over config file** for all API keys and tokens. This keeps secrets out of `openclaw.json` where they could be accidentally exposed or logged.
+- **Prefer env vars over config file** for all API keys and tokens. This keeps secrets out
+  of `openclaw.json` where they could be accidentally exposed or logged.
 
 ## 4) Deploy
 
@@ -202,7 +207,8 @@ EOF
 - Environment variable: `DISCORD_BOT_TOKEN` (recommended for secrets)
 - Config file: `channels.discord.token`
 
-If using env var, no need to add token to config. The gateway reads `DISCORD_BOT_TOKEN` automatically.
+If using env var, no need to add token to config. The gateway reads `DISCORD_BOT_TOKEN`
+automatically.
 
 Restart to apply:
 
@@ -250,11 +256,13 @@ The gateway is binding to `127.0.0.1` instead of `0.0.0.0`.
 
 Fly can't reach the gateway on the configured port.
 
-**Fix:** Ensure `internal_port` matches the gateway port (set `--port 3000` or `OPENCLAW_GATEWAY_PORT=3000`).
+**Fix:** Ensure `internal_port` matches the gateway port (set `--port 3000` or
+`OPENCLAW_GATEWAY_PORT=3000`).
 
 ### OOM / Memory Issues
 
-Container keeps restarting or getting killed. Signs: `SIGABRT`, `v8::internal::Runtime_AllocateInYoungGeneration`, or silent restarts.
+Container keeps restarting or getting killed. Signs: `SIGABRT`,
+`v8::internal::Runtime_AllocateInYoungGeneration`, or silent restarts.
 
 **Fix:** Increase memory in `fly.toml`:
 
@@ -269,7 +277,8 @@ Or update an existing machine:
 fly machine update <machine-id> --vm-memory 2048 -y
 ```
 
-**Note:** 512MB is too small. 1GB may work but can OOM under load or with verbose logging. **2GB is recommended.**
+**Note:** 512MB is too small. 1GB may work but can OOM under load or with verbose logging.
+**2GB is recommended.**
 
 ### Gateway Lock Issues
 
@@ -288,7 +297,8 @@ The lock file is at `/data/gateway.*.lock` (not in a subdirectory).
 
 ### Config Not Being Read
 
-If using `--allow-unconfigured`, the gateway creates a minimal config. Your custom config at `/data/openclaw.json` should be read on restart.
+If using `--allow-unconfigured`, the gateway creates a minimal config. Your custom config
+at `/data/openclaw.json` should be read on restart.
 
 Verify the config exists:
 
@@ -298,7 +308,8 @@ fly ssh console --command "cat /data/openclaw.json"
 
 ### Writing Config via SSH
 
-The `fly ssh console -C` command doesn't support shell redirection. To write a config file:
+The `fly ssh console -C` command doesn't support shell redirection. To write a config
+file:
 
 ```bash
 # Use echo + tee (pipe from local to remote)
@@ -317,7 +328,8 @@ fly ssh console --command "rm /data/openclaw.json"
 
 ### State Not Persisting
 
-If you lose credentials or sessions after a restart, the state dir is writing to the container filesystem.
+If you lose credentials or sessions after a restart, the state dir is writing to the
+container filesystem.
 
 **Fix:** Ensure `OPENCLAW_STATE_DIR=/data` is set in `fly.toml` and redeploy.
 
@@ -350,11 +362,14 @@ fly machine update <machine-id> --command "node dist/index.js gateway --port 300
 fly machine update <machine-id> --vm-memory 2048 --command "node dist/index.js gateway --port 3000 --bind lan" -y
 ```
 
-**Note:** After `fly deploy`, the machine command may reset to what's in `fly.toml`. If you made manual changes, re-apply them after deploy.
+**Note:** After `fly deploy`, the machine command may reset to what's in `fly.toml`. If
+you made manual changes, re-apply them after deploy.
 
 ## Private Deployment (Hardened)
 
-By default, Fly allocates public IPs, making your gateway accessible at `https://your-app.fly.dev`. This is convenient but means your deployment is discoverable by internet scanners (Shodan, Censys, etc.).
+By default, Fly allocates public IPs, making your gateway accessible at
+`https://your-app.fly.dev`. This is convenient but means your deployment is discoverable
+by internet scanners (Shodan, Censys, etc.).
 
 For a hardened deployment with **no public exposure**, use the private template.
 
@@ -434,7 +449,8 @@ If you need webhook callbacks (Twilio, Telnyx, etc.) without public exposure:
 
 1. **ngrok tunnel** - Run ngrok inside the container or as a sidecar
 2. **Tailscale Funnel** - Expose specific paths via Tailscale
-3. **Outbound-only** - Some providers (Twilio) work fine for outbound calls without webhooks
+3. **Outbound-only** - Some providers (Twilio) work fine for outbound calls without
+   webhooks
 
 Example voice-call config with ngrok:
 
@@ -457,7 +473,9 @@ Example voice-call config with ngrok:
 }
 ```
 
-The ngrok tunnel runs inside the container and provides a public webhook URL without exposing the Fly app itself. Set `webhookSecurity.allowedHosts` to the public tunnel hostname so forwarded host headers are accepted.
+The ngrok tunnel runs inside the container and provides a public webhook URL without
+exposing the Fly app itself. Set `webhookSecurity.allowedHosts` to the public tunnel
+hostname so forwarded host headers are accepted.
 
 ### Security benefits
 

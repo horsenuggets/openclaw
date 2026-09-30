@@ -1,5 +1,6 @@
 ---
-summary: "Fix Chrome/Brave/Edge/Chromium CDP startup issues for OpenClaw browser control on Linux"
+summary:
+  "Fix Chrome/Brave/Edge/Chromium CDP startup issues for OpenClaw browser control on Linux"
 read_when: "Browser control fails on Linux, especially with snap Chromium"
 title: "Browser Troubleshooting"
 ---
@@ -8,7 +9,8 @@ title: "Browser Troubleshooting"
 
 ## Problem: "Failed to start Chrome CDP on port 18800"
 
-OpenClaw's browser control server fails to launch Chrome/Brave/Edge/Chromium with the error:
+OpenClaw's browser control server fails to launch Chrome/Brave/Edge/Chromium with the
+error:
 
 ```
 {"error":"Error: Failed to start Chrome CDP on port 18800 for profile \"openclaw\"."}
@@ -16,7 +18,9 @@ OpenClaw's browser control server fails to launch Chrome/Brave/Edge/Chromium wit
 
 ### Root Cause
 
-On Ubuntu (and many Linux distros), the default Chromium installation is a **snap package**. Snap's AppArmor confinement interferes with how OpenClaw spawns and monitors the browser process.
+On Ubuntu (and many Linux distros), the default Chromium installation is a **snap
+package**. Snap's AppArmor confinement interferes with how OpenClaw spawns and monitors
+the browser process.
 
 The `apt install chromium` command installs a stub package that redirects to snap:
 
@@ -123,15 +127,15 @@ curl -s http://127.0.0.1:18791/tabs
 
 ### Problem: "Chrome extension relay is running, but no tab is connected"
 
-You’re using the `chrome` profile (extension relay). It expects the OpenClaw
-browser extension to be attached to a live tab.
+You’re using the `chrome` profile (extension relay). It expects the OpenClaw browser
+extension to be attached to a live tab.
 
 Fix options:
 
-1. **Use the managed browser:** `openclaw browser start --browser-profile openclaw`
-   (or set `browser.defaultProfile: "openclaw"`).
-2. **Use the extension relay:** install the extension, open a tab, and click the
-   OpenClaw extension icon to attach it.
+1. **Use the managed browser:** `openclaw browser start --browser-profile openclaw` (or
+   set `browser.defaultProfile: "openclaw"`).
+2. **Use the extension relay:** install the extension, open a tab, and click the OpenClaw
+   extension icon to attach it.
 
 Notes:
 

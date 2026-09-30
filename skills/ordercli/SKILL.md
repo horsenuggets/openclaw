@@ -1,6 +1,7 @@
 ---
 name: ordercli
-description: Foodora-only CLI for checking past orders and active order status (Deliveroo WIP).
+description:
+  Foodora-only CLI for checking past orders and active order status (Deliveroo WIP).
 homepage: https://ordercli.sh
 metadata:
   {
@@ -31,7 +32,8 @@ metadata:
 
 # ordercli
 
-Use `ordercli` to check past orders and track active order status (Foodora only right now).
+Use `ordercli` to check past orders and track active order status (Foodora only right
+now).
 
 Quick start (Foodora)
 
@@ -57,8 +59,10 @@ Reorder (adds to cart)
 
 Cloudflare / bot protection
 
-- Browser login: `ordercli foodora login --email you@example.com --password-stdin --browser`
-- Reuse profile: `--browser-profile "$HOME/Library/Application Support/ordercli/browser-profile"`
+- Browser login:
+  `ordercli foodora login --email you@example.com --password-stdin --browser`
+- Reuse profile:
+  `--browser-profile "$HOME/Library/Application Support/ordercli/browser-profile"`
 - Import Chrome cookies: `ordercli foodora cookies chrome --profile "Default"`
 
 Session import (no password)

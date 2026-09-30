@@ -63,7 +63,8 @@ Local TTS using the sherpa-onnx offline CLI.
 
 ## Install
 
-1. Download the runtime for your OS (extracts into `~/.openclaw/tools/sherpa-onnx-tts/runtime`)
+1. Download the runtime for your OS (extracts into
+   `~/.openclaw/tools/sherpa-onnx-tts/runtime`)
 2. Download a voice model (extracts into `~/.openclaw/tools/sherpa-onnx-tts/models`)
 
 Update `~/.openclaw/openclaw.json`:
@@ -97,7 +98,9 @@ export PATH="{baseDir}/bin:$PATH"
 
 Notes:
 
-- Pick a different model from the sherpa-onnx `tts-models` release if you want another voice.
-- If the model dir has multiple `.onnx` files, set `SHERPA_ONNX_MODEL_FILE` or pass `--model-file`.
+- Pick a different model from the sherpa-onnx `tts-models` release if you want another
+  voice.
+- If the model dir has multiple `.onnx` files, set `SHERPA_ONNX_MODEL_FILE` or pass
+  `--model-file`.
 - You can also pass `--tokens-file` or `--data-dir` to override the defaults.
 - Windows: run `node {baseDir}\\bin\\sherpa-onnx-tts -o tts.wav "Hello from local TTS."`

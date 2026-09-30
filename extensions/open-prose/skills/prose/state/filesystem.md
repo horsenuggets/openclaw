@@ -14,7 +14,9 @@ see-also:
 
 # File-System State Management
 
-This document describes how the OpenProse VM tracks execution state using **files in the `.prose/` directory**. This is one of two state management approaches (the other being in-context state in `in-context.md`).
+This document describes how the OpenProse VM tracks execution state using **files in the
+`.prose/` directory**. This is one of two state management approaches (the other being
+in-context state in `in-context.md`).
 
 ## Overview
 
@@ -25,7 +27,8 @@ File-based state persists all execution artifacts to disk. This enables:
 - **Long-running workflows**: Handle programs that exceed context limits
 - **Debugging**: Trace through execution history
 
-**Key principle:** Files are inspectable artifacts. The directory structure IS the execution state.
+**Key principle:** Files are inspectable artifacts. The directory structure IS the
+execution state.
 
 ---
 
@@ -99,7 +102,8 @@ SESSION_ID=sess-1704326400000-x9y8z7
 
 ### `state.md`
 
-The execution state file shows the program's current position using **annotated code snippets**. This makes it self-evident where execution is and what has happened.
+The execution state file shows the program's current position using **annotated code
+snippets**. This makes it self-evident where execution is and what has happened.
 
 **Only the VM writes this file.** Subagents never modify `state.md`.
 
@@ -113,10 +117,8 @@ The format shows:
 ````markdown
 # Execution State
 
-run: 20260115-143052-a7b3c9
-program: feature-implementation.prose
-started: 2026-01-15T14:30:52Z
-updated: 2026-01-15T14:35:22Z
+run: 20260115-143052-a7b3c9 program: feature-implementation.prose started:
+2026-01-15T14:30:52Z updated: 2026-01-15T14:35:22Z
 
 ## Execution Trace
 
@@ -216,9 +218,9 @@ let research = session: researcher
 
 ---
 
-AI safety research covers several key areas including alignment,
-robustness, and interpretability. The field has grown significantly
-since 2020 with major contributions from...
+AI safety research covers several key areas including alignment, robustness, and
+interpretability. The field has grown significantly since 2020 with major contributions
+from...
 
 ````
 
@@ -258,7 +260,8 @@ This ensures all session outputs are persisted and inspectable.
 
 ### Scoped Bindings (Block Invocations)
 
-When a binding is created inside a block invocation, it's scoped to that execution frame to prevent collisions across recursive calls.
+When a binding is created inside a block invocation, it's scoped to that execution frame
+to prevent collisions across recursive calls.
 
 **Naming convention:** `{name}__{execution_id}.md`
 
@@ -272,8 +275,7 @@ Examples:
 ````markdown
 # result
 
-kind: let
-execution_id: 43
+kind: let execution_id: 43
 
 source:
 
@@ -300,14 +302,9 @@ The first match wins.
 
 ```
 
-bindings/
-├── data.md # Root scope input
-├── result**1.md # First process() invocation
-├── parts**1.md # Parts from first invocation
-├── result**2.md # Recursive call (depth 2)
-├── parts**2.md # Parts from depth 2
-├── result\_\_3.md # Recursive call (depth 3)
-└── ...
+bindings/ ├── data.md # Root scope input ├── result**1.md # First process() invocation ├──
+parts**1.md # Parts from first invocation ├── result**2.md # Recursive call (depth 2) ├──
+parts**2.md # Parts from depth 2 ├── result\_\_3.md # Recursive call (depth 3) └── ...
 
 ````
 
@@ -345,8 +342,7 @@ Historical records of each invocation, flattened in the same directory:
 ```markdown
 # Segment 001
 
-timestamp: 2026-01-15T14:32:15Z
-prompt: "Review the research findings"
+timestamp: 2026-01-15T14:32:15Z prompt: "Review the research findings"
 
 ## Summary
 
@@ -367,7 +363,8 @@ prompt: "Review the research findings"
 | `agents/{name}/memory.md`     | Persistent agent |
 | `agents/{name}/{name}-NNN.md` | Persistent agent |
 
-The VM orchestrates; subagents write their own outputs directly to the filesystem. **The VM never holds full binding values—it tracks file paths.**
+The VM orchestrates; subagents write their own outputs directly to the filesystem. **The
+VM never holds full binding values—it tracks file paths.**
 
 ---
 
@@ -402,11 +399,10 @@ let research = session: researcher
 
 ```
 
-Your memory is at:
-.prose/runs/20260115-143052-a7b3c9/agents/captain/memory.md
+Your memory is at: .prose/runs/20260115-143052-a7b3c9/agents/captain/memory.md
 
-Read it first to understand your prior context. When done, update it
-with your compacted state following the guidelines in primitives/session.md.
+Read it first to understand your prior context. When done, update it with your compacted
+state following the guidelines in primitives/session.md.
 
 Also write your segment record to:
 .prose/runs/20260115-143052-a7b3c9/agents/captain/captain-003.md
@@ -420,19 +416,18 @@ After writing output, the subagent returns a **confirmation message**—not the 
 **Root scope (outside block invocations):**
 ```
 
-Binding written: research
-Location: .prose/runs/20260115-143052-a7b3c9/bindings/research.md
-Summary: AI safety research covering alignment, robustness, and interpretability with 15 citations.
+Binding written: research Location:
+.prose/runs/20260115-143052-a7b3c9/bindings/research.md Summary: AI safety research
+covering alignment, robustness, and interpretability with 15 citations.
 
 ```
 
 **Inside block invocation (include execution_id):**
 ```
 
-Binding written: result
-Location: .prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md
-Execution ID: 43
-Summary: Processed chunk into 3 sub-parts for recursive processing.
+Binding written: result Location:
+.prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md Execution ID: 43 Summary:
+Processed chunk into 3 sub-parts for recursive processing.
 
 ```
 
@@ -446,16 +441,9 @@ Imported programs use the **same unified structure recursively**:
 
 ```
 
-.prose/runs/{id}/imports/{handle}--{slug}/
-├── program.prose
-├── state.md
-├── bindings/
-│ └── {name}.md
-├── imports/ # Nested imports go here
-│ └── {handle2}--{slug2}/
-│ └── ...
-└── agents/
-└── {name}/
+.prose/runs/{id}/imports/{handle}--{slug}/ ├── program.prose ├── state.md ├── bindings/ │
+└── {name}.md ├── imports/ # Nested imports go here │ └── {handle2}--{slug2}/ │ └── ...
+└── agents/ └── {name}/
 
 ```
 

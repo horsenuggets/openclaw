@@ -5,7 +5,10 @@ homepage: https://developer.atlassian.com/cloud/trello/rest/
 metadata:
   {
     "openclaw":
-      { "emoji": "📋", "requires": { "bins": ["jq"], "env": ["TRELLO_API_KEY", "TRELLO_TOKEN"] } },
+      {
+        "emoji": "📋",
+        "requires": { "bins": ["jq"], "env": ["TRELLO_API_KEY", "TRELLO_TOKEN"] },
+      },
   }
 ---
 
@@ -79,7 +82,8 @@ curl -s -X PUT "https://api.trello.com/1/cards/{cardId}?key=$TRELLO_API_KEY&toke
 
 - Board/List/Card IDs can be found in the Trello URL or via the list commands
 - The API key and token provide full access to your Trello account - keep them secret!
-- Rate limits: 300 requests per 10 seconds per API key; 100 requests per 10 seconds per token; `/1/members` endpoints are limited to 100 requests per 900 seconds
+- Rate limits: 300 requests per 10 seconds per API key; 100 requests per 10 seconds per
+  token; `/1/members` endpoints are limited to 100 requests per 900 seconds
 
 ## Examples
 

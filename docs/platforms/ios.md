@@ -14,7 +14,8 @@ Availability: internal preview. The iOS app is not publicly distributed yet.
 ## What it does
 
 - Connects to a Gateway over WebSocket (LAN or tailnet).
-- Exposes node capabilities: Canvas, Screen snapshot, Camera capture, Location, Talk mode, Voice wake.
+- Exposes node capabilities: Canvas, Screen snapshot, Camera capture, Location, Talk mode,
+  Voice wake.
 - Receives `node.invoke` commands and reports node status events.
 
 ## Requirements
@@ -33,7 +34,8 @@ Availability: internal preview. The iOS app is not publicly distributed yet.
 openclaw gateway --port 18789
 ```
 
-2. In the iOS app, open Settings and pick a discovered gateway (or enable Manual Host and enter host/port).
+2. In the iOS app, open Settings and pick a discovered gateway (or enable Manual Host and
+   enter host/port).
 
 3. Approve the pairing request on the gateway host:
 
@@ -53,12 +55,14 @@ openclaw gateway call node.list --params "{}"
 
 ### Bonjour (LAN)
 
-The Gateway advertises `_openclaw-gw._tcp` on `local.`. The iOS app lists these automatically.
+The Gateway advertises `_openclaw-gw._tcp` on `local.`. The iOS app lists these
+automatically.
 
 ### Tailnet (cross-network)
 
-If mDNS is blocked, use a unicast DNS-SD zone (choose a domain; example: `openclaw.internal.`) and Tailscale split DNS.
-See [Bonjour](/gateway/bonjour) for the CoreDNS example.
+If mDNS is blocked, use a unicast DNS-SD zone (choose a domain; example:
+`openclaw.internal.`) and Tailscale split DNS. See [Bonjour](/gateway/bonjour) for the
+CoreDNS example.
 
 ### Manual host/port
 
@@ -91,14 +95,18 @@ openclaw nodes invoke --node "iOS Node" --command canvas.snapshot --params '{"ma
 ## Voice wake + talk mode
 
 - Voice wake and talk mode are available in Settings.
-- iOS may suspend background audio; treat voice features as best-effort when the app is not active.
+- iOS may suspend background audio; treat voice features as best-effort when the app is
+  not active.
 
 ## Common errors
 
-- `NODE_BACKGROUND_UNAVAILABLE`: bring the iOS app to the foreground (canvas/camera/screen commands require it).
-- `A2UI_HOST_NOT_CONFIGURED`: the Gateway did not advertise a canvas host URL; check `canvasHost` in [Gateway configuration](/gateway/configuration).
+- `NODE_BACKGROUND_UNAVAILABLE`: bring the iOS app to the foreground (canvas/camera/screen
+  commands require it).
+- `A2UI_HOST_NOT_CONFIGURED`: the Gateway did not advertise a canvas host URL; check
+  `canvasHost` in [Gateway configuration](/gateway/configuration).
 - Pairing prompt never appears: run `openclaw nodes pending` and approve manually.
-- Reconnect fails after reinstall: the Keychain pairing token was cleared; re-pair the node.
+- Reconnect fails after reinstall: the Keychain pairing token was cleared; re-pair the
+  node.
 
 ## Related docs
 

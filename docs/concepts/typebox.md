@@ -9,10 +9,10 @@ title: "TypeBox"
 
 Last updated: 2026-01-10
 
-TypeBox is a TypeScript-first schema library. We use it to define the **Gateway
-WebSocket protocol** (handshake, request/response, server events). Those schemas
-drive **runtime validation**, **JSON Schema export**, and **Swift codegen** for
-the macOS app. One source of truth; everything else is generated.
+TypeBox is a TypeScript-first schema library. We use it to define the **Gateway WebSocket
+protocol** (handshake, request/response, server events). Those schemas drive **runtime
+validation**, **JSON Schema export**, and **Swift codegen** for the macOS app. One source
+of truth; everything else is generated.
 
 If you want the higher-level protocol context, start with
 [Gateway architecture](/concepts/architecture).
@@ -25,9 +25,9 @@ Every Gateway WS message is one of three frames:
 - **Response**: `{ type: "res", id, ok, payload | error }`
 - **Event**: `{ type: "event", event, payload, seq?, stateVersion? }`
 
-The first frame **must** be a `connect` request. After that, clients can call
-methods (e.g. `health`, `send`, `chat.send`) and subscribe to events (e.g.
-`presence`, `tick`, `agent`).
+The first frame **must** be a `connect` request. After that, clients can call methods
+(e.g. `health`, `send`, `chat.send`) and subscribe to events (e.g. `presence`, `tick`,
+`agent`).
 
 Connection flow (minimal):
 
@@ -73,12 +73,11 @@ Authoritative list lives in `src/gateway/server.ts` (`METHODS`, `EVENTS`).
 
 ## How the schemas are used at runtime
 
-- **Server side**: every inbound frame is validated with AJV. The handshake only
-  accepts a `connect` request whose params match `ConnectParams`.
-- **Client side**: the JS client validates event and response frames before
-  using them.
-- **Method surface**: the Gateway advertises the supported `methods` and
-  `events` in `hello-ok`.
+- **Server side**: every inbound frame is validated with AJV. The handshake only accepts a
+  `connect` request whose params match `ConnectParams`.
+- **Client side**: the JS client validates event and response frames before using them.
+- **Method surface**: the Gateway advertises the supported `methods` and `events` in
+  `hello-ok`.
 
 ## Example frames
 
@@ -122,7 +121,11 @@ Hello-ok response:
       "stateVersion": { "presence": 0, "health": 0 },
       "uptimeMs": 0
     },
-    "policy": { "maxPayload": 1048576, "maxBufferedBytes": 1048576, "tickIntervalMs": 30000 }
+    "policy": {
+      "maxPayload": 1048576,
+      "maxBufferedBytes": 1048576,
+      "tickIntervalMs": 30000
+    }
   }
 }
 ```
@@ -222,7 +225,8 @@ export type SystemEchoResult = Static<typeof SystemEchoResultSchema>;
 In `src/gateway/protocol/index.ts`, export an AJV validator:
 
 ```ts
-export const validateSystemEchoParams = ajv.compile<SystemEchoParams>(SystemEchoParamsSchema);
+export const validateSystemEchoParams =
+  ajv.compile<SystemEchoParams>(SystemEchoParamsSchema);
 ```
 
 3. **Server behavior**
@@ -238,8 +242,8 @@ export const systemHandlers: GatewayRequestHandlers = {
 };
 ```
 
-Register it in `src/gateway/server-methods.ts` (already merges `systemHandlers`),
-then add `"system.echo"` to `METHODS` in `src/gateway/server.ts`.
+Register it in `src/gateway/server-methods.ts` (already merges `systemHandlers`), then add
+`"system.echo"` to `METHODS` in `src/gateway/server.ts`.
 
 4. **Regenerate**
 
@@ -272,13 +276,13 @@ Unknown frame types are preserved as raw payloads for forward compatibility.
 - Most objects use `additionalProperties: false` for strict payloads.
 - `NonEmptyString` is the default for IDs and method/event names.
 - The top-level `GatewayFrame` uses a **discriminator** on `type`.
-- Methods with side effects usually require an `idempotencyKey` in params
-  (example: `send`, `poll`, `agent`, `chat.send`).
+- Methods with side effects usually require an `idempotencyKey` in params (example:
+  `send`, `poll`, `agent`, `chat.send`).
 
 ## Live schema JSON
 
-Generated JSON Schema is in the repo at `dist/protocol.schema.json`. The
-published raw file is typically available at:
+Generated JSON Schema is in the repo at `dist/protocol.schema.json`. The published raw
+file is typically available at:
 
 - https://raw.githubusercontent.com/openclaw/openclaw/main/dist/protocol.schema.json
 

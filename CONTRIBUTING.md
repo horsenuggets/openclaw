@@ -11,24 +11,31 @@ Welcome to the lobster tank! 🦞
 ## Maintainers
 
 - **Peter Steinberger** - Benevolent Dictator
-  - GitHub: [@steipete](https://github.com/steipete) · X: [@steipete](https://x.com/steipete)
+  - GitHub: [@steipete](https://github.com/steipete) · X:
+    [@steipete](https://x.com/steipete)
 
 - **Shadow** - Discord + Slack subsystem
-  - GitHub: [@thewilloftheshadow](https://github.com/thewilloftheshadow) · X: [@4shad0wed](https://x.com/4shad0wed)
+  - GitHub: [@thewilloftheshadow](https://github.com/thewilloftheshadow) · X:
+    [@4shad0wed](https://x.com/4shad0wed)
 
 - **Jos** - Telegram, API, Nix mode
-  - GitHub: [@joshp123](https://github.com/joshp123) · X: [@jjpcodes](https://x.com/jjpcodes)
+  - GitHub: [@joshp123](https://github.com/joshp123) · X:
+    [@jjpcodes](https://x.com/jjpcodes)
 
 - **Christoph Nakazawa** - JS Infra
-  - GitHub: [@cpojer](https://github.com/cpojer) · X: [@cnakazawa](https://x.com/cnakazawa)
+  - GitHub: [@cpojer](https://github.com/cpojer) · X:
+    [@cnakazawa](https://x.com/cnakazawa)
 
 - **Gustavo Madeira Santana** - Multi-agents, CLI, web UI
-  - GitHub: [@gumadeiras](https://github.com/gumadeiras) · X: [@gumadeiras](https://x.com/gumadeiras)
+  - GitHub: [@gumadeiras](https://github.com/gumadeiras) · X:
+    [@gumadeiras](https://x.com/gumadeiras)
 
 ## How to Contribute
 
 1. **Bugs & small fixes** → Open a PR!
-2. **New features / architecture** → Start a [GitHub Discussion](https://github.com/openclaw/openclaw/discussions) or ask in Discord first
+2. **New features / architecture** → Start a
+   [GitHub Discussion](https://github.com/openclaw/openclaw/discussions) or ask in Discord
+   first
 3. **Questions** → Discord #setup-help
 
 ## Before You PR
@@ -40,18 +47,18 @@ Welcome to the lobster tank! 🦞
 
 ## Control UI Decorators
 
-The Control UI uses Lit with **legacy** decorators (current Rollup parsing does not support
-`accessor` fields required for standard decorators). When adding reactive fields, keep the
-legacy style:
+The Control UI uses Lit with **legacy** decorators (current Rollup parsing does not
+support `accessor` fields required for standard decorators). When adding reactive fields,
+keep the legacy style:
 
 ```ts
 @state() foo = "bar";
 @property({ type: Number }) count = 0;
 ```
 
-The root `tsconfig.json` is configured for legacy decorators (`experimentalDecorators: true`)
-with `useDefineForClassFields: false`. Avoid flipping these unless you are also updating the UI
-build tooling to support standard decorators.
+The root `tsconfig.json` is configured for legacy decorators
+(`experimentalDecorators: true`) with `useDefineForClassFields: false`. Avoid flipping
+these unless you are also updating the UI build tooling to support standard decorators.
 
 ## AI/Vibe-Coded PRs Welcome! 🤖
 
@@ -64,7 +71,8 @@ Please include in your PR:
 - [ ] Include prompts or session logs if possible (super helpful!)
 - [ ] Confirm you understand what the code does
 
-AI PRs are first-class citizens here. We just want transparency so reviewers know what to look for.
+AI PRs are first-class citizens here. We just want transparency so reviewers know what to
+look for.
 
 ## Current Focus & Roadmap 🗺
 
@@ -72,7 +80,9 @@ We are currently prioritizing:
 
 - **Stability**: Fixing edge cases in channel connections (WhatsApp/Telegram).
 - **UX**: Improving the onboarding wizard and error messages.
-- **Skills**: Expanding the library of bundled skills and improving the Skill Creation developer experience.
+- **Skills**: Expanding the library of bundled skills and improving the Skill Creation
+  developer experience.
 - **Performance**: Optimizing token usage and compaction logic.
 
-Check the [GitHub Issues](https://github.com/openclaw/openclaw/issues) for "good first issue" labels!
+Check the [GitHub Issues](https://github.com/openclaw/openclaw/issues) for "good first
+issue" labels!

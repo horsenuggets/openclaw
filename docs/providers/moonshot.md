@@ -9,9 +9,9 @@ title: "Moonshot AI"
 
 # Moonshot AI (Kimi)
 
-Moonshot provides the Kimi API with OpenAI-compatible endpoints. Configure the
-provider and set the default model to `moonshot/kimi-k2.5`, or use
-Kimi Coding with `kimi-coding/k2p5`.
+Moonshot provides the Kimi API with OpenAI-compatible endpoints. Configure the provider
+and set the default model to `moonshot/kimi-k2.5`, or use Kimi Coding with
+`kimi-coding/k2p5`.
 
 Current Kimi K2 model IDs:
 
@@ -21,8 +21,7 @@ Current Kimi K2 model IDs:
 - `kimi-k2-0905-preview`
 - `kimi-k2-turbo-preview`
 - `kimi-k2-thinking`
-- `kimi-k2-thinking-turbo`
-  {/_ moonshot-kimi-k2-ids:end _/ && null}
+- `kimi-k2-thinking-turbo` {/_ moonshot-kimi-k2-ids:end _/ && null}
 
 ```bash
 openclaw onboard --auth-choice moonshot-api-key
@@ -34,7 +33,9 @@ Kimi Coding:
 openclaw onboard --auth-choice kimi-code-api-key
 ```
 
-Note: Moonshot and Kimi Coding are separate providers. Keys are not interchangeable, endpoints differ, and model refs differ (Moonshot uses `moonshot/...`, Kimi Coding uses `kimi-coding/...`).
+Note: Moonshot and Kimi Coding are separate providers. Keys are not interchangeable,
+endpoints differ, and model refs differ (Moonshot uses `moonshot/...`, Kimi Coding uses
+`kimi-coding/...`).
 
 ## Config snippet (Moonshot API)
 
@@ -135,8 +136,10 @@ Note: Moonshot and Kimi Coding are separate providers. Keys are not interchangea
 
 ## Notes
 
-- Moonshot model refs use `moonshot/<modelId>`. Kimi Coding model refs use `kimi-coding/<modelId>`.
+- Moonshot model refs use `moonshot/<modelId>`. Kimi Coding model refs use
+  `kimi-coding/<modelId>`.
 - Override pricing and context metadata in `models.providers` if needed.
-- If Moonshot publishes different context limits for a model, adjust
-  `contextWindow` accordingly.
-- Use `https://api.moonshot.ai/v1` for the international endpoint, and `https://api.moonshot.cn/v1` for the China endpoint.
+- If Moonshot publishes different context limits for a model, adjust `contextWindow`
+  accordingly.
+- Use `https://api.moonshot.ai/v1` for the international endpoint, and
+  `https://api.moonshot.cn/v1` for the China endpoint.

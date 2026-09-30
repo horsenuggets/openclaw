@@ -8,13 +8,13 @@ title: "Plugin Agent Tools"
 
 # Plugin agent tools
 
-OpenClaw plugins can register **agent tools** (JSON‑schema functions) that are exposed
-to the LLM during agent runs. Tools can be **required** (always available) or
-**optional** (opt‑in).
+OpenClaw plugins can register **agent tools** (JSON‑schema functions) that are exposed to
+the LLM during agent runs. Tools can be **required** (always available) or **optional**
+(opt‑in).
 
 Agent tools are configured under `tools` in the main config, or per‑agent under
-`agents.list[].tools`. The allowlist/denylist policy controls which tools the agent
-can call.
+`agents.list[].tools`. The allowlist/denylist policy controls which tools the agent can
+call.
 
 ## Basic tool
 
@@ -37,8 +37,7 @@ export default function (api) {
 
 ## Optional tool (opt‑in)
 
-Optional tools are **never** auto‑enabled. Users must add them to an agent
-allowlist.
+Optional tools are **never** auto‑enabled. Users must add them to an agent allowlist.
 
 ```ts
 export default function (api) {

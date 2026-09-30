@@ -21,9 +21,11 @@ The payload is an array (one per provider).
 - provider, source, updatedAt
 - sessionTokens, sessionCostUSD
 - last30DaysTokens, last30DaysCostUSD
-- daily[]: date, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, totalTokens, totalCost, modelsUsed, modelBreakdowns[]
+- daily[]: date, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens,
+  totalTokens, totalCost, modelsUsed, modelBreakdowns[]
 - modelBreakdowns[]: modelName, cost
-- totals: totalInputTokens, totalOutputTokens, cacheReadTokens, cacheCreationTokens, totalTokens, totalCost
+- totals: totalInputTokens, totalOutputTokens, cacheReadTokens, cacheCreationTokens,
+  totalTokens, totalCost
 
 ## Notes
 

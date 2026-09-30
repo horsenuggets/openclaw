@@ -10,13 +10,15 @@ title: "Nostr"
 
 **Status:** Optional plugin (disabled by default).
 
-Nostr is a decentralized protocol for social networking. This channel enables OpenClaw to receive and respond to encrypted direct messages (DMs) via NIP-04.
+Nostr is a decentralized protocol for social networking. This channel enables OpenClaw to
+receive and respond to encrypted direct messages (DMs) via NIP-04.
 
 ## Install (on demand)
 
 ### Onboarding (recommended)
 
-- The onboarding wizard (`openclaw onboard`) and `openclaw channels add` list optional channel plugins.
+- The onboarding wizard (`openclaw onboard`) and `openclaw channels add` list optional
+  channel plugins.
 - Selecting Nostr prompts you to install the plugin on demand.
 
 Install defaults:
@@ -83,7 +85,8 @@ export NOSTR_PRIVATE_KEY="nsec1..."
 
 ## Profile metadata
 
-Profile data is published as a NIP-01 `kind:0` event. You can manage it from the Control UI (Channels -> Nostr -> Profile) or set it directly in config.
+Profile data is published as a NIP-01 `kind:0` event. You can manage it from the Control
+UI (Channels -> Nostr -> Profile) or set it directly in config.
 
 Example:
 

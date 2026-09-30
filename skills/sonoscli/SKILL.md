@@ -38,7 +38,8 @@ Common tasks
 - Grouping: `sonos group status|join|unjoin|party|solo`
 - Favorites: `sonos favorites list|open`
 - Queue: `sonos queue list|play|clear`
-- Spotify search (via SMAPI): `sonos smapi search --service "Spotify" --category tracks "query"`
+- Spotify search (via SMAPI):
+  `sonos smapi search --service "Spotify" --category tracks "query"`
 
 Notes
 

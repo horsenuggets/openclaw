@@ -8,8 +8,8 @@ title: "apply_patch Tool"
 
 # apply_patch tool
 
-Apply file changes using a structured patch format. This is ideal for multi-file
-or multi-hunk edits where a single `edit` call would be brittle.
+Apply file changes using a structured patch format. This is ideal for multi-file or
+multi-hunk edits where a single `edit` call would be brittle.
 
 The tool accepts a single `input` string that wraps one or more file operations:
 

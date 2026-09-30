@@ -8,7 +8,8 @@ title: "Diagnostics Flags"
 
 # Diagnostics Flags
 
-Diagnostics flags let you enable targeted debug logs without turning on verbose logging everywhere. Flags are opt-in and have no effect unless a subsystem checks them.
+Diagnostics flags let you enable targeted debug logs without turning on verbose logging
+everywhere. Flags are opt-in and have no effect unless a subsystem checks them.
 
 ## How it works
 
@@ -60,7 +61,8 @@ Flags emit logs into the standard diagnostics log file. By default:
 /tmp/openclaw/openclaw-YYYY-MM-DD.log
 ```
 
-If you set `logging.file`, use that path instead. Logs are JSONL (one JSON object per line). Redaction still applies based on `logging.redactSensitive`.
+If you set `logging.file`, use that path instead. Logs are JSONL (one JSON object per
+line). Redaction still applies based on `logging.redactSensitive`.
 
 ## Extract logs
 
@@ -82,10 +84,12 @@ Or tail while reproducing:
 tail -f /tmp/openclaw/openclaw-$(date +%F).log | rg "telegram http error"
 ```
 
-For remote gateways, you can also use `openclaw logs --follow` (see [/cli/logs](/cli/logs)).
+For remote gateways, you can also use `openclaw logs --follow` (see
+[/cli/logs](/cli/logs)).
 
 ## Notes
 
-- If `logging.level` is set higher than `warn`, these logs may be suppressed. Default `info` is fine.
+- If `logging.level` is set higher than `warn`, these logs may be suppressed. Default
+  `info` is fine.
 - Flags are safe to leave enabled; they only affect log volume for the specific subsystem.
 - Use [/logging](/logging) to change log destinations, levels, and redaction.

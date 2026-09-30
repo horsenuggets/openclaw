@@ -10,9 +10,11 @@ title: "DigitalOcean"
 
 ## Goal
 
-Run a persistent OpenClaw Gateway on DigitalOcean for **$6/month** (or $4/mo with reserved pricing).
+Run a persistent OpenClaw Gateway on DigitalOcean for **$6/month** (or $4/mo with reserved
+pricing).
 
-If you want a $0/month option and don’t mind ARM + provider-specific setup, see the [Oracle Cloud guide](/platforms/oracle).
+If you want a $0/month option and don’t mind ARM + provider-specific setup, see the
+[Oracle Cloud guide](/platforms/oracle).
 
 ## Cost Comparison (2026)
 
@@ -28,7 +30,8 @@ If you want a $0/month option and don’t mind ARM + provider-specific setup, se
 
 - DigitalOcean: simplest UX + predictable setup (this guide)
 - Hetzner: good price/perf (see [Hetzner guide](/install/hetzner))
-- Oracle Cloud: can be $0/month, but is more finicky and ARM-only (see [Oracle guide](/platforms/oracle))
+- Oracle Cloud: can be $0/month, but is more finicky and ARM-only (see
+  [Oracle guide](/platforms/oracle))
 
 ---
 
@@ -129,7 +132,8 @@ Open: `https://<magicdns>/`
 Notes:
 
 - Serve keeps the Gateway loopback-only and authenticates via Tailscale identity headers.
-- To require token/password instead, set `gateway.auth.allowTailscale: false` or use `gateway.auth.mode: "password"`.
+- To require token/password instead, set `gateway.auth.allowTailscale: false` or use
+  `gateway.auth.mode: "password"`.
 
 **Option C: Tailnet bind (no Serve)**
 
@@ -207,7 +211,8 @@ tar -czvf openclaw-backup.tar.gz ~/.openclaw ~/.openclaw/workspace
 
 ## Oracle Cloud Free Alternative
 
-Oracle Cloud offers **Always Free** ARM instances that are significantly more powerful than any paid option here — for $0/month.
+Oracle Cloud offers **Always Free** ARM instances that are significantly more powerful
+than any paid option here — for $0/month.
 
 | What you get      | Specs                  |
 | ----------------- | ---------------------- |
@@ -221,7 +226,9 @@ Oracle Cloud offers **Always Free** ARM instances that are significantly more po
 - Signup can be finicky (retry if it fails)
 - ARM architecture — most things work, but some binaries need ARM builds
 
-For the full setup guide, see [Oracle Cloud](/platforms/oracle). For signup tips and troubleshooting the enrollment process, see this [community guide](https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd).
+For the full setup guide, see [Oracle Cloud](/platforms/oracle). For signup tips and
+troubleshooting the enrollment process, see this
+[community guide](https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd).
 
 ---
 

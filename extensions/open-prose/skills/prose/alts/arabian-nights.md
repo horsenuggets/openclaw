@@ -9,18 +9,24 @@ requires: prose.md
 
 # OpenProse Arabian Nights Register
 
-> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution semantics, state management, and VM behavior are defined there. This file only provides keyword translations.
+> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution
+> semantics, state management, and VM behavior are defined there. This file only provides
+> keyword translations.
 
-An alternative register for OpenProse that draws from One Thousand and One Nights. Programs become tales told by Scheherazade. Recursion becomes stories within stories. Agents become djinns bound to serve.
+An alternative register for OpenProse that draws from One Thousand and One Nights.
+Programs become tales told by Scheherazade. Recursion becomes stories within stories.
+Agents become djinns bound to serve.
 
 ## How to Use
 
 1. Load `prose.md` first (execution semantics)
 2. Load this file (keyword translations)
-3. When parsing `.prose` files, accept Arabian Nights keywords as aliases for functional keywords
+3. When parsing `.prose` files, accept Arabian Nights keywords as aliases for functional
+   keywords
 4. All execution behavior remains identical—only surface syntax changes
 
-> **Design constraint:** Still aims to be "structured but self-evident" per the language tenets—just self-evident through a storytelling lens.
+> **Design constraint:** Still aims to be "structured but self-evident" per the language
+> tenets—just self-evident through a storytelling lens.
 
 ---
 
@@ -279,10 +285,12 @@ oath config = { spirit: "opus", persist: 3 }
 
 ## The Case For Arabian Nights
 
-1. **Frame narrative is recursion.** Stories within stories maps perfectly to nested program calls.
+1. **Frame narrative is recursion.** Stories within stories maps perfectly to nested
+   program calls.
 2. **Djinn/wish/gift.** The agent/input/output mapping is extremely clean.
 3. **Rich tradition.** One Thousand and One Nights is globally known.
-4. **Bazaar for parallel.** Many merchants, many stalls, all active at once—vivid metaphor.
+4. **Bazaar for parallel.** Many merchants, many stalls, all active at once—vivid
+   metaphor.
 5. **Oath for const.** An unbreakable vow is a perfect metaphor for immutability.
 6. **"1001 nights"** as a loop count is delightful.
 
@@ -347,7 +355,9 @@ oath config = { spirit: "opus", persist: 3 }
 
 ## Verdict
 
-Preserved for benchmarking. The Arabian Nights register offers a storytelling frame that maps naturally to recursive, nested programs. The djinn/wish/gift trio is particularly elegant.
+Preserved for benchmarking. The Arabian Nights register offers a storytelling frame that
+maps naturally to recursive, nested programs. The djinn/wish/gift trio is particularly
+elegant.
 
 Best suited for:
 
@@ -355,4 +365,5 @@ Best suited for:
 - Workflows that feel like granting wishes
 - Users who enjoy narrative framing
 
-The `frame` keyword for reusable blocks is especially apt—Scheherazade's frame story containing a thousand tales.
+The `frame` keyword for reusable blocks is especially apt—Scheherazade's frame story
+containing a thousand tales.

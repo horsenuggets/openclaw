@@ -7,7 +7,8 @@ title: "macOS Dev Setup"
 
 # macOS Developer Setup
 
-This guide covers the necessary steps to build and run the OpenClaw macOS application from source.
+This guide covers the necessary steps to build and run the OpenClaw macOS application from
+source.
 
 ## Prerequisites
 
@@ -32,12 +33,14 @@ To build the macOS app and package it into `dist/OpenClaw.app`, run:
 ./scripts/package-mac-app.sh
 ```
 
-If you don't have an Apple Developer ID certificate, the script will automatically use **ad-hoc signing** (`-`).
+If you don't have an Apple Developer ID certificate, the script will automatically use
+**ad-hoc signing** (`-`).
 
 For dev run modes, signing flags, and Team ID troubleshooting, see the macOS app README:
 https://github.com/openclaw/openclaw/blob/main/apps/macos/README.md
 
-> **Note**: Ad-hoc signed apps may trigger security prompts. If the app crashes immediately with "Abort trap 6", see the [Troubleshooting](#troubleshooting) section.
+> **Note**: Ad-hoc signed apps may trigger security prompts. If the app crashes
+> immediately with "Abort trap 6", see the [Troubleshooting](#troubleshooting) section.
 
 ## 3. Install the CLI
 
@@ -77,7 +80,8 @@ If versions don’t match, update macOS/Xcode and re-run the build.
 
 ### App Crashes on Permission Grant
 
-If the app crashes when you try to allow **Speech Recognition** or **Microphone** access, it may be due to a corrupted TCC cache or signature mismatch.
+If the app crashes when you try to allow **Speech Recognition** or **Microphone** access,
+it may be due to a corrupted TCC cache or signature mismatch.
 
 **Fix:**
 
@@ -85,11 +89,14 @@ If the app crashes when you try to allow **Speech Recognition** or **Microphone*
    ```bash
    tccutil reset All bot.molt.mac.debug
    ```
-2. If that fails, change the `BUNDLE_ID` temporarily in [`scripts/package-mac-app.sh`](https://github.com/openclaw/openclaw/blob/main/scripts/package-mac-app.sh) to force a "clean slate" from macOS.
+2. If that fails, change the `BUNDLE_ID` temporarily in
+   [`scripts/package-mac-app.sh`](https://github.com/openclaw/openclaw/blob/main/scripts/package-mac-app.sh)
+   to force a "clean slate" from macOS.
 
 ### Gateway "Starting..." indefinitely
 
-If the gateway status stays on "Starting...", check if a zombie process is holding the port:
+If the gateway status stays on "Starting...", check if a zombie process is holding the
+port:
 
 ```bash
 openclaw gateway status
@@ -99,4 +106,5 @@ openclaw gateway stop
 lsof -nP -iTCP:18789 -sTCP:LISTEN
 ```
 
-If a manual run is holding the port, stop that process (Ctrl+C). As a last resort, kill the PID you found above.
+If a manual run is holding the port, stop that process (Ctrl+C). As a last resort, kill
+the PID you found above.

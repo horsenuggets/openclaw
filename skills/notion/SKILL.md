@@ -5,7 +5,11 @@ homepage: https://developers.notion.com
 metadata:
   {
     "openclaw":
-      { "emoji": "📝", "requires": { "env": ["NOTION_API_KEY"] }, "primaryEnv": "NOTION_API_KEY" },
+      {
+        "emoji": "📝",
+        "requires": { "env": ["NOTION_API_KEY"] },
+        "primaryEnv": "NOTION_API_KEY",
+      },
   }
 ---
 
@@ -24,7 +28,8 @@ mkdir -p ~/.config/notion
 echo "ntn_your_key_here" > ~/.config/notion/api_key
 ```
 
-4. Share target pages/databases with your integration (click "..." → "Connect to" → your integration name)
+4. Share target pages/databases with your integration (click "..." → "Connect to" → your
+   integration name)
 
 ## API Basics
 
@@ -38,7 +43,8 @@ curl -X GET "https://api.notion.com/v1/..." \
   -H "Content-Type: application/json"
 ```
 
-> **Note:** The `Notion-Version` header is required. This skill uses `2025-09-03` (latest). In this version, databases are called "data sources" in the API.
+> **Note:** The `Notion-Version` header is required. This skill uses `2025-09-03`
+> (latest). In this version, databases are called "data sources" in the API.
 
 ## Common Operations
 
@@ -160,9 +166,12 @@ Common property formats for database items:
 - **Two IDs:** Each database now has both a `database_id` and a `data_source_id`
   - Use `database_id` when creating pages (`parent: {"database_id": "..."}`)
   - Use `data_source_id` when querying (`POST /v1/data_sources/{id}/query`)
-- **Search results:** Databases return as `"object": "data_source"` with their `data_source_id`
-- **Parent in responses:** Pages show `parent.data_source_id` alongside `parent.database_id`
-- **Finding the data_source_id:** Search for the database, or call `GET /v1/data_sources/{data_source_id}`
+- **Search results:** Databases return as `"object": "data_source"` with their
+  `data_source_id`
+- **Parent in responses:** Pages show `parent.data_source_id` alongside
+  `parent.database_id`
+- **Finding the data_source_id:** Search for the database, or call
+  `GET /v1/data_sources/{data_source_id}`
 
 ## Notes
 

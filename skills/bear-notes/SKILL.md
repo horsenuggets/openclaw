@@ -30,11 +30,13 @@ Use `grizzly` to create, read, and manage notes in Bear on macOS.
 Requirements
 
 - Bear app installed and running
-- For some operations (add-text, tags, open-note --selected), a Bear app token (stored in `~/.config/grizzly/token`)
+- For some operations (add-text, tags, open-note --selected), a Bear app token (stored in
+  `~/.config/grizzly/token`)
 
 ## Getting a Bear Token
 
-For operations that require a token (add-text, tags, open-note --selected), you need an authentication token:
+For operations that require a token (add-text, tags, open-note --selected), you need an
+authentication token:
 
 1. Open Bear → Help → API Token → Copy Token
 2. Save it: `echo "YOUR_TOKEN" > ~/.config/grizzly/token`
