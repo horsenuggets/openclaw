@@ -11,8 +11,7 @@
  *   18791 - Browser control server
  *   18792 - Browser CDP relay (browser control port + 1)
  *   18793 - Canvas host
- *   18794 - Whisper speech-to-text (DEFAULT_WHISPER_PORT)
- *   18795-18799 - Reserved for future one-off services
+ *   18794-18799 - Reserved for future one-off services
  */
 
 export const CDP_PORT_RANGE_START = 18800;

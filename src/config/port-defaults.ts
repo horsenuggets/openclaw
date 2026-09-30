@@ -14,14 +14,17 @@ function derivePort(base: number, offset: number, fallback: number): number {
 
 export const DEFAULT_BRIDGE_PORT = 18790;
 export const DEFAULT_BROWSER_CONTROL_PORT = 18791;
-// Local whisper speech-to-text server. Uses 18794, the first free slot in the
-// 18792-18799 "one-off services" band documented in src/browser/profiles.ts
-// (18792 is the browser CDP relay = browserControlPort + 1; 18793 is canvas).
-// Deliberately off 8787 (the historical default), which collides with RStudio
-// Server and OpenClaw's own Telegram webhook default. The prod deploy overrides
-// this via the WHISPER_PORT env (see infrastructure/deploy/boot.sh); keep the
-// two values in sync.
-export const DEFAULT_WHISPER_PORT = 18794;
+// Host-wide whisper speech-to-text server, shared by all per-channel agents.
+// Sits BELOW the per-agent gateway allocation base (18789): openclawctl hands
+// out agent gateway ports ascending from 18789, and each agent derives its
+// browser control/relay/canvas/CDP ports upward from its own gateway port
+// (relay = gatewayPort + 3, etc.), so the entire 18789+ range is agent
+// territory that a fixed shared port must avoid. 18700 is clear of that space
+// and of 8787 (the historical default, which collides with RStudio Server and
+// OpenClaw's own Telegram webhook default). The prod deploy overrides this via
+// the WHISPER_PORT env (see infrastructure/deploy/boot.sh); keep the two values
+// in sync.
+export const DEFAULT_WHISPER_PORT = 18700;
 export const DEFAULT_CANVAS_HOST_PORT = 18793;
 export const DEFAULT_BROWSER_CDP_PORT_RANGE_START = 18800;
 export const DEFAULT_BROWSER_CDP_PORT_RANGE_END = 18899;

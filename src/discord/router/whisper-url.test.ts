@@ -11,6 +11,14 @@ describe("resolveWhisperUrl", () => {
     expect(resolveWhisperUrl({})).not.toContain("8787");
   });
 
+  it("keeps the default below the per-agent gateway allocation base (18789)", () => {
+    // openclawctl allocates agent gateway ports ascending from 18789 and each
+    // agent derives its browser relay/canvas/CDP ports upward from there, so a
+    // host-wide shared service must stay clear of that whole range. A default
+    // >= 18789 would eventually collide with some agent's derived browser relay.
+    expect(DEFAULT_WHISPER_PORT).toBeLessThan(18789);
+  });
+
   it("uses OPENCLAW_WHISPER_URL verbatim when set", () => {
     expect(resolveWhisperUrl({ OPENCLAW_WHISPER_URL: "http://whisper.internal/xcribe" })).toBe(
       "http://whisper.internal/xcribe",

@@ -141,7 +141,7 @@ fi
 # (resolveWhisperUrl): a missing, non-numeric, or out-of-range value falls back
 # to the default so the server never gets a malformed --port and both sides stay
 # in agreement.
-WHISPER_PORT_DEFAULT=18794
+WHISPER_PORT_DEFAULT=18700
 case "${WHISPER_PORT:-}" in
   "")
     WHISPER_PORT="$WHISPER_PORT_DEFAULT"
