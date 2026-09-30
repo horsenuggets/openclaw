@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RouterRuntime } from "./router.js";
+import type { RouterRuntime } from "./types.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 
 const runtime: RouterRuntime = { log: () => {}, error: () => {} };

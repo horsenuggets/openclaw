@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldRelayCommandResult } from "./router";
+import { shouldRelayCommandResult } from "./route-message.js";
 
 const MAX = 5;
 

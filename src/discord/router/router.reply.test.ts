@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { discordSendReply } from "./router";
+import { discordSendReply } from "./discord-api.js";
 
 // Captures the fetch calls discordSendReply makes so we can assert the exact
 // POST body a bot's `/channel` reply produces (the tester-bot path has no
