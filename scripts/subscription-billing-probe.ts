@@ -27,9 +27,12 @@
  * accepted on argv, to keep a live bearer credential out of the process table and
  * shell history):
  *   1. env OPENCLAW_OAUTH_TOKEN
- *   2. auth-profiles.json ("anthropic-subscription:default".access) under
- *      <state dir>/agents/<agent>/agent/, state dir from OPENCLAW_STATE_DIR or
- *      ~/.openclaw, agent from --agent (default "main").
+ *   2. the "anthropic-subscription:default" profile from the runtime's effective
+ *      auth store for the selected agent (resolveAgentDir + ensureAuthProfileStore,
+ *      the same loaders a real run uses): the default agent reads the main store
+ *      and honors OPENCLAW_AGENT_DIR / PI_CODING_AGENT_DIR; a non-default agent
+ *      reads its configured agents.list[].agentDir and inherits the main agent's
+ *      profile when its own store lacks it. --agent selects the agent (default main).
  * Access tokens are short-lived; if you get 401, mint a fresh one with
  * scripts/mint-anthropic-reauth.sh and retry. Note that on a deploy host that
  * helper writes to the shared store (<instances dir>/shared/auth/), which is only
