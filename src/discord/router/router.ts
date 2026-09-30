@@ -6,29 +6,29 @@ import type { RouterRuntime, RunAgentCommand } from "./types.js";
 import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
-  type ChannelReplyPayload,
-  type DiscordActionRow,
   type InstanceStatus,
   type ProvisioningClient,
-  handleChannelCommand,
-  handleUnregisterButtonClick,
-  parseChannelTextCommand,
-  parseUnregisterCustomId,
 } from "./channel-commands.js";
-import { loadRouterConfig, setUserPreference } from "./config.js";
+import { loadRouterConfig } from "./config.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
   discordSend,
   discordSendEmbed,
-  discordSendEphemeral,
-  discordSendReply,
   openDMChannel,
   probePort,
 } from "./discord-api.js";
+import {
+  type GatewayContext,
+  handleChannelDelete,
+  handleComponentInteraction,
+  handleGuildDelete,
+  handleMessageCreate,
+  handleSlashInteraction,
+} from "./gateway-events.js";
 import { WELCOME_EMBED, bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
-import { handleTextCommand, routeMessage } from "./route-message.js";
+import { routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
@@ -340,6 +340,25 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return `error: unknown command "${cmd.command}"`;
   };
 
+  // Bundle the closed-over state the DISPATCH handlers need, assembled once.
+  // The socket lifecycle (connect/reconnect/heartbeat/close) stays below; only
+  // the event bodies live in gateway-events.ts (see GatewayContext).
+  const gatewayCtx: GatewayContext = {
+    discordToken,
+    applicationId,
+    agentTimeoutMs,
+    runtime,
+    instances,
+    inflight,
+    channelGuild,
+    allowedBotIds,
+    describeInstance,
+    isWhitelisted: whitelist.isWhitelisted,
+    channelCommandDeps,
+    runAgentCommand,
+    cleanupDeletedChannel,
+  };
+
   let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   let lastSequence: number | null = null;
   let sessionId: string | undefined;
@@ -510,425 +529,23 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           }
 
           if (t === "MESSAGE_CREATE") {
-            const authorId = d.author?.id;
-            const isBot = d.author?.bot === true;
-            const guildId = d.guild_id;
-            let content = d.content ?? "";
-            const channelId = d.channel_id;
-
-            // Learn the channel's guild so GUILD_DELETE can tear down its
-            // instances (see channelGuild above).
-            if (channelId && guildId) {
-              channelGuild.set(channelId, guildId);
-            }
-
-            // Collect attachments (voice messages, images, files)
-            const rawAttachments = (d.attachments ?? []) as Array<{
-              id: string;
-              filename: string;
-              content_type?: string;
-              url: string;
-              size: number;
-            }>;
-            const hasAttachments = rawAttachments.length > 0;
-
-            // Include reply context so the agent knows what message is being responded to
-            const ref = d.referenced_message;
-            if (ref && typeof ref === "object") {
-              const refAuthor = ref.author?.username ?? "unknown";
-              const refContent = (ref.content ?? "").slice(0, 500);
-              if (refContent) {
-                content = `[Replying to ${refAuthor}: "${refContent}"]\n${content}`;
-              }
-            }
-
-            runtime.log(
-              `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
-            );
-
-            // `/channel` management commands must work even when the channel is
-            // not registered yet (register is the whole point) AND even when the
-            // author is a bot (e.g. an automated tester bot, which cannot invoke
-            // slash commands), so handle them before both the bot filter and the
-            // registered-instance gate below. register/unregister stay
-            // whitelist-gated inside handleChannelCommand: authorization is the
-            // configured auth-guild role, applied uniformly to bots and humans.
-            // A bot can therefore provision only if it has been granted that
-            // role (the intended setup for a trusted tester/automation bot);
-            // untrusted bots without the role are rejected exactly like
-            // untrusted humans. status stays open to everyone.
-            const channelCmd = authorId ? parseChannelTextCommand(content) : null;
-            if (channelCmd && authorId) {
-              const commandMessageId = d.id;
-              void handleChannelCommand(
-                {
-                  subcommand: channelCmd.subcommand,
-                  args: channelCmd.args,
-                  channelId,
-                  userId: authorId,
-                  isDM: !guildId,
-                  // Bots cannot send true ephemeral messages outside an
-                  // interaction. Reply as a real Discord reply (referencing the
-                  // command message) so status/denials thread under the command
-                  // and embeds render. Ephemeral hints still fall back to an
-                  // auto-deleting plain message (only strings can auto-delete
-                  // cleanly; embeds are always full replies).
-                  reply: (payload, opts) =>
-                    opts?.ephemeral && typeof payload === "string"
-                      ? discordSendEphemeral(discordToken, channelId, payload)
-                      : discordSendReply(discordToken, channelId, commandMessageId, payload),
-                },
-                channelCommandDeps,
-              );
-              runtime.log(
-                `[router] /channel ${channelCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId})`,
-              );
-              return;
-            }
-
-            // Normal agent messages: ignore untrusted bots and empty messages.
-            // Channel commands were already handled above so bots can still drive
-            // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse, but
-            // never the router's own bot (self-routing would loop).
-            const botAllowed = isBot
-              ? isConversationalBot(authorId, applicationId, allowedBotIds)
-              : false;
-            if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
-              return;
-            }
-
-            const instance = instances.get(channelId);
-            if (!instance) {
-              // Only respond in DMs (no guild_id), silently ignore unregistered guild channels
-              if (!guildId) {
-                void discordSendEphemeral(
-                  discordToken,
-                  channelId,
-                  "*This channel is not registered.*",
-                );
-              }
-              return;
-            }
-
-            // Route the message to the instance (text-command fallback first,
-            // then the agent). Onboarding (including offering Google) is driven
-            // by the agent's BOOTSTRAP.md checklist and the `⁘` command channel,
-            // not by a router-side state machine.
-            const routeInstanceMessage = (): void => {
-              const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
-              if (commandMatch) {
-                const cmdName = commandMatch[1].toLowerCase();
-                const cmdArg = commandMatch[2]?.trim().toLowerCase();
-                const messageId = d.id;
-                void handleTextCommand({
-                  cmdName,
-                  cmdArg,
-                  userId: authorId,
-                  channelId,
-                  messageId,
-                  instance,
-                  discordToken,
-                  runtime,
-                }).then((handled) => {
-                  if (!handled) {
-                    void routeMessage({
-                      authorId,
-                      channelId,
-                      messageContent: content,
-                      attachments: rawAttachments,
-                      instance,
-                      discordToken,
-                      runtime,
-                      agentTimeoutMs,
-                      inflight,
-                      runCommand: runAgentCommand,
-                    });
-                  }
-                });
-                return;
-              }
-
-              void routeMessage({
-                authorId,
-                channelId,
-                messageContent: content,
-                attachments: rawAttachments,
-                instance,
-                discordToken,
-                runtime,
-                agentTimeoutMs,
-                inflight,
-                runCommand: runAgentCommand,
-              });
-            };
-
-            // Access control. DMs are inherently 1:1 with the owner, so they
-            // pass through untouched (onboarding a brand-new user happens here).
-            // In a shared guild channel, restrict conversation to the channel
-            // owner (the user it was registered for) or a whitelisted admin, so
-            // other members cannot hijack someone else's agent. Fail closed.
-            if (guildId) {
-              void isAuthorizedForChannel(channelId, authorId, {
-                describeInstance,
-                isWhitelisted: whitelist.isWhitelisted,
-              }).then((allowed) => {
-                if (!allowed) {
-                  runtime.log(
-                    `[router] denied message from ${authorId} in channel ${channelId} (not owner or whitelisted)`,
-                  );
-                  void discordSendEphemeral(
-                    discordToken,
-                    channelId,
-                    "*You are not authorized to use this channel's agent.*",
-                  );
-                  return;
-                }
-                routeInstanceMessage();
-              });
-              return;
-            }
-
-            routeInstanceMessage();
+            handleMessageCreate(gatewayCtx, d);
           }
 
-          // Handle slash command interactions
+          // Slash-command interactions (/lifecycle, /channel).
           if (t === "INTERACTION_CREATE" && d.type === 2) {
-            const interactionData = d.data;
-            const interactionChannelId = d.channel_id;
-            const interactionToken = d.token;
-            const interactionId = d.id;
-
-            // Learn the channel's guild from interactions too (e.g. a channel
-            // registered via `/channel register` before any message is sent), so
-            // GUILD_DELETE can still tear its instance down (see channelGuild).
-            if (interactionChannelId && d.guild_id) {
-              channelGuild.set(interactionChannelId, d.guild_id);
-            }
-
-            // Helper to respond to interactions (always ephemeral). Accepts a
-            // plain string (content) or an embeds payload from a channel
-            // command; either way keeps the ephemeral flag (64).
-            const respondToInteraction = (payload: ChannelReplyPayload) => {
-              const data =
-                typeof payload === "string"
-                  ? { content: payload, flags: 64 }
-                  : {
-                      embeds: payload.embeds,
-                      ...(payload.components ? { components: payload.components } : {}),
-                      flags: 64,
-                    };
-              void fetch(
-                `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    type: 4,
-                    data,
-                  }),
-                },
-              )
-                .then((resp) => {
-                  if (!resp.ok) {
-                    runtime.error(`[router] interaction response failed (${resp.status})`);
-                  }
-                })
-                .catch((err) =>
-                  runtime.error(`[router] interaction response failed: ${String(err)}`),
-                );
-            };
-
-            if (interactionData?.name === "lifecycle" && interactionChannelId) {
-              const instance = instances.get(interactionChannelId);
-              if (!instance) {
-                respondToInteraction("*This channel is not registered.*");
-                return;
-              }
-
-              const current = instance.preferences.lifecycleMessages ?? false;
-              const setting = (
-                interactionData.options as Array<{ name: string; value: string }> | undefined
-              )?.find((o: { name: string }) => o.name === "setting")?.value;
-
-              let statusText: string;
-              if (setting === "on") {
-                setUserPreference(instance, "lifecycleMessages", true);
-                statusText =
-                  "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
-              } else if (setting === "off") {
-                setUserPreference(instance, "lifecycleMessages", false);
-                statusText =
-                  "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
-              } else {
-                statusText = current
-                  ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
-                  : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
-              }
-
-              respondToInteraction(statusText);
-              runtime.log(
-                `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
-              );
-            }
-
-            if (interactionData?.name === "channel" && interactionChannelId) {
-              // Subcommand + its options (e.g. unregister confirm) live one level
-              // down in the interaction options tree.
-              const subOpt = (
-                interactionData.options as
-                  | Array<{
-                      name: string;
-                      options?: Array<{ name: string; value: string | number | boolean }>;
-                    }>
-                  | undefined
-              )?.[0];
-              // A subcommand carries at most one relevant option: register's
-              // optional `owner` (a user id) or unregister's optional `confirm`.
-              // Either becomes args[0], interpreted per subcommand downstream.
-              const args: string[] = [];
-              const owner = subOpt?.options?.find((o) => o.name === "owner")?.value;
-              if (owner !== undefined) {
-                args.push(String(owner));
-              }
-              const confirm = subOpt?.options?.find((o) => o.name === "confirm")?.value;
-              if (confirm !== undefined) {
-                args.push(String(confirm));
-              }
-              const userId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
-              if (userId) {
-                // Acknowledge immediately with a deferred (ephemeral) response:
-                // register can take up to the daemon's command timeout plus
-                // readiness polling, well beyond Discord's ~3s window. The
-                // result is then delivered by editing the deferred reply.
-                void fetch(
-                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ type: 5, data: { flags: 64 } }),
-                  },
-                ).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
-                const editReply = (payload: ChannelReplyPayload) => {
-                  const body =
-                    typeof payload === "string"
-                      ? { content: payload }
-                      : {
-                          embeds: payload.embeds,
-                          // Always send components so an updated reply can also
-                          // clear a previous action row (e.g. the confirm button).
-                          components: payload.components ?? [],
-                        };
-                  void fetch(
-                    `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-                    {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(body),
-                    },
-                  )
-                    .then((resp) => {
-                      if (!resp.ok) {
-                        runtime.error(`[router] channel followup failed (${resp.status})`);
-                      }
-                    })
-                    .catch((err) =>
-                      runtime.error(`[router] channel followup failed: ${String(err)}`),
-                    );
-                };
-                void handleChannelCommand(
-                  {
-                    subcommand: subOpt?.name ?? null,
-                    args,
-                    channelId: interactionChannelId,
-                    userId,
-                    isDM: !d.guild_id,
-                    reply: (payload) => editReply(payload),
-                  },
-                  channelCommandDeps,
-                );
-              }
-            }
+            handleSlashInteraction(gatewayCtx, d);
           }
 
-          // Handle message-component interactions (buttons). Currently only the
-          // `/channel unregister` confirmation buttons.
+          // Message-component interactions (buttons): /channel unregister confirm.
           if (t === "INTERACTION_CREATE" && d.type === 3) {
-            const customId = d.data?.custom_id as string | undefined;
-            const parsed = customId ? parseUnregisterCustomId(customId) : null;
-            const clickerId = (d.member?.user?.id ?? d.user?.id) as string | undefined;
-            const interactionId = d.id;
-            const interactionToken = d.token;
-            if (d.channel_id && d.guild_id) {
-              channelGuild.set(d.channel_id, d.guild_id);
-            }
-
-            if (parsed && clickerId && customId) {
-              if (parsed.initiatorId !== clickerId) {
-                // Someone other than the initiator clicked: reply ephemerally
-                // and leave the original confirmation message untouched.
-                void fetch(
-                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      type: 4,
-                      data: { content: "This confirmation isn't for you.", flags: 64 },
-                    }),
-                  },
-                ).catch((err) => runtime.error(`[router] button response failed: ${String(err)}`));
-              } else {
-                // Defer the message update (type 6) so a slow unregister does
-                // not blow Discord's ~3s response window, then edit the original
-                // confirmation message with the result and drop the buttons.
-                void fetch(
-                  `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ type: 6 }),
-                  },
-                ).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
-                void handleUnregisterButtonClick({ customId, clickerId }, channelCommandDeps).then(
-                  (result) => {
-                    if (!result.update) {
-                      return;
-                    }
-                    void fetch(
-                      `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-                      {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          embeds: result.update.embeds,
-                          components: result.update.components satisfies DiscordActionRow[],
-                        }),
-                      },
-                    )
-                      .then((resp) => {
-                        if (!resp.ok) {
-                          runtime.error(`[router] button followup failed (${resp.status})`);
-                        }
-                      })
-                      .catch((err) =>
-                        runtime.error(`[router] button followup failed: ${String(err)}`),
-                      );
-                  },
-                );
-              }
-            }
+            handleComponentInteraction(gatewayCtx, d);
           }
 
-          // A guild channel (or thread) was deleted. If it had a registered
-          // instance, tear it down so we don't keep a dead route around.
+          // A guild channel (or thread) was deleted; tear down any registered
+          // instance so we don't keep a dead route around.
           if (t === "CHANNEL_DELETE" || t === "THREAD_DELETE") {
-            const deletedChannelId = d.id;
-            if (deletedChannelId) {
-              // Drop the learned guild mapping so deleted channels don't
-              // accumulate as stale entries on a long-lived router.
-              channelGuild.delete(deletedChannelId);
-              cleanupDeletedChannel(deletedChannelId, t.toLowerCase());
-            }
+            handleChannelDelete(gatewayCtx, d, t);
           }
 
           // The bot was removed from a guild (or the guild was deleted). Tear
@@ -936,15 +553,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           // with `unavailable: true` is a transient outage, not a removal, so we
           // ignore it and keep the instances.
           if (t === "GUILD_DELETE" && d?.unavailable !== true) {
-            const deletedGuildId = d.id;
-            if (deletedGuildId) {
-              for (const [channelId, guildId] of channelGuild) {
-                if (guildId === deletedGuildId) {
-                  channelGuild.delete(channelId);
-                  cleanupDeletedChannel(channelId, "guild_delete");
-                }
-              }
-            }
+            handleGuildDelete(gatewayCtx, d);
           }
           break;
         }
