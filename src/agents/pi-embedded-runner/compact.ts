@@ -63,7 +63,6 @@ import {
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { buildModelAliasLines, resolveModel } from "./model.js";
-import { splitPersonaContextFiles } from "./persona-preamble.js";
 import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
 import {
@@ -73,6 +72,7 @@ import {
 } from "./system-prompt.js";
 import { splitSdkTools } from "./tool-split.js";
 import { describeUnknownError, mapThinkingLevel, resolveExecToolDefaults } from "./utils.js";
+import { resolveWorkspaceContextDelivery } from "./workspace-context.js";
 
 export type CompactEmbeddedPiSessionParams = {
   sessionId: string;
@@ -216,10 +216,13 @@ export async function compactEmbeddedPiSessionDirect(
       sessionId: params.sessionId,
       warn: makeBootstrapWarn({ sessionLabel, warn: (message) => log.warn(message) }),
     });
-    // Persona files (SOUL.md, AGENTS.md) are delivered via the persona preamble on
-    // normal runs, not the system-prompt Project Context block. Exclude them here
-    // too so the compaction request's system prompt matches the normal-run shape.
-    const { remainingFiles } = splitPersonaContextFiles(contextFiles);
+    // Only inline-mode files belong in the compaction request's system prompt, so
+    // it matches the normal-run shape (preamble/off files are delivered elsewhere or
+    // withheld). Compaction is an internal summarization pass and needs no preamble.
+    const { inlineFiles } = resolveWorkspaceContextDelivery(
+      contextFiles,
+      params.config?.agents?.defaults?.context,
+    );
     const runAbortController = new AbortController();
     const toolsRaw = createOpenClawCodingTools({
       exec: {
@@ -361,7 +364,7 @@ export async function compactEmbeddedPiSessionDirect(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles: remainingFiles,
+      contextFiles: inlineFiles,
       memoryCitationsMode: params.config?.memory?.citations,
       wrapProjectContext: needsSubscriptionPrefix,
     });

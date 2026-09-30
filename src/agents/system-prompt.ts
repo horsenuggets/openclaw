@@ -264,6 +264,12 @@ export function buildAgentSystemPrompt(params: {
   userTime?: string;
   userTimeFormat?: ResolvedTimeFormat;
   contextFiles?: EmbeddedContextFile[];
+  /**
+   * Pointer listing withheld ("off") workspace files by name so the model can
+   * Read them on demand. Emitted as its own section when the pointer placement is
+   * "inline"; preamble placement is handled outside the system prompt.
+   */
+  contextPointer?: string;
   skillsPrompt?: string;
   heartbeatPrompt?: string;
   docsPath?: string;
@@ -680,6 +686,13 @@ export function buildAgentSystemPrompt(params: {
       lines.push(`## ${file.path}`, "", file.content, "");
     }
     contextBlockEnd = lines.length;
+  }
+
+  // Pointer to withheld ("off") workspace files, when the pointer is placed inline.
+  // Sits outside the sentinel-wrapped Project Context block so it survives the
+  // subscription strip (it lists filenames only, which is CC-consistent).
+  if (params.contextPointer?.trim()) {
+    lines.push(params.contextPointer.trim(), "");
   }
 
   // Skip silent replies for subagent/none modes

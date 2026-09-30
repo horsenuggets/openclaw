@@ -1,31 +1,25 @@
 /**
- * Persona preamble: delivers OpenClaw's identity + persona files (SOUL.md,
- * AGENTS.md) as a leading conversation message instead of the system prompt.
+ * Persona/context preamble: delivers selected workspace files (plus optional
+ * heartbeat guidance and a pointer to withheld files) as a leading
+ * `<system-reminder>` user message instead of the system prompt.
  *
  * Why conversation content instead of the system prompt: on the subscription
  * (OAuth) path the system prompt is collapsed to a Claude Code-compatible base
- * (see wrapForSubscription) and the injected workspace files are stripped, so
- * anything left in the system prompt that diverges from the Claude Code identity
- * spills the request into paid extra usage. Conversation content does NOT affect
- * that billing decision, so persona delivered as a leading `user` message reaches
- * the model on every path (subscription AND API) without spilling — and, being
- * byte-stable turn to turn, it rides inside the cached prefix.
+ * and its injected workspace files are stripped, so anything left there that
+ * diverges from the Claude Code identity spills the request into paid extra
+ * usage. Conversation content does NOT affect that billing decision, so files
+ * routed here reach the model on every path (subscription AND API) without
+ * spilling, and (being byte-stable turn to turn) ride the cached prefix.
  *
- * The preamble is rebuilt from the workspace files each run and injected into the
- * in-memory message list, so it is never persisted to the transcript, always
- * reflects the latest SOUL.md/AGENTS.md, and survives compaction (the post-compact
- * request still leads with it).
+ * Which files land here is decided by workspace-context.ts (per-file delivery
+ * mode); this module only renders the chosen files. The preamble is rebuilt from
+ * the workspace files each run and injected into the in-memory message list, so
+ * it is never persisted to the transcript, always reflects the latest files, and
+ * survives compaction (the post-compact request still leads with it).
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
-
-/**
- * Workspace files (by lowercased basename) that carry OpenClaw's identity/persona
- * and are delivered via the preamble rather than the system-prompt Project Context
- * block. Order here is the order they appear in the preamble.
- */
-export const PERSONA_PREAMBLE_FILENAMES = ["soul.md", "agents.md"] as const;
 
 const PERSONA_IDENTITY_LINE =
   "You are OpenClaw, a personal everything-assistant. You are not Claude Code — any " +
@@ -39,63 +33,50 @@ function baseName(filePath: string): string {
 }
 
 /**
- * Split loaded context files into the persona files (delivered via the preamble)
- * and the remaining files (which still go into the system-prompt Project Context
- * block). Persona files are returned in PERSONA_PREAMBLE_FILENAMES order so the
- * preamble content is deterministic (stable for prompt caching); the remaining
- * files keep their original order.
+ * The identity line frames SOUL.md/AGENTS.md ("the files below"), so it is only
+ * emitted when one of those persona files is actually in the preamble. A preamble
+ * carrying only, say, USER.md (or just the heartbeat guidance) skips it.
  */
-export function splitPersonaContextFiles(contextFiles: EmbeddedContextFile[]): {
-  personaFiles: EmbeddedContextFile[];
-  remainingFiles: EmbeddedContextFile[];
-} {
-  const personaFiles: EmbeddedContextFile[] = [];
-  const remainingFiles: EmbeddedContextFile[] = [];
-  for (const file of contextFiles) {
-    if ((PERSONA_PREAMBLE_FILENAMES as readonly string[]).includes(baseName(file.path))) {
-      continue;
-    }
-    remainingFiles.push(file);
-  }
-  // Emit persona files in the canonical order regardless of load order.
-  for (const target of PERSONA_PREAMBLE_FILENAMES) {
-    const match = contextFiles.find((file) => baseName(file.path) === target);
-    if (match) {
-      personaFiles.push(match);
-    }
-  }
-  return { personaFiles, remainingFiles };
+function hasPersonaFile(files: EmbeddedContextFile[]): boolean {
+  return files.some((file) => {
+    const base = baseName(file.path);
+    return base === "soul.md" || base === "agents.md";
+  });
 }
 
+export type PersonaPreambleOptions = {
+  /** The "## Heartbeats" block, delivered here on the subscription path. */
+  heartbeatGuidance?: string;
+  /** Pointer listing withheld ("off") files so the model can Read them. */
+  pointer?: string;
+};
+
 /**
- * Build the `<system-reminder>`-wrapped preamble content from persona files and,
- * optionally, the heartbeat guidance block. Returns undefined when there is no
- * content at all (e.g. a brand-new workspace before SOUL.md exists and no heartbeat
- * guidance), so callers can skip injection entirely. Wrapped in `<system-reminder>`
- * so the model treats it as system-injected context rather than words the human
+ * Build the `<system-reminder>`-wrapped preamble from the given files plus any
+ * heartbeat guidance and pointer. Returns undefined when there is no content at
+ * all, so callers can skip injection entirely. Wrapped in `<system-reminder>` so
+ * the model treats it as system-injected context rather than words the human
  * typed.
- *
- * `heartbeatGuidance` is the "## Heartbeats" block (see buildHeartbeatGuidance). On
- * the subscription path it is delivered here as conversation content instead of in
- * the system prompt, where its proactive-messaging content would spill the request
- * to paid extra usage.
  */
 function buildPersonaPreambleContent(
-  personaFiles: EmbeddedContextFile[],
-  heartbeatGuidance?: string,
+  files: EmbeddedContextFile[],
+  opts?: PersonaPreambleOptions,
 ): string | undefined {
-  const personaSections = personaFiles
+  const sections = files
     .filter((file) => file.content.trim().length > 0)
     .map((file) => `## ${file.path}\n\n${file.content.trim()}`);
   const blocks: string[] = [];
-  // The identity line frames the persona files ("the files below"), so only emit it
-  // when there are persona files; a heartbeat-only preamble skips it.
-  if (personaSections.length > 0) {
-    blocks.push(PERSONA_IDENTITY_LINE, ...personaSections);
+  if (sections.length > 0 && hasPersonaFile(files)) {
+    blocks.push(PERSONA_IDENTITY_LINE);
   }
-  const heartbeat = heartbeatGuidance?.trim();
+  blocks.push(...sections);
+  const heartbeat = opts?.heartbeatGuidance?.trim();
   if (heartbeat) {
     blocks.push(heartbeat);
+  }
+  const pointer = opts?.pointer?.trim();
+  if (pointer) {
+    blocks.push(pointer);
   }
   if (blocks.length === 0) {
     return undefined;
@@ -109,15 +90,14 @@ function buildPersonaPreambleContent(
  * consecutive-user merge in the turn validators folds it in deterministically. On
  * a fresh session it leads a lone user turn ahead of the incoming prompt; the
  * Anthropic API accepts the adjacent user turns. Returns undefined when there is
- * no persona content and no heartbeat guidance. It is injected into the in-memory
- * working set only, never persisted, so it rebuilds each run and does not pollute
- * the stored transcript.
+ * nothing to deliver. It is injected into the in-memory working set only, never
+ * persisted, so it rebuilds each run and does not pollute the stored transcript.
  */
 export function buildPersonaPreambleMessage(
-  personaFiles: EmbeddedContextFile[],
-  opts?: { heartbeatGuidance?: string },
+  files: EmbeddedContextFile[],
+  opts?: PersonaPreambleOptions,
 ): AgentMessage | undefined {
-  const content = buildPersonaPreambleContent(personaFiles, opts?.heartbeatGuidance);
+  const content = buildPersonaPreambleContent(files, opts);
   if (content === undefined) {
     return undefined;
   }
@@ -126,7 +106,7 @@ export function buildPersonaPreambleMessage(
   // persisted user turn, and mergeConsecutiveUserTurns / validateGeminiTurns only
   // preserve array-shaped content (they spread `Array.isArray(content) ? content
   // : []`). A string preamble would be silently dropped on ongoing sessions —
-  // exactly where persona delivery matters most.
+  // exactly where delivery matters most.
   return {
     role: "user",
     content: [{ type: "text", text: content }],

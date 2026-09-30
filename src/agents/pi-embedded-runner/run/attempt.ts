@@ -79,7 +79,7 @@ import {
 } from "../google.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
-import { buildPersonaPreambleMessage, splitPersonaContextFiles } from "../persona-preamble.js";
+import { buildPersonaPreambleMessage } from "../persona-preamble.js";
 import {
   clearActiveEmbeddedRun,
   type EmbeddedPiQueueHandle,
@@ -95,6 +95,10 @@ import {
 } from "../system-prompt.js";
 import { splitSdkTools } from "../tool-split.js";
 import { describeUnknownError, mapThinkingLevel } from "../utils.js";
+import {
+  buildWorkspaceContextPointer,
+  resolveWorkspaceContextDelivery,
+} from "../workspace-context.js";
 import { detectAndLoadPromptImages } from "./images.js";
 
 export function injectHistoryImagesIntoMessages(
@@ -210,13 +214,21 @@ export async function runEmbeddedAttempt(
       ? ["Reminder: commit your changes in this workspace after edits."]
       : undefined;
 
-    // Persona files (SOUL.md, AGENTS.md) are delivered as a leading conversation
-    // message (persona preamble) rather than the system-prompt Project Context
-    // block, so identity/persona reaches the model on the subscription path too
-    // (where the system prompt is stripped) without spilling to paid usage. The
-    // remaining files still go into the system prompt. The preamble message itself
-    // is built below, once the subscription/heartbeat inputs are resolved.
-    const { personaFiles, remainingFiles } = splitPersonaContextFiles(contextFiles);
+    // Route each workspace context file to inline (system prompt), preamble
+    // (leading <system-reminder> conversation message), or off (withheld, listed
+    // in a pointer) per the agents.defaults.context config. Preamble delivery
+    // reaches the model on the subscription path too (where the inline Project
+    // Context block is stripped) without spilling to paid usage. The preamble
+    // message itself is built below, once the subscription/heartbeat inputs are
+    // resolved.
+    const contextDelivery = resolveWorkspaceContextDelivery(
+      contextFiles,
+      params.config?.agents?.defaults?.context,
+    );
+    const { inlineFiles, preambleFiles, offFiles, pointerPlacement } = contextDelivery;
+    const contextPointer = buildWorkspaceContextPointer(offFiles);
+    const preamblePointer = pointerPlacement === "preamble" ? contextPointer : undefined;
+    const inlinePointer = pointerPlacement === "inline" ? contextPointer : undefined;
 
     const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
 
@@ -378,7 +390,10 @@ export async function runEmbeddedAttempt(
       needsSubscriptionPrefix && promptMode !== "minimal"
         ? buildHeartbeatGuidance(heartbeatPromptText)
         : undefined;
-    const personaPreamble = buildPersonaPreambleMessage(personaFiles, { heartbeatGuidance });
+    const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
+      heartbeatGuidance,
+      pointer: preamblePointer,
+    });
     const docsPath = await resolveOpenClawDocsPath({
       workspaceDir: effectiveWorkspace,
       argv1: process.argv[1],
@@ -409,7 +424,8 @@ export async function runEmbeddedAttempt(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles: remainingFiles,
+      contextFiles: inlineFiles,
+      contextPointer: inlinePointer,
       memoryCitationsMode: params.config?.memory?.citations,
       // Only the subscription path slices the Project Context block back out
       // (wrapForSubscription below), so only it needs the sentinel markers.
@@ -433,11 +449,10 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
-      // Report all loaded files as injected, including the persona files. They no
-      // longer live in the system-prompt Project Context block (that byte count is
-      // parsed from the prompt text and stays accurate) but they still reach the
-      // model via the conversation preamble, so /context must count their bytes.
-      injectedFiles: contextFiles,
+      // Report files that actually reach the model: inline (system Project Context)
+      // and preamble (conversation <system-reminder>). "off" files are withheld
+      // (only their name is pointed at), so they are excluded from the byte count.
+      injectedFiles: [...inlineFiles, ...preambleFiles],
       skillsPrompt,
       tools,
     });
