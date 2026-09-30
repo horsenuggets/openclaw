@@ -13,11 +13,15 @@
         "source.organizeImports": "explicit",
       },
     },
+    "[markdown]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true,
+    },
     "biome.enabled": false,
     "js/ts.tsdk.path": "node_modules/typescript/lib",
   },
   "extensions": {
-    "recommendations": ["oxc.oxc-vscode"],
+    "recommendations": ["oxc.oxc-vscode", "esbenp.prettier-vscode"],
     "unwantedRecommendations": ["biomejs.biome"],
   },
 }
