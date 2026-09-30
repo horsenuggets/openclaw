@@ -325,14 +325,16 @@ async function main() {
     }
     results.push({ c, outcome, detail, ok: ok || unreliable });
     if (!args.json) {
-      const status = ok ? "OK  " : unreliable ? "WARN" : "FAIL";
+      // Probes are exploratory and never gate the run, so they print as INFO
+      // rather than OK/FAIL even when the observed outcome differs from the guess.
+      const status = c.group === "probe" ? "INFO" : ok ? "OK  " : unreliable ? "WARN" : "FAIL";
       console.log(
         `${status}  [${c.group}] ${c.name.padEnd(28)} expect=${c.expect.padEnd(5)} got=${outcome.padEnd(5)} ${detail}` +
           (unreliable ? "  (extra-usage balance may be >0; signal unreliable)" : ""),
       );
     }
-    // Space out requests a touch to be polite to the API.
-    await new Promise((r) => setTimeout(r, 500));
+    // Space out requests to stay clear of the API's short-window rate limit.
+    await new Promise((r) => setTimeout(r, 1500));
   }
 
   if (args.json) {
