@@ -23,10 +23,11 @@
  * returns 200, the script warns that the signal is unreliable rather than
  * asserting a pass.
  *
- * Auth: needs a subscription OAuth access token. Resolution order:
- *   1. --token <tok>
- *   2. env OPENCLAW_OAUTH_TOKEN
- *   3. auth-profiles.json ("anthropic-subscription:default".access) under
+ * Auth: needs a subscription OAuth access token. Resolution order (no token is
+ * accepted on argv, to keep a live bearer credential out of the process table and
+ * shell history):
+ *   1. env OPENCLAW_OAUTH_TOKEN
+ *   2. auth-profiles.json ("anthropic-subscription:default".access) under
  *      <state dir>/agents/<agent>/agent/, state dir from OPENCLAW_STATE_DIR or
  *      ~/.openclaw, agent from --agent (default "main").
  * Access tokens are short-lived; if you get 401, mint a fresh one with
@@ -71,7 +72,6 @@ type Case = {
 };
 
 type Args = {
-  token?: string;
   agent: string;
   assertOnly: boolean;
   list: boolean;
@@ -83,9 +83,7 @@ function parseArgs(): Args {
   const args: Args = { agent: DEFAULT_AGENT_ID, assertOnly: false, list: false, json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--token" && argv[i + 1]) {
-      args.token = String(argv[++i]).trim();
-    } else if (arg === "--agent" && argv[i + 1]) {
+    if (arg === "--agent" && argv[i + 1]) {
       args.agent = String(argv[++i]).trim() || DEFAULT_AGENT_ID;
     } else if (arg === "--assert-only") {
       args.assertOnly = true;
@@ -99,9 +97,6 @@ function parseArgs(): Args {
 }
 
 function resolveToken(args: Args): string {
-  if (args.token) {
-    return args.token;
-  }
   const envToken = process.env.OPENCLAW_OAUTH_TOKEN?.trim();
   if (envToken) {
     return envToken;
@@ -117,9 +112,7 @@ function resolveToken(args: Args): string {
       : resolveUserPath(path.join(resolveStateDir(), "agents", agentId, "agent"));
   const authPath = path.join(agentDir, "auth-profiles.json");
   if (!fs.existsSync(authPath)) {
-    throw new Error(
-      `No token: pass --token, set OPENCLAW_OAUTH_TOKEN, or provide ${authPath} (missing).`,
-    );
+    throw new Error(`No token: set OPENCLAW_OAUTH_TOKEN, or provide ${authPath} (missing).`);
   }
   const store = JSON.parse(fs.readFileSync(authPath, "utf8")) as {
     profiles?: Record<string, { access?: string; expires?: number }>;
@@ -321,6 +314,19 @@ async function main() {
   const token = resolveToken(args);
   const results: Array<{ c: Case; outcome: Outcome; detail: string; ok: boolean }> = [];
 
+  // Flat, safe JSON projection (never the raw Case, which holds full prompt
+  // bodies). Used for both the normal and precondition-failure output branches so
+  // the schema is stable and request bodies are never serialized.
+  const flatResults = () =>
+    results.map((r) => ({
+      name: r.c.name,
+      group: r.c.group,
+      expect: r.c.expect,
+      outcome: r.outcome,
+      detail: r.detail,
+      ok: r.ok,
+    }));
+
   const printRow = (c: Case, outcome: Outcome, detail: string, ok: boolean) => {
     if (args.json) {
       return;
@@ -359,7 +365,7 @@ async function main() {
   }
   if (controlFailure) {
     if (args.json) {
-      console.log(JSON.stringify(results, null, 2));
+      console.log(JSON.stringify(flatResults(), null, 2));
     }
     console.error(
       "\nA known-spill control did not return the 400 spill signal. This account still has " +
@@ -379,20 +385,7 @@ async function main() {
   }
 
   if (args.json) {
-    console.log(
-      JSON.stringify(
-        results.map((r) => ({
-          name: r.c.name,
-          group: r.c.group,
-          expect: r.c.expect,
-          outcome: r.outcome,
-          detail: r.detail,
-          ok: r.ok,
-        })),
-        null,
-        2,
-      ),
-    );
+    console.log(JSON.stringify(flatResults(), null, 2));
   }
 
   if (assertionFailures > 0) {
