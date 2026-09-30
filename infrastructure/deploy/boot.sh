@@ -131,6 +131,15 @@ except: pass
   export DISCORD_BOT_TOKEN
 fi
 
+# Whisper speech-to-text port. One value drives both the server bind
+# (whisper.yml) and the router's transcription target (discord-router.yml passes
+# it as OPENCLAW_WHISPER_PORT), so client and server can never drift. Default
+# matches DEFAULT_WHISPER_PORT in src/config/port-defaults.ts; override in ~/.env
+# if it collides on the host (e.g. WSL mirrored networking sharing the port with
+# another distro). Kept off 8787, which clashes with RStudio and the Telegram
+# webhook default.
+export WHISPER_PORT="${WHISPER_PORT:-18792}"
+
 # Start whisper (speech-to-text)
 docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
 
