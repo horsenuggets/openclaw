@@ -151,9 +151,19 @@ case "${WHISPER_PORT:-}" in
     WHISPER_PORT="$WHISPER_PORT_DEFAULT"
     ;;
   *)
-    if [ "$WHISPER_PORT" -lt 1 ] || [ "$WHISPER_PORT" -gt 65535 ]; then
+    # All digits. Strip leading zeros so a 0-prefixed value compares as decimal
+    # (keeps the shell from treating it as octal); an empty result means it was
+    # all zeros.
+    stripped="${WHISPER_PORT#"${WHISPER_PORT%%[!0]*}"}"
+    [ -z "$stripped" ] && stripped=0
+    # Reject by length before the bounded numeric test: a value longer than 5
+    # digits would overflow the shell's integer test, which inside this
+    # if-condition would not trip set -e and would leak the bad value through.
+    if [ "${#stripped}" -gt 5 ] || [ "$stripped" -lt 1 ] || [ "$stripped" -gt 65535 ]; then
       echo "Warning: ignoring out-of-range WHISPER_PORT='$WHISPER_PORT' (must be 1-65535); using $WHISPER_PORT_DEFAULT." >&2
       WHISPER_PORT="$WHISPER_PORT_DEFAULT"
+    else
+      WHISPER_PORT="$stripped"
     fi
     ;;
 esac
