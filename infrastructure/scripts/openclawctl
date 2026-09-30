@@ -17,7 +17,7 @@ SHARED_AUTH_FILE="$SHARED_AUTH_DIR/auth-profiles.json"
 # (a shell script cannot import the TypeScript constant).
 BASE_PORT=18789
 # Per-instance port file, relative to each instance directory. Mirrors
-# PORT_FILENAME in src/discord-router/config.ts.
+# PORT_FILENAME in src/discord/router/config.ts.
 PORT_FILENAME=".port"
 PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
@@ -355,7 +355,7 @@ seed_instance_config() {
   # config. Without this the first channel on a brand-new host gets no
   # openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
   # gateway.mode=local). The router reads each instance's gateway.auth.token back
-  # from this file to authenticate to the agent (see src/discord-router/config.ts),
+  # from this file to authenticate to the agent (see src/discord/router/config.ts),
   # so a fresh per-instance token is all that is required. Guarded like the
   # proxyUrl edit below so a failure warns rather than aborting under set -e after
   # the port is already reserved.

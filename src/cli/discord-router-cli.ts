@@ -7,8 +7,8 @@ export function registerDiscordRouterCli(program: Command) {
     .option("--discord-token <token>", "Discord bot token (or set DISCORD_BOT_TOKEN)")
     .option("--instances-dir <dir>", "Instances directory (default: ~/.openclaw-instances)")
     .action(async (opts: { discordToken?: string; instancesDir?: string }) => {
-      const { loadRouterConfig } = await import("../discord-router/config.js");
-      const { startRouter } = await import("../discord-router/router.js");
+      const { loadRouterConfig } = await import("../discord/router/config.js");
+      const { startRouter } = await import("../discord/router/router.js");
 
       const config = loadRouterConfig({
         discordToken: opts.discordToken,

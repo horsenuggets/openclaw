@@ -520,7 +520,7 @@ if (!skipBuild) {
 
   console.log("Bundling discord-router to CJS...");
   runEsbuild(
-    `src/discord-router/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/discord-router-bundle.cjs`,
+    `src/discord/router/entry.ts --bundle --platform=node --format=cjs ${importMetaBanner} ${importMetaDefine} --outfile=dist/discord-router-bundle.cjs`,
   );
 
   console.log("Bundling health-monitor to CJS...");

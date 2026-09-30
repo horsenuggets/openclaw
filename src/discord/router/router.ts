@@ -6,10 +6,10 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { AgentCommand } from "./agent-commands.js";
 import type { RouterConfig, InstanceConfig } from "./config.js";
-import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
-import { stripHorizontalRules } from "../discord/markdown-strip.js";
-import { convertTimesToDiscordTimestamps } from "../discord/timestamps.js";
-import { convertMarkdownTables } from "../markdown/tables.js";
+import { wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
+import { convertMarkdownTables } from "../../markdown/tables.js";
+import { stripHorizontalRules } from "../markdown-strip.js";
+import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import {
   CHANNEL_COMMAND_SPEC,

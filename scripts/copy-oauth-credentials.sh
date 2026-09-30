@@ -14,7 +14,7 @@
 #      instances at once; because they share the same store, an OAuth refresh
 #      by any container is seen by all, so tokens never go stale per-instance.
 #      <instances-root> is $OPENCLAW_INSTANCES_DIR on the deploy host if set
-#      (matching src/discord-router/config.ts), else ~/.openclaw-instances.
+#      (matching src/discord/router/config.ts), else ~/.openclaw-instances.
 #
 # The gateway picks the new tokens up on the next refresh attempt — no
 # container restart needed.
@@ -44,7 +44,7 @@ echo "Uploading credentials blob to $HOST:~/.claude/.credentials.json ..."
 printf '%s' "$CREDS" | ssh "$HOST" 'sh -lc '\''umask 077 && if [ -L "$HOME/.claude" ]; then echo "Refusing to write: $HOME/.claude is a symlink" >&2; exit 1; fi && mkdir -p "$HOME/.claude" && chmod 700 "$HOME/.claude" && tmp=$(mktemp "$HOME/.claude/.credentials.json.XXXXXX") && chmod 600 "$tmp" && cat > "$tmp" && mv -f "$tmp" "$HOME/.claude/.credentials.json"'\'''
 
 echo "Updating auth profiles (main + every per-channel instance) ..."
-# Mirror src/discord-router/config.ts's instancesDir override so this script
+# Mirror src/discord/router/config.ts's instancesDir override so this script
 # fans out to the same directory the router actually scans on hosts that set
 # OPENCLAW_INSTANCES_DIR (e.g. non-default instance roots). Forward it
 # base64-encoded so arbitrary path contents (spaces, quotes) can't affect
@@ -262,7 +262,7 @@ targets = [os.path.join(home, ".openclaw/agents/main/agent/auth-profiles.json")]
 # (plus the main-agent store above) instead of fanning a copy into each
 # per-instance dir; all containers read/write the shared file, so an OAuth
 # refresh by any one of them is seen by all. <instances-root> honours the
-# operator's OPENCLAW_INSTANCES_DIR override (src/discord-router/config.ts).
+# operator's OPENCLAW_INSTANCES_DIR override (src/discord/router/config.ts).
 instances_root_b64 = os.environ.get("OPENCLAW_INSTANCES_DIR_B64")
 instances_root = (
     base64.b64decode(instances_root_b64).decode()
