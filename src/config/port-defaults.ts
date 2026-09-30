@@ -14,12 +14,14 @@ function derivePort(base: number, offset: number, fallback: number): number {
 
 export const DEFAULT_BRIDGE_PORT = 18790;
 export const DEFAULT_BROWSER_CONTROL_PORT = 18791;
-// Local whisper speech-to-text server. Sits in the gateway's 187xx cluster,
-// deliberately off 8787 (the historical default) which collides with RStudio
+// Local whisper speech-to-text server. Uses 18794, the first free slot in the
+// 18792-18799 "one-off services" band documented in src/browser/profiles.ts
+// (18792 is the browser CDP relay = browserControlPort + 1; 18793 is canvas).
+// Deliberately off 8787 (the historical default), which collides with RStudio
 // Server and OpenClaw's own Telegram webhook default. The prod deploy overrides
 // this via the WHISPER_PORT env (see infrastructure/deploy/boot.sh); keep the
 // two values in sync.
-export const DEFAULT_WHISPER_PORT = 18792;
+export const DEFAULT_WHISPER_PORT = 18794;
 export const DEFAULT_CANVAS_HOST_PORT = 18793;
 export const DEFAULT_BROWSER_CDP_PORT_RANGE_START = 18800;
 export const DEFAULT_BROWSER_CDP_PORT_RANGE_END = 18899;

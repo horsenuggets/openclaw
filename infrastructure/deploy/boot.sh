@@ -137,8 +137,27 @@ fi
 # matches DEFAULT_WHISPER_PORT in src/config/port-defaults.ts; override in ~/.env
 # if it collides on the host (e.g. WSL mirrored networking sharing the port with
 # another distro). Kept off 8787, which clashes with RStudio and the Telegram
-# webhook default.
-export WHISPER_PORT="${WHISPER_PORT:-18792}"
+# webhook default. Normalize here with the same rule the router applies
+# (resolveWhisperUrl): a missing, non-numeric, or out-of-range value falls back
+# to the default so the server never gets a malformed --port and both sides stay
+# in agreement.
+WHISPER_PORT_DEFAULT=18794
+case "${WHISPER_PORT:-}" in
+  "")
+    WHISPER_PORT="$WHISPER_PORT_DEFAULT"
+    ;;
+  *[!0-9]*)
+    echo "Warning: ignoring non-numeric WHISPER_PORT='$WHISPER_PORT'; using $WHISPER_PORT_DEFAULT." >&2
+    WHISPER_PORT="$WHISPER_PORT_DEFAULT"
+    ;;
+  *)
+    if [ "$WHISPER_PORT" -lt 1 ] || [ "$WHISPER_PORT" -gt 65535 ]; then
+      echo "Warning: ignoring out-of-range WHISPER_PORT='$WHISPER_PORT' (must be 1-65535); using $WHISPER_PORT_DEFAULT." >&2
+      WHISPER_PORT="$WHISPER_PORT_DEFAULT"
+    fi
+    ;;
+esac
+export WHISPER_PORT
 
 # Start whisper (speech-to-text)
 docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
