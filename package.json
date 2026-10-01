@@ -185,7 +185,7 @@
     "oxfmt": "0.28.0",
     "oxlint": "^1.43.0",
     "oxlint-tsgolint": "^0.11.4",
-    "prettier": "3.9.9",
+    "prettier": "npm:@horsenuggets/prettier@3.9.9-horse.0",
     "rolldown": "1.0.0-rc.3",
     "tsdown": "^0.20.3",
     "tsx": "^4.21.0",

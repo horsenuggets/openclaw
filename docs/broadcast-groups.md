@@ -168,7 +168,7 @@ Agents process in order (one waits for previous to finish):
    - Normal routing applies (first matching binding)
 
 Note: broadcast groups do not bypass channel allowlists or group activation rules
-(mentions/commands/etc). They only change _which agents run_ when a message is eligible
+(mentions/commands/etc). They only change *which agents run* when a message is eligible
 for processing.
 
 ### Session Isolation

@@ -14,7 +14,7 @@ description:
 
 ## Context
 
-Outbound sends were mirrored into the _current_ agent session (tool session key) rather
+Outbound sends were mirrored into the *current* agent session (tool session key) rather
 than the target channel session. Inbound routing uses channel/peer session keys, so
 outbound responses landed in the wrong session and first-contact targets often lacked
 session entries.

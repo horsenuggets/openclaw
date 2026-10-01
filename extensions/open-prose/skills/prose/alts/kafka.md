@@ -285,7 +285,7 @@ statute config = { authority: "opus", resubmit: 3 }
 ## The Case For Kafka
 
 1. **Darkly comic.** Programs-as-bureaucracy is funny and relatable.
-2. **Surprisingly apt.** Software often _is_ an inscrutable apparatus.
+2. **Surprisingly apt.** Software often *is* an inscrutable apparatus.
 3. **Clean mappings.** Petition/verdict, file/dossier, clerk/proceeding all work well.
 4. **Appeal as loop.** The endless appeal process is a perfect metaphor for retry logic.
 5. **Cultural resonance.** "Kafkaesque" is a widely understood adjective.
@@ -374,7 +374,7 @@ Not recommended for:
 ## Closing Note
 
 > "Someone must have slandered Josef K., for one morning, without having done anything
-> wrong, he was arrested." — _The Trial_
+> wrong, he was arrested." — *The Trial*
 
 In the Kafka register, your program is Josef K. The apparatus will process it. Whether it
 succeeds or fails, no one can say for certain. But the proceedings will continue.

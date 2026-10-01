@@ -5,7 +5,7 @@ Adds the `lobster` agent tool as an **optional** plugin tool.
 ## What this is
 
 - Lobster is a standalone workflow shell (typed JSON-first pipelines + approvals/resume).
-- This plugin integrates Lobster with OpenClaw _without core changes_.
+- This plugin integrates Lobster with OpenClaw *without core changes*.
 
 ## Enable
 

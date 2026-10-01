@@ -57,7 +57,7 @@ To disable bootstrap file creation entirely (for pre-seeded workspaces), set:
 
 Core tools (read/exec/edit/write and related system tools) are always available, subject
 to tool policy. `apply_patch` is optional and gated by `tools.exec.applyPatch`. `TOOLS.md`
-does **not** control which tools exist; it’s guidance for how _you_ want them used.
+does **not** control which tools exist; it’s guidance for how *you* want them used.
 
 ## Skills
 
@@ -130,4 +130,4 @@ At minimum, set:
 
 ---
 
-_Next: [Group Chats](/concepts/group-messages)_ 🦞
+*Next: [Group Chats](/concepts/group-messages)* 🦞

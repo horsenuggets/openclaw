@@ -344,7 +344,7 @@ Same `deviceId` across roles → single “Instance” row:
 
 - Role/allowlist enforced at gateway boundary.
 - No client gets “full” API without operator scope.
-- Pairing required for _all_ connections.
+- Pairing required for *all* connections.
 - TLS + pinning reduces MITM risk for mobile.
 - SSH silent approval is a convenience; still recorded + revocable.
 - Discovery is never a trust anchor.

@@ -214,8 +214,8 @@ and you want a resumable workflow with human checkpoints.
 
 ### How it pairs with heartbeat and cron
 
-- **Heartbeat/cron** decide _when_ a run happens.
-- **Lobster** defines _what steps_ happen once the run starts.
+- **Heartbeat/cron** decide *when* a run happens.
+- **Lobster** defines *what steps* happen once the run starts.
 
 For scheduled workflows, use cron or heartbeat to trigger an agent turn that calls
 Lobster. For ad-hoc workflows, call Lobster directly.

@@ -237,8 +237,8 @@ importers:
         specifier: ^0.11.4
         version: 0.11.4
       prettier:
-        specifier: 3.9.9
-        version: 3.9.9
+        specifier: npm:@horsenuggets/prettier@3.9.9-horse.0
+        version: '@horsenuggets/prettier@3.9.9-horse.0'
       rolldown:
         specifier: 1.0.0-rc.3
         version: 1.0.0-rc.3
@@ -1149,6 +1149,11 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: 4.11.7
+
+  '@horsenuggets/prettier@3.9.9-horse.0':
+    resolution: {integrity: sha512-k9EThltcQ3RBU+NM4u1lRSONL9OYbBScXQeMfcdATiUVdcVEJajizwn5RWSiCd6af2Sva2+xfIHtn3QTQNZrfQ==}
+    engines: {node: '>=14'}
+    hasBin: true
 
   '@huggingface/jinja@0.5.4':
     resolution: {integrity: sha512-VoQJywjpjy2D88Oj0BTHRuS8JCbUgoOg5t1UGgbtGh2fRia9Dx/k6Wf8FqrEWIvWK9fAkfJeeLB9fcSpCNPCpw==}
@@ -4730,11 +4735,6 @@ packages:
     resolution: {integrity: sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg==}
     engines: {node: '>=12'}
 
-  prettier@3.9.9:
-    resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
-    engines: {node: '>=14'}
-    hasBin: true
-
   pretty-bytes@6.1.1:
     resolution: {integrity: sha512-mQUvGU6aUFQ+rNvTIAcZuWGRT9a6f6Yrg9bHs4ImKF+HZCEK+plBvnAZYSIQztknZF2qnzNtr6F8s0+IuptdlQ==}
     engines: {node: ^14.13.1 || >=16.0.0}
@@ -6601,6 +6601,8 @@ snapshots:
     dependencies:
       hono: 4.11.7
     optional: true
+
+  '@horsenuggets/prettier@3.9.9-horse.0': {}
 
   '@huggingface/jinja@0.5.4': {}
 
@@ -10477,8 +10479,6 @@ snapshots:
       source-map-js: 1.2.1
 
   postgres@3.4.8: {}
-
-  prettier@3.9.9: {}
 
   pretty-bytes@6.1.1: {}
 

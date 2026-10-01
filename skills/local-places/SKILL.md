@@ -16,7 +16,7 @@ metadata:
 
 # 📍 Local Places
 
-_Find places, Go fast_
+*Find places, Go fast*
 
 Search for nearby places using a local Google Places API proxy. Two-step flow: resolve
 location first, then search.

@@ -52,7 +52,7 @@ What it does (high level):
 - Mitigates `sharp` native install gotchas by defaulting `SHARP_IGNORE_GLOBAL_LIBVIPS=1`
   (avoids building against system libvips).
 
-If you _want_ `sharp` to link against a globally-installed libvips (or you’re debugging),
+If you *want* `sharp` to link against a globally-installed libvips (or you’re debugging),
 set:
 
 ```bash
@@ -75,7 +75,7 @@ with code `2`.
 
 Git is required for the `--install-method git` path (clone / pull).
 
-For `npm` installs, Git is _usually_ not required, but some environments still end up
+For `npm` installs, Git is *usually* not required, but some environments still end up
 needing it (e.g. when a package or dependency is fetched via a git URL). The installer
 currently ensures Git is present to avoid `spawn git ENOENT` surprises on fresh distros.
 

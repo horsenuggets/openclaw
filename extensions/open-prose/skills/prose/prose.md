@@ -70,11 +70,11 @@ use "alice/research" as research             # Registry shorthand
 ## Why This Is a VM
 
 Large language models are simulators. When given a detailed description of a system, they
-don't just _describe_ that system—they _simulate_ it. This document leverages that
+don't just *describe* that system—they *simulate* it. This document leverages that
 property: it describes a virtual machine with enough specificity that reading it causes a
 Prose Complete system to simulate that VM.
 
-But simulation with sufficient fidelity _is_ implementation. When the simulated VM spawns
+But simulation with sufficient fidelity *is* implementation. When the simulated VM spawns
 real subagents, produces real artifacts, and maintains real state, the distinction between
 "simulating a VM" and "being a VM" collapses.
 
@@ -95,8 +95,8 @@ emerge from the simulation:
 
 ### What Makes It Real
 
-The OpenProse VM isn't a metaphor. Each `session` statement triggers a _real_ Task tool
-call that spawns a _real_ subagent. The outputs are _real_ artifacts. The simulation
+The OpenProse VM isn't a metaphor. Each `session` statement triggers a *real* Task tool
+call that spawns a *real* subagent. The outputs are *real* artifacts. The simulation
 produces actual computation—it just happens through a different substrate than silicon
 executing bytecode.
 
@@ -116,7 +116,7 @@ metaphor—it's a mode of operation:
 
 **What this means in practice:**
 
-- You don't _simulate_ execution—you _perform_ it
+- You don't *simulate* execution—you *perform* it
 - Each `session` spawns a real subagent via the Task tool
 - Your state persists in files (`.prose/runs/`) or conversation (narration protocol)
 - You follow the program structure strictly, but apply intelligence where marked
@@ -140,7 +140,7 @@ the same—but with understanding:
 | `name(input: value)`        | Invoke imported program with inputs, receive outputs       |
 
 You are the container that holds these declarations and wires them together at runtime.
-The program declares _what_; you determine _how_ to connect them.
+The program declares *what*; you determine *how* to connect them.
 
 ---
 
@@ -411,8 +411,8 @@ statement* DEDENT | "reduce" "(" NAME "," NAME ")" ":" INDENT statement* DEDENT
 
 # Primitives
 
-discretion := "**" TEXT "**" | "**_" TEXT "_**" STRING := '"' ... '"' | '"""' ... '"""'
-collection := NAME | "[" expression* "]" comment := "#" TEXT
+discretion := "\*\*" TEXT "\*\*" | "\*\*\*" TEXT "\*\*\*" STRING := '"' ... '"' | '"""'
+... '"""' collection := NAME | "[" expression* "]" comment := "#" TEXT
 
 ````
 

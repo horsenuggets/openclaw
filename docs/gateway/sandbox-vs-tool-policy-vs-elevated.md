@@ -21,7 +21,7 @@ OpenClaw has three related (but different) controls:
 
 ## Quick debug
 
-Use the inspector to see what OpenClaw is _actually_ doing:
+Use the inspector to see what OpenClaw is *actually* doing:
 
 ```bash
 openclaw sandbox explain
@@ -51,7 +51,7 @@ images).
 
 ### Bind mounts (security quick check)
 
-- `docker.binds` _pierces_ the sandbox filesystem: whatever you mount is visible inside
+- `docker.binds` *pierces* the sandbox filesystem: whatever you mount is visible inside
   the container with the mode you set (`:ro` or `:rw`).
 - Default is read-write if you omit the mode; prefer `:ro` for source/secrets.
 - `scope: "shared"` ignores per-agent binds (only global binds apply).
@@ -149,5 +149,5 @@ Fix-it keys (pick one):
 
 ### “I thought this was main, why is it sandboxed?”
 
-In `"non-main"` mode, group/channel keys are _not_ main. Use the main session key (shown
+In `"non-main"` mode, group/channel keys are *not* main. Use the main session key (shown
 by `sandbox explain`) or switch mode to `"off"`.

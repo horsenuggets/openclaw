@@ -1951,7 +1951,7 @@ High level:
 
 Soft vs hard pruning (what changes in the context sent to the LLM):
 
-- **Soft-trim**: only for _oversized_ tool results. Keeps the beginning + end and inserts
+- **Soft-trim**: only for *oversized* tool results. Keeps the beginning + end and inserts
   `...` in the middle.
   - Before: `toolResult("…very long output…")`
   - After: `toolResult("HEAD…\n...\n…TAIL\n\n[Tool result trimmed: …]")`
@@ -3624,4 +3624,4 @@ Cron is a Gateway-owned scheduler for wakeups and scheduled jobs. See
 
 ---
 
-_Next: [Agent Runtime](/concepts/agent)_ 🦞
+*Next: [Agent Runtime](/concepts/agent)* 🦞

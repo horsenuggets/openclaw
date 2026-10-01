@@ -31,7 +31,7 @@ Last updated: 2026-01-01
 
 ## Tailoring strategy (so updates don’t hurt)
 
-If you want “100% tailored to me” _and_ easy updates, keep your customization in:
+If you want “100% tailored to me” *and* easy updates, keep your customization in:
 
 - **Config:** `~/.openclaw/openclaw.json` (JSON/JSON5-ish)
 - **Workspace:** `~/.openclaw/workspace` (skills, prompts, memories; make it a private git

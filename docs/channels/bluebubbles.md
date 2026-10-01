@@ -268,7 +268,7 @@ Available actions:
 
 ### Message IDs (short vs full)
 
-OpenClaw may surface _short_ message IDs (e.g., `1`, `2`) to save tokens.
+OpenClaw may surface *short* message IDs (e.g., `1`, `2`) to save tokens.
 
 - `MessageSid` / `ReplyToId` can be short IDs.
 - `MessageSidFull` / `ReplyToIdFull` contain the provider full IDs.

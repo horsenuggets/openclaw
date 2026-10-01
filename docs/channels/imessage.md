@@ -91,7 +91,7 @@ Messages clean), use a dedicated Apple ID + a dedicated macOS user.
    the bot user.
 
 First-run note: sending/receiving may require GUI approvals (Automation + Full Disk
-Access) in the _bot macOS user_. If `imsg rpc` looks stuck or exits, log into that user
+Access) in the *bot macOS user*. If `imsg rpc` looks stuck or exits, log into that user
 (Screen Sharing helps), run a one-time `imsg chats --limit 1` / `imsg send ...`, approve
 prompts, then retry.
 

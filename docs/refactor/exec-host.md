@@ -17,7 +17,7 @@ title: "Exec Host Refactor"
 - Split execution into a **headless runner service** with optional UI (macOS app) via
   local IPC.
 - Provide **per-agent** policy, allowlist, ask mode, and node binding.
-- Support **ask modes** that work _with_ or _without_ allowlists.
+- Support **ask modes** that work *with* or *without* allowlists.
 - Cross-platform: Unix socket + token auth (macOS/Linux/Windows parity).
 
 ## Non-goals

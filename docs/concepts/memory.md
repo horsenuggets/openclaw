@@ -40,7 +40,7 @@ These files live under the workspace (`agents.defaults.workspace`, default `~/cl
 
 When a session is **close to auto-compaction**, OpenClaw triggers a **silent, agentic
 turn** that reminds the model to write durable memory **before** the context is compacted.
-The default prompts explicitly say the model _may reply_, but usually `NO_REPLY` is the
+The default prompts explicitly say the model *may reply*, but usually `NO_REPLY` is the
 correct response so the user never sees this turn.
 
 This is controlled by `agents.defaults.compaction.memoryFlush`:
