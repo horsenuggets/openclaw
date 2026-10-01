@@ -1,5 +1,6 @@
 ---
-summary: "Routing rules per channel (WhatsApp, Telegram, Discord, Slack) and shared context"
+summary:
+  "Routing rules per channel (WhatsApp, Telegram, Discord, Slack) and shared context"
 read_when:
   - Changing channel routing or inbox behavior
 title: "Channel Routing"
@@ -7,13 +8,13 @@ title: "Channel Routing"
 
 # Channels & routing
 
-OpenClaw routes replies **back to the channel where a message came from**. The
-model does not choose a channel; routing is deterministic and controlled by the
-host configuration.
+OpenClaw routes replies **back to the channel where a message came from**. The model does
+not choose a channel; routing is deterministic and controlled by the host configuration.
 
 ## Key terms
 
-- **Channel**: `whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`, `webchat`.
+- **Channel**: `whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`,
+  `webchat`.
 - **AccountId**: per‑channel account instance (when supported).
 - **AgentId**: an isolated workspace + session store (“brain”).
 - **SessionKey**: the bucket key used to store context and control concurrency.
@@ -54,7 +55,8 @@ The matched agent determines which workspace and session store are used.
 
 ## Broadcast groups (run multiple agents)
 
-Broadcast groups let you run **multiple agents** for the same peer **when OpenClaw would normally reply** (for example: in WhatsApp groups, after mention/activation gating).
+Broadcast groups let you run **multiple agents** for the same peer **when OpenClaw would
+normally reply** (for example: in WhatsApp groups, after mention/activation gating).
 
 Config:
 
@@ -80,11 +82,16 @@ Example:
 ```json5
 {
   agents: {
-    list: [{ id: "support", name: "Support", workspace: "~/.openclaw/workspace-support" }],
+    list: [
+      { id: "support", name: "Support", workspace: "~/.openclaw/workspace-support" },
+    ],
   },
   bindings: [
     { match: { channel: "slack", teamId: "T123" }, agentId: "support" },
-    { match: { channel: "telegram", peer: { kind: "group", id: "-100123" } }, agentId: "support" },
+    {
+      match: { channel: "telegram", peer: { kind: "group", id: "-100123" } },
+      agentId: "support",
+    },
   ],
 }
 ```
@@ -100,9 +107,8 @@ You can override the store path via `session.store` and `{agentId}` templating.
 
 ## WebChat behavior
 
-WebChat attaches to the **selected agent** and defaults to the agent’s main
-session. Because of this, WebChat lets you see cross‑channel context for that
-agent in one place.
+WebChat attaches to the **selected agent** and defaults to the agent’s main session.
+Because of this, WebChat lets you see cross‑channel context for that agent in one place.
 
 ## Reply context
 

@@ -9,9 +9,9 @@ sidebarTitle: "Onboarding: macOS App"
 
 # Onboarding (macOS App)
 
-This doc describes the **current** first‑run onboarding flow. The goal is a
-smooth “day 0” experience: pick where the Gateway runs, connect auth, run the
-wizard, and let the agent bootstrap itself.
+This doc describes the **current** first‑run onboarding flow. The goal is a smooth “day 0”
+experience: pick where the Gateway runs, connect auth, run the wizard, and let the agent
+bootstrap itself.
 
 <Steps>
 <Step title="Approve macOS warning">
@@ -36,10 +36,9 @@ wizard, and let the agent bootstrap itself.
 
 Where does the **Gateway** run?
 
-- **This Mac (Local only):** onboarding can run OAuth flows and write credentials
-  locally.
-- **Remote (over SSH/Tailnet):** onboarding does **not** run OAuth locally;
-  credentials must exist on the gateway host.
+- **This Mac (Local only):** onboarding can run OAuth flows and write credentials locally.
+- **Remote (over SSH/Tailnet):** onboarding does **not** run OAuth locally; credentials
+  must exist on the gateway host.
 - **Configure later:** skip setup and leave the app unconfigured.
 
 <Tip>

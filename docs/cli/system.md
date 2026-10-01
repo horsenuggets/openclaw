@@ -9,8 +9,8 @@ title: "system"
 
 # `openclaw system`
 
-System-level helpers for the Gateway: enqueue system events, control heartbeats,
-and view presence.
+System-level helpers for the Gateway: enqueue system events, control heartbeats, and view
+presence.
 
 ## Common commands
 
@@ -23,9 +23,9 @@ openclaw system presence
 
 ## `system event`
 
-Enqueue a system event on the **main** session. The next heartbeat will inject
-it as a `System:` line in the prompt. Use `--mode now` to trigger the heartbeat
-immediately; `next-heartbeat` waits for the next scheduled tick.
+Enqueue a system event on the **main** session. The next heartbeat will inject it as a
+`System:` line in the prompt. Use `--mode now` to trigger the heartbeat immediately;
+`next-heartbeat` waits for the next scheduled tick.
 
 Flags:
 
@@ -47,8 +47,8 @@ Flags:
 
 ## `system presence`
 
-List the current system presence entries the Gateway knows about (nodes,
-instances, and similar status lines).
+List the current system presence entries the Gateway knows about (nodes, instances, and
+similar status lines).
 
 Flags:
 

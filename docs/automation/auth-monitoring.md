@@ -8,8 +8,8 @@ title: "Auth Monitoring"
 
 # Auth monitoring
 
-OpenClaw exposes OAuth expiry health via `openclaw models status`. Use that for
-automation and alerting; scripts are optional extras for phone workflows.
+OpenClaw exposes OAuth expiry health via `openclaw models status`. Use that for automation
+and alerting; scripts are optional extras for phone workflows.
 
 ## Preferred: CLI check (portable)
 
@@ -27,12 +27,12 @@ This works in cron/systemd and requires no extra scripts.
 
 ## Optional scripts (ops / phone workflows)
 
-These live under `scripts/` and are **optional**. They assume SSH access to the
-gateway host and are tuned for systemd + Termux.
+These live under `scripts/` and are **optional**. They assume SSH access to the gateway
+host and are tuned for systemd + Termux.
 
-- `scripts/claude-auth-status.sh` now uses `openclaw models status --json` as the
-  source of truth (falling back to direct file reads if the CLI is unavailable),
-  so keep `openclaw` on `PATH` for timers.
+- `scripts/claude-auth-status.sh` now uses `openclaw models status --json` as the source
+  of truth (falling back to direct file reads if the CLI is unavailable), so keep
+  `openclaw` on `PATH` for timers.
 - `scripts/auth-monitor.sh`: cron/systemd timer target; sends alerts (ntfy or phone).
 - `scripts/systemd/openclaw-auth-monitor.{service,timer}`: systemd user timer.
 - `scripts/claude-auth-status.sh`: Claude Code + OpenClaw auth checker (full/json/simple).

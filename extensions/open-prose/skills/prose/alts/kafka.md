@@ -9,9 +9,13 @@ requires: prose.md
 
 # OpenProse Kafka Register
 
-> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution semantics, state management, and VM behavior are defined there. This file only provides keyword translations.
+> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution
+> semantics, state management, and VM behavior are defined there. This file only provides
+> keyword translations.
 
-An alternative register for OpenProse that draws from the works of Franz Kafka—The Trial, The Castle, "In the Penal Colony." Programs become proceedings. Agents become clerks. Everything is a process, and nobody quite knows the rules.
+An alternative register for OpenProse that draws from the works of Franz Kafka—The Trial,
+The Castle, "In the Penal Colony." Programs become proceedings. Agents become clerks.
+Everything is a process, and nobody quite knows the rules.
 
 ## How to Use
 
@@ -20,7 +24,8 @@ An alternative register for OpenProse that draws from the works of Franz Kafka�
 3. When parsing `.prose` files, accept Kafka keywords as aliases for functional keywords
 4. All execution behavior remains identical—only surface syntax changes
 
-> **Design constraint:** Still aims to be "structured but self-evident" per the language tenets—just self-evident through a bureaucratic lens. (The irony is intentional.)
+> **Design constraint:** Still aims to be "structured but self-evident" per the language
+> tenets—just self-evident through a bureaucratic lens. (The irony is intentional.)
 
 ---
 
@@ -349,7 +354,8 @@ statute config = { authority: "opus", resubmit: 3 }
 
 ## Verdict
 
-Preserved for benchmarking. The Kafka register offers a darkly comic, self-aware framing that acknowledges the bureaucratic nature of software systems. The irony is the point.
+Preserved for benchmarking. The Kafka register offers a darkly comic, self-aware framing
+that acknowledges the bureaucratic nature of software systems. The irony is the point.
 
 Best suited for:
 
@@ -367,7 +373,8 @@ Not recommended for:
 
 ## Closing Note
 
-> "Someone must have slandered Josef K., for one morning, without having done anything wrong, he was arrested."
-> — _The Trial_
+> "Someone must have slandered Josef K., for one morning, without having done anything
+> wrong, he was arrested." — _The Trial_
 
-In the Kafka register, your program is Josef K. The apparatus will process it. Whether it succeeds or fails, no one can say for certain. But the proceedings will continue.
+In the Kafka register, your program is Josef K. The apparatus will process it. Whether it
+succeeds or fails, no one can say for certain. But the proceedings will continue.

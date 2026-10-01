@@ -35,7 +35,8 @@ You can override this with:
 ```
 
 - `envelopeTimezone: "utc"` uses UTC.
-- `envelopeTimezone: "user"` uses `agents.defaults.userTimezone` (falls back to host timezone).
+- `envelopeTimezone: "user"` uses `agents.defaults.userTimezone` (falls back to host
+  timezone).
 - Use an explicit IANA timezone (e.g., `"Europe/Vienna"`) for a fixed offset.
 - `envelopeTimestamp: "off"` removes absolute timestamps from envelope headers.
 - `envelopeElapsed: "off"` removes elapsed time suffixes (the `+2m` style).
@@ -62,8 +63,8 @@ You can override this with:
 
 ## Tool payloads (raw provider data + normalized fields)
 
-Tool calls (`channels.discord.readMessages`, `channels.slack.readMessages`, etc.) return **raw provider timestamps**.
-We also attach normalized fields for consistency:
+Tool calls (`channels.discord.readMessages`, `channels.slack.readMessages`, etc.) return
+**raw provider timestamps**. We also attach normalized fields for consistency:
 
 - `timestampMs` (UTC epoch milliseconds)
 - `timestampUtc` (ISO 8601 UTC string)
@@ -86,6 +87,7 @@ The system prompt includes:
 - `Current Date & Time` section with local time and timezone
 - `Time format: 12-hour` or `24-hour`
 
-You can control the prompt format with `agents.defaults.timeFormat` (`auto` | `12` | `24`).
+You can control the prompt format with `agents.defaults.timeFormat` (`auto` | `12` |
+`24`).
 
 See [Date & Time](/date-time) for the full behavior and examples.

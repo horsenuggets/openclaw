@@ -25,7 +25,8 @@ System control (launchd/systemd) lives on the Gateway host. See [Gateway](/gatew
 
 Android node app ⇄ (mDNS/NSD + WebSocket) ⇄ **Gateway**
 
-Android connects directly to the Gateway WebSocket (default `ws://<host>:18789`) and uses Gateway-owned pairing.
+Android connects directly to the Gateway WebSocket (default `ws://<host>:18789`) and uses
+Gateway-owned pairing.
 
 ### Prerequisites
 
@@ -46,7 +47,8 @@ Confirm in logs you see something like:
 
 - `listening on ws://0.0.0.0:18789`
 
-For tailnet-only setups (recommended for Vienna ⇄ London), bind the gateway to the tailnet IP:
+For tailnet-only setups (recommended for Vienna ⇄ London), bind the gateway to the tailnet
+IP:
 
 - Set `gateway.bind: "tailnet"` in `~/.openclaw/openclaw.json` on the gateway host.
 - Restart the Gateway / macOS menubar app.
@@ -63,9 +65,12 @@ More debugging notes: [Bonjour](/gateway/bonjour).
 
 #### Tailnet (Vienna ⇄ London) discovery via unicast DNS-SD
 
-Android NSD/mDNS discovery won’t cross networks. If your Android node and the gateway are on different networks but connected via Tailscale, use Wide-Area Bonjour / unicast DNS-SD instead:
+Android NSD/mDNS discovery won’t cross networks. If your Android node and the gateway are
+on different networks but connected via Tailscale, use Wide-Area Bonjour / unicast DNS-SD
+instead:
 
-1. Set up a DNS-SD zone (example `openclaw.internal.`) on the gateway host and publish `_openclaw-gw._tcp` records.
+1. Set up a DNS-SD zone (example `openclaw.internal.`) on the gateway host and publish
+   `_openclaw-gw._tcp` records.
 2. Configure Tailscale split DNS for your chosen domain pointing at that DNS server.
 
 Details and example CoreDNS config: [Bonjour](/gateway/bonjour).
@@ -74,10 +79,12 @@ Details and example CoreDNS config: [Bonjour](/gateway/bonjour).
 
 In the Android app:
 
-- The app keeps its gateway connection alive via a **foreground service** (persistent notification).
+- The app keeps its gateway connection alive via a **foreground service** (persistent
+  notification).
 - Open **Settings**.
 - Under **Discovered Gateways**, select your gateway and hit **Connect**.
-- If mDNS is blocked, use **Advanced → Manual Gateway** (host + port) and **Connect (Manual)**.
+- If mDNS is blocked, use **Advanced → Manual Gateway** (host + port) and **Connect
+  (Manual)**.
 
 After the first successful pairing, Android auto-reconnects on launch:
 
@@ -108,7 +115,8 @@ Pairing details: [Gateway pairing](/gateway/pairing).
 
 ### 6) Chat + history
 
-The Android node’s Chat sheet uses the gateway’s **primary session key** (`main`), so history and replies are shared with WebChat and other clients:
+The Android node’s Chat sheet uses the gateway’s **primary session key** (`main`), so
+history and replies are shared with WebChat and other clients:
 
 - History: `chat.history`
 - Send: `chat.send`
@@ -118,7 +126,8 @@ The Android node’s Chat sheet uses the gateway’s **primary session key** (`m
 
 #### Gateway Canvas Host (recommended for web content)
 
-If you want the node to show real HTML/CSS/JS that the agent can edit on disk, point the node at the Gateway canvas host.
+If you want the node to show real HTML/CSS/JS that the agent can edit on disk, point the
+node at the Gateway canvas host.
 
 Note: nodes use the standalone canvas host on `canvasHost.port` (default `18793`).
 
@@ -130,14 +139,17 @@ Note: nodes use the standalone canvas host on `canvasHost.port` (default `18793`
 openclaw nodes invoke --node "<Android Node>" --command canvas.navigate --params '{"url":"http://<gateway-hostname>.local:18793/__openclaw__/canvas/"}'
 ```
 
-Tailnet (optional): if both devices are on Tailscale, use a MagicDNS name or tailnet IP instead of `.local`, e.g. `http://<gateway-magicdns>:18793/__openclaw__/canvas/`.
+Tailnet (optional): if both devices are on Tailscale, use a MagicDNS name or tailnet IP
+instead of `.local`, e.g. `http://<gateway-magicdns>:18793/__openclaw__/canvas/`.
 
-This server injects a live-reload client into HTML and reloads on file changes.
-The A2UI host lives at `http://<gateway-host>:18793/__openclaw__/a2ui/`.
+This server injects a live-reload client into HTML and reloads on file changes. The A2UI
+host lives at `http://<gateway-host>:18793/__openclaw__/a2ui/`.
 
 Canvas commands (foreground only):
 
-- `canvas.eval`, `canvas.snapshot`, `canvas.navigate` (use `{"url":""}` or `{"url":"/"}` to return to the default scaffold). `canvas.snapshot` returns `{ format, base64 }` (default `format="jpeg"`).
+- `canvas.eval`, `canvas.snapshot`, `canvas.navigate` (use `{"url":""}` or `{"url":"/"}`
+  to return to the default scaffold). `canvas.snapshot` returns `{ format, base64 }`
+  (default `format="jpeg"`).
 - A2UI: `canvas.a2ui.push`, `canvas.a2ui.reset` (`canvas.a2ui.pushJSONL` legacy alias)
 
 Camera commands (foreground only; permission-gated):

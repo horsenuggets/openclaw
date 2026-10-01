@@ -31,7 +31,8 @@ Responses (shape)
 
 ## UI Hints
 
-- `uiHints` keyed by path; optional metadata (label/help/group/order/advanced/sensitive/placeholder).
+- `uiHints` keyed by path; optional metadata
+  (label/help/group/order/advanced/sensitive/placeholder).
 - Sensitive fields render as password inputs; no redaction layer.
 - Unsupported schema nodes fall back to the raw JSON editor.
 

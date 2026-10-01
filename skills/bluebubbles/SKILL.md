@@ -1,14 +1,20 @@
 ---
 name: bluebubbles
-description: Use when you need to send or manage iMessages via BlueBubbles (recommended iMessage integration). Calls go through the generic message tool with channel="bluebubbles".
-metadata: { "openclaw": { "emoji": "🫧", "requires": { "config": ["channels.bluebubbles"] } } }
+description:
+  Use when you need to send or manage iMessages via BlueBubbles (recommended iMessage
+  integration). Calls go through the generic message tool with channel="bluebubbles".
+metadata:
+  { "openclaw": { "emoji": "🫧", "requires": { "config": ["channels.bluebubbles"] } } }
 ---
 
 # BlueBubbles Actions
 
 ## Overview
 
-BlueBubbles is OpenClaw’s recommended iMessage integration. Use the `message` tool with `channel: "bluebubbles"` to send messages and manage iMessage conversations: send texts and attachments, react (tapbacks), edit/unsend, reply in threads, and manage group participants/names/icons.
+BlueBubbles is OpenClaw’s recommended iMessage integration. Use the `message` tool with
+`channel: "bluebubbles"` to send messages and manage iMessage conversations: send texts
+and attachments, react (tapbacks), edit/unsend, reply in threads, and manage group
+participants/names/icons.
 
 ## Inputs to collect
 
@@ -17,7 +23,8 @@ BlueBubbles is OpenClaw’s recommended iMessage integration. Use the `message` 
 - `messageId` for react/edit/unsend/reply
 - Attachment `path` for local files, or `buffer` + `filename` for base64
 
-If the user is vague ("text my mom"), ask for the recipient handle or chat guid and the exact message content.
+If the user is vague ("text my mom"), ask for the recipient handle or chat guid and the
+exact message content.
 
 ## Actions
 
@@ -120,9 +127,12 @@ If the user is vague ("text my mom"), ask for the recipient handle or chat guid 
 
 - Requires gateway config `channels.bluebubbles` (serverUrl/password/webhookPath).
 - Prefer `chat_guid` targets when you have them (especially for group chats).
-- BlueBubbles supports rich actions, but some are macOS-version dependent (for example, edit may be broken on macOS 26 Tahoe).
-- The gateway may expose both short and full message ids; full ids are more durable across restarts.
-- Developer reference for the underlying plugin lives in `extensions/bluebubbles/README.md`.
+- BlueBubbles supports rich actions, but some are macOS-version dependent (for example,
+  edit may be broken on macOS 26 Tahoe).
+- The gateway may expose both short and full message ids; full ids are more durable across
+  restarts.
+- Developer reference for the underlying plugin lives in
+  `extensions/bluebubbles/README.md`.
 
 ## Ideas to try
 

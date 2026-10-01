@@ -29,7 +29,8 @@ openclaw agents delete work
 Each agent workspace can include an `IDENTITY.md` at the workspace root:
 
 - Example path: `~/.openclaw/workspace/IDENTITY.md`
-- `set-identity --from-identity` reads from the workspace root (or an explicit `--identity-file`)
+- `set-identity --from-identity` reads from the workspace root (or an explicit
+  `--identity-file`)
 
 Avatar paths resolve relative to the workspace root.
 

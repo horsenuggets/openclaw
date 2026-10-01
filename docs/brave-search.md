@@ -14,7 +14,8 @@ OpenClaw uses Brave Search as the default provider for `web_search`.
 
 1. Create a Brave Search API account at https://brave.com/search/api/
 2. In the dashboard, choose the **Data for Search** plan and generate an API key.
-3. Store the key in config (recommended) or set `BRAVE_API_KEY` in the Gateway environment.
+3. Store the key in config (recommended) or set `BRAVE_API_KEY` in the Gateway
+   environment.
 
 ## Config example
 
@@ -36,6 +37,7 @@ OpenClaw uses Brave Search as the default provider for `web_search`.
 ## Notes
 
 - The Data for AI plan is **not** compatible with `web_search`.
-- Brave provides a free tier plus paid plans; check the Brave API portal for current limits.
+- Brave provides a free tier plus paid plans; check the Brave API portal for current
+  limits.
 
 See [Web tools](/tools/web) for the full web_search configuration.

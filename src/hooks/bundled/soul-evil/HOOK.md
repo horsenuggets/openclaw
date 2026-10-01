@@ -9,18 +9,21 @@ metadata:
         "emoji": "😈",
         "events": ["agent:bootstrap"],
         "requires": { "config": ["hooks.internal.entries.soul-evil.enabled"] },
-        "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
+        "install":
+          [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
       },
   }
 ---
 
 # SOUL Evil Hook
 
-Replaces the injected `SOUL.md` content with `SOUL_EVIL.md` during a daily purge window or by random chance.
+Replaces the injected `SOUL.md` content with `SOUL_EVIL.md` during a daily purge window or
+by random chance.
 
 ## What It Does
 
-When enabled and the trigger conditions match, the hook swaps the **injected** `SOUL.md` content before the system prompt is built. It does **not** modify files on disk.
+When enabled and the trigger conditions match, the hook swaps the **injected** `SOUL.md`
+content before the system prompt is built. It does **not** modify files on disk.
 
 ## Files
 

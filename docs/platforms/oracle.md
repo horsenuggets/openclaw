@@ -13,7 +13,8 @@ title: "Oracle Cloud"
 
 Run a persistent OpenClaw Gateway on Oracle Cloud's **Always Free** ARM tier.
 
-Oracle’s free tier can be a great fit for OpenClaw (especially if you already have an OCI account), but it comes with tradeoffs:
+Oracle’s free tier can be a great fit for OpenClaw (especially if you already have an OCI
+account), but it comes with tradeoffs:
 
 - ARM architecture (most things work, but some binaries may be x86-only)
 - Capacity and signup can be finicky
@@ -32,7 +33,9 @@ Oracle’s free tier can be a great fit for OpenClaw (especially if you already 
 
 ## Prerequisites
 
-- Oracle Cloud account ([signup](https://www.oracle.com/cloud/free/)) — see [community signup guide](https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd) if you hit issues
+- Oracle Cloud account ([signup](https://www.oracle.com/cloud/free/)) — see
+  [community signup guide](https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd)
+  if you hit issues
 - Tailscale account (free at [tailscale.com](https://tailscale.com))
 - ~30 minutes
 
@@ -51,7 +54,8 @@ Oracle’s free tier can be a great fit for OpenClaw (especially if you already 
 4. Click **Create**
 5. Note the public IP address
 
-**Tip:** If instance creation fails with "Out of capacity", try a different availability domain or retry later. Free tier capacity is limited.
+**Tip:** If instance creation fails with "Out of capacity", try a different availability
+domain or retry later. Free tier capacity is limited.
 
 ## 2) Connect and Update
 
@@ -86,7 +90,8 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up --ssh --hostname=openclaw
 ```
 
-This enables Tailscale SSH, so you can connect via `ssh openclaw` from any device on your tailnet — no public IP needed.
+This enables Tailscale SSH, so you can connect via `ssh openclaw` from any device on your
+tailnet — no public IP needed.
 
 Verify:
 
@@ -105,11 +110,13 @@ source ~/.bashrc
 
 When prompted "How do you want to hatch your bot?", select **"Do this later"**.
 
-> Note: If you hit ARM-native build issues, start with system packages (e.g. `sudo apt install -y build-essential`) before reaching for Homebrew.
+> Note: If you hit ARM-native build issues, start with system packages (e.g.
+> `sudo apt install -y build-essential`) before reaching for Homebrew.
 
 ## 6) Configure Gateway (loopback + token auth) and enable Tailscale Serve
 
-Use token auth as the default. It’s predictable and avoids needing any “insecure auth” Control UI flags.
+Use token auth as the default. It’s predictable and avoids needing any “insecure auth”
+Control UI flags.
 
 ```bash
 # Keep the Gateway private on the VM
@@ -144,7 +151,9 @@ curl http://localhost:18789
 
 ## 8) Lock Down VCN Security
 
-Now that everything is working, lock down the VCN to block all traffic except Tailscale. OCI's Virtual Cloud Network acts as a firewall at the network edge — traffic is blocked before it reaches your instance.
+Now that everything is working, lock down the VCN to block all traffic except Tailscale.
+OCI's Virtual Cloud Network acts as a firewall at the network edge — traffic is blocked
+before it reaches your instance.
 
 1. Go to **Networking → Virtual Cloud Networks** in the OCI Console
 2. Click your VCN → **Security Lists** → Default Security List
@@ -152,7 +161,8 @@ Now that everything is working, lock down the VCN to block all traffic except Ta
    - `0.0.0.0/0 UDP 41641` (Tailscale)
 4. Keep default egress rules (allow all outbound)
 
-This blocks SSH on port 22, HTTP, HTTPS, and everything else at the network edge. From now on, you can only connect via Tailscale.
+This blocks SSH on port 22, HTTP, HTTPS, and everything else at the network edge. From now
+on, you can only connect via Tailscale.
 
 ---
 
@@ -176,9 +186,14 @@ No SSH tunnel needed. Tailscale provides:
 
 ## Security: VCN + Tailscale (recommended baseline)
 
-With the VCN locked down (only UDP 41641 open) and the Gateway bound to loopback, you get strong defense-in-depth: public traffic is blocked at the network edge, and admin access happens over your tailnet.
+With the VCN locked down (only UDP 41641 open) and the Gateway bound to loopback, you get
+strong defense-in-depth: public traffic is blocked at the network edge, and admin access
+happens over your tailnet.
 
-This setup often removes the _need_ for extra host-based firewall rules purely to stop Internet-wide SSH brute force — but you should still keep the OS updated, run `openclaw security audit`, and verify you aren’t accidentally listening on public interfaces.
+This setup often removes the _need_ for extra host-based firewall rules purely to stop
+Internet-wide SSH brute force — but you should still keep the OS updated, run
+`openclaw security audit`, and verify you aren’t accidentally listening on public
+interfaces.
 
 ### What's Already Protected
 
@@ -196,7 +211,8 @@ This setup often removes the _need_ for extra host-based firewall rules purely t
 - **Credential permissions:** `chmod 700 ~/.openclaw`
 - **Security audit:** `openclaw security audit`
 - **System updates:** `sudo apt update && sudo apt upgrade` regularly
-- **Monitor Tailscale:** Review devices in [Tailscale admin console](https://login.tailscale.com/admin)
+- **Monitor Tailscale:** Review devices in
+  [Tailscale admin console](https://login.tailscale.com/admin)
 
 ### Verify Security Posture
 

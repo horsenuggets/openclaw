@@ -1,5 +1,6 @@
 ---
-summary: "Run OpenClaw Gateway 24/7 on a GCP Compute Engine VM (Docker) with durable state"
+summary:
+  "Run OpenClaw Gateway 24/7 on a GCP Compute Engine VM (Docker) with durable state"
 read_when:
   - You want OpenClaw running 24/7 on GCP
   - You want a production-grade, always-on Gateway on your own VM
@@ -11,10 +12,12 @@ title: "GCP"
 
 ## Goal
 
-Run a persistent OpenClaw Gateway on a GCP Compute Engine VM using Docker, with durable state, baked-in binaries, and safe restart behavior.
+Run a persistent OpenClaw Gateway on a GCP Compute Engine VM using Docker, with durable
+state, baked-in binaries, and safe restart behavior.
 
 If you want "OpenClaw 24/7 for ~$5-12/mo", this is a reliable setup on Google Cloud.
-Pricing varies by machine type and region; pick the smallest VM that fits your workload and scale up if you hit OOMs.
+Pricing varies by machine type and region; pick the smallest VM that fits your workload
+and scale up if you hit OOMs.
 
 ## What are we doing (simple terms)?
 
@@ -30,8 +33,7 @@ The Gateway can be accessed via:
 - SSH port forwarding from your laptop
 - Direct port exposure if you manage firewalling and tokens yourself
 
-This guide uses Debian on GCP Compute Engine.
-Ubuntu also works; map packages accordingly.
+This guide uses Debian on GCP Compute Engine. Ubuntu also works; map packages accordingly.
 For the generic Docker flow, see [Docker](/install/docker).
 
 ---
@@ -153,7 +155,8 @@ gcloud compute ssh openclaw-gateway --zone=us-central1-a
 
 Click the "SSH" button next to your VM in the Compute Engine dashboard.
 
-Note: SSH key propagation can take 1-2 minutes after VM creation. If connection is refused, wait and retry.
+Note: SSH key propagation can take 1-2 minutes after VM creation. If connection is
+refused, wait and retry.
 
 ---
 
@@ -200,8 +203,7 @@ This guide assumes you will build a custom image to guarantee binary persistence
 
 ## 7) Create persistent host directories
 
-Docker containers are ephemeral.
-All long-lived state must live on the host.
+Docker containers are ephemeral. All long-lived state must live on the host.
 
 ```bash
 mkdir -p ~/.openclaw
@@ -286,8 +288,8 @@ services:
 
 ## 10) Bake required binaries into the image (critical)
 
-Installing binaries inside a running container is a trap.
-Anything installed at runtime will be lost on restart.
+Installing binaries inside a running container is a trap. Anything installed at runtime
+will be lost on restart.
 
 All external binaries required by skills must be installed at image build time.
 
@@ -297,8 +299,8 @@ The examples below show three common binaries only:
 - `goplaces` for Google Places
 - `wacli` for WhatsApp
 
-These are examples, not a complete list.
-You may install as many binaries as needed using the same pattern.
+These are examples, not a complete list. You may install as many binaries as needed using
+the same pattern.
 
 If you add new skills later that depend on additional binaries, you must:
 
@@ -404,8 +406,8 @@ Paste your gateway token.
 
 ## What persists where (source of truth)
 
-OpenClaw runs in Docker, but Docker is not the source of truth.
-All long-lived state must survive restarts, rebuilds, and reboots.
+OpenClaw runs in Docker, but Docker is not the source of truth. All long-lived state must
+survive restarts, rebuilds, and reboots.
 
 | Component           | Location                          | Persistence mechanism  | Notes                            |
 | ------------------- | --------------------------------- | ---------------------- | -------------------------------- |
@@ -449,7 +451,8 @@ Check your OS Login profile:
 gcloud compute os-login describe-profile
 ```
 
-Ensure your account has the required IAM permissions (Compute OS Login or Compute OS Admin Login).
+Ensure your account has the required IAM permissions (Compute OS Login or Compute OS Admin
+Login).
 
 **Out of memory (OOM)**
 
@@ -474,7 +477,8 @@ gcloud compute instances start openclaw-gateway --zone=us-central1-a
 
 For personal use, your default user account works fine.
 
-For automation or CI/CD pipelines, create a dedicated service account with minimal permissions:
+For automation or CI/CD pipelines, create a dedicated service account with minimal
+permissions:
 
 1. Create a service account:
 

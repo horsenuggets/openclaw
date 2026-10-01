@@ -10,9 +10,13 @@ requires: prose.md
 
 # OpenProse Folk Register
 
-> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution semantics, state management, and VM behavior are defined there. This file only provides keyword translations.
+> **This is a skin layer.** It requires `prose.md` to be loaded first. All execution
+> semantics, state management, and VM behavior are defined there. This file only provides
+> keyword translations.
 
-An alternative register for OpenProse that leans into literary, theatrical, and folklore terminology. The functional register prioritizes utility and clarity; the folk register prioritizes whimsy and narrative flow.
+An alternative register for OpenProse that leans into literary, theatrical, and folklore
+terminology. The functional register prioritizes utility and clarity; the folk register
+prioritizes whimsy and narrative flow.
 
 ## How to Use
 
@@ -21,7 +25,8 @@ An alternative register for OpenProse that leans into literary, theatrical, and 
 3. When parsing `.prose` files, accept folk keywords as aliases for functional keywords
 4. All execution behavior remains identical—only surface syntax changes
 
-> **Design constraint:** Still aims to be "structured but self-evident" per the language tenets—just self-evident to a different sensibility.
+> **Design constraint:** Still aims to be "structured but self-evident" per the language
+> tenets—just self-evident to a different sensibility.
 
 ---
 
@@ -312,7 +317,8 @@ perform review("quantum computing")
 
 ## Verdict
 
-Preserved for benchmarking against the functional register. The functional register remains the primary path, but folk provides an interesting data point for:
+Preserved for benchmarking against the functional register. The functional register
+remains the primary path, but folk provides an interesting data point for:
 
 1. **Learnability** — Which is easier for newcomers?
 2. **Memorability** — Which sticks better?

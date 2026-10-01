@@ -10,15 +10,18 @@ title: "Browser Login"
 
 ## Manual login (recommended)
 
-When a site requires login, **sign in manually** in the **host** browser profile (the openclaw browser).
+When a site requires login, **sign in manually** in the **host** browser profile (the
+openclaw browser).
 
-Do **not** give the model your credentials. Automated logins often trigger anti‑bot defenses and can lock the account.
+Do **not** give the model your credentials. Automated logins often trigger anti‑bot
+defenses and can lock the account.
 
 Back to the main browser docs: [Browser](/tools/browser).
 
 ## Which Chrome profile is used?
 
-OpenClaw controls a **dedicated Chrome profile** (named `openclaw`, orange‑tinted UI). This is separate from your daily browser profile.
+OpenClaw controls a **dedicated Chrome profile** (named `openclaw`, orange‑tinted UI).
+This is separate from your daily browser profile.
 
 Two easy ways to access it:
 
@@ -30,7 +33,8 @@ openclaw browser start
 openclaw browser open https://x.com
 ```
 
-If you have multiple profiles, pass `--browser-profile <name>` (the default is `openclaw`).
+If you have multiple profiles, pass `--browser-profile <name>` (the default is
+`openclaw`).
 
 ## X/Twitter: recommended flow
 
@@ -40,9 +44,11 @@ If you have multiple profiles, pass `--browser-profile <name>` (the default is `
 
 ## Sandboxing + host browser access
 
-Sandboxed browser sessions are **more likely** to trigger bot detection. For X/Twitter (and other strict sites), prefer the **host** browser.
+Sandboxed browser sessions are **more likely** to trigger bot detection. For X/Twitter
+(and other strict sites), prefer the **host** browser.
 
-If the agent is sandboxed, the browser tool defaults to the sandbox. To allow host control:
+If the agent is sandboxed, the browser tool defaults to the sandbox. To allow host
+control:
 
 ```json5
 {

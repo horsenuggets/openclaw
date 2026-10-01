@@ -1,7 +1,8 @@
 ---
 summary: "CLI reference for `openclaw channels` (accounts, status, login/logout, logs)"
 read_when:
-  - You want to add/remove channel accounts (WhatsApp/Telegram/Discord/Google Chat/Slack/Mattermost (plugin)/Signal/iMessage)
+  - You want to add/remove channel accounts (WhatsApp/Telegram/Discord/Google
+    Chat/Slack/Mattermost (plugin)/Signal/iMessage)
   - You want to check channel status or tail channel logs
 title: "channels"
 ---
@@ -33,7 +34,8 @@ openclaw channels add --channel telegram --token <bot-token>
 openclaw channels remove --channel telegram --delete
 ```
 
-Tip: `openclaw channels add --help` shows per-channel flags (token, app token, signal-cli paths, etc).
+Tip: `openclaw channels add --help` shows per-channel flags (token, app token, signal-cli
+paths, etc).
 
 ## Login / logout (interactive)
 
@@ -46,11 +48,14 @@ openclaw channels logout --channel whatsapp
 
 - Run `openclaw status --deep` for a broad probe.
 - Use `openclaw doctor` for guided fixes.
-- `openclaw channels list` prints `Claude: HTTP 403 ... user:profile` → usage snapshot needs the `user:profile` scope. Use `--no-usage`, or provide a claude.ai session key (`CLAUDE_WEB_SESSION_KEY` / `CLAUDE_WEB_COOKIE`), or re-auth via Claude Code CLI.
+- `openclaw channels list` prints `Claude: HTTP 403 ... user:profile` → usage snapshot
+  needs the `user:profile` scope. Use `--no-usage`, or provide a claude.ai session key
+  (`CLAUDE_WEB_SESSION_KEY` / `CLAUDE_WEB_COOKIE`), or re-auth via Claude Code CLI.
 
 ## Capabilities probe
 
-Fetch provider capability hints (intents/scopes where available) plus static feature support:
+Fetch provider capability hints (intents/scopes where available) plus static feature
+support:
 
 ```bash
 openclaw channels capabilities
@@ -60,8 +65,12 @@ openclaw channels capabilities --channel discord --target channel:123
 Notes:
 
 - `--channel` is optional; omit it to list every channel (including extensions).
-- `--target` accepts `channel:<id>` or a raw numeric channel id and only applies to Discord.
-- Probes are provider-specific: Discord intents + optional channel permissions; Slack bot + user scopes; Telegram bot flags + webhook; Signal daemon version; MS Teams app token + Graph roles/scopes (annotated where known). Channels without probes report `Probe: unavailable`.
+- `--target` accepts `channel:<id>` or a raw numeric channel id and only applies to
+  Discord.
+- Probes are provider-specific: Discord intents + optional channel permissions; Slack
+  bot + user scopes; Telegram bot flags + webhook; Signal daemon version; MS Teams app
+  token + Graph roles/scopes (annotated where known). Channels without probes report
+  `Probe: unavailable`.
 
 ## Resolve names to IDs
 

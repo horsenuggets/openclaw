@@ -8,18 +8,17 @@ title: "Agent Workspace"
 
 # Agent workspace
 
-The workspace is the agent's home. It is the only working directory used for
-file tools and for workspace context. Keep it private and treat it as memory.
+The workspace is the agent's home. It is the only working directory used for file tools
+and for workspace context. Keep it private and treat it as memory.
 
-This is separate from `~/.openclaw/`, which stores config, credentials, and
-sessions.
+This is separate from `~/.openclaw/`, which stores config, credentials, and sessions.
 
-**Important:** the workspace is the **default cwd**, not a hard sandbox. Tools
-resolve relative paths against the workspace, but absolute paths can still reach
-elsewhere on the host unless sandboxing is enabled. If you need isolation, use
-[`agents.defaults.sandbox`](/gateway/sandboxing) (and/or per‑agent sandbox config).
-When sandboxing is enabled and `workspaceAccess` is not `"rw"`, tools operate
-inside a sandbox workspace under `~/.openclaw/sandboxes`, not your host workspace.
+**Important:** the workspace is the **default cwd**, not a hard sandbox. Tools resolve
+relative paths against the workspace, but absolute paths can still reach elsewhere on the
+host unless sandboxing is enabled. If you need isolation, use
+[`agents.defaults.sandbox`](/gateway/sandboxing) (and/or per‑agent sandbox config). When
+sandboxing is enabled and `workspaceAccess` is not `"rw"`, tools operate inside a sandbox
+workspace under `~/.openclaw/sandboxes`, not your host workspace.
 
 ## Default location
 
@@ -36,11 +35,11 @@ inside a sandbox workspace under `~/.openclaw/sandboxes`, not your host workspac
 }
 ```
 
-`openclaw onboard`, `openclaw configure`, or `openclaw setup` will create the
-workspace and seed the bootstrap files if they are missing.
+`openclaw onboard`, `openclaw configure`, or `openclaw setup` will create the workspace
+and seed the bootstrap files if they are missing.
 
-If you already manage the workspace files yourself, you can disable bootstrap
-file creation:
+If you already manage the workspace files yourself, you can disable bootstrap file
+creation:
 
 ```json5
 { agent: { skipBootstrap: true } }
@@ -48,14 +47,14 @@ file creation:
 
 ## Extra workspace folders
 
-Older installs may have created `~/openclaw`. Keeping multiple workspace
-directories around can cause confusing auth or state drift, because only one
-workspace is active at a time.
+Older installs may have created `~/openclaw`. Keeping multiple workspace directories
+around can cause confusing auth or state drift, because only one workspace is active at a
+time.
 
-**Recommendation:** keep a single active workspace. If you no longer use the
-extra folders, archive or move them to Trash (for example `trash ~/openclaw`).
-If you intentionally keep multiple workspaces, make sure
-`agents.defaults.workspace` points to the active one.
+**Recommendation:** keep a single active workspace. If you no longer use the extra
+folders, archive or move them to Trash (for example `trash ~/openclaw`). If you
+intentionally keep multiple workspaces, make sure `agents.defaults.workspace` points to
+the active one.
 
 `openclaw doctor` warns when it detects extra workspace directories.
 
@@ -89,7 +88,8 @@ These are the standard files OpenClaw expects inside the workspace:
   - Keep it short to avoid token burn.
 
 - `BOOT.md`
-  - Optional startup checklist executed on gateway restart when internal hooks are enabled.
+  - Optional startup checklist executed on gateway restart when internal hooks are
+    enabled.
   - Keep it short; use the message tool for outbound sends.
 
 - `BOOTSTRAP.md`
@@ -114,11 +114,10 @@ See [Memory](/concepts/memory) for the workflow and automatic memory flush.
 - `canvas/` (optional)
   - Canvas UI files for node displays (for example `canvas/index.html`).
 
-If any bootstrap file is missing, OpenClaw injects a "missing file" marker into
-the session and continues. Large bootstrap files are truncated when injected;
-adjust the limit with `agents.defaults.bootstrapMaxChars` (default: 20000).
-`openclaw setup` can recreate missing defaults without overwriting existing
-files.
+If any bootstrap file is missing, OpenClaw injects a "missing file" marker into the
+session and continues. Large bootstrap files are truncated when injected; adjust the limit
+with `agents.defaults.bootstrapMaxChars` (default: 20000). `openclaw setup` can recreate
+missing defaults without overwriting existing files.
 
 ## What is NOT in the workspace
 
@@ -129,21 +128,20 @@ These live under `~/.openclaw/` and should NOT be committed to the workspace rep
 - `~/.openclaw/agents/<agentId>/sessions/` (session transcripts + metadata)
 - `~/.openclaw/skills/` (managed skills)
 
-If you need to migrate sessions or config, copy them separately and keep them
-out of version control.
+If you need to migrate sessions or config, copy them separately and keep them out of
+version control.
 
 ## Git backup (recommended, private)
 
-Treat the workspace as private memory. Put it in a **private** git repo so it is
-backed up and recoverable.
+Treat the workspace as private memory. Put it in a **private** git repo so it is backed up
+and recoverable.
 
-Run these steps on the machine where the Gateway runs (that is where the
-workspace lives).
+Run these steps on the machine where the Gateway runs (that is where the workspace lives).
 
 ### 1) Initialize the repo
 
-If git is installed, brand-new workspaces are initialized automatically. If this
-workspace is not already a repo, run:
+If git is installed, brand-new workspaces are initialized automatically. If this workspace
+is not already a repo, run:
 
 ```bash
 cd ~/.openclaw/workspace
@@ -204,8 +202,8 @@ Even in a private repo, avoid storing secrets in the workspace:
 - Anything under `~/.openclaw/`.
 - Raw dumps of chats or sensitive attachments.
 
-If you must store sensitive references, use placeholders and keep the real
-secret elsewhere (password manager, environment variables, or `~/.openclaw/`).
+If you must store sensitive references, use placeholders and keep the real secret
+elsewhere (password manager, environment variables, or `~/.openclaw/`).
 
 Suggested `.gitignore` starter:
 
@@ -222,8 +220,8 @@ Suggested `.gitignore` starter:
 1. Clone the repo to the desired path (default `~/.openclaw/workspace`).
 2. Set `agents.defaults.workspace` to that path in `~/.openclaw/openclaw.json`.
 3. Run `openclaw setup --workspace <path>` to seed any missing files.
-4. If you need sessions, copy `~/.openclaw/agents/<agentId>/sessions/` from the
-   old machine separately.
+4. If you need sessions, copy `~/.openclaw/agents/<agentId>/sessions/` from the old
+   machine separately.
 
 ## Advanced notes
 

@@ -9,8 +9,8 @@ title: "MiniMax"
 # MiniMax
 
 MiniMax is an AI company that builds the **M2/M2.1** model family. The current
-coding-focused release is **MiniMax M2.1** (December 23, 2025), built for
-real-world complex tasks.
+coding-focused release is **MiniMax M2.1** (December 23, 2025), built for real-world
+complex tasks.
 
 Source: [MiniMax M2.1 release note](https://www.minimax.io/news/minimax-m21)
 
@@ -54,7 +54,9 @@ You will be prompted to select an endpoint:
 - **Global** - International users (`api.minimax.io`)
 - **CN** - Users in China (`api.minimaxi.com`)
 
-See [MiniMax OAuth plugin README](https://github.com/openclaw/openclaw/tree/main/extensions/minimax-portal-auth) for details.
+See
+[MiniMax OAuth plugin README](https://github.com/openclaw/openclaw/tree/main/extensions/minimax-portal-auth)
+for details.
 
 ### MiniMax M2.1 (API key)
 
@@ -118,9 +120,8 @@ Configure via CLI:
 
 ### Optional: Local via LM Studio (manual)
 
-**Best for:** local inference with LM Studio.
-We have seen strong results with MiniMax M2.1 on powerful hardware (e.g. a
-desktop/server) using LM Studio's local server.
+**Best for:** local inference with LM Studio. We have seen strong results with MiniMax
+M2.1 on powerful hardware (e.g. a desktop/server) using LM Studio's local server.
 
 Configure manually via `openclaw.json`:
 
@@ -167,19 +168,26 @@ Use the interactive config wizard to set MiniMax without editing JSON:
 
 ## Configuration options
 
-- `models.providers.minimax.baseUrl`: prefer `https://api.minimax.io/anthropic` (Anthropic-compatible); `https://api.minimax.io/v1` is optional for OpenAI-compatible payloads.
-- `models.providers.minimax.api`: prefer `anthropic-messages`; `openai-completions` is optional for OpenAI-compatible payloads.
+- `models.providers.minimax.baseUrl`: prefer `https://api.minimax.io/anthropic`
+  (Anthropic-compatible); `https://api.minimax.io/v1` is optional for OpenAI-compatible
+  payloads.
+- `models.providers.minimax.api`: prefer `anthropic-messages`; `openai-completions` is
+  optional for OpenAI-compatible payloads.
 - `models.providers.minimax.apiKey`: MiniMax API key (`MINIMAX_API_KEY`).
-- `models.providers.minimax.models`: define `id`, `name`, `reasoning`, `contextWindow`, `maxTokens`, `cost`.
+- `models.providers.minimax.models`: define `id`, `name`, `reasoning`, `contextWindow`,
+  `maxTokens`, `cost`.
 - `agents.defaults.models`: alias models you want in the allowlist.
 - `models.mode`: keep `merge` if you want to add MiniMax alongside built-ins.
 
 ## Notes
 
 - Model refs are `minimax/<model>`.
-- Coding Plan usage API: `https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains` (requires a coding plan key).
+- Coding Plan usage API:
+  `https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains` (requires a coding
+  plan key).
 - Update pricing values in `models.json` if you need exact cost tracking.
-- Referral link for MiniMax Coding Plan (10% off): https://platform.minimax.io/subscribe/coding-plan?code=DbXJTRClnb&source=link
+- Referral link for MiniMax Coding Plan (10% off):
+  https://platform.minimax.io/subscribe/coding-plan?code=DbXJTRClnb&source=link
 - See [/concepts/model-providers](/concepts/model-providers) for provider rules.
 - Use `openclaw models list` and `openclaw models set minimax/MiniMax-M2.1` to switch.
 
@@ -187,9 +195,9 @@ Use the interactive config wizard to set MiniMax without editing JSON:
 
 ### “Unknown model: minimax/MiniMax-M2.1”
 
-This usually means the **MiniMax provider isn’t configured** (no provider entry
-and no MiniMax auth profile/env key found). A fix for this detection is in
-**2026.1.12** (unreleased at the time of writing). Fix by:
+This usually means the **MiniMax provider isn’t configured** (no provider entry and no
+MiniMax auth profile/env key found). A fix for this detection is in **2026.1.12**
+(unreleased at the time of writing). Fix by:
 
 - Upgrading to **2026.1.12** (or run from source `main`), then restarting the gateway.
 - Running `openclaw configure` and selecting **MiniMax M2.1**, or

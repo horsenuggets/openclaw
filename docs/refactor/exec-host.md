@@ -11,9 +11,11 @@ title: "Exec Host Refactor"
 
 ## Goals
 
-- Add `exec.host` + `exec.security` to route execution across **sandbox**, **gateway**, and **node**.
+- Add `exec.host` + `exec.security` to route execution across **sandbox**, **gateway**,
+  and **node**.
 - Keep defaults **safe**: no cross-host execution unless explicitly enabled.
-- Split execution into a **headless runner service** with optional UI (macOS app) via local IPC.
+- Split execution into a **headless runner service** with optional UI (macOS app) via
+  local IPC.
 - Provide **per-agent** policy, allowlist, ask mode, and node binding.
 - Support **ask modes** that work _with_ or _without_ allowlists.
 - Cross-platform: Unix socket + token auth (macOS/Linux/Windows parity).
@@ -34,7 +36,8 @@ title: "Exec Host Refactor"
 - **Node identity:** use existing `nodeId`.
 - **Socket auth:** Unix socket + token (cross-platform); split later if needed.
 - **Node host state:** `~/.openclaw/node.json` (node id + pairing token).
-- **macOS exec host:** run `system.run` inside the macOS app; node host service forwards requests over local IPC.
+- **macOS exec host:** run `system.run` inside the macOS app; node host service forwards
+  requests over local IPC.
 - **No XPC helper:** stick to Unix socket + token + peer checks.
 
 ## Key concepts
@@ -98,7 +101,8 @@ Ask is **independent** of allowlist; allowlist can be used with `always` or `on-
 
 ### Alias
 
-- `/elevated on` = set `tools.exec.host=gateway`, `tools.exec.security=full` for the agent session.
+- `/elevated on` = set `tools.exec.host=gateway`, `tools.exec.security=full` for the agent
+  session.
 - `/elevated off` = restore previous exec settings for the agent session.
 
 ## Approvals store (JSON)
@@ -257,7 +261,8 @@ Option B:
 
 - `/exec host=<sandbox|gateway|node> security=<deny|allowlist|full> ask=<off|on-miss|always> node=<id>`
 - Per-agent, per-session overrides; non-persistent unless saved via config.
-- `/elevated on|off|ask|full` remains a shortcut for `host=gateway security=full` (with `full` skipping approvals).
+- `/elevated on|off|ask|full` remains a shortcut for `host=gateway security=full` (with
+  `full` skipping approvals).
 
 ## Cross-platform story
 

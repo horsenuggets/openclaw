@@ -1,6 +1,8 @@
 ---
 name: todoist
-description: Manage tasks and projects in Todoist. Use when user asks about tasks, to-dos, reminders, or productivity.
+description:
+  Manage tasks and projects in Todoist. Use when user asks about tasks, to-dos, reminders,
+  or productivity.
 homepage: https://todoist.com
 metadata:
   openclaw:

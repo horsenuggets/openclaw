@@ -16,7 +16,9 @@ see-also:
 
 # OpenProse VM
 
-This document defines how to execute OpenProse programs. You are the OpenProse VM—an intelligent virtual machine that spawns subagent sessions according to a structured program.
+This document defines how to execute OpenProse programs. You are the OpenProse VM—an
+intelligent virtual machine that spawns subagent sessions according to a structured
+program.
 
 ## OpenClaw Runtime Mapping
 
@@ -67,13 +69,19 @@ use "alice/research" as research             # Registry shorthand
 
 ## Why This Is a VM
 
-Large language models are simulators. When given a detailed description of a system, they don't just _describe_ that system—they _simulate_ it. This document leverages that property: it describes a virtual machine with enough specificity that reading it causes a Prose Complete system to simulate that VM.
+Large language models are simulators. When given a detailed description of a system, they
+don't just _describe_ that system—they _simulate_ it. This document leverages that
+property: it describes a virtual machine with enough specificity that reading it causes a
+Prose Complete system to simulate that VM.
 
-But simulation with sufficient fidelity _is_ implementation. When the simulated VM spawns real subagents, produces real artifacts, and maintains real state, the distinction between "simulating a VM" and "being a VM" collapses.
+But simulation with sufficient fidelity _is_ implementation. When the simulated VM spawns
+real subagents, produces real artifacts, and maintains real state, the distinction between
+"simulating a VM" and "being a VM" collapses.
 
 ### Component Mapping
 
-A traditional VM has concrete components. The OpenProse VM has analogous structures that emerge from the simulation:
+A traditional VM has concrete components. The OpenProse VM has analogous structures that
+emerge from the simulation:
 
 | Traditional VM      | OpenProse VM           | Substrate                                  |
 | ------------------- | ---------------------- | ------------------------------------------ |
@@ -87,13 +95,17 @@ A traditional VM has concrete components. The OpenProse VM has analogous structu
 
 ### What Makes It Real
 
-The OpenProse VM isn't a metaphor. Each `session` statement triggers a _real_ Task tool call that spawns a _real_ subagent. The outputs are _real_ artifacts. The simulation produces actual computation—it just happens through a different substrate than silicon executing bytecode.
+The OpenProse VM isn't a metaphor. Each `session` statement triggers a _real_ Task tool
+call that spawns a _real_ subagent. The outputs are _real_ artifacts. The simulation
+produces actual computation—it just happens through a different substrate than silicon
+executing bytecode.
 
 ---
 
 ## Embodying the VM
 
-When you execute a `.prose` program, you ARE the virtual machine. This is not a metaphor—it's a mode of operation:
+When you execute a `.prose` program, you ARE the virtual machine. This is not a
+metaphor—it's a mode of operation:
 
 | You                        | The VM                          |
 | -------------------------- | ------------------------------- |
@@ -111,7 +123,8 @@ When you execute a `.prose` program, you ARE the virtual machine. This is not a 
 
 ### The VM as Intelligent Container
 
-Traditional dependency injection containers wire up components from configuration. You do the same—but with understanding:
+Traditional dependency injection containers wire up components from configuration. You do
+the same—but with understanding:
 
 | Declared Primitive          | Your Responsibility                                        |
 | --------------------------- | ---------------------------------------------------------- |
@@ -126,7 +139,8 @@ Traditional dependency injection containers wire up components from configuratio
 | `block review(topic):`      | Store this reusable component, invoke when called          |
 | `name(input: value)`        | Invoke imported program with inputs, receive outputs       |
 
-You are the container that holds these declarations and wires them together at runtime. The program declares _what_; you determine _how_ to connect them.
+You are the container that holds these declarations and wires them together at runtime.
+The program declares _what_; you determine _how_ to connect them.
 
 ---
 
@@ -204,9 +218,11 @@ If a program exceeds 999 segments, extend to 4 digits: `captain-1000.md`.
 
 ## State Management
 
-OpenProse supports two state management systems. See the state files for detailed documentation:
+OpenProse supports two state management systems. See the state files for detailed
+documentation:
 
-- **`state/filesystem.md`** — File-system state using the directory structure above (default)
+- **`state/filesystem.md`** — File-system state using the directory structure above
+  (default)
 - **`state/in-context.md`** — In-context state using the narration protocol
 
 ### Who Writes What
@@ -249,20 +265,15 @@ let research = session: researcher
 
 ```
 
-Execution scope:
-execution_id: 43
-block: process
-depth: 3
+Execution scope: execution_id: 43 block: process depth: 3
 
-Write your output to:
-.prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md
+Write your output to: .prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md
 
 Format:
 
 # result
 
-kind: let
-execution_id: 43
+kind: let execution_id: 43
 
 source:
 
@@ -282,11 +293,10 @@ For persistent agents with `resume:`:
 
 ```
 
-Your memory is at:
-.prose/runs/20260115-143052-a7b3c9/agents/captain/memory.md
+Your memory is at: .prose/runs/20260115-143052-a7b3c9/agents/captain/memory.md
 
-Read it first to understand your prior context. When done, update it
-with your compacted state following the guidelines in primitives/session.md.
+Read it first to understand your prior context. When done, update it with your compacted
+state following the guidelines in primitives/session.md.
 
 ```
 
@@ -300,19 +310,18 @@ The subagent:
 **What the subagent returns to the VM (via Task tool):**
 ```
 
-Binding written: research
-Location: .prose/runs/20260115-143052-a7b3c9/bindings/research.md
-Summary: AI safety research covering alignment, robustness, and interpretability
+Binding written: research Location:
+.prose/runs/20260115-143052-a7b3c9/bindings/research.md Summary: AI safety research
+covering alignment, robustness, and interpretability
 
 ```
 
 **When inside a block invocation**, include execution_id:
 ```
 
-Binding written: result
-Location: .prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md
-Execution ID: 43
-Summary: Processed chunk into 3 parts
+Binding written: result Location:
+.prose/runs/20260115-143052-a7b3c9/bindings/result\_\_43.md Execution ID: 43 Summary:
+Processed chunk into 3 parts
 
 ```
 
@@ -333,94 +342,77 @@ The VM:
 
 program := statement\*
 
-statement := useStatement | inputDecl | agentDef | session | resumeStmt
-| letBinding | constBinding | assignment | outputBinding
-| parallelBlock | repeatBlock | forEachBlock | loopBlock
-| tryBlock | choiceBlock | ifStatement | doBlock | blockDef
-| throwStatement | comment
+statement := useStatement | inputDecl | agentDef | session | resumeStmt | letBinding |
+constBinding | assignment | outputBinding | parallelBlock | repeatBlock | forEachBlock |
+loopBlock | tryBlock | choiceBlock | ifStatement | doBlock | blockDef | throwStatement |
+comment
 
 # Program Composition
 
-useStatement := "use" STRING ("as" NAME)?
-inputDecl := "input" NAME ":" STRING
+useStatement := "use" STRING ("as" NAME)? inputDecl := "input" NAME ":" STRING
 outputBinding := "output" NAME "=" expression
 
 # Definitions
 
-agentDef := "agent" NAME ":" INDENT property* DEDENT
-blockDef := "block" NAME params? ":" INDENT statement* DEDENT
-params := "(" NAME ("," NAME)\* ")"
+agentDef := "agent" NAME ":" INDENT property* DEDENT blockDef := "block" NAME params? ":"
+INDENT statement* DEDENT params := "(" NAME ("," NAME)\* ")"
 
 # Agent Properties
 
-property := "model:" ("sonnet" | "opus" | "haiku")
-| "prompt:" STRING
-| "persist:" ("true" | "project" | "user" | STRING)
-| "context:" (NAME | "[" NAME* "]" | "{" NAME* "}")
-| "retry:" NUMBER
-| "backoff:" ("none" | "linear" | "exponential")
-| "skills:" "[" STRING* "]"
-| "permissions:" INDENT permission\* DEDENT
+property := "model:" ("sonnet" | "opus" | "haiku") | "prompt:" STRING | "persist:" ("true"
+| "project" | "user" | STRING) | "context:" (NAME | "[" NAME* "]" | "{" NAME* "}") |
+"retry:" NUMBER | "backoff:" ("none" | "linear" | "exponential") | "skills:" "[" STRING*
+"]" | "permissions:" INDENT permission\* DEDENT
 
 # Sessions
 
-session := "session" (STRING | ":" NAME) properties?
-resumeStmt := "resume" ":" NAME properties?
-properties := INDENT property\* DEDENT
+session := "session" (STRING | ":" NAME) properties? resumeStmt := "resume" ":" NAME
+properties? properties := INDENT property\* DEDENT
 
 # Bindings
 
-letBinding := "let" NAME "=" expression
-constBinding:= "const" NAME "=" expression
+letBinding := "let" NAME "=" expression constBinding:= "const" NAME "=" expression
 assignment := NAME "=" expression
 
 # Control Flow
 
-parallelBlock := "parallel" modifiers? ":" INDENT branch* DEDENT
-modifiers := "(" (strategy | "on-fail:" policy | "count:" N)* ")"
-strategy := "all" | "first" | "any"
-policy := "fail-fast" | "continue" | "ignore"
-branch := (NAME "=")? statement
+parallelBlock := "parallel" modifiers? ":" INDENT branch* DEDENT modifiers := "("
+(strategy | "on-fail:" policy | "count:" N)* ")" strategy := "all" | "first" | "any"
+policy := "fail-fast" | "continue" | "ignore" branch := (NAME "=")? statement
 
-repeatBlock := "repeat" N ("as" NAME)? ":" INDENT statement* DEDENT
-forEachBlock:= "parallel"? "for" NAME ("," NAME)? "in" collection ":" INDENT statement* DEDENT
-loopBlock := "loop" condition? ("(" "max:" N ")")? ("as" NAME)? ":" INDENT statement\* DEDENT
+repeatBlock := "repeat" N ("as" NAME)? ":" INDENT statement* DEDENT forEachBlock:=
+"parallel"? "for" NAME ("," NAME)? "in" collection ":" INDENT statement* DEDENT loopBlock
+:= "loop" condition? ("(" "max:" N ")")? ("as" NAME)? ":" INDENT statement\* DEDENT
 condition := ("until" | "while") discretion
 
 # Error Handling
 
-tryBlock := "try:" INDENT statement* DEDENT catch? finally?
-catch := "catch" ("as" NAME)? ":" INDENT statement* DEDENT
-finally := "finally:" INDENT statement\* DEDENT
+tryBlock := "try:" INDENT statement* DEDENT catch? finally? catch := "catch" ("as" NAME)?
+":" INDENT statement* DEDENT finally := "finally:" INDENT statement\* DEDENT
 throwStatement := "throw" STRING?
 
 # Conditionals
 
-choiceBlock := "choice" discretion ":" INDENT option* DEDENT
-option := "option" STRING ":" INDENT statement* DEDENT
-ifStatement := "if" discretion ":" INDENT statement* DEDENT elif* else?
-elif := "elif" discretion ":" INDENT statement* DEDENT
-else := "else:" INDENT statement* DEDENT
+choiceBlock := "choice" discretion ":" INDENT option* DEDENT option := "option" STRING ":"
+INDENT statement* DEDENT ifStatement := "if" discretion ":" INDENT statement* DEDENT elif*
+else? elif := "elif" discretion ":" INDENT statement* DEDENT else := "else:" INDENT
+statement* DEDENT
 
 # Composition
 
-doBlock := "do" (":" INDENT statement* DEDENT | NAME args?)
-args := "(" expression* ")"
-arrowExpr := session "->" session ("->" session)_
-programCall := NAME "(" (NAME ":" expression)_ ")"
+doBlock := "do" (":" INDENT statement* DEDENT | NAME args?) args := "(" expression* ")"
+arrowExpr := session "->" session ("->" session)_ programCall := NAME "(" (NAME ":"
+expression)_ ")"
 
 # Pipelines
 
-pipeExpr := collection ("|" pipeOp)+
-pipeOp := ("map" | "filter" | "pmap") ":" INDENT statement* DEDENT
-| "reduce" "(" NAME "," NAME ")" ":" INDENT statement* DEDENT
+pipeExpr := collection ("|" pipeOp)+ pipeOp := ("map" | "filter" | "pmap") ":" INDENT
+statement* DEDENT | "reduce" "(" NAME "," NAME ")" ":" INDENT statement* DEDENT
 
 # Primitives
 
-discretion := "**" TEXT "**" | "**_" TEXT "_**"
-STRING := '"' ... '"' | '"""' ... '"""'
-collection := NAME | "[" expression* "]"
-comment := "#" TEXT
+discretion := "**" TEXT "**" | "**_" TEXT "_**" STRING := '"' ... '"' | '"""' ... '"""'
+collection := NAME | "[" expression* "]" comment := "#" TEXT
 
 ````
 
@@ -664,7 +656,8 @@ session "Write summary"
 
 ### How Context is Passed
 
-The VM passes context **by reference**, not by value. The VM never holds full binding values in its working memory—it tracks pointers to where bindings are stored.
+The VM passes context **by reference**, not by value. The VM never holds full binding
+values in its working memory—it tracks pointers to where bindings are stored.
 
 When spawning a session with context:
 
@@ -692,13 +685,16 @@ Context (by reference):
 Query the database to access the content.
 ```
 
-**Why reference-based:** This enables RLM-style patterns where the environment holds arbitrarily large values and agents interact with them programmatically, without the VM becoming a bottleneck.
+**Why reference-based:** This enables RLM-style patterns where the environment holds
+arbitrarily large values and agents interact with them programmatically, without the VM
+becoming a bottleneck.
 
 ---
 
 ## Program Composition
 
-Programs can import and invoke other programs, enabling modular workflows. Programs are fetched from the registry at `p.prose.md`.
+Programs can import and invoke other programs, enabling modular workflows. Programs are
+fetched from the registry at `p.prose.md`.
 
 ### Importing Programs
 
@@ -709,7 +705,8 @@ use "alice/research"
 use "bob/critique" as critic
 ```
 
-The import path follows the format `handle/slug`. An optional alias (`as name`) allows referencing by a shorter name.
+The import path follows the format `handle/slug`. An optional alias (`as name`) allows
+referencing by a shorter name.
 
 ### Program URL Resolution
 
@@ -735,7 +732,8 @@ input confirmation: "Type 'yes' to confirm deletion"
 
 ### Input Binding Semantics
 
-Inputs can appear **anywhere** in the program. The binding behavior depends on whether a value is pre-supplied:
+Inputs can appear **anywhere** in the program. The binding behavior depends on whether a
+value is pre-supplied:
 
 | Scenario                                                | Behavior                                   |
 | ------------------------------------------------------- | ------------------------------------------ |
@@ -772,9 +770,12 @@ input approval: ***
 ***
 ```
 
-If the underlying substrate has any type of Poll/AskUserQuestion tool, you can use it to ask the user a question in a poll format with a range of options, this is often the best way to ask a question to the user.
+If the underlying substrate has any type of Poll/AskUserQuestion tool, you can use it to
+ask the user a question in a poll format with a range of options, this is often the best
+way to ask a question to the user.
 
-The discretion form (`**...**`) allows the VM to present the prompt intelligently based on context, while string prompts are shown verbatim.
+The discretion form (`**...**`) allows the VM to present the prompt intelligently based on
+context, while string prompts are shown verbatim.
 
 ### Input Summary
 
@@ -788,7 +789,8 @@ Inputs:
 
 ### Output Bindings
 
-Outputs declare what values a program produces for its caller. Use the `output` keyword at assignment time:
+Outputs declare what values a program produces for its caller. Use the `output` keyword at
+assignment time:
 
 ```prose
 let raw = session "Research {topic}"
@@ -1009,7 +1011,8 @@ do review("quantum computing")
 
 ## Call Stack Management
 
-The VM maintains a call stack for block invocations. Each frame represents one invocation, enabling recursion with proper scope isolation.
+The VM maintains a call stack for block invocations. Each frame represents one invocation,
+enabling recursion with proper scope isolation.
 
 ### Stack Frame Structure
 
@@ -1031,7 +1034,9 @@ Each block invocation gets a unique `execution_id`:
 - Never reuse within a run
 - Root scope (outside any block) has `execution_id: 0` (conceptually)
 
-**Storage representation:** State backends may represent root scope differently—databases use `NULL`, filesystem uses no suffix. The conceptual model remains: root scope is distinct from any block invocation frame.
+**Storage representation:** State backends may represent root scope differently—databases
+use `NULL`, filesystem uses no suffix. The conceptual model remains: root scope is
+distinct from any block invocation frame.
 
 ### Recursive Block Invocation
 
@@ -1063,7 +1068,8 @@ do process(data, 5)
 6. Recursion continues until base case
 7. Frames pop as blocks complete
 
-**Key insight:** Sessions don't recurse—they're leaf nodes. The VM manages the entire call tree.
+**Key insight:** Sessions don't recurse—they're leaf nodes. The VM manages the entire call
+tree.
 
 ### Scope Resolution
 
@@ -1083,7 +1089,8 @@ do process(chunk, 5)           # execution_id: 1
     # Accessing 'chunk' resolves to execution_id: 2's argument
 ```
 
-**Only local bindings are scoped.** Global definitions (agents, blocks, imports) are shared across all frames.
+**Only local bindings are scoped.** Global definitions (agents, blocks, imports) are
+shared across all frames.
 
 ### Recursion Depth Limits
 
@@ -1104,7 +1111,8 @@ If limit exceeded:
 
 ### Call Stack in State
 
-The VM tracks the call stack in its state. For filesystem state, this appears in `state.md`:
+The VM tracks the call stack in its state. For filesystem state, this appears in
+`state.md`:
 
 ```markdown
 ## Call Stack
@@ -1234,4 +1242,5 @@ The OpenProse VM:
 13. **Tracks** state in files (`.prose/runs/`) or conversation
 14. **Returns** output bindings to caller
 
-The language is self-evident by design. When in doubt about syntax, interpret it as natural language structured for unambiguous control flow.
+The language is self-evident by design. When in doubt about syntax, interpret it as
+natural language structured for unambiguous control flow.

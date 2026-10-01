@@ -15,17 +15,20 @@ see-also:
 
 # Session Context Management
 
-You are a subagent operating within an OpenProse program. This document explains how to work with the context you receive and how to preserve state for future sessions.
+You are a subagent operating within an OpenProse program. This document explains how to
+work with the context you receive and how to preserve state for future sessions.
 
 ---
 
 ## 1. Understanding Your Context Layers
 
-When you start, you receive context from multiple sources. Understand what each represents:
+When you start, you receive context from multiple sources. Understand what each
+represents:
 
 ### 1.1 Outer Agent State
 
-The **outer agent state** is context from the orchestrating VM or parent agent. It tells you:
+The **outer agent state** is context from the orchestrating VM or parent agent. It tells
+you:
 
 - What program is running
 - Where you are in the execution flow
@@ -40,11 +43,13 @@ Current phase: Implementation
 Prior steps completed: [plan, design]
 ```
 
-**How to use it:** This orients you. You're not starting from scratch—you're continuing work that's already in progress. Reference prior steps when relevant.
+**How to use it:** This orients you. You're not starting from scratch—you're continuing
+work that's already in progress. Reference prior steps when relevant.
 
 ### 1.2 Persistent Agent Memory
 
-If you are a **persistent agent**, you'll receive a memory file with your prior observations and decisions. This is YOUR accumulated knowledge from previous segments.
+If you are a **persistent agent**, you'll receive a memory file with your prior
+observations and decisions. This is YOUR accumulated knowledge from previous segments.
 
 Look for:
 
@@ -52,11 +57,14 @@ Look for:
 ## Agent Memory: [your-name]
 ```
 
-**How to use it:** This is your continuity. You reviewed something yesterday; you remember that review today. Reference your prior decisions. Build on your accumulated understanding. Don't contradict yourself without acknowledging the change.
+**How to use it:** This is your continuity. You reviewed something yesterday; you remember
+that review today. Reference your prior decisions. Build on your accumulated
+understanding. Don't contradict yourself without acknowledging the change.
 
 ### 1.3 Task Context
 
-The **task context** is the specific input for THIS session—the code to review, the plan to evaluate, the feature to implement.
+The **task context** is the specific input for THIS session—the code to review, the plan
+to evaluate, the feature to implement.
 
 Look for:
 
@@ -73,7 +81,8 @@ Context provided:
 ---
 ```
 
-**How to use it:** This is what you're working on RIGHT NOW. Your primary focus. The other context layers inform how you approach this.
+**How to use it:** This is what you're working on RIGHT NOW. Your primary focus. The other
+context layers inform how you approach this.
 
 ### 1.4 Layering Order
 
@@ -107,13 +116,19 @@ Execution scope:
 
 **How to use it:**
 
-1. **Include in your binding output**: When writing bindings, include the `execution_id` in the filename and frontmatter so the VM can track scope correctly.
+1. **Include in your binding output**: When writing bindings, include the `execution_id`
+   in the filename and frontmatter so the VM can track scope correctly.
 
-2. **Understand variable isolation**: Your bindings won't collide with other invocations of the same block. If the block calls itself recursively, each invocation has its own `execution_id`.
+2. **Understand variable isolation**: Your bindings won't collide with other invocations
+   of the same block. If the block calls itself recursively, each invocation has its own
+   `execution_id`.
 
-3. **Context references are pre-resolved**: The VM resolves variable references before passing context to you. You don't need to walk the scope chain—the VM already did.
+3. **Context references are pre-resolved**: The VM resolves variable references before
+   passing context to you. You don't need to walk the scope chain—the VM already did.
 
-**Example:** If a recursive `process` block is at depth 5, there are 5 separate `execution_id` values, each with their own local bindings. Your session only sees the current frame's context.
+**Example:** If a recursive `process` block is at depth 5, there are 5 separate
+`execution_id` values, each with their own local bindings. Your session only sees the
+current frame's context.
 
 ---
 
@@ -130,11 +145,14 @@ Persistent agents have **two separate outputs** that must not be confused:
 | **Binding** | The result of THIS task    | `bindings/{name}.md` or database      | Passed to other sessions via `context:`    |
 | **Memory**  | Your accumulated knowledge | `agents/{name}/memory.md` or database | Carried forward to YOUR future invocations |
 
-**The binding is task-specific.** If you're asked to "review the plan," the binding contains your review.
+**The binding is task-specific.** If you're asked to "review the plan," the binding
+contains your review.
 
-**The memory is agent-specific.** It contains your accumulated understanding, decisions, and concerns across ALL your invocations—not just this one.
+**The memory is agent-specific.** It contains your accumulated understanding, decisions,
+and concerns across ALL your invocations—not just this one.
 
-These are written to **different locations** and serve **different purposes**. Always write both.
+These are written to **different locations** and serve **different purposes**. Always
+write both.
 
 ### 2.1 Reading Your Memory
 
@@ -145,25 +163,30 @@ At session start, your memory file is provided. It contains:
 - **Open Concerns**: Things you're watching for
 - **Recent Segments**: What happened in recent sessions
 
-**Read it carefully.** Your memory is your continuity. A persistent agent that ignores its memory is just a stateless agent with extra steps.
+**Read it carefully.** Your memory is your continuity. A persistent agent that ignores its
+memory is just a stateless agent with extra steps.
 
 ### 2.2 Building on Prior Knowledge
 
 When you encounter something related to your memory:
 
 - Reference it explicitly: "In my previous review, I noted X..."
-- Build on it: "Given that I already approved the plan, I'm now checking implementation alignment..."
+- Build on it: "Given that I already approved the plan, I'm now checking implementation
+  alignment..."
 - Update it if wrong: "I previously thought X, but now I see Y..."
 
 ### 2.3 Maintaining Consistency
 
-Your decisions should be consistent across segments unless you explicitly change your position. If you approved a plan in segment 1, don't reject the same approach in segment 3 without acknowledging the change and explaining why.
+Your decisions should be consistent across segments unless you explicitly change your
+position. If you approved a plan in segment 1, don't reject the same approach in segment 3
+without acknowledging the change and explaining why.
 
 ---
 
 ## 3. Memory Compaction Guidelines
 
-At the end of your session, you'll be asked to update your memory file. This is **compaction**—preserving what matters for future sessions.
+At the end of your session, you'll be asked to update your memory file. This is
+**compaction**—preserving what matters for future sessions.
 
 ### 3.1 Compaction is NOT Summarization
 
@@ -171,7 +194,10 @@ At the end of your session, you'll be asked to update your memory file. This is 
 
 This loses all useful information. A summary generalizes; compaction preserves specifics.
 
-**Right approach:** "Reviewed auth module (src/auth/login.ts:45-120). Found: (1) SQL injection risk in query builder line 67, (2) missing rate limiting on login endpoint, (3) good error handling pattern worth reusing. Requested fixes for #1 and #2, approved overall structure."
+**Right approach:** "Reviewed auth module (src/auth/login.ts:45-120). Found: (1) SQL
+injection risk in query builder line 67, (2) missing rate limiting on login endpoint, (3)
+good error handling pattern worth reusing. Requested fixes for #1 and #2, approved overall
+structure."
 
 ### 3.2 What to Preserve
 
@@ -250,7 +276,8 @@ Reviewed the implementation. Found some issues. Requested changes.
 
 ### 3.6 The Specificity Test
 
-Before finalizing your compaction, ask: "If I read only this summary in a week, could I understand exactly what happened and make consistent follow-up decisions?"
+Before finalizing your compaction, ask: "If I read only this summary in a week, could I
+understand exactly what happened and make consistent follow-up decisions?"
 
 If the answer is no, add more specifics.
 
@@ -342,23 +369,26 @@ READY FOR: [what should happen next]
 
 ## 6. Writing Output Files
 
-When using file-based state (see `../state/filesystem.md`), the VM tells you where to write your output. You must write your results directly to the filesystem.
+When using file-based state (see `../state/filesystem.md`), the VM tells you where to
+write your output. You must write your results directly to the filesystem.
 
 ### 6.1 Binding Output Files
 
-For regular sessions with output capture (`let x = session "..."`), write to the specified binding path:
+For regular sessions with output capture (`let x = session "..."`), write to the specified
+binding path:
 
 **Path format:** `.prose/runs/{run-id}/bindings/{name}.md`
 
-**Path format (inside block invocation):** `.prose/runs/{run-id}/bindings/{name}__{execution_id}.md`
+**Path format (inside block invocation):**
+`.prose/runs/{run-id}/bindings/{name}__{execution_id}.md`
 
 **File format:**
 
 ````markdown
 # {name}
 
-kind: {let|const|output|input}
-execution_id: {id} # Include if inside a block invocation (omit for root scope)
+kind: {let|const|output|input} execution_id: {id} # Include if inside a block invocation
+(omit for root scope)
 
 source:
 
@@ -460,8 +490,7 @@ If you are a persistent agent (invoked with `resume:`), you have additional resp
 ```markdown
 # Segment {NNN}
 
-timestamp: {ISO8601}
-prompt: "{the prompt for this session}"
+timestamp: {ISO8601} prompt: "{the prompt for this session}"
 
 ## Summary
 
@@ -485,7 +514,8 @@ Before completing your session:
 
 ## 7. Returning to the VM
 
-When your session completes, you return a **confirmation message** to the VM—not your full output. The VM tracks pointers, not values.
+When your session completes, you return a **confirmation message** to the VM—not your full
+output. The VM tracks pointers, not values.
 
 ### 7.1 What to Return
 
@@ -536,8 +566,10 @@ Summary: Processed chunk into 3 sub-parts for recursive processing.
 The VM never holds full binding values in its working memory. This is intentional:
 
 1. **Scalability**: Bindings can be arbitrarily large (megabytes, even gigabytes)
-2. **RLM patterns**: Enables "environment as variable" where agents query state programmatically
-3. **Context efficiency**: The VM's context stays lean regardless of intermediate data size
+2. **RLM patterns**: Enables "environment as variable" where agents query state
+   programmatically
+3. **Context efficiency**: The VM's context stays lean regardless of intermediate data
+   size
 4. **Concurrent access**: Multiple agents can read/write different bindings simultaneously
 
 ### 7.3 What NOT to Return
@@ -582,7 +614,8 @@ Segment: captain-003.md
 As a subagent in an OpenProse program:
 
 1. **Understand your context layers** — outer state, memory, task context
-2. **Read context by reference** — access binding files/database directly, load what you need
+2. **Read context by reference** — access binding files/database directly, load what you
+   need
 3. **Build on your memory** — you have continuity, use it
 4. **Compact, don't summarize** — preserve specifics, drop reasoning chains
 5. **Signal clearly** — help the VM understand your decisions
@@ -590,4 +623,5 @@ As a subagent in an OpenProse program:
 7. **Write outputs directly** — persist to the binding location you're given
 8. **Return pointers, not values** — the VM tracks locations, not content
 
-Your memory is what makes you persistent. The VM's efficiency depends on you writing outputs and returning confirmations—not dumping full content back through the substrate.
+Your memory is what makes you persistent. The VM's efficiency depends on you writing
+outputs and returning confirmations—not dumping full content back through the substrate.

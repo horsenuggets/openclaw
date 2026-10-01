@@ -9,20 +9,20 @@ title: "Gateway-Owned Pairing"
 
 # Gateway-owned pairing (Option B)
 
-In Gateway-owned pairing, the **Gateway** is the source of truth for which nodes
-are allowed to join. UIs (macOS app, future clients) are just frontends that
-approve or reject pending requests.
+In Gateway-owned pairing, the **Gateway** is the source of truth for which nodes are
+allowed to join. UIs (macOS app, future clients) are just frontends that approve or reject
+pending requests.
 
 **Important:** WS nodes use **device pairing** (role `node`) during `connect`.
-`node.pair.*` is a separate pairing store and does **not** gate the WS handshake.
-Only clients that explicitly call `node.pair.*` use this flow.
+`node.pair.*` is a separate pairing store and does **not** gate the WS handshake. Only
+clients that explicitly call `node.pair.*` use this flow.
 
 ## Concepts
 
 - **Pending request**: a node asked to join; requires approval.
 - **Paired node**: approved node with an issued auth token.
-- **Transport**: the Gateway WS endpoint forwards requests but does not decide
-  membership. (Legacy TCP bridge support is deprecated/removed.)
+- **Transport**: the Gateway WS endpoint forwards requests but does not decide membership.
+  (Legacy TCP bridge support is deprecated/removed.)
 
 ## How pairing works
 
@@ -63,8 +63,8 @@ Methods:
 
 Notes:
 
-- `node.pair.request` is idempotent per node: repeated calls return the same
-  pending request.
+- `node.pair.request` is idempotent per node: repeated calls return the same pending
+  request.
 - Approval **always** generates a fresh token; no token is ever returned from
   `node.pair.request`.
 - Requests may include `silent: true` as a hint for auto-approval flows.
@@ -96,4 +96,5 @@ Security notes:
 
 - The transport is **stateless**; it does not store membership.
 - If the Gateway is offline or pairing is disabled, nodes cannot pair.
-- If the Gateway is in remote mode, pairing still happens against the remote Gateway’s store.
+- If the Gateway is in remote mode, pairing still happens against the remote Gateway’s
+  store.

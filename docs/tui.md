@@ -37,7 +37,8 @@ Use `--password` if your Gateway uses password auth.
 - Header: connection URL, current agent, current session.
 - Chat log: user messages, assistant replies, system notices, tool cards.
 - Status line: connection/run state (connecting, running, streaming, idle, error).
-- Footer: connection state + agent + session + model + think/verbose/reasoning + token counts + deliver.
+- Footer: connection state + agent + session + model + think/verbose/reasoning + token
+  counts + deliver.
 - Input: text editor with autocomplete.
 
 ## Mental model: agents + sessions
@@ -106,13 +107,16 @@ Session lifecycle:
 - `/settings`
 - `/exit`
 
-Other Gateway slash commands (for example, `/context`) are forwarded to the Gateway and shown as system output. See [Slash commands](/tools/slash-commands).
+Other Gateway slash commands (for example, `/context`) are forwarded to the Gateway and
+shown as system output. See [Slash commands](/tools/slash-commands).
 
 ## Local shell commands
 
 - Prefix a line with `!` to run a local shell command on the TUI host.
-- The TUI prompts once per session to allow local execution; declining keeps `!` disabled for the session.
-- Commands run in a fresh, non-interactive shell in the TUI working directory (no persistent `cd`/env).
+- The TUI prompts once per session to allow local execution; declining keeps `!` disabled
+  for the session.
+- Commands run in a fresh, non-interactive shell in the TUI working directory (no
+  persistent `cd`/env).
 - A lone `!` is sent as a normal message; leading spaces do not trigger local exec.
 
 ## Tool output
@@ -142,8 +146,9 @@ Other Gateway slash commands (for example, `/context`) are forwarded to the Gate
 - `--thinking <level>`: Override thinking level for sends
 - `--timeout-ms <ms>`: Agent timeout in ms (defaults to `agents.defaults.timeoutSeconds`)
 
-Note: when you set `--url`, the TUI does not fall back to config or environment credentials.
-Pass `--token` or `--password` explicitly. Missing explicit credentials is an error.
+Note: when you set `--url`, the TUI does not fall back to config or environment
+credentials. Pass `--token` or `--password` explicitly. Missing explicit credentials is an
+error.
 
 ## Troubleshooting
 
@@ -152,11 +157,13 @@ No output after sending a message:
 - Run `/status` in the TUI to confirm the Gateway is connected and idle/busy.
 - Check the Gateway logs: `openclaw logs --follow`.
 - Confirm the agent can run: `openclaw status` and `openclaw models status`.
-- If you expect messages in a chat channel, enable delivery (`/deliver on` or `--deliver`).
+- If you expect messages in a chat channel, enable delivery (`/deliver on` or
+  `--deliver`).
 - `--history-limit <n>`: History entries to load (default 200)
 
 ## Troubleshooting
 
-- `disconnected`: ensure the Gateway is running and your `--url/--token/--password` are correct.
+- `disconnected`: ensure the Gateway is running and your `--url/--token/--password` are
+  correct.
 - No agents in picker: check `openclaw agents list` and your routing config.
 - Empty session picker: you might be in global scope or have no sessions yet.

@@ -1,6 +1,7 @@
 # Bundled Hooks
 
-This directory contains hooks that ship with OpenClaw. These hooks are automatically discovered and can be enabled/disabled via CLI or configuration.
+This directory contains hooks that ship with OpenClaw. These hooks are automatically
+discovered and can be enabled/disabled via CLI or configuration.
 
 ## Available Hooks
 
@@ -8,9 +9,9 @@ This directory contains hooks that ship with OpenClaw. These hooks are automatic
 
 Automatically saves session context to memory when you issue `/new`.
 
-**Events**: `command:new`
-**What it does**: Creates a dated memory file with LLM-generated slug based on conversation content.
-**Output**: `<workspace>/memory/YYYY-MM-DD-slug.md` (defaults to `~/.openclaw/workspace`)
+**Events**: `command:new` **What it does**: Creates a dated memory file with LLM-generated
+slug based on conversation content. **Output**: `<workspace>/memory/YYYY-MM-DD-slug.md`
+(defaults to `~/.openclaw/workspace`)
 
 **Enable**:
 
@@ -22,9 +23,8 @@ openclaw hooks enable session-memory
 
 Logs all command events to a centralized audit file.
 
-**Events**: `command` (all commands)
-**What it does**: Appends JSONL entries to command log file.
-**Output**: `~/.openclaw/logs/commands.log`
+**Events**: `command` (all commands) **What it does**: Appends JSONL entries to command
+log file. **Output**: `~/.openclaw/logs/commands.log`
 
 **Enable**:
 
@@ -34,11 +34,11 @@ openclaw hooks enable command-logger
 
 ### 😈 soul-evil
 
-Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random chance.
+Swaps injected `SOUL.md` content with `SOUL_EVIL.md` during a purge window or by random
+chance.
 
-**Events**: `agent:bootstrap`
-**What it does**: Overrides the injected SOUL content before the system prompt is built.
-**Output**: No files written; swaps happen in-memory only.
+**Events**: `agent:bootstrap` **What it does**: Overrides the injected SOUL content before
+the system prompt is built. **Output**: No files written; swaps happen in-memory only.
 **Docs**: https://docs.openclaw.ai/hooks/soul-evil
 
 **Enable**:
@@ -51,9 +51,9 @@ openclaw hooks enable soul-evil
 
 Runs `BOOT.md` whenever the gateway starts (after channels start).
 
-**Events**: `gateway:startup`
-**What it does**: Executes BOOT.md instructions via the agent runner.
-**Output**: Whatever the instructions request (for example, outbound messages).
+**Events**: `gateway:startup` **What it does**: Executes BOOT.md instructions via the
+agent runner. **Output**: Whatever the instructions request (for example, outbound
+messages).
 
 **Enable**:
 
@@ -84,7 +84,10 @@ name: my-hook
 description: "Short description"
 homepage: https://docs.openclaw.ai/hooks#my-hook
 metadata:
-  { "openclaw": { "emoji": "🔗", "events": ["command:new"], "requires": { "bins": ["node"] } } }
+  {
+    "openclaw":
+      { "emoji": "🔗", "events": ["command:new"], "requires": { "bins": ["node"] } },
+  }
 ---
 # Hook Title
 
@@ -101,7 +104,8 @@ Documentation goes here...
   - **env**: Required environment variables
   - **config**: Required config paths (e.g., `["workspace.dir"]`)
   - **os**: Required platforms (e.g., `["darwin", "linux"]`)
-- **install**: Installation methods (for bundled hooks: `[{"id":"bundled","kind":"bundled"}]`)
+- **install**: Installation methods (for bundled hooks:
+  `[{"id":"bundled","kind":"bundled"}]`)
 
 ## Creating Custom Hooks
 

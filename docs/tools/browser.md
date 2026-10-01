@@ -9,8 +9,8 @@ title: "Browser (OpenClaw-managed)"
 
 # Browser (openclaw-managed)
 
-OpenClaw can run a **dedicated Chrome/Brave/Edge/Chromium profile** that the agent controls.
-It is isolated from your personal browser and is managed through a small local
+OpenClaw can run a **dedicated Chrome/Brave/Edge/Chromium profile** that the agent
+controls. It is isolated from your personal browser and is managed through a small local
 control service inside the Gateway (loopback only).
 
 Beginner view:
@@ -28,8 +28,8 @@ Beginner view:
 - Agent actions (click/type/drag/select), snapshots, screenshots, PDFs.
 - Optional multi-profile support (`openclaw`, `work`, `remote`, ...).
 
-This browser is **not** your daily driver. It is a safe, isolated surface for
-agent automation and verification.
+This browser is **not** your daily driver. It is a safe, isolated surface for agent
+automation and verification.
 
 ## Quick start
 
@@ -40,14 +40,13 @@ openclaw browser --browser-profile openclaw open https://example.com
 openclaw browser --browser-profile openclaw snapshot
 ```
 
-If you get “Browser disabled”, enable it in config (see below) and restart the
-Gateway.
+If you get “Browser disabled”, enable it in config (see below) and restart the Gateway.
 
 ## Profiles: `openclaw` vs `chrome`
 
 - `openclaw`: managed, isolated browser (no extension required).
-- `chrome`: extension relay to your **system browser** (requires the OpenClaw
-  extension to be attached to a tab).
+- `chrome`: extension relay to your **system browser** (requires the OpenClaw extension to
+  be attached to a tab).
 
 Set `browser.defaultProfile: "openclaw"` if you want managed mode by default.
 
@@ -81,22 +80,26 @@ Notes:
 
 - The browser control service binds to loopback on a port derived from `gateway.port`
   (default: `18791`, which is gateway + 2). The relay uses the next port (`18792`).
-- If you override the Gateway port (`gateway.port` or `OPENCLAW_GATEWAY_PORT`),
-  the derived browser ports shift to stay in the same “family”.
+- If you override the Gateway port (`gateway.port` or `OPENCLAW_GATEWAY_PORT`), the
+  derived browser ports shift to stay in the same “family”.
 - `cdpUrl` defaults to the relay port when unset.
 - `remoteCdpTimeoutMs` applies to remote (non-loopback) CDP reachability checks.
 - `remoteCdpHandshakeTimeoutMs` applies to remote CDP WebSocket reachability checks.
-- `attachOnly: true` means “never launch a local browser; only attach if it is already running.”
-- `color` + per-profile `color` tint the browser UI so you can see which profile is active.
-- Default profile is `chrome` (extension relay). Use `defaultProfile: "openclaw"` for the managed browser.
-- Auto-detect order: system default browser if Chromium-based; otherwise Chrome → Brave → Edge → Chromium → Chrome Canary.
-- Local `openclaw` profiles auto-assign `cdpPort`/`cdpUrl` — set those only for remote CDP.
+- `attachOnly: true` means “never launch a local browser; only attach if it is already
+  running.”
+- `color` + per-profile `color` tint the browser UI so you can see which profile is
+  active.
+- Default profile is `chrome` (extension relay). Use `defaultProfile: "openclaw"` for the
+  managed browser.
+- Auto-detect order: system default browser if Chromium-based; otherwise Chrome → Brave →
+  Edge → Chromium → Chrome Canary.
+- Local `openclaw` profiles auto-assign `cdpPort`/`cdpUrl` — set those only for remote
+  CDP.
 
 ## Use Brave (or another Chromium-based browser)
 
-If your **system default** browser is Chromium-based (Chrome/Brave/Edge/etc),
-OpenClaw uses it automatically. Set `browser.executablePath` to override
-auto-detection:
+If your **system default** browser is Chromium-based (Chrome/Brave/Edge/etc), OpenClaw
+uses it automatically. Set `browser.executablePath` to override auto-detection:
 
 CLI example:
 
@@ -129,25 +132,27 @@ openclaw config set browser.executablePath "/usr/bin/google-chrome"
 
 ## Local vs remote control
 
-- **Local control (default):** the Gateway starts the loopback control service and can launch a local browser.
-- **Remote control (node host):** run a node host on the machine that has the browser; the Gateway proxies browser actions to it.
-- **Remote CDP:** set `browser.profiles.<name>.cdpUrl` (or `browser.cdpUrl`) to
-  attach to a remote Chromium-based browser. In this case, OpenClaw will not launch a local browser.
+- **Local control (default):** the Gateway starts the loopback control service and can
+  launch a local browser.
+- **Remote control (node host):** run a node host on the machine that has the browser; the
+  Gateway proxies browser actions to it.
+- **Remote CDP:** set `browser.profiles.<name>.cdpUrl` (or `browser.cdpUrl`) to attach to
+  a remote Chromium-based browser. In this case, OpenClaw will not launch a local browser.
 
 Remote CDP URLs can include auth:
 
 - Query tokens (e.g., `https://provider.example?token=<token>`)
 - HTTP Basic auth (e.g., `https://user:pass@provider.example`)
 
-OpenClaw preserves the auth when calling `/json/*` endpoints and when connecting
-to the CDP WebSocket. Prefer environment variables or secrets managers for
-tokens instead of committing them to config files.
+OpenClaw preserves the auth when calling `/json/*` endpoints and when connecting to the
+CDP WebSocket. Prefer environment variables or secrets managers for tokens instead of
+committing them to config files.
 
 ## Node browser proxy (zero-config default)
 
-If you run a **node host** on the machine that has your browser, OpenClaw can
-auto-route browser tool calls to that node without any extra browser config.
-This is the default path for remote gateways.
+If you run a **node host** on the machine that has your browser, OpenClaw can auto-route
+browser tool calls to that node without any extra browser config. This is the default path
+for remote gateways.
 
 Notes:
 
@@ -159,9 +164,9 @@ Notes:
 
 ## Browserless (hosted remote CDP)
 
-[Browserless](https://browserless.io) is a hosted Chromium service that exposes
-CDP endpoints over HTTPS. You can point a OpenClaw browser profile at a
-Browserless region endpoint and authenticate with your API key.
+[Browserless](https://browserless.io) is a hosted Chromium service that exposes CDP
+endpoints over HTTPS. You can point a OpenClaw browser profile at a Browserless region
+endpoint and authenticate with your API key.
 
 Example:
 
@@ -191,8 +196,10 @@ Notes:
 
 Key ideas:
 
-- Browser control is loopback-only; access flows through the Gateway’s auth or node pairing.
-- Keep the Gateway and any node hosts on a private network (Tailscale); avoid public exposure.
+- Browser control is loopback-only; access flows through the Gateway’s auth or node
+  pairing.
+- Keep the Gateway and any node hosts on a private network (Tailscale); avoid public
+  exposure.
 - Treat remote CDP URLs/tokens as secrets; prefer env vars or a secrets manager.
 
 Remote CDP tips:
@@ -204,14 +211,16 @@ Remote CDP tips:
 
 OpenClaw supports multiple named profiles (routing configs). Profiles can be:
 
-- **openclaw-managed**: a dedicated Chromium-based browser instance with its own user data directory + CDP port
+- **openclaw-managed**: a dedicated Chromium-based browser instance with its own user data
+  directory + CDP port
 - **remote**: an explicit CDP URL (Chromium-based browser running elsewhere)
 - **extension relay**: your existing Chrome tab(s) via the local relay + Chrome extension
 
 Defaults:
 
 - The `openclaw` profile is auto-created if missing.
-- The `chrome` profile is built-in for the Chrome extension relay (points at `http://127.0.0.1:18792` by default).
+- The `chrome` profile is built-in for the Chrome extension relay (points at
+  `http://127.0.0.1:18792` by default).
 - Local CDP ports allocate from **18800–18899** by default.
 - Deleting a profile moves its local data directory to Trash.
 
@@ -219,26 +228,33 @@ All control endpoints accept `?profile=<name>`; the CLI uses `--browser-profile`
 
 ## Chrome extension relay (use your existing Chrome)
 
-OpenClaw can also drive **your existing Chrome tabs** (no separate “openclaw” Chrome instance) via a local CDP relay + a Chrome extension.
+OpenClaw can also drive **your existing Chrome tabs** (no separate “openclaw” Chrome
+instance) via a local CDP relay + a Chrome extension.
 
 Full guide: [Chrome extension](/tools/chrome-extension)
 
 Flow:
 
 - The Gateway runs locally (same machine) or a node host runs on the browser machine.
-- A local **relay server** listens at a loopback `cdpUrl` (default: `http://127.0.0.1:18792`).
-- You click the **OpenClaw Browser Relay** extension icon on a tab to attach (it does not auto-attach).
-- The agent controls that tab via the normal `browser` tool, by selecting the right profile.
+- A local **relay server** listens at a loopback `cdpUrl` (default:
+  `http://127.0.0.1:18792`).
+- You click the **OpenClaw Browser Relay** extension icon on a tab to attach (it does not
+  auto-attach).
+- The agent controls that tab via the normal `browser` tool, by selecting the right
+  profile.
 
-If the Gateway runs elsewhere, run a node host on the browser machine so the Gateway can proxy browser actions.
+If the Gateway runs elsewhere, run a node host on the browser machine so the Gateway can
+proxy browser actions.
 
 ### Sandboxed sessions
 
-If the agent session is sandboxed, the `browser` tool may default to `target="sandbox"` (sandbox browser).
-Chrome extension relay takeover requires host browser control, so either:
+If the agent session is sandboxed, the `browser` tool may default to `target="sandbox"`
+(sandbox browser). Chrome extension relay takeover requires host browser control, so
+either:
 
 - run the session unsandboxed, or
-- set `agents.defaults.sandbox.browser.allowHostControl: true` and use `target="host"` when calling the tool.
+- set `agents.defaults.sandbox.browser.allowHostControl: true` and use `target="host"`
+  when calling the tool.
 
 ### Setup
 
@@ -269,7 +285,8 @@ openclaw browser create-profile \
 
 Notes:
 
-- This mode relies on Playwright-on-CDP for most operations (screenshots/snapshots/actions).
+- This mode relies on Playwright-on-CDP for most operations
+  (screenshots/snapshots/actions).
 - Detach by clicking the extension icon again.
 
 ## Isolation guarantees
@@ -307,29 +324,32 @@ For local integrations only, the Gateway exposes a small loopback HTTP API:
 - Hooks: `POST /hooks/file-chooser`, `POST /hooks/dialog`
 - Downloads: `POST /download`, `POST /wait/download`
 - Debugging: `GET /console`, `POST /pdf`
-- Debugging: `GET /errors`, `GET /requests`, `POST /trace/start`, `POST /trace/stop`, `POST /highlight`
+- Debugging: `GET /errors`, `GET /requests`, `POST /trace/start`, `POST /trace/stop`,
+  `POST /highlight`
 - Network: `POST /response/body`
 - State: `GET /cookies`, `POST /cookies/set`, `POST /cookies/clear`
 - State: `GET /storage/:kind`, `POST /storage/:kind/set`, `POST /storage/:kind/clear`
-- Settings: `POST /set/offline`, `POST /set/headers`, `POST /set/credentials`, `POST /set/geolocation`, `POST /set/media`, `POST /set/timezone`, `POST /set/locale`, `POST /set/device`
+- Settings: `POST /set/offline`, `POST /set/headers`, `POST /set/credentials`,
+  `POST /set/geolocation`, `POST /set/media`, `POST /set/timezone`, `POST /set/locale`,
+  `POST /set/device`
 
 All endpoints accept `?profile=<name>`.
 
 ### Playwright requirement
 
 Some features (navigate/act/AI snapshot/role snapshot, element screenshots, PDF) require
-Playwright. If Playwright isn’t installed, those endpoints return a clear 501
-error. ARIA snapshots and basic screenshots still work for openclaw-managed Chrome.
-For the Chrome extension relay driver, ARIA snapshots and screenshots require Playwright.
+Playwright. If Playwright isn’t installed, those endpoints return a clear 501 error. ARIA
+snapshots and basic screenshots still work for openclaw-managed Chrome. For the Chrome
+extension relay driver, ARIA snapshots and screenshots require Playwright.
 
 If you see `Playwright is not available in this gateway build`, install the full
-Playwright package (not `playwright-core`) and restart the gateway, or reinstall
-OpenClaw with browser support.
+Playwright package (not `playwright-core`) and restart the gateway, or reinstall OpenClaw
+with browser support.
 
 #### Docker Playwright install
 
-If your Gateway runs in Docker, avoid `npx playwright` (npm override conflicts).
-Use the bundled CLI instead:
+If your Gateway runs in Docker, avoid `npx playwright` (npm override conflicts). Use the
+bundled CLI instead:
 
 ```bash
 docker compose run --rm openclaw-cli \
@@ -346,17 +366,16 @@ High-level flow:
 
 - A small **control server** accepts HTTP requests.
 - It connects to Chromium-based browsers (Chrome/Brave/Edge/Chromium) via **CDP**.
-- For advanced actions (click/type/snapshot/PDF), it uses **Playwright** on top
-  of CDP.
+- For advanced actions (click/type/snapshot/PDF), it uses **Playwright** on top of CDP.
 - When Playwright is missing, only non-Playwright operations are available.
 
-This design keeps the agent on a stable, deterministic interface while letting
-you swap local/remote browsers and profiles.
+This design keeps the agent on a stable, deterministic interface while letting you swap
+local/remote browsers and profiles.
 
 ## CLI quick reference
 
-All commands accept `--browser-profile <name>` to target a specific profile.
-All commands also accept `--json` for machine-readable output (stable payloads).
+All commands accept `--browser-profile <name>` to target a specific profile. All commands
+also accept `--json` for machine-readable output (stable payloads).
 
 Basics:
 
@@ -436,20 +455,28 @@ State:
 
 Notes:
 
-- `upload` and `dialog` are **arming** calls; run them before the click/press
-  that triggers the chooser/dialog.
+- `upload` and `dialog` are **arming** calls; run them before the click/press that
+  triggers the chooser/dialog.
 - `upload` can also set file inputs directly via `--input-ref` or `--element`.
 - `snapshot`:
-  - `--format ai` (default when Playwright is installed): returns an AI snapshot with numeric refs (`aria-ref="<n>"`).
+  - `--format ai` (default when Playwright is installed): returns an AI snapshot with
+    numeric refs (`aria-ref="<n>"`).
   - `--format aria`: returns the accessibility tree (no refs; inspection only).
-  - `--efficient` (or `--mode efficient`): compact role snapshot preset (interactive + compact + depth + lower maxChars).
-  - Config default (tool/CLI only): set `browser.snapshotDefaults.mode: "efficient"` to use efficient snapshots when the caller does not pass a mode (see [Gateway configuration](/gateway/configuration#browser-openclaw-managed-browser)).
-  - Role snapshot options (`--interactive`, `--compact`, `--depth`, `--selector`) force a role-based snapshot with refs like `ref=e12`.
-  - `--frame "<iframe selector>"` scopes role snapshots to an iframe (pairs with role refs like `e12`).
-  - `--interactive` outputs a flat, easy-to-pick list of interactive elements (best for driving actions).
-  - `--labels` adds a viewport-only screenshot with overlayed ref labels (prints `MEDIA:<path>`).
-- `click`/`type`/etc require a `ref` from `snapshot` (either numeric `12` or role ref `e12`).
-  CSS selectors are intentionally not supported for actions.
+  - `--efficient` (or `--mode efficient`): compact role snapshot preset (interactive +
+    compact + depth + lower maxChars).
+  - Config default (tool/CLI only): set `browser.snapshotDefaults.mode: "efficient"` to
+    use efficient snapshots when the caller does not pass a mode (see
+    [Gateway configuration](/gateway/configuration#browser-openclaw-managed-browser)).
+  - Role snapshot options (`--interactive`, `--compact`, `--depth`, `--selector`) force a
+    role-based snapshot with refs like `ref=e12`.
+  - `--frame "<iframe selector>"` scopes role snapshots to an iframe (pairs with role refs
+    like `e12`).
+  - `--interactive` outputs a flat, easy-to-pick list of interactive elements (best for
+    driving actions).
+  - `--labels` adds a viewport-only screenshot with overlayed ref labels (prints
+    `MEDIA:<path>`).
+- `click`/`type`/etc require a `ref` from `snapshot` (either numeric `12` or role ref
+  `e12`). CSS selectors are intentionally not supported for actions.
 
 ## Snapshots and refs
 
@@ -460,7 +487,8 @@ OpenClaw supports two “snapshot” styles:
   - Actions: `openclaw browser click 12`, `openclaw browser type 23 "hello"`.
   - Internally, the ref is resolved via Playwright’s `aria-ref`.
 
-- **Role snapshot (role refs like `e12`)**: `openclaw browser snapshot --interactive` (or `--compact`, `--depth`, `--selector`, `--frame`)
+- **Role snapshot (role refs like `e12`)**: `openclaw browser snapshot --interactive` (or
+  `--compact`, `--depth`, `--selector`, `--frame`)
   - Output: a role-based list/tree with `[ref=e12]` (and optional `[nth=1]`).
   - Actions: `openclaw browser click e12`, `openclaw browser highlight e12`.
   - Internally, the ref is resolved via `getByRole(...)` (plus `nth()` for duplicates).
@@ -468,8 +496,10 @@ OpenClaw supports two “snapshot” styles:
 
 Ref behavior:
 
-- Refs are **not stable across navigations**; if something fails, re-run `snapshot` and use a fresh ref.
-- If the role snapshot was taken with `--frame`, role refs are scoped to that iframe until the next role snapshot.
+- Refs are **not stable across navigations**; if something fails, re-run `snapshot` and
+  use a fresh ref.
+- If the role snapshot was taken with `--frame`, role refs are scoped to that iframe until
+  the next role snapshot.
 
 ## Wait power-ups
 
@@ -500,7 +530,8 @@ When an action fails (e.g. “not visible”, “strict mode violation”, “co
 
 1. `openclaw browser snapshot --interactive`
 2. Use `click <ref>` / `type <ref>` (prefer role refs in interactive mode)
-3. If it still fails: `openclaw browser highlight <ref>` to see what Playwright is targeting
+3. If it still fails: `openclaw browser highlight <ref>` to see what Playwright is
+   targeting
 4. If the page behaves oddly:
    - `openclaw browser errors --clear`
    - `openclaw browser requests --filter api --clear`
@@ -522,7 +553,8 @@ openclaw browser requests --filter api --json
 openclaw browser cookies --json
 ```
 
-Role snapshots in JSON include `refs` plus a small `stats` block (lines/chars/refs/interactive) so tools can reason about payload size and density.
+Role snapshots in JSON include `refs` plus a small `stats` block
+(lines/chars/refs/interactive) so tools can reason about payload size and density.
 
 ## State and environment knobs
 
@@ -543,10 +575,11 @@ These are useful for “make the site behave like X” workflows:
 ## Security & privacy
 
 - The openclaw browser profile may contain logged-in sessions; treat it as sensitive.
-- `browser act kind=evaluate` / `openclaw browser evaluate` and `wait --fn`
-  execute arbitrary JavaScript in the page context. Prompt injection can steer
-  this. Disable it with `browser.evaluateEnabled=false` if you do not need it.
-- For logins and anti-bot notes (X/Twitter, etc.), see [Browser login + X/Twitter posting](/tools/browser-login).
+- `browser act kind=evaluate` / `openclaw browser evaluate` and `wait --fn` execute
+  arbitrary JavaScript in the page context. Prompt injection can steer this. Disable it
+  with `browser.evaluateEnabled=false` if you do not need it.
+- For logins and anti-bot notes (X/Twitter, etc.), see
+  [Browser login + X/Twitter posting](/tools/browser-login).
 - Keep the Gateway/node host private (loopback or tailnet-only).
 - Remote CDP endpoints are powerful; tunnel and protect them.
 
@@ -569,8 +602,11 @@ How it maps:
 - `browser` accepts:
   - `profile` to choose a named browser profile (openclaw, chrome, or remote CDP).
   - `target` (`sandbox` | `host` | `node`) to select where the browser lives.
-  - In sandboxed sessions, `target: "host"` requires `agents.defaults.sandbox.browser.allowHostControl=true`.
-  - If `target` is omitted: sandboxed sessions default to `sandbox`, non-sandbox sessions default to `host`.
-  - If a browser-capable node is connected, the tool may auto-route to it unless you pin `target="host"` or `target="node"`.
+  - In sandboxed sessions, `target: "host"` requires
+    `agents.defaults.sandbox.browser.allowHostControl=true`.
+  - If `target` is omitted: sandboxed sessions default to `sandbox`, non-sandbox sessions
+    default to `host`.
+  - If a browser-capable node is connected, the tool may auto-route to it unless you pin
+    `target="host"` or `target="node"`.
 
 This keeps the agent deterministic and avoids brittle selectors.

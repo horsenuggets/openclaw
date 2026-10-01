@@ -1,5 +1,6 @@
 ---
-summary: "Full reference for the CLI onboarding wizard: every step, flag, and config field"
+summary:
+  "Full reference for the CLI onboarding wizard: every step, flag, and config field"
 read_when:
   - Looking up a specific wizard step or flag
   - Automating onboarding with non-interactive mode
@@ -10,8 +11,8 @@ sidebarTitle: "Wizard Reference"
 
 # Onboarding Wizard Reference
 
-This is the full reference for the `openclaw onboard` CLI wizard.
-For a high-level overview, see [Onboarding Wizard](/start/wizard).
+This is the full reference for the `openclaw onboard` CLI wizard. For a high-level
+overview, see [Onboarding Wizard](/start/wizard).
 
 ## Flow details (local mode)
 
@@ -218,8 +219,9 @@ openclaw agents add work \
 
 ## Gateway wizard RPC
 
-The Gateway exposes the wizard flow over RPC (`wizard.start`, `wizard.next`, `wizard.cancel`, `wizard.status`).
-Clients (macOS app, Control UI) can render steps without re‑implementing onboarding logic.
+The Gateway exposes the wizard flow over RPC (`wizard.start`, `wizard.next`,
+`wizard.cancel`, `wizard.status`). Clients (macOS app, Control UI) can render steps
+without re‑implementing onboarding logic.
 
 ## Signal setup (signal-cli)
 
@@ -242,8 +244,10 @@ Typical fields in `~/.openclaw/openclaw.json`:
 - `agents.defaults.workspace`
 - `agents.defaults.model` / `models.providers` (if Minimax chosen)
 - `gateway.*` (mode, bind, auth, tailscale)
-- `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`, `channels.imessage.*`
-- Channel allowlists (Slack/Discord/Matrix/Microsoft Teams) when you opt in during the prompts (names resolve to IDs when possible).
+- `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`,
+  `channels.imessage.*`
+- Channel allowlists (Slack/Discord/Matrix/Microsoft Teams) when you opt in during the
+  prompts (names resolve to IDs when possible).
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`
 - `wizard.lastRunVersion`
@@ -253,8 +257,8 @@ Typical fields in `~/.openclaw/openclaw.json`:
 
 `openclaw agents add` writes `agents.list[]` and optional `bindings`.
 
-WhatsApp credentials go under `~/.openclaw/credentials/whatsapp/<accountId>/`.
-Sessions are stored under `~/.openclaw/agents/<agentId>/sessions/`.
+WhatsApp credentials go under `~/.openclaw/credentials/whatsapp/<accountId>/`. Sessions
+are stored under `~/.openclaw/agents/<agentId>/sessions/`.
 
 Some channels are delivered as plugins. When you pick one during onboarding, the wizard
 will prompt to install it (npm or a local path) before it can be configured.
@@ -264,5 +268,8 @@ will prompt to install it (npm or a local path) before it can be configured.
 - Wizard overview: [Onboarding Wizard](/start/wizard)
 - macOS app onboarding: [Onboarding](/start/onboarding)
 - Config reference: [Gateway configuration](/gateway/configuration)
-- Providers: [WhatsApp](/channels/whatsapp), [Telegram](/channels/telegram), [Discord](/channels/discord), [Google Chat](/channels/googlechat), [Signal](/channels/signal), [BlueBubbles](/channels/bluebubbles) (iMessage), [iMessage](/channels/imessage) (legacy)
+- Providers: [WhatsApp](/channels/whatsapp), [Telegram](/channels/telegram),
+  [Discord](/channels/discord), [Google Chat](/channels/googlechat),
+  [Signal](/channels/signal), [BlueBubbles](/channels/bluebubbles) (iMessage),
+  [iMessage](/channels/imessage) (legacy)
 - Skills: [Skills](/tools/skills), [Skills config](/tools/skills-config)

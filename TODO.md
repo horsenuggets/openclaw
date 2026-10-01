@@ -20,7 +20,9 @@ All OpenClaw work tracking lives in **Todoist** now, in the `openclaw` project.
 
 ## Accessing Todoist from Claude Code
 
-The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is configured at user scope. Once a Claude Code session starts, it auto-connects and exposes tools under the `mcp__todoist__*` namespace. Common ones:
+The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is configured at user scope. Once
+a Claude Code session starts, it auto-connects and exposes tools under the
+`mcp__todoist__*` namespace. Common ones:
 
 | Tool                                             | Use                                                        |
 | ------------------------------------------------ | ---------------------------------------------------------- |
@@ -72,16 +74,23 @@ mcp__todoist__create_tasks({
 
 ## Labels
 
-Useful labels already defined in Todoist for time estimates: `<15m`, `<30m`, `<45m`, `<1h`, `<1h30m`, `<2h`, `<3h`, `<4h`, `<6h` — plus matching `>...` variants. Tag tasks with these to help with planning sessions.
+Useful labels already defined in Todoist for time estimates: `<15m`, `<30m`, `<45m`,
+`<1h`, `<1h30m`, `<2h`, `<3h`, `<4h`, `<6h` — plus matching `>...` variants. Tag tasks
+with these to help with planning sessions.
 
 Other relevant labels: `Routine`, `Stretch`, `Discarded`.
 
 ## Adding tasks outside Claude Code
 
 - **Todoist mobile / desktop app** — just add to the `openclaw` project
-- **`openclaw` CLI skill** — if there's a `/todo` or equivalent slash command configured, use that
-- **Todoist REST API** — `curl` with `Authorization: Bearer <API_TOKEN>` against `api.todoist.com/rest/v2/tasks` works anywhere (API token lives in keychain / the gateway config)
+- **`openclaw` CLI skill** — if there's a `/todo` or equivalent slash command configured,
+  use that
+- **Todoist REST API** — `curl` with `Authorization: Bearer <API_TOKEN>` against
+  `api.todoist.com/rest/v2/tasks` works anywhere (API token lives in keychain / the
+  gateway config)
 
 ## Why this file still exists
 
-It's a pointer for future Claude Code sessions (and you) that open the repo and look for `TODO.md`. Without this note, it's not obvious the tasks have moved. Do NOT add real tasks to this file — they'll get lost. Add them to Todoist.
+It's a pointer for future Claude Code sessions (and you) that open the repo and look for
+`TODO.md`. Without this note, it's not obvious the tasks have moved. Do NOT add real tasks
+to this file — they'll get lost. Add them to Todoist.

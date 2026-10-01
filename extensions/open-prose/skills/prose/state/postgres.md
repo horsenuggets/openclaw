@@ -16,7 +16,9 @@ see-also:
 
 # PostgreSQL State Management (Experimental)
 
-This document describes how the OpenProse VM tracks execution state using a **PostgreSQL database**. This is an experimental alternative to file-based state (`filesystem.md`), SQLite state (`sqlite.md`), and in-context state (`in-context.md`).
+This document describes how the OpenProse VM tracks execution state using a **PostgreSQL
+database**. This is an experimental alternative to file-based state (`filesystem.md`),
+SQLite state (`sqlite.md`), and in-context state (`in-context.md`).
 
 ## Prerequisites
 
@@ -50,20 +52,24 @@ If `psql` is not available, the VM will offer to fall back to SQLite state.
 
 PostgreSQL state provides:
 
-- **True concurrent writes**: Row-level locking allows parallel branches to write simultaneously
+- **True concurrent writes**: Row-level locking allows parallel branches to write
+  simultaneously
 - **Network access**: Query state from any machine, external tools, or dashboards
 - **Team collaboration**: Multiple developers can share run state
 - **Rich SQL**: JSONB queries, window functions, CTEs for complex state analysis
 - **High throughput**: Handle 1000+ writes/minute, multi-GB outputs
 - **Durability**: WAL-based recovery, point-in-time restore
 
-**Key principle:** The database is a flexible, shared workspace. The VM and subagents coordinate through it, and external tools can observe and query execution state in real-time.
+**Key principle:** The database is a flexible, shared workspace. The VM and subagents
+coordinate through it, and external tools can observe and query execution state in
+real-time.
 
 ---
 
 ## Security Warning
 
-**⚠️ Credentials are visible to subagents.** The `OPENPROSE_POSTGRES_URL` connection string is passed to spawned sessions so they can write their outputs. This means:
+**⚠️ Credentials are visible to subagents.** The `OPENPROSE_POSTGRES_URL` connection
+string is passed to spawned sessions so they can write their outputs. This means:
 
 - Database credentials appear in subagent context and may be logged
 - Treat these credentials as **non-sensitive**
@@ -94,7 +100,8 @@ PostgreSQL state is for **power users** with specific scale or collaboration nee
 | Outputs exceeding 1GB                       | Bulk ingestion; no single-file bottleneck     |
 | Mission-critical workflows (hours/days)     | Robust durability; point-in-time recovery     |
 
-**If none of these apply, use filesystem or SQLite state.** They're simpler and sufficient for 99% of programs.
+**If none of these apply, use filesystem or SQLite state.** They're simpler and sufficient
+for 99% of programs.
 
 ### Decision Tree
 
@@ -127,7 +134,8 @@ The primary motivation for PostgreSQL is **concurrent writes in parallel executi
 - SQLite uses table-level locks: parallel branches serialize
 - PostgreSQL uses row-level locks: parallel branches write simultaneously
 
-If your program has 10 parallel branches completing at once, PostgreSQL will be 5-10x faster than SQLite for the write phase.
+If your program has 10 parallel branches completing at once, PostgreSQL will be 5-10x
+faster than SQLite for the write phase.
 
 ---
 
@@ -260,7 +268,9 @@ The VM (the orchestrating agent running the .prose program) is responsible for:
 | **Context preservation**  | Maintain sufficient narration in the main thread          |
 | **Completion detection**  | Mark the run as complete when finished                    |
 
-**Critical:** The VM must preserve enough context in its own conversation to understand execution state without re-reading the entire database. The database is for coordination and persistence, not a replacement for working memory.
+**Critical:** The VM must preserve enough context in its own conversation to understand
+execution state without re-reading the entire database. The database is for coordination
+and persistence, not a replacement for working memory.
 
 ### Subagent Responsibilities
 
@@ -274,11 +284,15 @@ Subagents (sessions spawned by the VM) are responsible for:
 | **Attachment handling** | Write large outputs to `attachments/` directory, store path in DB |
 | **Atomic writes**       | Use transactions when updating multiple related records           |
 
-**Critical:** Subagents write ONLY to `bindings`, `agents`, and `agent_segments` tables. The VM owns the `execution` table entirely. Completion signaling happens through the substrate (Task tool return), not database updates.
+**Critical:** Subagents write ONLY to `bindings`, `agents`, and `agent_segments` tables.
+The VM owns the `execution` table entirely. Completion signaling happens through the
+substrate (Task tool return), not database updates.
 
-**Critical:** Subagents must write their outputs directly to the database. The VM does not write subagent outputs—it only reads them after the subagent completes.
+**Critical:** Subagents must write their outputs directly to the database. The VM does not
+write subagent outputs—it only reads them after the subagent completes.
 
-**What subagents return to the VM:** A confirmation message with the binding location—not the full content:
+**What subagents return to the VM:** A confirmation message with the binding location—not
+the full content:
 
 **Root scope:**
 
@@ -297,7 +311,8 @@ Execution ID: 43
 Summary: Processed chunk into 3 sub-parts for recursive processing.
 ```
 
-The VM tracks locations, not values. This keeps the VM's context lean and enables arbitrarily large intermediate values.
+The VM tracks locations, not values. This keeps the VM's context lean and enables
+arbitrarily large intermediate values.
 
 ### Shared Concerns
 
@@ -312,7 +327,8 @@ The VM tracks locations, not values. This keeps the VM's context lean and enable
 
 ## Core Schema
 
-The VM initializes these tables using the `openprose` schema. This is a **minimum viable schema**—extend freely.
+The VM initializes these tables using the `openprose` schema. This is a **minimum viable
+schema**—extend freely.
 
 ```sql
 -- Create dedicated schema for OpenProse state
@@ -414,16 +430,22 @@ CREATE INDEX IF NOT EXISTS idx_agent_segments_lookup ON openprose.agent_segments
 ### Schema Conventions
 
 - **Timestamps**: Use `TIMESTAMPTZ` with `NOW()` (timezone-aware)
-- **JSON fields**: Use `JSONB` for structured data in `metadata` columns (queryable, indexable)
-- **Large values**: If a binding value exceeds ~100KB, write to `attachments/{name}.md` and store path
+- **JSON fields**: Use `JSONB` for structured data in `metadata` columns (queryable,
+  indexable)
+- **Large values**: If a binding value exceeds ~100KB, write to `attachments/{name}.md`
+  and store path
 - **Extension tables**: Prefix with `x_` (e.g., `x_metrics`, `x_audit_log`)
-- **Anonymous bindings**: Sessions without explicit capture use auto-generated names: `anon_001`, `anon_002`, etc.
-- **Import bindings**: Prefix with import alias for scoping: `research.findings`, `research.sources`
-- **Scoped bindings**: Use `execution_id` column—NULL for root scope, non-null for block invocations
+- **Anonymous bindings**: Sessions without explicit capture use auto-generated names:
+  `anon_001`, `anon_002`, etc.
+- **Import bindings**: Prefix with import alias for scoping: `research.findings`,
+  `research.sources`
+- **Scoped bindings**: Use `execution_id` column—NULL for root scope, non-null for block
+  invocations
 
 ### Scope Resolution Query
 
-For recursive blocks, bindings are scoped to their execution frame. Resolve variables by walking up the call stack:
+For recursive blocks, bindings are scoped to their execution frame. Resolve variables by
+walking up the call stack:
 
 ```sql
 -- Find binding 'result' starting from execution_id 43 in run '20260116-143052-a7b3c9'
@@ -589,7 +611,8 @@ UPDATE openprose.agents SET memory = '...' WHERE name = 'advisor' AND run_id IS 
 
 ## Context Preservation in Main Thread
 
-**This is critical.** The database is for persistence and coordination, but the VM must still maintain conversational context.
+**This is critical.** The database is for persistence and coordination, but the VM must
+still maintain conversational context.
 
 ### What the VM Must Narrate
 
@@ -612,13 +635,15 @@ Even with PostgreSQL state, the VM should narrate key events in its conversation
 | **Subagent coordination** | PostgreSQL database (shared access point)                            |
 | **Debugging/inspection**  | PostgreSQL database (queryable history)                              |
 
-The narration is the VM's "mental model" of execution. The database is the "source of truth" for resumption and inspection.
+The narration is the VM's "mental model" of execution. The database is the "source of
+truth" for resumption and inspection.
 
 ---
 
 ## Parallel Execution
 
-For parallel blocks, the VM uses the `metadata` JSONB field to track branches. **Only the VM writes to the `execution` table.**
+For parallel blocks, the VM uses the `metadata` JSONB field to track branches. **Only the
+VM writes to the `execution` table.**
 
 ```sql
 -- VM marks parallel start
@@ -651,7 +676,8 @@ WHERE run_id = '20260116-143052-a7b3c9'
 
 ### The Concurrency Advantage
 
-Each subagent writes to a different row in `openprose.bindings`. PostgreSQL's row-level locking means **no blocking**:
+Each subagent writes to a different row in `openprose.bindings`. PostgreSQL's row-level
+locking means **no blocking**:
 
 ```
 SQLite (table locks):
@@ -708,9 +734,14 @@ UPDATE openprose.run SET status = 'failed' WHERE id = '20260116-143052-a7b3c9';
 
 ## Project-Scoped and User-Scoped Agents
 
-Execution-scoped agents (the default) use `run_id = specific value`. **Project-scoped agents** (`persist: project`) and **user-scoped agents** (`persist: user`) use `run_id IS NULL` and survive across runs.
+Execution-scoped agents (the default) use `run_id = specific value`. **Project-scoped
+agents** (`persist: project`) and **user-scoped agents** (`persist: user`) use
+`run_id IS NULL` and survive across runs.
 
-For user-scoped agents, the VM maintains a separate connection or uses a naming convention to distinguish them from project-scoped agents. One approach is to prefix user-scoped agent names with `__user__` in the same database, or use a separate user-level database configured via `OPENPROSE_POSTGRES_USER_URL`.
+For user-scoped agents, the VM maintains a separate connection or uses a naming convention
+to distinguish them from project-scoped agents. One approach is to prefix user-scoped
+agent names with `__user__` in the same database, or use a separate user-level database
+configured via `OPENPROSE_POSTGRES_USER_URL`.
 
 ### The run_id Approach
 
@@ -723,9 +754,11 @@ PRIMARY KEY (name, COALESCE(run_id, '__project__'))
 This means:
 
 - `name='advisor', run_id=NULL` has PK `('advisor', '__project__')`
-- `name='advisor', run_id='20260116-143052-a7b3c9'` has PK `('advisor', '20260116-143052-a7b3c9')`
+- `name='advisor', run_id='20260116-143052-a7b3c9'` has PK
+  `('advisor', '20260116-143052-a7b3c9')`
 
-The same agent name can exist as both project-scoped and execution-scoped without collision.
+The same agent name can exist as both project-scoped and execution-scoped without
+collision.
 
 ### Query Patterns
 
@@ -738,8 +771,8 @@ The same agent name can exist as both project-scoped and execution-scoped withou
 
 Project-scoped agents should store generalizable knowledge that accumulates:
 
-**DO store:** User preferences, project context, learned patterns, decision rationale
-**DO NOT store:** Run-specific details, time-sensitive information, large data
+**DO store:** User preferences, project context, learned patterns, decision rationale **DO
+NOT store:** Run-specific details, time-sensitive information, large data
 
 ### Agent Cleanup
 
@@ -811,7 +844,8 @@ WHERE run_id = '20260116-143052-a7b3c9'
 
 ## Flexibility Encouragement
 
-PostgreSQL state is intentionally **flexible**. The core schema is a starting point. You are encouraged to:
+PostgreSQL state is intentionally **flexible**. The core schema is a starting point. You
+are encouraged to:
 
 - **Add columns** to existing tables as needed
 - **Create extension tables** (prefix with `x_`)
@@ -875,6 +909,9 @@ PostgreSQL state management:
 6. Requires the **psql CLI** and a running PostgreSQL server
 7. Is **experimental**—expect changes
 
-The core contract: the VM manages execution flow and spawns subagents; subagents write their own outputs directly to the database. Completion is signaled through the Task tool return, not database updates. External tools can query execution state in real-time.
+The core contract: the VM manages execution flow and spawns subagents; subagents write
+their own outputs directly to the database. Completion is signaled through the Task tool
+return, not database updates. External tools can query execution state in real-time.
 
-**PostgreSQL state is for power users.** If you don't need concurrent writes, network access, or team collaboration, filesystem or SQLite state will be simpler and sufficient.
+**PostgreSQL state is for power users.** If you don't need concurrent writes, network
+access, or team collaboration, filesystem or SQLite state will be simpler and sufficient.

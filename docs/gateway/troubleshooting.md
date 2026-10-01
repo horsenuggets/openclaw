@@ -9,7 +9,9 @@ title: "Troubleshooting"
 
 When OpenClaw misbehaves, here's how to fix it.
 
-Start with the FAQ’s [First 60 seconds](/help/faq#first-60-seconds-if-somethings-broken) if you just want a quick triage recipe. This page goes deeper on runtime failures and diagnostics.
+Start with the FAQ’s [First 60 seconds](/help/faq#first-60-seconds-if-somethings-broken)
+if you just want a quick triage recipe. This page goes deeper on runtime failures and
+diagnostics.
 
 Provider-specific shortcuts: [/channels/troubleshooting](/channels/troubleshooting)
 
@@ -27,7 +29,8 @@ Quick triage commands (in order):
 | `openclaw gateway status`          | Supervisor state (launchd/systemd/schtasks), runtime PID/exit, last gateway error                      | When the service “looks loaded” but nothing runs  |
 | `openclaw logs --follow`           | Live logs (best signal for runtime issues)                                                             | When you need the actual failure reason           |
 
-**Sharing output:** prefer `openclaw status --all` (it redacts tokens). If you paste `openclaw status`, consider setting `OPENCLAW_SHOW_SECRETS=0` first (token previews).
+**Sharing output:** prefer `openclaw status --all` (it redacts tokens). If you paste
+`openclaw status`, consider setting `OPENCLAW_SHOW_SECRETS=0` first (token previews).
 
 See also: [Health checks](/gateway/health) and [Logging](/logging).
 
@@ -35,8 +38,8 @@ See also: [Health checks](/gateway/health) and [Logging](/logging).
 
 ### No API key found for provider "anthropic"
 
-This means the **agent’s auth store is empty** or missing Anthropic credentials.
-Auth is **per agent**, so a new agent won’t inherit the main agent’s keys.
+This means the **agent’s auth store is empty** or missing Anthropic credentials. Auth is
+**per agent**, so a new agent won’t inherit the main agent’s keys.
 
 Fix options:
 
@@ -55,9 +58,9 @@ openclaw models status
 
 ### OAuth token refresh failed (Anthropic Claude subscription)
 
-This means the stored Anthropic OAuth token expired and the refresh failed.
-If you’re on a Claude subscription (no API key), the most reliable fix is to
-switch to a **Claude Code setup-token** and paste it on the **gateway host**.
+This means the stored Anthropic OAuth token expired and the refresh failed. If you’re on a
+Claude subscription (no API key), the most reliable fix is to switch to a **Claude Code
+setup-token** and paste it on the **gateway host**.
 
 **Recommended (setup-token):**
 
@@ -79,26 +82,26 @@ More detail: [Anthropic](/providers/anthropic) and [OAuth](/concepts/oauth).
 ### Control UI fails on HTTP ("device identity required" / "connect failed")
 
 If you open the dashboard over plain HTTP (e.g. `http://<lan-ip>:18789/` or
-`http://<tailscale-ip>:18789/`), the browser runs in a **non-secure context** and
-blocks WebCrypto, so device identity can’t be generated.
+`http://<tailscale-ip>:18789/`), the browser runs in a **non-secure context** and blocks
+WebCrypto, so device identity can’t be generated.
 
 **Fix:**
 
 - Prefer HTTPS via [Tailscale Serve](/gateway/tailscale).
 - Or open locally on the gateway host: `http://127.0.0.1:18789/`.
-- If you must stay on HTTP, enable `gateway.controlUi.allowInsecureAuth: true` and
-  use a gateway token (token-only; no device identity/pairing). See
+- If you must stay on HTTP, enable `gateway.controlUi.allowInsecureAuth: true` and use a
+  gateway token (token-only; no device identity/pairing). See
   [Control UI](/web/control-ui#insecure-http).
 
 ### CI Secrets Scan Failed
 
-This means `detect-secrets` found new candidates not yet in the baseline.
-Follow [Secret scanning](/gateway/security#secret-scanning-detect-secrets).
+This means `detect-secrets` found new candidates not yet in the baseline. Follow
+[Secret scanning](/gateway/security#secret-scanning-detect-secrets).
 
 ### Service Installed but Nothing is Running
 
-If the gateway service is installed but the process exits immediately, the service
-can appear “loaded” while nothing is running.
+If the gateway service is installed but the process exits immediately, the service can
+appear “loaded” while nothing is running.
 
 **Check:**
 
@@ -112,9 +115,12 @@ Doctor/service will show runtime state (PID/last exit) and log hints.
 **Logs:**
 
 - Preferred: `openclaw logs --follow`
-- File logs (always): `/tmp/openclaw/openclaw-YYYY-MM-DD.log` (or your configured `logging.file`)
-- macOS LaunchAgent (if installed): `$OPENCLAW_STATE_DIR/logs/gateway.log` and `gateway.err.log`
-- Linux systemd (if installed): `journalctl --user -u openclaw-gateway[-<profile>].service -n 200 --no-pager`
+- File logs (always): `/tmp/openclaw/openclaw-YYYY-MM-DD.log` (or your configured
+  `logging.file`)
+- macOS LaunchAgent (if installed): `$OPENCLAW_STATE_DIR/logs/gateway.log` and
+  `gateway.err.log`
+- Linux systemd (if installed):
+  `journalctl --user -u openclaw-gateway[-<profile>].service -n 200 --no-pager`
 - Windows: `schtasks /Query /TN "OpenClaw Gateway (<profile>)" /V /FO LIST`
 
 **Enable more logging:**
@@ -127,14 +133,15 @@ Doctor/service will show runtime state (PID/last exit) and log hints.
   ```json
   { "logging": { "consoleLevel": "debug", "consoleStyle": "pretty" } }
   ```
-- Quick tip: `--verbose` affects **console** output only. File logs remain controlled by `logging.level`.
+- Quick tip: `--verbose` affects **console** output only. File logs remain controlled by
+  `logging.level`.
 
 See [/logging](/logging) for a full overview of formats, config, and access.
 
 ### "Gateway start blocked: set gateway.mode=local"
 
-This means the config exists but `gateway.mode` is unset (or not `local`), so the
-Gateway refuses to start.
+This means the config exists but `gateway.mode` is unset (or not `local`), so the Gateway
+refuses to start.
 
 **Fix (recommended):**
 
@@ -158,8 +165,8 @@ Gateway refuses to start.
 **Ad-hoc/dev only:** pass `--allow-unconfigured` to start the gateway without
 `gateway.mode=local`.
 
-**No config file yet?** Run `openclaw setup` to create a starter config, then rerun
-the gateway.
+**No config file yet?** Run `openclaw setup` to create a starter config, then rerun the
+gateway.
 
 ### Service Environment (PATH + runtime)
 
@@ -168,17 +175,16 @@ The gateway service runs with a **minimal PATH** to avoid shell/manager cruft:
 - macOS: `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`
 - Linux: `/usr/local/bin`, `/usr/bin`, `/bin`
 
-This intentionally excludes version managers (nvm/fnm/volta/asdf) and package
-managers (pnpm/npm) because the service does not load your shell init. Runtime
-variables like `DISPLAY` should live in `~/.openclaw/.env` (loaded early by the
-gateway).
-Exec runs on `host=gateway` merge your login-shell `PATH` into the exec environment,
-so missing tools usually mean your shell init isn’t exporting them (or set
-`tools.exec.pathPrepend`). See [/tools/exec](/tools/exec).
+This intentionally excludes version managers (nvm/fnm/volta/asdf) and package managers
+(pnpm/npm) because the service does not load your shell init. Runtime variables like
+`DISPLAY` should live in `~/.openclaw/.env` (loaded early by the gateway). Exec runs on
+`host=gateway` merge your login-shell `PATH` into the exec environment, so missing tools
+usually mean your shell init isn’t exporting them (or set `tools.exec.pathPrepend`). See
+[/tools/exec](/tools/exec).
 
-WhatsApp + Telegram channels require **Node**; Bun is unsupported. If your
-service was installed with Bun or a version-managed Node path, run `openclaw doctor`
-to migrate to a system Node install.
+WhatsApp + Telegram channels require **Node**; Bun is unsupported. If your service was
+installed with Bun or a version-managed Node path, run `openclaw doctor` to migrate to a
+system Node install.
 
 ### Skill missing API key in sandbox
 
@@ -188,56 +194,72 @@ to migrate to a system Node install.
 
 **Fix:**
 
-- set `agents.defaults.sandbox.docker.env` (or per-agent `agents.list[].sandbox.docker.env`)
+- set `agents.defaults.sandbox.docker.env` (or per-agent
+  `agents.list[].sandbox.docker.env`)
 - or bake the key into your custom sandbox image
 - then run `openclaw sandbox recreate --agent <id>` (or `--all`)
 
 ### Service Running but Port Not Listening
 
-If the service reports **running** but nothing is listening on the gateway port,
-the Gateway likely refused to bind.
+If the service reports **running** but nothing is listening on the gateway port, the
+Gateway likely refused to bind.
 
 **What "running" means here**
 
-- `Runtime: running` means your supervisor (launchd/systemd/schtasks) thinks the process is alive.
-- `RPC probe` means the CLI could actually connect to the gateway WebSocket and call `status`.
-- Always trust `Probe target:` + `Config (service):` as the “what did we actually try?” lines.
+- `Runtime: running` means your supervisor (launchd/systemd/schtasks) thinks the process
+  is alive.
+- `RPC probe` means the CLI could actually connect to the gateway WebSocket and call
+  `status`.
+- Always trust `Probe target:` + `Config (service):` as the “what did we actually try?”
+  lines.
 
 **Check:**
 
 - `gateway.mode` must be `local` for `openclaw gateway` and the service.
-- If you set `gateway.mode=remote`, the **CLI defaults** to a remote URL. The service can still be running locally, but your CLI may be probing the wrong place. Use `openclaw gateway status` to see the service’s resolved port + probe target (or pass `--url`).
-- `openclaw gateway status` and `openclaw doctor` surface the **last gateway error** from logs when the service looks running but the port is closed.
-- Non-loopback binds (`lan`/`tailnet`/`custom`, or `auto` when loopback is unavailable) require auth:
-  `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`).
+- If you set `gateway.mode=remote`, the **CLI defaults** to a remote URL. The service can
+  still be running locally, but your CLI may be probing the wrong place. Use
+  `openclaw gateway status` to see the service’s resolved port + probe target (or pass
+  `--url`).
+- `openclaw gateway status` and `openclaw doctor` surface the **last gateway error** from
+  logs when the service looks running but the port is closed.
+- Non-loopback binds (`lan`/`tailnet`/`custom`, or `auto` when loopback is unavailable)
+  require auth: `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`).
 - `gateway.remote.token` is for remote CLI calls only; it does **not** enable local auth.
 - `gateway.token` is ignored; use `gateway.auth.token`.
 
 **If `openclaw gateway status` shows a config mismatch**
 
 - `Config (cli): ...` and `Config (service): ...` should normally match.
-- If they don’t, you’re almost certainly editing one config while the service is running another.
-- Fix: rerun `openclaw gateway install --force` from the same `--profile` / `OPENCLAW_STATE_DIR` you want the service to use.
+- If they don’t, you’re almost certainly editing one config while the service is running
+  another.
+- Fix: rerun `openclaw gateway install --force` from the same `--profile` /
+  `OPENCLAW_STATE_DIR` you want the service to use.
 
 **If `openclaw gateway status` reports service config issues**
 
 - The supervisor config (launchd/systemd/schtasks) is missing current defaults.
-- Fix: run `openclaw doctor` to update it (or `openclaw gateway install --force` for a full rewrite).
+- Fix: run `openclaw doctor` to update it (or `openclaw gateway install --force` for a
+  full rewrite).
 
 **If `Last gateway error:` mentions “refusing to bind … without auth”**
 
-- You set `gateway.bind` to a non-loopback mode (`lan`/`tailnet`/`custom`, or `auto` when loopback is unavailable) but didn’t configure auth.
-- Fix: set `gateway.auth.mode` + `gateway.auth.token` (or export `OPENCLAW_GATEWAY_TOKEN`) and restart the service.
+- You set `gateway.bind` to a non-loopback mode (`lan`/`tailnet`/`custom`, or `auto` when
+  loopback is unavailable) but didn’t configure auth.
+- Fix: set `gateway.auth.mode` + `gateway.auth.token` (or export `OPENCLAW_GATEWAY_TOKEN`)
+  and restart the service.
 
 **If `openclaw gateway status` says `bind=tailnet` but no tailnet interface was found**
 
-- The gateway tried to bind to a Tailscale IP (100.64.0.0/10) but none were detected on the host.
+- The gateway tried to bind to a Tailscale IP (100.64.0.0/10) but none were detected on
+  the host.
 - Fix: bring up Tailscale on that machine (or change `gateway.bind` to `loopback`/`lan`).
 
 **If `Probe note:` says the probe uses loopback**
 
-- That’s expected for `bind=lan`: the gateway listens on `0.0.0.0` (all interfaces), and loopback should still connect locally.
-- For remote clients, use a real LAN IP (not `0.0.0.0`) plus the port, and ensure auth is configured.
+- That’s expected for `bind=lan`: the gateway listens on `0.0.0.0` (all interfaces), and
+  loopback should still connect locally.
+- For remote clients, use a real LAN IP (not `0.0.0.0`) plus the port, and ensure auth is
+  configured.
 
 ### Address Already in Use (Port 18789)
 
@@ -249,31 +271,32 @@ This means something is already listening on the gateway port.
 openclaw gateway status
 ```
 
-It will show the listener(s) and likely causes (gateway already running, SSH tunnel).
-If needed, stop the service or pick a different port.
+It will show the listener(s) and likely causes (gateway already running, SSH tunnel). If
+needed, stop the service or pick a different port.
 
 ### Extra Workspace Folders Detected
 
-If you upgraded from older installs, you might still have `~/openclaw` on disk.
-Multiple workspace directories can cause confusing auth or state drift because
-only one workspace is active.
+If you upgraded from older installs, you might still have `~/openclaw` on disk. Multiple
+workspace directories can cause confusing auth or state drift because only one workspace
+is active.
 
 **Fix:** keep a single active workspace and archive/remove the rest. See
 [Agent workspace](/concepts/agent-workspace#extra-workspace-folders).
 
 ### Main chat running in a sandbox workspace
 
-Symptoms: `pwd` or file tools show `~/.openclaw/sandboxes/...` even though you
-expected the host workspace.
+Symptoms: `pwd` or file tools show `~/.openclaw/sandboxes/...` even though you expected
+the host workspace.
 
-**Why:** `agents.defaults.sandbox.mode: "non-main"` keys off `session.mainKey` (default `"main"`).
-Group/channel sessions use their own keys, so they are treated as non-main and
+**Why:** `agents.defaults.sandbox.mode: "non-main"` keys off `session.mainKey` (default
+`"main"`). Group/channel sessions use their own keys, so they are treated as non-main and
 get sandbox workspaces.
 
 **Fix options:**
 
 - If you want host workspaces for an agent: set `agents.list[].sandbox.mode: "off"`.
-- If you want host workspace access inside sandbox: set `workspaceAccess: "rw"` for that agent.
+- If you want host workspace access inside sandbox: set `workspaceAccess: "rw"` for that
+  agent.
 
 ### "Agent was aborted"
 
@@ -289,9 +312,8 @@ The agent was interrupted mid-response.
 
 ### "Agent failed before reply: Unknown model: anthropic/claude-haiku-3-5"
 
-OpenClaw intentionally rejects **older/insecure models** (especially those more
-vulnerable to prompt injection). If you see this error, the model name is no
-longer supported.
+OpenClaw intentionally rejects **older/insecure models** (especially those more vulnerable
+to prompt injection). If you see this error, the model name is no longer supported.
 
 **Fix:**
 
@@ -331,7 +353,8 @@ tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -1)" | grep "blocked\\|skip
 
 ### Pairing Code Not Arriving
 
-If `dmPolicy` is `pairing`, unknown senders should receive a code and their message is ignored until approved.
+If `dmPolicy` is `pairing`, unknown senders should receive a code and their message is
+ignored until approved.
 
 **Check 1:** Is a pending request already waiting?
 
@@ -339,7 +362,8 @@ If `dmPolicy` is `pairing`, unknown senders should receive a code and their mess
 openclaw pairing list <channel>
 ```
 
-Pending DM pairing requests are capped at **3 per channel** by default. If the list is full, new requests won’t generate a code until one is approved or expires.
+Pending DM pairing requests are capped at **3 per channel** by default. If the list is
+full, new requests won’t generate a code until one is approved or expires.
 
 **Check 2:** Did the request get created but no reply was sent?
 
@@ -351,7 +375,8 @@ openclaw logs --follow | grep "pairing request"
 
 ### Image + Mention Not Working
 
-Known issue: When you send an image with ONLY a mention (no other text), WhatsApp sometimes doesn't include the mention metadata.
+Known issue: When you send an image with ONLY a mention (no other text), WhatsApp
+sometimes doesn't include the mention metadata.
 
 **Workaround:** Add some text with the mention:
 
@@ -408,7 +433,9 @@ openclaw status --deep
 openclaw logs --limit 200 | grep "connection\\|disconnect\\|logout"
 ```
 
-**Fix:** Usually reconnects automatically once the Gateway is running. If you’re stuck, restart the Gateway process (however you supervise it), or run it manually with verbose output:
+**Fix:** Usually reconnects automatically once the Gateway is running. If you’re stuck,
+restart the Gateway process (however you supervise it), or run it manually with verbose
+output:
 
 ```bash
 openclaw gateway --verbose
@@ -460,8 +487,8 @@ OpenClaw keeps conversation history in memory.
 
 ### “Gateway won’t start — configuration invalid”
 
-OpenClaw now refuses to start when the config contains unknown keys, malformed values, or invalid types.
-This is intentional for safety.
+OpenClaw now refuses to start when the config contains unknown keys, malformed values, or
+invalid types. This is intentional for safety.
 
 Fix it with Doctor:
 
@@ -474,12 +501,15 @@ Notes:
 
 - `openclaw doctor` reports every invalid entry.
 - `openclaw doctor --fix` applies migrations/repairs and rewrites the config.
-- Diagnostic commands like `openclaw logs`, `openclaw health`, `openclaw status`, `openclaw gateway status`, and `openclaw gateway probe` still run even if the config is invalid.
+- Diagnostic commands like `openclaw logs`, `openclaw health`, `openclaw status`,
+  `openclaw gateway status`, and `openclaw gateway probe` still run even if the config is
+  invalid.
 
 ### “All models failed” — what should I check first?
 
 - **Credentials** present for the provider(s) being tried (auth profiles + env vars).
-- **Model routing**: confirm `agents.defaults.model.primary` and fallbacks are models you can access.
+- **Model routing**: confirm `agents.defaults.model.primary` and fallbacks are models you
+  can access.
 - **Gateway logs** in `/tmp/openclaw/…` for the exact provider error.
 - **Model status**: use `/model status` (chat) or `openclaw models status` (CLI).
 
@@ -518,8 +548,8 @@ openclaw channels login
 
 ### npm install fails (allow-build-scripts / missing tar or yargs). What now?
 
-If you’re running from source, use the repo’s package manager: **pnpm** (preferred).
-The repo declares `packageManager: "pnpm@…"`.
+If you’re running from source, use the repo’s package manager: **pnpm** (preferred). The
+repo declares `packageManager: "pnpm@…"`.
 
 Typical recovery:
 
@@ -535,8 +565,8 @@ Why: pnpm is the configured package manager for this repo.
 
 ### How do I switch between git installs and npm installs?
 
-Use the **website installer** and select the install method with a flag. It
-upgrades in place and rewrites the gateway service to point at the new install.
+Use the **website installer** and select the install method with a flag. It upgrades in
+place and rewrites the gateway service to point at the new install.
 
 Switch **to git install**:
 
@@ -561,7 +591,8 @@ Notes:
 
 ### Telegram block streaming isn’t splitting text between tool calls. Why?
 
-Block streaming only sends **completed text blocks**. Common reasons you see a single message:
+Block streaming only sends **completed text blocks**. Common reasons you see a single
+message:
 
 - `agents.defaults.blockStreamingDefault` is still `"off"`.
 - `channels.telegram.blockStreaming` is set to `false`.
@@ -580,16 +611,18 @@ See [Streaming](/concepts/streaming).
 
 ### Discord doesn’t reply in my server even with `requireMention: false`. Why?
 
-`requireMention` only controls mention‑gating **after** the channel passes allowlists.
-By default `channels.discord.groupPolicy` is **allowlist**, so guilds must be explicitly enabled.
-If you set `channels.discord.guilds.<guildId>.channels`, only the listed channels are allowed; omit it to allow all channels in the guild.
+`requireMention` only controls mention‑gating **after** the channel passes allowlists. By
+default `channels.discord.groupPolicy` is **allowlist**, so guilds must be explicitly
+enabled. If you set `channels.discord.guilds.<guildId>.channels`, only the listed channels
+are allowed; omit it to allow all channels in the guild.
 
 Fix checklist:
 
-1. Set `channels.discord.groupPolicy: "open"` **or** add a guild allowlist entry (and optionally a channel allowlist).
+1. Set `channels.discord.groupPolicy: "open"` **or** add a guild allowlist entry (and
+   optionally a channel allowlist).
 2. Use **numeric channel IDs** in `channels.discord.guilds.<guildId>.channels`.
-3. Put `requireMention: false` **under** `channels.discord.guilds` (global or per‑channel).
-   Top‑level `channels.discord.requireMention` is not a supported key.
+3. Put `requireMention: false` **under** `channels.discord.guilds` (global or
+   per‑channel). Top‑level `channels.discord.requireMention` is not a supported key.
 4. Ensure the bot has **Message Content Intent** and channel permissions.
 5. Run `openclaw channels status --probe` for audit hints.
 
@@ -598,9 +631,8 @@ Docs: [Discord](/channels/discord), [Channels troubleshooting](/channels/trouble
 ### Cloud Code Assist API error: invalid tool schema (400). What now?
 
 This is almost always a **tool schema compatibility** issue. The Cloud Code Assist
-endpoint accepts a strict subset of JSON Schema. OpenClaw scrubs/normalizes tool
-schemas in current `main`, but the fix is not in the last release yet (as of
-January 13, 2026).
+endpoint accepts a strict subset of JSON Schema. OpenClaw scrubs/normalizes tool schemas
+in current `main`, but the fix is not in the last release yet (as of January 13, 2026).
 
 Fix checklist:
 
@@ -626,15 +658,16 @@ If the app disappears or shows "Abort trap 6" when you click "Allow" on a privac
 tccutil reset All bot.molt.mac.debug
 ```
 
-**Fix 2: Force New Bundle ID**
-If resetting doesn't work, change the `BUNDLE_ID` in [`scripts/package-mac-app.sh`](https://github.com/openclaw/openclaw/blob/main/scripts/package-mac-app.sh) (e.g., add a `.test` suffix) and rebuild. This forces macOS to treat it as a new app.
+**Fix 2: Force New Bundle ID** If resetting doesn't work, change the `BUNDLE_ID` in
+[`scripts/package-mac-app.sh`](https://github.com/openclaw/openclaw/blob/main/scripts/package-mac-app.sh)
+(e.g., add a `.test` suffix) and rebuild. This forces macOS to treat it as a new app.
 
 ### Gateway stuck on "Starting..."
 
 The app connects to a local gateway on port `18789`. If it stays stuck:
 
-**Fix 1: Stop the supervisor (preferred)**
-If the gateway is supervised by launchd, killing the PID will just respawn it. Stop the supervisor first:
+**Fix 1: Stop the supervisor (preferred)** If the gateway is supervised by launchd,
+killing the PID will just respawn it. Stop the supervisor first:
 
 ```bash
 openclaw gateway status
@@ -656,8 +689,8 @@ sleep 1
 kill -9 <PID> # last resort
 ```
 
-**Fix 3: Check the CLI install**
-Ensure the global `openclaw` CLI is installed and matches the app version:
+**Fix 3: Check the CLI install** Ensure the global `openclaw` CLI is installed and matches
+the app version:
 
 ```bash
 openclaw --version
@@ -727,7 +760,8 @@ openclaw gateway restart           # or: openclaw gateway
 
 ## Getting Help
 
-1. Check logs first: `/tmp/openclaw/` (default: `openclaw-YYYY-MM-DD.log`, or your configured `logging.file`)
+1. Check logs first: `/tmp/openclaw/` (default: `openclaw-YYYY-MM-DD.log`, or your
+   configured `logging.file`)
 2. Search existing issues on GitHub
 3. Open a new issue with:
    - OpenClaw version

@@ -8,8 +8,8 @@ title: "GLM Models"
 
 # GLM models
 
-GLM is a **model family** (not a company) available through the Z.AI platform. In OpenClaw, GLM
-models are accessed via the `zai` provider and model IDs like `zai/glm-4.7`.
+GLM is a **model family** (not a company) available through the Z.AI platform. In
+OpenClaw, GLM models are accessed via the `zai` provider and model IDs like `zai/glm-4.7`.
 
 ## CLI setup
 

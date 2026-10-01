@@ -8,8 +8,8 @@ title: "message"
 
 # `openclaw message`
 
-Single outbound command for sending messages and channel actions
-(Discord/Google Chat/Slack/Mattermost (plugin)/Telegram/WhatsApp/Signal/iMessage/MS Teams).
+Single outbound command for sending messages and channel actions (Discord/Google
+Chat/Slack/Mattermost (plugin)/Telegram/WhatsApp/Signal/iMessage/MS Teams).
 
 ## Usage
 
@@ -21,24 +21,31 @@ Channel selection:
 
 - `--channel` required if more than one channel is configured.
 - If exactly one channel is configured, it becomes the default.
-- Values: `whatsapp|telegram|discord|googlechat|slack|mattermost|signal|imessage|msteams` (Mattermost requires plugin)
+- Values: `whatsapp|telegram|discord|googlechat|slack|mattermost|signal|imessage|msteams`
+  (Mattermost requires plugin)
 
 Target formats (`--target`):
 
 - WhatsApp: E.164 or group JID
 - Telegram: chat id or `@username`
-- Discord: `channel:<id>` or `user:<id>` (or `<@id>` mention; raw numeric ids are treated as channels)
+- Discord: `channel:<id>` or `user:<id>` (or `<@id>` mention; raw numeric ids are treated
+  as channels)
 - Google Chat: `spaces/<spaceId>` or `users/<userId>`
 - Slack: `channel:<id>` or `user:<id>` (raw channel id is accepted)
-- Mattermost (plugin): `channel:<id>`, `user:<id>`, or `@username` (bare ids are treated as channels)
-- Signal: `+E.164`, `group:<id>`, `signal:+E.164`, `signal:group:<id>`, or `username:<name>`/`u:<name>`
+- Mattermost (plugin): `channel:<id>`, `user:<id>`, or `@username` (bare ids are treated
+  as channels)
+- Signal: `+E.164`, `group:<id>`, `signal:+E.164`, `signal:group:<id>`, or
+  `username:<name>`/`u:<name>`
 - iMessage: handle, `chat_id:<id>`, `chat_guid:<guid>`, or `chat_identifier:<id>`
-- MS Teams: conversation id (`19:...@thread.tacv2`) or `conversation:<id>` or `user:<aad-object-id>`
+- MS Teams: conversation id (`19:...@thread.tacv2`) or `conversation:<id>` or
+  `user:<aad-object-id>`
 
 Name lookup:
 
-- For supported providers (Discord/Slack/etc), channel names like `Help` or `#help` are resolved via the directory cache.
-- On cache miss, OpenClaw will attempt a live directory lookup when the provider supports it.
+- For supported providers (Discord/Slack/etc), channel names like `Help` or `#help` are
+  resolved via the directory cache.
+- On cache miss, OpenClaw will attempt a live directory lookup when the provider supports
+  it.
 
 ## Common flags
 
@@ -55,10 +62,12 @@ Name lookup:
 ### Core
 
 - `send`
-  - Channels: WhatsApp/Telegram/Discord/Google Chat/Slack/Mattermost (plugin)/Signal/iMessage/MS Teams
+  - Channels: WhatsApp/Telegram/Discord/Google Chat/Slack/Mattermost
+    (plugin)/Signal/iMessage/MS Teams
   - Required: `--target`, plus `--message` or `--media`
   - Optional: `--media`, `--reply-to`, `--thread-id`, `--gif-playback`
-  - Telegram only: `--buttons` (requires `channels.telegram.capabilities.inlineButtons` to allow it)
+  - Telegram only: `--buttons` (requires `channels.telegram.capabilities.inlineButtons` to
+    allow it)
   - Telegram only: `--thread-id` (forum topic id)
   - Slack only: `--thread-id` (thread timestamp; `--reply-to` uses the same field)
   - WhatsApp only: `--gif-playback`
@@ -72,8 +81,10 @@ Name lookup:
 - `react`
   - Channels: Discord/Google Chat/Slack/Telegram/WhatsApp/Signal
   - Required: `--message-id`, `--target`
-  - Optional: `--emoji`, `--remove`, `--participant`, `--from-me`, `--target-author`, `--target-author-uuid`
-  - Note: `--remove` requires `--emoji` (omit `--emoji` to clear own reactions where supported; see /tools/reactions)
+  - Optional: `--emoji`, `--remove`, `--participant`, `--from-me`, `--target-author`,
+    `--target-author-uuid`
+  - Note: `--remove` requires `--emoji` (omit `--emoji` to clear own reactions where
+    supported; see /tools/reactions)
   - WhatsApp only: `--participant`, `--from-me`
   - Signal group reactions: `--target-author` or `--target-author-uuid` required
 
@@ -111,7 +122,8 @@ Name lookup:
 - `search`
   - Channels: Discord
   - Required: `--guild-id`, `--query`
-  - Optional: `--channel-id`, `--channel-ids` (repeat), `--author-id`, `--author-ids` (repeat), `--limit`
+  - Optional: `--channel-id`, `--channel-ids` (repeat), `--author-id`, `--author-ids`
+    (repeat), `--limit`
 
 ### Threads
 
@@ -150,7 +162,8 @@ Name lookup:
 
 - `sticker upload`
   - Channels: Discord
-  - Required: `--guild-id`, `--sticker-name`, `--sticker-desc`, `--sticker-tags`, `--media`
+  - Required: `--guild-id`, `--sticker-name`, `--sticker-desc`, `--sticker-tags`,
+    `--media`
 
 ### Roles / Channels / Members / Voice
 
@@ -169,7 +182,8 @@ Name lookup:
 
 ### Moderation (Discord)
 
-- `timeout`: `--guild-id`, `--user-id` (optional `--duration-min` or `--until`; omit both to clear timeout)
+- `timeout`: `--guild-id`, `--user-id` (optional `--duration-min` or `--until`; omit both
+  to clear timeout)
 - `kick`: `--guild-id`, `--user-id` (+ `--reason`)
 - `ban`: `--guild-id`, `--user-id` (+ `--delete-days`, `--reason`)
   - `timeout` also supports `--reason`

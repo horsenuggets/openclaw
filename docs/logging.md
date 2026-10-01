@@ -14,8 +14,8 @@ OpenClaw logs in two places:
 - **File logs** (JSON lines) written by the Gateway.
 - **Console output** shown in terminals and the Control UI.
 
-This page explains where logs live, how to read them, and how to configure log
-levels and formats.
+This page explains where logs live, how to read them, and how to configure log levels and
+formats.
 
 ## Where logs live
 
@@ -68,8 +68,8 @@ openclaw doctor
 
 ### Control UI (web)
 
-The Control UI’s **Logs** tab tails the same file using `logs.tail`.
-See [/web/control-ui](/web/control-ui) for how to open it.
+The Control UI’s **Logs** tab tails the same file using `logs.tail`. See
+[/web/control-ui](/web/control-ui) for how to open it.
 
 ### Channel-only logs
 
@@ -83,8 +83,8 @@ openclaw channels logs --channel whatsapp
 
 ### File logs (JSONL)
 
-Each line in the log file is a JSON object. The CLI and Control UI parse these
-entries to render structured output (time, level, subsystem, message).
+Each line in the log file is a JSON object. The CLI and Control UI parse these entries to
+render structured output (time, level, subsystem, message).
 
 ### Console output
 
@@ -139,12 +139,12 @@ Redaction affects **console output only** and does not alter file logs.
 
 ## Diagnostics + OpenTelemetry
 
-Diagnostics are structured, machine-readable events for model runs **and**
-message-flow telemetry (webhooks, queueing, session state). They do **not**
-replace logs; they exist to feed metrics, traces, and other exporters.
+Diagnostics are structured, machine-readable events for model runs **and** message-flow
+telemetry (webhooks, queueing, session state). They do **not** replace logs; they exist to
+feed metrics, traces, and other exporters.
 
-Diagnostics events are emitted in-process, but exporters only attach when
-diagnostics + the exporter plugin are enabled.
+Diagnostics events are emitted in-process, but exporters only attach when diagnostics +
+the exporter plugin are enabled.
 
 ### OpenTelemetry vs OTLP
 
@@ -156,8 +156,8 @@ diagnostics + the exporter plugin are enabled.
 
 - **Metrics**: counters + histograms (token usage, message flow, queueing).
 - **Traces**: spans for model usage + webhook/message processing.
-- **Logs**: exported over OTLP when `diagnostics.otel.logs` is enabled. Log
-  volume can be high; keep `logging.level` and exporter filters in mind.
+- **Logs**: exported over OTLP when `diagnostics.otel.logs` is enabled. Log volume can be
+  high; keep `logging.level` and exporter filters in mind.
 
 ### Diagnostic event catalog
 
@@ -196,8 +196,8 @@ Use this if you want diagnostics events available to plugins or custom sinks:
 
 ### Diagnostics flags (targeted logs)
 
-Use flags to turn on extra, targeted debug logs without raising `logging.level`.
-Flags are case-insensitive and support wildcards (e.g. `telegram.*` or `*`).
+Use flags to turn on extra, targeted debug logs without raising `logging.level`. Flags are
+case-insensitive and support wildcards (e.g. `telegram.*` or `*`).
 
 ```json
 {
@@ -221,8 +221,8 @@ Notes:
 
 ### Export to OpenTelemetry
 
-Diagnostics can be exported via the `diagnostics-otel` plugin (OTLP/HTTP). This
-works with any OpenTelemetry collector/backend that accepts OTLP/HTTP.
+Diagnostics can be exported via the `diagnostics-otel` plugin (OTLP/HTTP). This works with
+any OpenTelemetry collector/backend that accepts OTLP/HTTP.
 
 ```json
 {
@@ -257,11 +257,11 @@ Notes:
 - `protocol` currently supports `http/protobuf` only. `grpc` is ignored.
 - Metrics include token usage, cost, context size, run duration, and message-flow
   counters/histograms (webhooks, queueing, session state, queue depth/wait).
-- Traces/metrics can be toggled with `traces` / `metrics` (default: on). Traces
-  include model usage spans plus webhook/message processing spans when enabled.
+- Traces/metrics can be toggled with `traces` / `metrics` (default: on). Traces include
+  model usage spans plus webhook/message processing spans when enabled.
 - Set `headers` when your collector requires auth.
-- Environment variables supported: `OTEL_EXPORTER_OTLP_ENDPOINT`,
-  `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_PROTOCOL`.
+- Environment variables supported: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`,
+  `OTEL_EXPORTER_OTLP_PROTOCOL`.
 
 ### Exported metrics (names + types)
 
@@ -271,23 +271,19 @@ Model usage:
   `openclaw.provider`, `openclaw.model`)
 - `openclaw.cost.usd` (counter, attrs: `openclaw.channel`, `openclaw.provider`,
   `openclaw.model`)
-- `openclaw.run.duration_ms` (histogram, attrs: `openclaw.channel`,
+- `openclaw.run.duration_ms` (histogram, attrs: `openclaw.channel`, `openclaw.provider`,
+  `openclaw.model`)
+- `openclaw.context.tokens` (histogram, attrs: `openclaw.context`, `openclaw.channel`,
   `openclaw.provider`, `openclaw.model`)
-- `openclaw.context.tokens` (histogram, attrs: `openclaw.context`,
-  `openclaw.channel`, `openclaw.provider`, `openclaw.model`)
 
 Message flow:
 
-- `openclaw.webhook.received` (counter, attrs: `openclaw.channel`,
-  `openclaw.webhook`)
-- `openclaw.webhook.error` (counter, attrs: `openclaw.channel`,
-  `openclaw.webhook`)
+- `openclaw.webhook.received` (counter, attrs: `openclaw.channel`, `openclaw.webhook`)
+- `openclaw.webhook.error` (counter, attrs: `openclaw.channel`, `openclaw.webhook`)
 - `openclaw.webhook.duration_ms` (histogram, attrs: `openclaw.channel`,
   `openclaw.webhook`)
-- `openclaw.message.queued` (counter, attrs: `openclaw.channel`,
-  `openclaw.source`)
-- `openclaw.message.processed` (counter, attrs: `openclaw.channel`,
-  `openclaw.outcome`)
+- `openclaw.message.queued` (counter, attrs: `openclaw.channel`, `openclaw.source`)
+- `openclaw.message.processed` (counter, attrs: `openclaw.channel`, `openclaw.outcome`)
 - `openclaw.message.duration_ms` (histogram, attrs: `openclaw.channel`,
   `openclaw.outcome`)
 
@@ -312,15 +308,13 @@ Queues + sessions:
 - `openclaw.webhook.processed`
   - `openclaw.channel`, `openclaw.webhook`, `openclaw.chatId`
 - `openclaw.webhook.error`
-  - `openclaw.channel`, `openclaw.webhook`, `openclaw.chatId`,
-    `openclaw.error`
+  - `openclaw.channel`, `openclaw.webhook`, `openclaw.chatId`, `openclaw.error`
 - `openclaw.message.processed`
-  - `openclaw.channel`, `openclaw.outcome`, `openclaw.chatId`,
-    `openclaw.messageId`, `openclaw.sessionKey`, `openclaw.sessionId`,
-    `openclaw.reason`
+  - `openclaw.channel`, `openclaw.outcome`, `openclaw.chatId`, `openclaw.messageId`,
+    `openclaw.sessionKey`, `openclaw.sessionId`, `openclaw.reason`
 - `openclaw.session.stuck`
-  - `openclaw.state`, `openclaw.ageMs`, `openclaw.queueDepth`,
-    `openclaw.sessionKey`, `openclaw.sessionId`
+  - `openclaw.state`, `openclaw.ageMs`, `openclaw.queueDepth`, `openclaw.sessionKey`,
+    `openclaw.sessionId`
 
 ### Sampling + flushing
 
@@ -338,13 +332,13 @@ Queues + sessions:
 ### Log export behavior
 
 - OTLP logs use the same structured records written to `logging.file`.
-- Respect `logging.level` (file log level). Console redaction does **not** apply
-  to OTLP logs.
+- Respect `logging.level` (file log level). Console redaction does **not** apply to OTLP
+  logs.
 - High-volume installs should prefer OTLP collector sampling/filtering.
 
 ## Troubleshooting tips
 
 - **Gateway not reachable?** Run `openclaw doctor` first.
-- **Logs empty?** Check that the Gateway is running and writing to the file path
-  in `logging.file`.
+- **Logs empty?** Check that the Gateway is running and writing to the file path in
+  `logging.file`.
 - **Need more detail?** Set `logging.level` to `debug` or `trace` and retry.

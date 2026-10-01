@@ -8,22 +8,31 @@ metadata: {"openclaw":{"emoji":"🎮","requires":{"config":["channels.discord"]}
 
 ## Overview
 
-Use `discord` to manage messages, reactions, threads, polls, and moderation. You can disable groups via `discord.actions.*` (defaults to enabled, except roles/moderation). The tool uses the bot token configured for OpenClaw.
+Use `discord` to manage messages, reactions, threads, polls, and moderation. You can
+disable groups via `discord.actions.*` (defaults to enabled, except roles/moderation). The
+tool uses the bot token configured for OpenClaw.
 
 ## Inputs to collect
 
 - For reactions: `channelId`, `messageId`, and an `emoji`.
-- For fetchMessage: `guildId`, `channelId`, `messageId`, or a `messageLink` like `https://discord.com/channels/<guildId>/<channelId>/<messageId>`.
-- For stickers/polls/sendMessage: a `to` target (`channel:<id>` or `user:<id>`). Optional `content` text.
+- For fetchMessage: `guildId`, `channelId`, `messageId`, or a `messageLink` like
+  `https://discord.com/channels/<guildId>/<channelId>/<messageId>`.
+- For stickers/polls/sendMessage: a `to` target (`channel:<id>` or `user:<id>`). Optional
+  `content` text.
 - Polls also need a `question` plus 2–10 `answers`.
 - For media: `mediaUrl` with `file:///path` for local files or `https://...` for remote.
-- For emoji uploads: `guildId`, `name`, `mediaUrl`, optional `roleIds` (limit 256KB, PNG/JPG/GIF).
-- For sticker uploads: `guildId`, `name`, `description`, `tags`, `mediaUrl` (limit 512KB, PNG/APNG/Lottie JSON).
+- For emoji uploads: `guildId`, `name`, `mediaUrl`, optional `roleIds` (limit 256KB,
+  PNG/JPG/GIF).
+- For sticker uploads: `guildId`, `name`, `description`, `tags`, `mediaUrl` (limit 512KB,
+  PNG/APNG/Lottie JSON).
 
-Message context lines include `discord message id` and `channel` fields you can reuse directly.
+Message context lines include `discord message id` and `channel` fields you can reuse
+directly.
 
-**Note:** `sendMessage` uses `to: "channel:<id>"` format, not `channelId`. Other actions like `react`, `readMessages`, `editMessage` use `channelId` directly.
-**Note:** `fetchMessage` accepts message IDs or full links like `https://discord.com/channels/<guildId>/<channelId>/<messageId>`.
+**Note:** `sendMessage` uses `to: "channel:<id>"` format, not `channelId`. Other actions
+like `react`, `readMessages`, `editMessage` use `channelId` directly. **Note:**
+`fetchMessage` accepts message IDs or full links like
+`https://discord.com/channels/<guildId>/<channelId>/<messageId>`.
 
 ## Actions
 
@@ -321,7 +330,8 @@ Use `discord.actions.*` to disable action groups:
 
 ### Channel management (disabled by default)
 
-Create, edit, delete, and move channels and categories. Enable via `discord.actions.channels: true`.
+Create, edit, delete, and move channels and categories. Enable via
+`discord.actions.channels: true`.
 
 **Create a text channel:**
 
@@ -336,7 +346,8 @@ Create, edit, delete, and move channels and categories. Enable via `discord.acti
 }
 ```
 
-- `type`: Discord channel type integer (0 = text, 2 = voice, 4 = category; other values supported)
+- `type`: Discord channel type integer (0 = text, 2 = voice, 4 = category; other values
+  supported)
 - `parentId`: category ID to nest under (optional)
 - `topic`, `position`, `nsfw`: optional
 
@@ -361,7 +372,8 @@ Create, edit, delete, and move channels and categories. Enable via `discord.acti
 }
 ```
 
-- Supports `name`, `topic`, `position`, `parentId` (null to remove from category), `nsfw`, `rateLimitPerUser`
+- Supports `name`, `topic`, `position`, `parentId` (null to remove from category), `nsfw`,
+  `rateLimitPerUser`
 
 **Move a channel:**
 
@@ -437,12 +449,17 @@ Create, edit, delete, and move channels and categories. Enable via `discord.acti
 
 Set the bot's online status and activity. Enable via `discord.actions.presence: true`.
 
-Discord bots can only set `name`, `state`, `type`, and `url` on an activity. Other Activity fields (details, emoji, assets) are accepted by the gateway but silently ignored by Discord for bots.
+Discord bots can only set `name`, `state`, `type`, and `url` on an activity. Other
+Activity fields (details, emoji, assets) are accepted by the gateway but silently ignored
+by Discord for bots.
 
 **How fields render by activity type:**
 
-- **playing, streaming, listening, watching, competing**: `activityName` is shown in the sidebar under the bot's name (e.g. "**with fire**" for type "playing" and name "with fire"). `activityState` is shown in the profile flyout.
-- **custom**: `activityName` is ignored. Only `activityState` is displayed as the status text in the sidebar.
+- **playing, streaming, listening, watching, competing**: `activityName` is shown in the
+  sidebar under the bot's name (e.g. "**with fire**" for type "playing" and name "with
+  fire"). `activityState` is shown in the profile flyout.
+- **custom**: `activityName` is ignored. Only `activityState` is displayed as the status
+  text in the sidebar.
 - **streaming**: `activityUrl` may be displayed or embedded by the client.
 
 **Set playing status:**
@@ -524,8 +541,10 @@ Result in sidebar: "Vibing". Note: `activityName` is ignored for custom type.
 
 - `activityType`: `playing`, `streaming`, `listening`, `watching`, `competing`, `custom`
 - `activityName`: text shown in the sidebar for non-custom types (ignored for `custom`)
-- `activityUrl`: Twitch or YouTube URL for streaming type (optional; may not render for bots)
-- `activityState`: for `custom` this is the status text; for other types it shows in the profile flyout
+- `activityUrl`: Twitch or YouTube URL for streaming type (optional; may not render for
+  bots)
+- `activityState`: for `custom` this is the status text; for other types it shows in the
+  profile flyout
 - `status`: `online` (default), `dnd`, `idle`, `invisible`
 
 ## Discord Writing Style Guide

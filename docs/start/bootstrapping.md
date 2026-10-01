@@ -10,9 +10,8 @@ sidebarTitle: "Bootstrapping"
 
 # Agent Bootstrapping
 
-Bootstrapping is the **first‑run** ritual that prepares an agent workspace and
-collects identity details. It happens after onboarding, when the agent starts
-for the first time.
+Bootstrapping is the **first‑run** ritual that prepares an agent workspace and collects
+identity details. It happens after onboarding, when the agent starts for the first time.
 
 ## What bootstrapping does
 
@@ -26,9 +25,8 @@ On the first agent run, OpenClaw bootstraps the workspace (default
 
 ## Where it runs
 
-Bootstrapping always runs on the **gateway host**. If the macOS app connects to
-a remote Gateway, the workspace and bootstrapping files live on that remote
-machine.
+Bootstrapping always runs on the **gateway host**. If the macOS app connects to a remote
+Gateway, the workspace and bootstrapping files live on that remote machine.
 
 <Note>
 When the Gateway runs on another machine, edit workspace files on the gateway

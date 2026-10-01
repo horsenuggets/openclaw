@@ -1,5 +1,7 @@
 ---
-summary: "Legacy iMessage support via imsg (JSON-RPC over stdio). New setups should use BlueBubbles."
+summary:
+  "Legacy iMessage support via imsg (JSON-RPC over stdio). New setups should use
+  BlueBubbles."
 read_when:
   - Setting up iMessage support
   - Debugging iMessage send/receive
@@ -10,7 +12,8 @@ title: iMessage
 
 > **Recommended:** Use [BlueBubbles](/channels/bluebubbles) for new iMessage setups.
 >
-> The `imsg` channel is a legacy external-CLI integration and may be removed in a future release.
+> The `imsg` channel is a legacy external-CLI integration and may be removed in a future
+> release.
 
 Status: legacy external CLI integration. Gateway spawns `imsg rpc` (JSON-RPC over stdio).
 
@@ -40,12 +43,15 @@ Minimal config:
 
 - iMessage channel backed by `imsg` on macOS.
 - Deterministic routing: replies always go back to iMessage.
-- DMs share the agent's main session; groups are isolated (`agent:<agentId>:imessage:group:<chat_id>`).
-- If a multi-participant thread arrives with `is_group=false`, you can still isolate it by `chat_id` using `channels.imessage.groups` (see “Group-ish threads” below).
+- DMs share the agent's main session; groups are isolated
+  (`agent:<agentId>:imessage:group:<chat_id>`).
+- If a multi-participant thread arrives with `is_group=false`, you can still isolate it by
+  `chat_id` using `channels.imessage.groups` (see “Group-ish threads” below).
 
 ## Config writes
 
-By default, iMessage is allowed to write config updates triggered by `/config set|unset` (requires `commands.config: true`).
+By default, iMessage is allowed to write config updates triggered by `/config set|unset`
+(requires `commands.config: true`).
 
 Disable with:
 
@@ -60,7 +66,8 @@ Disable with:
 - macOS with Messages signed in.
 - Full Disk Access for OpenClaw + `imsg` (Messages DB access).
 - Automation permission when sending.
-- `channels.imessage.cliPath` can point to any command that proxies stdin/stdout (for example, a wrapper script that SSHes to another Mac and runs `imsg rpc`).
+- `channels.imessage.cliPath` can point to any command that proxies stdin/stdout (for
+  example, a wrapper script that SSHes to another Mac and runs `imsg rpc`).
 
 ## Setup (fast path)
 
@@ -69,7 +76,8 @@ Disable with:
 
 ### Dedicated bot macOS user (for isolated identity)
 
-If you want the bot to send from a **separate iMessage identity** (and keep your personal Messages clean), use a dedicated Apple ID + a dedicated macOS user.
+If you want the bot to send from a **separate iMessage identity** (and keep your personal
+Messages clean), use a dedicated Apple ID + a dedicated macOS user.
 
 1. Create a dedicated Apple ID (example: `my-cool-bot@icloud.com`).
    - Apple may require a phone number for verification / 2FA.
@@ -79,9 +87,13 @@ If you want the bot to send from a **separate iMessage identity** (and keep your
 5. Install `imsg`:
    - `brew install steipete/tap/imsg`
 6. Set up SSH so `ssh <bot-macos-user>@localhost true` works without a password.
-7. Point `channels.imessage.accounts.bot.cliPath` at an SSH wrapper that runs `imsg` as the bot user.
+7. Point `channels.imessage.accounts.bot.cliPath` at an SSH wrapper that runs `imsg` as
+   the bot user.
 
-First-run note: sending/receiving may require GUI approvals (Automation + Full Disk Access) in the _bot macOS user_. If `imsg rpc` looks stuck or exits, log into that user (Screen Sharing helps), run a one-time `imsg chats --limit 1` / `imsg send ...`, approve prompts, then retry.
+First-run note: sending/receiving may require GUI approvals (Automation + Full Disk
+Access) in the _bot macOS user_. If `imsg rpc` looks stuck or exits, log into that user
+(Screen Sharing helps), run a one-time `imsg chats --limit 1` / `imsg send ...`, approve
+prompts, then retry.
 
 Example wrapper (`chmod +x`). Replace `<bot-macos-user>` with your actual macOS username:
 
@@ -115,11 +127,13 @@ Example config:
 }
 ```
 
-For single-account setups, use flat options (`channels.imessage.cliPath`, `channels.imessage.dbPath`) instead of the `accounts` map.
+For single-account setups, use flat options (`channels.imessage.cliPath`,
+`channels.imessage.dbPath`) instead of the `accounts` map.
 
 ### Remote/SSH variant (optional)
 
-If you want iMessage on another Mac, set `channels.imessage.cliPath` to a wrapper that runs `imsg` on the remote macOS host over SSH. OpenClaw only needs stdio.
+If you want iMessage on another Mac, set `channels.imessage.cliPath` to a wrapper that
+runs `imsg` on the remote macOS host over SSH. OpenClaw only needs stdio.
 
 Example wrapper:
 
@@ -128,7 +142,9 @@ Example wrapper:
 exec ssh -T gateway-host imsg "$@"
 ```
 
-**Remote attachments:** When `cliPath` points to a remote host via SSH, attachment paths in the Messages database reference files on the remote machine. OpenClaw can automatically fetch these over SCP by setting `channels.imessage.remoteHost`:
+**Remote attachments:** When `cliPath` points to a remote host via SSH, attachment paths
+in the Messages database reference files on the remote machine. OpenClaw can automatically
+fetch these over SCP by setting `channels.imessage.remoteHost`:
 
 ```json5
 {
@@ -142,11 +158,14 @@ exec ssh -T gateway-host imsg "$@"
 }
 ```
 
-If `remoteHost` is not set, OpenClaw attempts to auto-detect it by parsing the SSH command in your wrapper script. Explicit configuration is recommended for reliability.
+If `remoteHost` is not set, OpenClaw attempts to auto-detect it by parsing the SSH command
+in your wrapper script. Explicit configuration is recommended for reliability.
 
 #### Remote Mac via Tailscale (example)
 
-If the Gateway runs on a Linux host/VM but iMessage must run on a Mac, Tailscale is the simplest bridge: the Gateway talks to the Mac over the tailnet, runs `imsg` via SSH, and SCPs attachments back.
+If the Gateway runs on a Linux host/VM but iMessage must run on a Mac, Tailscale is the
+simplest bridge: the Gateway talks to the Mac over the tailnet, runs `imsg` via SSH, and
+SCPs attachments back.
 
 Architecture:
 
@@ -191,36 +210,48 @@ Notes:
 - Use SSH keys so `ssh bot@mac-mini.tailnet-1234.ts.net` works without prompts.
 - `remoteHost` should match the SSH target so SCP can fetch attachments.
 
-Multi-account support: use `channels.imessage.accounts` with per-account config and optional `name`. See [`gateway/configuration`](/gateway/configuration#telegramaccounts--discordaccounts--slackaccounts--signalaccounts--imessageaccounts) for the shared pattern. Don't commit `~/.openclaw/openclaw.json` (it often contains tokens).
+Multi-account support: use `channels.imessage.accounts` with per-account config and
+optional `name`. See
+[`gateway/configuration`](/gateway/configuration#telegramaccounts--discordaccounts--slackaccounts--signalaccounts--imessageaccounts)
+for the shared pattern. Don't commit `~/.openclaw/openclaw.json` (it often contains
+tokens).
 
 ## Access control (DMs + groups)
 
 DMs:
 
 - Default: `channels.imessage.dmPolicy = "pairing"`.
-- Unknown senders receive a pairing code; messages are ignored until approved (codes expire after 1 hour).
+- Unknown senders receive a pairing code; messages are ignored until approved (codes
+  expire after 1 hour).
 - Approve via:
   - `openclaw pairing list imessage`
   - `openclaw pairing approve imessage <CODE>`
-- Pairing is the default token exchange for iMessage DMs. Details: [Pairing](/start/pairing)
+- Pairing is the default token exchange for iMessage DMs. Details:
+  [Pairing](/start/pairing)
 
 Groups:
 
 - `channels.imessage.groupPolicy = open | allowlist | disabled`.
-- `channels.imessage.groupAllowFrom` controls who can trigger in groups when `allowlist` is set.
-- Mention gating uses `agents.list[].groupChat.mentionPatterns` (or `messages.groupChat.mentionPatterns`) because iMessage has no native mention metadata.
-- Multi-agent override: set per-agent patterns on `agents.list[].groupChat.mentionPatterns`.
+- `channels.imessage.groupAllowFrom` controls who can trigger in groups when `allowlist`
+  is set.
+- Mention gating uses `agents.list[].groupChat.mentionPatterns` (or
+  `messages.groupChat.mentionPatterns`) because iMessage has no native mention metadata.
+- Multi-agent override: set per-agent patterns on
+  `agents.list[].groupChat.mentionPatterns`.
 
 ## How it works (behavior)
 
-- `imsg` streams message events; the gateway normalizes them into the shared channel envelope.
+- `imsg` streams message events; the gateway normalizes them into the shared channel
+  envelope.
 - Replies always route back to the same chat id or handle.
 
 ## Group-ish threads (`is_group=false`)
 
-Some iMessage threads can have multiple participants but still arrive with `is_group=false` depending on how Messages stores the chat identifier.
+Some iMessage threads can have multiple participants but still arrive with
+`is_group=false` depending on how Messages stores the chat identifier.
 
-If you explicitly configure a `chat_id` under `channels.imessage.groups`, OpenClaw treats that thread as a “group” for:
+If you explicitly configure a `chat_id` under `channels.imessage.groups`, OpenClaw treats
+that thread as a “group” for:
 
 - session isolation (separate `agent:<agentId>:imessage:group:<chat_id>` session key)
 - group allowlisting / mention gating behavior
@@ -241,7 +272,9 @@ Example:
 }
 ```
 
-This is useful when you want an isolated personality/model for a specific thread (see [Multi-agent routing](/concepts/multi-agent)). For filesystem isolation, see [Sandboxing](/gateway/sandboxing).
+This is useful when you want an isolated personality/model for a specific thread (see
+[Multi-agent routing](/concepts/multi-agent)). For filesystem isolation, see
+[Sandboxing](/gateway/sandboxing).
 
 ## Media + limits
 
@@ -251,7 +284,8 @@ This is useful when you want an isolated personality/model for a specific thread
 ## Limits
 
 - Outbound text is chunked to `channels.imessage.textChunkLimit` (default 4000).
-- Optional newline chunking: set `channels.imessage.chunkMode="newline"` to split on blank lines (paragraph boundaries) before length chunking.
+- Optional newline chunking: set `channels.imessage.chunkMode="newline"` to split on blank
+  lines (paragraph boundaries) before length chunking.
 - Media uploads are capped by `channels.imessage.mediaMaxMb` (default 16).
 
 ## Addressing / delivery targets
@@ -278,19 +312,27 @@ Provider options:
 - `channels.imessage.enabled`: enable/disable channel startup.
 - `channels.imessage.cliPath`: path to `imsg`.
 - `channels.imessage.dbPath`: Messages DB path.
-- `channels.imessage.remoteHost`: SSH host for SCP attachment transfer when `cliPath` points to a remote Mac (e.g., `user@gateway-host`). Auto-detected from SSH wrapper if not set.
+- `channels.imessage.remoteHost`: SSH host for SCP attachment transfer when `cliPath`
+  points to a remote Mac (e.g., `user@gateway-host`). Auto-detected from SSH wrapper if
+  not set.
 - `channels.imessage.service`: `imessage | sms | auto`.
 - `channels.imessage.region`: SMS region.
-- `channels.imessage.dmPolicy`: `pairing | allowlist | open | disabled` (default: pairing).
-- `channels.imessage.allowFrom`: DM allowlist (handles, emails, E.164 numbers, or `chat_id:*`). `open` requires `"*"`. iMessage has no usernames; use handles or chat targets.
+- `channels.imessage.dmPolicy`: `pairing | allowlist | open | disabled` (default:
+  pairing).
+- `channels.imessage.allowFrom`: DM allowlist (handles, emails, E.164 numbers, or
+  `chat_id:*`). `open` requires `"*"`. iMessage has no usernames; use handles or chat
+  targets.
 - `channels.imessage.groupPolicy`: `open | allowlist | disabled` (default: allowlist).
 - `channels.imessage.groupAllowFrom`: group sender allowlist.
-- `channels.imessage.historyLimit` / `channels.imessage.accounts.*.historyLimit`: max group messages to include as context (0 disables).
-- `channels.imessage.groups`: per-group defaults + allowlist (use `"*"` for global defaults).
+- `channels.imessage.historyLimit` / `channels.imessage.accounts.*.historyLimit`: max
+  group messages to include as context (0 disables).
+- `channels.imessage.groups`: per-group defaults + allowlist (use `"*"` for global
+  defaults).
 - `channels.imessage.includeAttachments`: ingest attachments into context.
 - `channels.imessage.mediaMaxMb`: inbound/outbound media cap (MB).
 - `channels.imessage.textChunkLimit`: outbound chunk size (chars).
-- `channels.imessage.chunkMode`: `length` (default) or `newline` to split on blank lines (paragraph boundaries) before length chunking.
+- `channels.imessage.chunkMode`: `length` (default) or `newline` to split on blank lines
+  (paragraph boundaries) before length chunking.
 
 Related global options:
 

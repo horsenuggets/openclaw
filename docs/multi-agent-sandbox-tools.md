@@ -1,7 +1,9 @@
 ---
 summary: "Per-agent sandbox + tool restrictions, precedence, and examples"
 title: Multi-Agent Sandbox & Tools
-read_when: "You want per-agent sandboxing or per-agent tool allow/deny policies in a multi-agent gateway."
+read_when:
+  "You want per-agent sandboxing or per-agent tool allow/deny policies in a multi-agent
+  gateway."
 status: active
 ---
 
@@ -20,8 +22,8 @@ This allows you to run multiple agents with different security profiles:
 - Family/work agents with restricted tools
 - Public-facing agents in sandboxes
 
-`setupCommand` belongs under `sandbox.docker` (global or per-agent) and runs once
-when the container is created.
+`setupCommand` belongs under `sandbox.docker` (global or per-agent) and runs once when the
+container is created.
 
 Auth is per-agent: each agent reads from its own `agentDir` auth store at:
 
@@ -29,11 +31,13 @@ Auth is per-agent: each agent reads from its own `agentDir` auth store at:
 ~/.openclaw/agents/<agentId>/agent/auth-profiles.json
 ```
 
-Credentials are **not** shared between agents. Never reuse `agentDir` across agents.
-If you want to share creds, copy `auth-profiles.json` into the other agent's `agentDir`.
+Credentials are **not** shared between agents. Never reuse `agentDir` across agents. If
+you want to share creds, copy `auth-profiles.json` into the other agent's `agentDir`.
 
-For how sandboxing behaves at runtime, see [Sandboxing](/gateway/sandboxing).
-For debugging “why is this blocked?”, see [Sandbox vs Tool Policy vs Elevated](/gateway/sandbox-vs-tool-policy-vs-elevated) and `openclaw sandbox explain`.
+For how sandboxing behaves at runtime, see [Sandboxing](/gateway/sandboxing). For
+debugging “why is this blocked?”, see
+[Sandbox vs Tool Policy vs Elevated](/gateway/sandbox-vs-tool-policy-vs-elevated) and
+`openclaw sandbox explain`.
 
 ---
 
@@ -184,7 +188,8 @@ For debugging “why is this blocked?”, see [Sandbox vs Tool Policy vs Elevate
 
 ## Configuration Precedence
 
-When both global (`agents.defaults.*`) and agent-specific (`agents.list[].*`) configs exist:
+When both global (`agents.defaults.*`) and agent-specific (`agents.list[].*`) configs
+exist:
 
 ### Sandbox Config
 
@@ -202,14 +207,17 @@ agents.list[].sandbox.prune.* > agents.defaults.sandbox.prune.*
 
 **Notes:**
 
-- `agents.list[].sandbox.{docker,browser,prune}.*` overrides `agents.defaults.sandbox.{docker,browser,prune}.*` for that agent (ignored when sandbox scope resolves to `"shared"`).
+- `agents.list[].sandbox.{docker,browser,prune}.*` overrides
+  `agents.defaults.sandbox.{docker,browser,prune}.*` for that agent (ignored when sandbox
+  scope resolves to `"shared"`).
 
 ### Tool Restrictions
 
 The filtering order is:
 
 1. **Tool profile** (`tools.profile` or `agents.list[].tools.profile`)
-2. **Provider tool profile** (`tools.byProvider[provider].profile` or `agents.list[].tools.byProvider[provider].profile`)
+2. **Provider tool profile** (`tools.byProvider[provider].profile` or
+   `agents.list[].tools.byProvider[provider].profile`)
 3. **Global tool policy** (`tools.allow` / `tools.deny`)
 4. **Provider tool policy** (`tools.byProvider[provider].allow/deny`)
 5. **Agent-specific tool policy** (`agents.list[].tools.allow/deny`)
@@ -217,18 +225,21 @@ The filtering order is:
 7. **Sandbox tool policy** (`tools.sandbox.tools` or `agents.list[].tools.sandbox.tools`)
 8. **Subagent tool policy** (`tools.subagents.tools`, if applicable)
 
-Each level can further restrict tools, but cannot grant back denied tools from earlier levels.
-If `agents.list[].tools.sandbox.tools` is set, it replaces `tools.sandbox.tools` for that agent.
-If `agents.list[].tools.profile` is set, it overrides `tools.profile` for that agent.
-Provider tool keys accept either `provider` (e.g. `google-antigravity`) or `provider/model` (e.g. `openai/gpt-5.2`).
+Each level can further restrict tools, but cannot grant back denied tools from earlier
+levels. If `agents.list[].tools.sandbox.tools` is set, it replaces `tools.sandbox.tools`
+for that agent. If `agents.list[].tools.profile` is set, it overrides `tools.profile` for
+that agent. Provider tool keys accept either `provider` (e.g. `google-antigravity`) or
+`provider/model` (e.g. `openai/gpt-5.2`).
 
 ### Tool groups (shorthands)
 
-Tool policies (global, agent, sandbox) support `group:*` entries that expand to multiple concrete tools:
+Tool policies (global, agent, sandbox) support `group:*` entries that expand to multiple
+concrete tools:
 
 - `group:runtime`: `exec`, `bash`, `process`
 - `group:fs`: `read`, `write`, `edit`, `apply_patch`
-- `group:sessions`: `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
+- `group:sessions`: `sessions_list`, `sessions_history`, `sessions_send`,
+  `sessions_spawn`, `session_status`
 - `group:memory`: `memory_search`, `memory_get`
 - `group:ui`: `browser`, `canvas`
 - `group:automation`: `cron`, `gateway`
@@ -238,14 +249,18 @@ Tool policies (global, agent, sandbox) support `group:*` entries that expand to 
 
 ### Elevated Mode
 
-`tools.elevated` is the global baseline (sender-based allowlist). `agents.list[].tools.elevated` can further restrict elevated for specific agents (both must allow).
+`tools.elevated` is the global baseline (sender-based allowlist).
+`agents.list[].tools.elevated` can further restrict elevated for specific agents (both
+must allow).
 
 Mitigation patterns:
 
 - Deny `exec` for untrusted agents (`agents.list[].tools.deny: ["exec"]`)
 - Avoid allowlisting senders that route to restricted agents
-- Disable elevated globally (`tools.elevated.enabled: false`) if you only want sandboxed execution
-- Disable elevated per agent (`agents.list[].tools.elevated.enabled: false`) for sensitive profiles
+- Disable elevated globally (`tools.elevated.enabled: false`) if you only want sandboxed
+  execution
+- Disable elevated per agent (`agents.list[].tools.elevated.enabled: false`) for sensitive
+  profiles
 
 ---
 
@@ -291,7 +306,8 @@ Mitigation patterns:
 }
 ```
 
-Legacy `agent.*` configs are migrated by `openclaw doctor`; prefer `agents.defaults` + `agents.list` going forward.
+Legacy `agent.*` configs are migrated by `openclaw doctor`; prefer `agents.defaults` +
+`agents.list` going forward.
 
 ---
 
@@ -334,10 +350,10 @@ Legacy `agent.*` configs are migrated by `openclaw doctor`; prefer `agents.defau
 
 ## Common Pitfall: "non-main"
 
-`agents.defaults.sandbox.mode: "non-main"` is based on `session.mainKey` (default `"main"`),
-not the agent id. Group/channel sessions always get their own keys, so they
-are treated as non-main and will be sandboxed. If you want an agent to never
-sandbox, set `agents.list[].sandbox.mode: "off"`.
+`agents.defaults.sandbox.mode: "non-main"` is based on `session.mainKey` (default
+`"main"`), not the agent id. Group/channel sessions always get their own keys, so they are
+treated as non-main and will be sandboxed. If you want an agent to never sandbox, set
+`agents.list[].sandbox.mode: "off"`.
 
 ---
 

@@ -12,8 +12,8 @@ title: "Transcript Hygiene"
 This document describes **provider-specific fixes** applied to transcripts before a run
 (building model context). These are **in-memory** adjustments used to satisfy strict
 provider requirements. These hygiene steps do **not** rewrite the stored JSONL transcript
-on disk; however, a separate session-file repair pass may rewrite malformed JSONL files
-by dropping invalid lines before the session is loaded. When a repair occurs, the original
+on disk; however, a separate session-file repair pass may rewrite malformed JSONL files by
+dropping invalid lines before the session is loaded. When a repair occurs, the original
 file is backed up alongside the session file.
 
 Scope includes:
@@ -36,7 +36,8 @@ If you need transcript storage details, see:
 All transcript hygiene is centralized in the embedded runner:
 
 - Policy selection: `src/agents/transcript-policy.ts`
-- Sanitization/repair application: `sanitizeSessionHistory` in `src/agents/pi-embedded-runner/google.ts`
+- Sanitization/repair application: `sanitizeSessionHistory` in
+  `src/agents/pi-embedded-runner/google.ts`
 
 The policy uses `provider`, `modelApi`, and `modelId` to decide what to apply.
 
@@ -49,8 +50,8 @@ Separate from transcript hygiene, session files are repaired (if needed) before 
 
 ## Global rule: image sanitization
 
-Image payloads are always sanitized to prevent provider-side rejection due to size
-limits (downscale/recompress oversized base64 images).
+Image payloads are always sanitized to prevent provider-side rejection due to size limits
+(downscale/recompress oversized base64 images).
 
 Implementation:
 
@@ -62,8 +63,8 @@ Implementation:
 ## Global rule: malformed tool calls
 
 Assistant tool-call blocks that are missing both `input` and `arguments` are dropped
-before model context is built. This prevents provider rejections from partially
-persisted tool calls (for example, after a rate limit failure).
+before model context is built. This prevents provider rejections from partially persisted
+tool calls (for example, after a rate limit failure).
 
 Implementation:
 
@@ -77,7 +78,8 @@ Implementation:
 **OpenAI / OpenAI Codex**
 
 - Image sanitization only.
-- On model switch into OpenAI Responses/Codex, drop orphaned reasoning signatures (standalone reasoning items without a following content block).
+- On model switch into OpenAI Responses/Codex, drop orphaned reasoning signatures
+  (standalone reasoning items without a following content block).
 - No tool call id sanitization.
 - No tool result pairing repair.
 - No turn validation or reordering.
@@ -89,7 +91,8 @@ Implementation:
 - Tool call id sanitization: strict alphanumeric.
 - Tool result pairing repair and synthetic tool results.
 - Turn validation (Gemini-style turn alternation).
-- Google turn ordering fixup (prepend a tiny user bootstrap if history starts with assistant).
+- Google turn ordering fixup (prepend a tiny user bootstrap if history starts with
+  assistant).
 - Antigravity Claude: normalize thinking signatures; drop unsigned thinking blocks.
 
 **Anthropic / Minimax (Anthropic-compatible)**
@@ -125,5 +128,5 @@ Before the 2026.1.22 release, OpenClaw applied multiple layers of transcript hyg
   - Trimming assistant content after tool calls.
 
 This complexity caused cross-provider regressions (notably `openai-responses`
-`call_id|fc_id` pairing). The 2026.1.22 cleanup removed the extension, centralized
-logic in the runner, and made OpenAI **no-touch** beyond image sanitization.
+`call_id|fc_id` pairing). The 2026.1.22 cleanup removed the extension, centralized logic
+in the runner, and made OpenAI **no-touch** beyond image sanitization.

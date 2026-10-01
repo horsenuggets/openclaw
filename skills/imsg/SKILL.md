@@ -29,7 +29,8 @@ metadata:
 
 Use `imsg` to read and send Messages.app iMessage/SMS on macOS.
 
-Requirements: Messages.app signed in, Full Disk Access for your terminal, and Automation permission to control Messages.app for sending.
+Requirements: Messages.app signed in, Full Disk Access for your terminal, and Automation
+permission to control Messages.app for sending.
 
 ## Inputs to collect
 

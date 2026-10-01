@@ -14,7 +14,8 @@ openclaw plugins install ./extensions/feishu
 openclaw plugins install @openclaw/feishu
 ```
 
-Onboarding: select Feishu/Lark and confirm the install prompt to fetch the plugin automatically.
+Onboarding: select Feishu/Lark and confirm the install prompt to fetch the plugin
+automatically.
 
 ## Config
 

@@ -1,6 +1,7 @@
 # Apple device identifier mappings
 
-This directory includes model identifier → human-readable name mappings derived from the open-source project:
+This directory includes model identifier → human-readable name mappings derived from the
+open-source project:
 
 - `kyle-seongwoo-jun/apple-device-identifiers`
   - iOS mapping pinned to commit `8e7388b29da046183f5d976eb74dbb2f2acda955`

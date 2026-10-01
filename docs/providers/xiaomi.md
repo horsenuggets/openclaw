@@ -10,8 +10,8 @@ title: "Xiaomi MiMo"
 
 Xiaomi MiMo is the API platform for **MiMo** models. It provides REST APIs compatible with
 OpenAI and Anthropic formats and uses API keys for authentication. Create your API key in
-the [Xiaomi MiMo console](https://platform.xiaomimimo.com/#/console/api-keys). OpenClaw uses
-the `xiaomi` provider with a Xiaomi MiMo API key.
+the [Xiaomi MiMo console](https://platform.xiaomimimo.com/#/console/api-keys). OpenClaw
+uses the `xiaomi` provider with a Xiaomi MiMo API key.
 
 ## Model overview
 
@@ -60,5 +60,6 @@ openclaw onboard --auth-choice xiaomi-api-key --xiaomi-api-key "$XIAOMI_API_KEY"
 ## Notes
 
 - Model ref: `xiaomi/mimo-v2-flash`.
-- The provider is injected automatically when `XIAOMI_API_KEY` is set (or an auth profile exists).
+- The provider is injected automatically when `XIAOMI_API_KEY` is set (or an auth profile
+  exists).
 - See [/concepts/model-providers](/concepts/model-providers) for provider rules.

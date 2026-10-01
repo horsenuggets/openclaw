@@ -1,19 +1,25 @@
 ---
 name: coding-agent
-description: Run Codex CLI, Claude Code, OpenCode, or Pi Coding Agent via background process for programmatic control.
+description:
+  Run Codex CLI, Claude Code, OpenCode, or Pi Coding Agent via background process for
+  programmatic control.
 metadata:
   {
-    "openclaw": { "emoji": "🧩", "requires": { "anyBins": ["claude", "codex", "opencode", "pi"] } },
+    "openclaw":
+      { "emoji": "🧩", "requires": { "anyBins": ["claude", "codex", "opencode", "pi"] } },
   }
 ---
 
 # Coding Agent (bash-first)
 
-Use **bash** (with optional background mode) for all coding agent work. Simple and effective.
+Use **bash** (with optional background mode) for all coding agent work. Simple and
+effective.
 
 ## ⚠️ PTY Mode Required!
 
-Coding agents (Codex, Claude Code, Pi) are **interactive terminal applications** that need a pseudo-terminal (PTY) to work correctly. Without PTY, you'll get broken output, missing colors, or the agent may hang.
+Coding agents (Codex, Claude Code, Pi) are **interactive terminal applications** that need
+a pseudo-terminal (PTY) to work correctly. Without PTY, you'll get broken output, missing
+colors, or the agent may hang.
 
 **Always use `pty:true`** when running coding agents:
 
@@ -63,7 +69,8 @@ SCRATCH=$(mktemp -d) && cd $SCRATCH && git init && codex exec "Your prompt here"
 bash pty:true workdir:~/Projects/myproject command:"codex exec 'Add error handling to the API calls'"
 ```
 
-**Why git init?** Codex refuses to run outside a trusted git directory. Creating a temp repo solves this for scratch work.
+**Why git init?** Codex refuses to run outside a trusted git directory. Creating a temp
+repo solves this for scratch work.
 
 ---
 
@@ -92,7 +99,8 @@ process action:submit sessionId:XXX data:"yes"
 process action:kill sessionId:XXX
 ```
 
-**Why workdir matters:** Agent wakes up in a focused directory, doesn't wander off reading unrelated files (like your soul.md 😅).
+**Why workdir matters:** Agent wakes up in a focused directory, doesn't wander off reading
+unrelated files (like your soul.md 😅).
 
 ---
 
@@ -120,8 +128,8 @@ bash pty:true workdir:~/project background:true command:"codex --yolo 'Refactor 
 
 ### Reviewing PRs
 
-**⚠️ CRITICAL: Never review PRs in OpenClaw's own project folder!**
-Clone to temp folder or use git worktree.
+**⚠️ CRITICAL: Never review PRs in OpenClaw's own project folder!** Clone to temp folder
+or use git worktree.
 
 ```bash
 # Clone to temp for safe review
@@ -225,14 +233,17 @@ git worktree remove /tmp/issue-99
 1. **Always use pty:true** - coding agents need a terminal!
 2. **Respect tool choice** - if user asks for Codex, use Codex.
    - Orchestrator mode: do NOT hand-code patches yourself.
-   - If an agent fails/hangs, respawn it or ask the user for direction, but don't silently take over.
+   - If an agent fails/hangs, respawn it or ask the user for direction, but don't silently
+     take over.
 3. **Be patient** - don't kill sessions because they're "slow"
 4. **Monitor with process:log** - check progress without interfering
 5. **--full-auto for building** - auto-approves changes
 6. **vanilla for reviewing** - no special flags needed
 7. **Parallel is OK** - run many Codex processes at once for batch work
-8. **NEVER start Codex in ~/clawd/** - it'll read your soul docs and get weird ideas about the org chart!
-9. **NEVER checkout branches in ~/Projects/openclaw/** - that's the LIVE OpenClaw instance!
+8. **NEVER start Codex in ~/clawd/** - it'll read your soul docs and get weird ideas about
+   the org chart!
+9. **NEVER checkout branches in ~/Projects/openclaw/** - that's the LIVE OpenClaw
+   instance!
 
 ---
 
@@ -248,13 +259,15 @@ When you spawn coding agents in the background, keep the user in the loop.
   - the agent finishes (include what changed + where)
 - If you kill a session, immediately say you killed it and why.
 
-This prevents the user from seeing only "Agent failed before reply" and having no idea what happened.
+This prevents the user from seeing only "Agent failed before reply" and having no idea
+what happened.
 
 ---
 
 ## Auto-Notify on Completion
 
-For long-running background tasks, append a wake trigger to your prompt so OpenClaw gets notified immediately when the agent finishes (instead of waiting for the next heartbeat):
+For long-running background tasks, append a wake trigger to your prompt so OpenClaw gets
+notified immediately when the agent finishes (instead of waiting for the next heartbeat):
 
 ```
 ... your task here.
@@ -277,8 +290,14 @@ This triggers an immediate wake event — Skippy gets pinged in seconds, not 10 
 
 ## Learnings (Jan 2026)
 
-- **PTY is essential:** Coding agents are interactive terminal apps. Without `pty:true`, output breaks or agent hangs.
-- **Git repo required:** Codex won't run outside a git directory. Use `mktemp -d && git init` for scratch work.
-- **exec is your friend:** `codex exec "prompt"` runs and exits cleanly - perfect for one-shots.
-- **submit vs write:** Use `submit` to send input + Enter, `write` for raw data without newline.
-- **Sass works:** Codex responds well to playful prompts. Asked it to write a haiku about being second fiddle to a space lobster, got: _"Second chair, I code / Space lobster sets the tempo / Keys glow, I follow"_ 🦞
+- **PTY is essential:** Coding agents are interactive terminal apps. Without `pty:true`,
+  output breaks or agent hangs.
+- **Git repo required:** Codex won't run outside a git directory. Use
+  `mktemp -d && git init` for scratch work.
+- **exec is your friend:** `codex exec "prompt"` runs and exits cleanly - perfect for
+  one-shots.
+- **submit vs write:** Use `submit` to send input + Enter, `write` for raw data without
+  newline.
+- **Sass works:** Codex responds well to playful prompts. Asked it to write a haiku about
+  being second fiddle to a space lobster, got: _"Second chair, I code / Space lobster sets
+  the tempo / Keys glow, I follow"_ 🦞

@@ -14,8 +14,8 @@ receiver on the gateway and uses your channel access token + channel secret for
 authentication.
 
 Status: supported via plugin. Direct messages, group chats, media, locations, Flex
-messages, template messages, and quick replies are supported. Reactions and threads
-are not supported.
+messages, template messages, and quick replies are supported. Reactions and threads are
+not supported.
 
 ## Plugin required
 
@@ -44,8 +44,8 @@ openclaw plugins install ./extensions/line
 https://gateway-host/line/webhook
 ```
 
-The gateway responds to LINE’s webhook verification (GET) and inbound events (POST).
-If you need a custom path, set `channels.line.webhookPath` or
+The gateway responds to LINE’s webhook verification (GET) and inbound events (POST). If
+you need a custom path, set `channels.line.webhookPath` or
 `channels.line.accounts.<id>.webhookPath` and update the URL accordingly.
 
 ## Configure
@@ -103,8 +103,8 @@ Multiple accounts:
 
 ## Access control
 
-Direct messages default to pairing. Unknown senders get a pairing code and their
-messages are ignored until approved.
+Direct messages default to pairing. Unknown senders get a pairing code and their messages
+are ignored until approved.
 
 ```bash
 openclaw pairing list line
@@ -128,16 +128,15 @@ LINE IDs are case-sensitive. Valid IDs look like:
 ## Message behavior
 
 - Text is chunked at 5000 characters.
-- Markdown formatting is stripped; code blocks and tables are converted into Flex
-  cards when possible.
-- Streaming responses are buffered; LINE receives full chunks with a loading
-  animation while the agent works.
+- Markdown formatting is stripped; code blocks and tables are converted into Flex cards
+  when possible.
+- Streaming responses are buffered; LINE receives full chunks with a loading animation
+  while the agent works.
 - Media downloads are capped by `channels.line.mediaMaxMb` (default 10).
 
 ## Channel data (rich messages)
 
-Use `channelData.line` to send quick replies, locations, Flex cards, or template
-messages.
+Use `channelData.line` to send quick replies, locations, Flex cards, or template messages.
 
 ```json5
 {
@@ -153,9 +152,7 @@ messages.
       },
       flexMessage: {
         altText: "Status card",
-        contents: {
-          /* Flex payload */
-        },
+        contents: {/* Flex payload */},
       },
       templateMessage: {
         type: "confirm",
@@ -178,9 +175,9 @@ The LINE plugin also ships a `/card` command for Flex message presets:
 
 ## Troubleshooting
 
-- **Webhook verification fails:** ensure the webhook URL is HTTPS and the
-  `channelSecret` matches the LINE console.
-- **No inbound events:** confirm the webhook path matches `channels.line.webhookPath`
-  and that the gateway is reachable from LINE.
-- **Media download errors:** raise `channels.line.mediaMaxMb` if media exceeds the
-  default limit.
+- **Webhook verification fails:** ensure the webhook URL is HTTPS and the `channelSecret`
+  matches the LINE console.
+- **No inbound events:** confirm the webhook path matches `channels.line.webhookPath` and
+  that the gateway is reachable from LINE.
+- **Media download errors:** raise `channels.line.mediaMaxMb` if media exceeds the default
+  limit.

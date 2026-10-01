@@ -9,7 +9,8 @@ title: "OpenRouter"
 # OpenRouter
 
 OpenRouter provides a **unified API** that routes requests to many models behind a single
-endpoint and API key. It is OpenAI-compatible, so most OpenAI SDKs work by switching the base URL.
+endpoint and API key. It is OpenAI-compatible, so most OpenAI SDKs work by switching the
+base URL.
 
 ## CLI setup
 
@@ -33,5 +34,6 @@ openclaw onboard --auth-choice apiKey --token-provider openrouter --token "$OPEN
 ## Notes
 
 - Model refs are `openrouter/<provider>/<model>`.
-- For more model/provider options, see [/concepts/model-providers](/concepts/model-providers).
+- For more model/provider options, see
+  [/concepts/model-providers](/concepts/model-providers).
 - OpenRouter uses a Bearer token with your API key under the hood.

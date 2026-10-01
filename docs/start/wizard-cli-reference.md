@@ -1,5 +1,6 @@
 ---
-summary: "Complete reference for CLI onboarding flow, auth/model setup, outputs, and internals"
+summary:
+  "Complete reference for CLI onboarding flow, auth/model setup, outputs, and internals"
 read_when:
   - You need detailed behavior for openclaw onboard
   - You are debugging onboarding results or integrating onboarding clients
@@ -9,23 +10,25 @@ sidebarTitle: "CLI reference"
 
 # CLI Onboarding Reference
 
-This page is the full reference for `openclaw onboard`.
-For the short guide, see [Onboarding Wizard (CLI)](/start/wizard).
+This page is the full reference for `openclaw onboard`. For the short guide, see
+[Onboarding Wizard (CLI)](/start/wizard).
 
 ## What the wizard does
 
 Local mode (default) walks you through:
 
-- Model and auth setup (OpenAI Code subscription OAuth, Anthropic API key or setup token, plus MiniMax, GLM, Moonshot, and AI Gateway options)
+- Model and auth setup (OpenAI Code subscription OAuth, Anthropic API key or setup token,
+  plus MiniMax, GLM, Moonshot, and AI Gateway options)
 - Workspace location and bootstrap files
 - Gateway settings (port, bind, auth, tailscale)
-- Channels and providers (Telegram, WhatsApp, Discord, Google Chat, Mattermost plugin, Signal)
+- Channels and providers (Telegram, WhatsApp, Discord, Google Chat, Mattermost plugin,
+  Signal)
 - Daemon install (LaunchAgent or systemd user unit)
 - Health check
 - Skills setup
 
-Remote mode configures this machine to connect to a gateway elsewhere.
-It does not install or modify anything on the remote host.
+Remote mode configures this machine to connect to a gateway elsewhere. It does not install
+or modify anything on the remote host.
 
 ## Local flow details
 
@@ -185,7 +188,8 @@ Model behavior:
 Credential and profile paths:
 
 - OAuth credentials: `~/.openclaw/credentials/oauth.json`
-- Auth profiles (API keys + OAuth): `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- Auth profiles (API keys + OAuth):
+  `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
 
 <Note>
 Headless and server tip: complete OAuth on a machine with a browser, then copy
@@ -200,8 +204,10 @@ Typical fields in `~/.openclaw/openclaw.json`:
 - `agents.defaults.workspace`
 - `agents.defaults.model` / `models.providers` (if Minimax chosen)
 - `gateway.*` (mode, bind, auth, tailscale)
-- `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`, `channels.imessage.*`
-- Channel allowlists (Slack, Discord, Matrix, Microsoft Teams) when you opt in during prompts (names resolve to IDs when possible)
+- `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`,
+  `channels.imessage.*`
+- Channel allowlists (Slack, Discord, Matrix, Microsoft Teams) when you opt in during
+  prompts (names resolve to IDs when possible)
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`
 - `wizard.lastRunVersion`
@@ -211,8 +217,8 @@ Typical fields in `~/.openclaw/openclaw.json`:
 
 `openclaw agents add` writes `agents.list[]` and optional `bindings`.
 
-WhatsApp credentials go under `~/.openclaw/credentials/whatsapp/<accountId>/`.
-Sessions are stored under `~/.openclaw/agents/<agentId>/sessions/`.
+WhatsApp credentials go under `~/.openclaw/credentials/whatsapp/<accountId>/`. Sessions
+are stored under `~/.openclaw/agents/<agentId>/sessions/`.
 
 <Note>
 Some channels are delivered as plugins. When selected during onboarding, the wizard
@@ -226,7 +232,8 @@ Gateway wizard RPC:
 - `wizard.cancel`
 - `wizard.status`
 
-Clients (macOS app and Control UI) can render steps without re-implementing onboarding logic.
+Clients (macOS app and Control UI) can render steps without re-implementing onboarding
+logic.
 
 Signal setup behavior:
 

@@ -8,14 +8,16 @@ title: "Model Providers"
 
 # Model Providers
 
-OpenClaw can use many LLM providers. Pick a provider, authenticate, then set the
-default model as `provider/model`.
+OpenClaw can use many LLM providers. Pick a provider, authenticate, then set the default
+model as `provider/model`.
 
-Looking for chat channel docs (WhatsApp/Telegram/Discord/Slack/Mattermost (plugin)/etc.)? See [Channels](/channels).
+Looking for chat channel docs (WhatsApp/Telegram/Discord/Slack/Mattermost (plugin)/etc.)?
+See [Channels](/channels).
 
 ## Highlight: Venice (Venice AI)
 
-Venice is our recommended Venice AI setup for privacy-first inference with an option to use Opus for hard tasks.
+Venice is our recommended Venice AI setup for privacy-first inference with an option to
+use Opus for hard tasks.
 
 - Default: `venice/llama-3.3-70b`
 - Best overall: `venice/claude-opus-45` (Opus remains the strongest)
@@ -57,7 +59,8 @@ See [Venice AI](/providers/venice).
 
 ## Community tools
 
-- [Claude Max API Proxy](/providers/claude-max-api-proxy) - Use Claude Max/Pro subscription as an OpenAI-compatible API endpoint
+- [Claude Max API Proxy](/providers/claude-max-api-proxy) - Use Claude Max/Pro
+  subscription as an OpenAI-compatible API endpoint
 
-For the full provider catalog (xAI, Groq, Mistral, etc.) and advanced configuration,
-see [Model providers](/concepts/model-providers).
+For the full provider catalog (xAI, Groq, Mistral, etc.) and advanced configuration, see
+[Model providers](/concepts/model-providers).

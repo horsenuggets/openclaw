@@ -1,5 +1,6 @@
 ---
-summary: "How the installer scripts work (install.sh + install-cli.sh), flags, and automation"
+summary:
+  "How the installer scripts work (install.sh + install-cli.sh), flags, and automation"
 read_when:
   - You want to understand `openclaw.ai/install.sh`
   - You want to automate installs (CI / headless)
@@ -11,9 +12,12 @@ title: "Installer Internals"
 
 OpenClaw ships two installer scripts (served from `openclaw.ai`):
 
-- `https://openclaw.ai/install.sh` — “recommended” installer (global npm install by default; can also install from a GitHub checkout)
-- `https://openclaw.ai/install-cli.sh` — non-root-friendly CLI installer (installs into a prefix with its own Node)
-- `https://openclaw.ai/install.ps1` — Windows PowerShell installer (npm by default; optional git install)
+- `https://openclaw.ai/install.sh` — “recommended” installer (global npm install by
+  default; can also install from a GitHub checkout)
+- `https://openclaw.ai/install-cli.sh` — non-root-friendly CLI installer (installs into a
+  prefix with its own Node)
+- `https://openclaw.ai/install.ps1` — Windows PowerShell installer (npm by default;
+  optional git install)
 
 To see the current flags/behavior, run:
 
@@ -27,7 +31,8 @@ Windows (PowerShell) help:
 & ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -?
 ```
 
-If the installer completes but `openclaw` is not found in a new terminal, it’s usually a Node/npm PATH issue. See: [Install](/install#nodejs--npm-path-sanity).
+If the installer completes but `openclaw` is not found in a new terminal, it’s usually a
+Node/npm PATH issue. See: [Install](/install#nodejs--npm-path-sanity).
 
 ## install.sh (recommended)
 
@@ -38,12 +43,17 @@ What it does (high level):
 - Choose install method:
   - `npm` (default): `npm install -g openclaw@latest`
   - `git`: clone/build a source checkout and install a wrapper script
-- On Linux: avoid global npm permission errors by switching npm's prefix to `~/.npm-global` when needed.
-- If upgrading an existing install: runs `openclaw doctor --non-interactive` (best effort).
-- For git installs: runs `openclaw doctor --non-interactive` after install/update (best effort).
-- Mitigates `sharp` native install gotchas by defaulting `SHARP_IGNORE_GLOBAL_LIBVIPS=1` (avoids building against system libvips).
+- On Linux: avoid global npm permission errors by switching npm's prefix to
+  `~/.npm-global` when needed.
+- If upgrading an existing install: runs `openclaw doctor --non-interactive` (best
+  effort).
+- For git installs: runs `openclaw doctor --non-interactive` after install/update (best
+  effort).
+- Mitigates `sharp` native install gotchas by defaulting `SHARP_IGNORE_GLOBAL_LIBVIPS=1`
+  (avoids building against system libvips).
 
-If you _want_ `sharp` to link against a globally-installed libvips (or you’re debugging), set:
+If you _want_ `sharp` to link against a globally-installed libvips (or you’re debugging),
+set:
 
 ```bash
 SHARP_IGNORE_GLOBAL_LIBVIPS=0 curl -fsSL https://openclaw.ai/install.sh | bash
@@ -51,22 +61,29 @@ SHARP_IGNORE_GLOBAL_LIBVIPS=0 curl -fsSL https://openclaw.ai/install.sh | bash
 
 ### Discoverability / “git install” prompt
 
-If you run the installer while **already inside a OpenClaw source checkout** (detected via `package.json` + `pnpm-workspace.yaml`), it prompts:
+If you run the installer while **already inside a OpenClaw source checkout** (detected via
+`package.json` + `pnpm-workspace.yaml`), it prompts:
 
 - update and use this checkout (`git`)
 - or migrate to the global npm install (`npm`)
 
-In non-interactive contexts (no TTY / `--no-prompt`), you must pass `--install-method git|npm` (or set `OPENCLAW_INSTALL_METHOD`), otherwise the script exits with code `2`.
+In non-interactive contexts (no TTY / `--no-prompt`), you must pass
+`--install-method git|npm` (or set `OPENCLAW_INSTALL_METHOD`), otherwise the script exits
+with code `2`.
 
 ### Why Git is needed
 
 Git is required for the `--install-method git` path (clone / pull).
 
-For `npm` installs, Git is _usually_ not required, but some environments still end up needing it (e.g. when a package or dependency is fetched via a git URL). The installer currently ensures Git is present to avoid `spawn git ENOENT` surprises on fresh distros.
+For `npm` installs, Git is _usually_ not required, but some environments still end up
+needing it (e.g. when a package or dependency is fetched via a git URL). The installer
+currently ensures Git is present to avoid `spawn git ENOENT` surprises on fresh distros.
 
 ### Why npm hits `EACCES` on fresh Linux
 
-On some Linux setups (especially after installing Node via the system package manager or NodeSource), npm's global prefix points at a root-owned location. Then `npm install -g ...` fails with `EACCES` / `mkdir` permission errors.
+On some Linux setups (especially after installing Node via the system package manager or
+NodeSource), npm's global prefix points at a root-owned location. Then
+`npm install -g ...` fails with `EACCES` / `mkdir` permission errors.
 
 `install.sh` mitigates this by switching the prefix to:
 
@@ -74,7 +91,9 @@ On some Linux setups (especially after installing Node via the system package ma
 
 ## install-cli.sh (non-root CLI installer)
 
-This script installs `openclaw` into a prefix (default: `~/.openclaw`) and also installs a dedicated Node runtime under that prefix, so it can work on machines where you don’t want to touch the system Node/npm.
+This script installs `openclaw` into a prefix (default: `~/.openclaw`) and also installs a
+dedicated Node runtime under that prefix, so it can work on machines where you don’t want
+to touch the system Node/npm.
 
 Help:
 
@@ -113,11 +132,13 @@ Environment variables:
 
 Git requirement:
 
-If you choose `-InstallMethod git` and Git is missing, the installer will print the
-Git for Windows link (`https://git-scm.com/download/win`) and exit.
+If you choose `-InstallMethod git` and Git is missing, the installer will print the Git
+for Windows link (`https://git-scm.com/download/win`) and exit.
 
 Common Windows issues:
 
-- **npm error spawn git / ENOENT**: install Git for Windows and reopen PowerShell, then rerun the installer.
-- **"openclaw" is not recognized**: your npm global bin folder is not on PATH. Most systems use
-  `%AppData%\\npm`. You can also run `npm config get prefix` and add `\\bin` to PATH, then reopen PowerShell.
+- **npm error spawn git / ENOENT**: install Git for Windows and reopen PowerShell, then
+  rerun the installer.
+- **"openclaw" is not recognized**: your npm global bin folder is not on PATH. Most
+  systems use `%AppData%\\npm`. You can also run `npm config get prefix` and add `\\bin`
+  to PATH, then reopen PowerShell.

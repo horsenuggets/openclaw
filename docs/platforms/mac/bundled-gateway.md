@@ -9,10 +9,10 @@ title: "Gateway on macOS"
 
 # Gateway on macOS (external launchd)
 
-OpenClaw.app no longer bundles Node/Bun or the Gateway runtime. The macOS app
-expects an **external** `openclaw` CLI install, does not spawn the Gateway as a
-child process, and manages a per‑user launchd service to keep the Gateway
-running (or attaches to an existing local Gateway if one is already running).
+OpenClaw.app no longer bundles Node/Bun or the Gateway runtime. The macOS app expects an
+**external** `openclaw` CLI install, does not spawn the Gateway as a child process, and
+manages a per‑user launchd service to keep the Gateway running (or attaches to an existing
+local Gateway if one is already running).
 
 ## Install the CLI (required for local mode)
 
@@ -22,7 +22,8 @@ You need Node 22+ on the Mac, then install `openclaw` globally:
 npm install -g openclaw@<version>
 ```
 
-The macOS app’s **Install CLI** button runs the same flow via npm/pnpm (bun not recommended for Gateway runtime).
+The macOS app’s **Install CLI** button runs the same flow via npm/pnpm (bun not
+recommended for Gateway runtime).
 
 ## Launchd (Gateway as LaunchAgent)
 
@@ -32,8 +33,8 @@ Label:
 
 Plist location (per‑user):
 
-- `~/Library/LaunchAgents/bot.molt.gateway.plist`
-  (or `~/Library/LaunchAgents/bot.molt.<profile>.plist`)
+- `~/Library/LaunchAgents/bot.molt.gateway.plist` (or
+  `~/Library/LaunchAgents/bot.molt.<profile>.plist`)
 
 Manager:
 
@@ -44,8 +45,8 @@ Behavior:
 
 - “OpenClaw Active” enables/disables the LaunchAgent.
 - App quit does **not** stop the gateway (launchd keeps it alive).
-- If a Gateway is already running on the configured port, the app attaches to
-  it instead of starting a new one.
+- If a Gateway is already running on the configured port, the app attaches to it instead
+  of starting a new one.
 
 Logging:
 
@@ -53,8 +54,8 @@ Logging:
 
 ## Version compatibility
 
-The macOS app checks the gateway version against its own version. If they’re
-incompatible, update the global CLI to match the app version.
+The macOS app checks the gateway version against its own version. If they’re incompatible,
+update the global CLI to match the app version.
 
 ## Smoke check
 

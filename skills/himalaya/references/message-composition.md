@@ -1,10 +1,12 @@
 # Message Composition with MML (MIME Meta Language)
 
-Himalaya uses MML for composing emails. MML is a simple XML-based syntax that compiles to MIME messages.
+Himalaya uses MML for composing emails. MML is a simple XML-based syntax that compiles to
+MIME messages.
 
 ## Basic Message Structure
 
-An email message is a list of **headers** followed by a **body**, separated by a blank line:
+An email message is a list of **headers** followed by a **body**, separated by a blank
+line:
 
 ```
 From: sender@example.com
@@ -196,4 +198,5 @@ himalaya message write \
 - The editor opens with a template; fill in headers and body.
 - Save and exit the editor to send; exit without saving to cancel.
 - MML parts are compiled to proper MIME when sending.
-- Use `himalaya message export --full` to inspect the raw MIME structure of received emails.
+- Use `himalaya message export --full` to inspect the raw MIME structure of received
+  emails.

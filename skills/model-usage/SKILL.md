@@ -1,6 +1,10 @@
 ---
 name: model-usage
-description: Use CodexBar CLI local cost usage to summarize per-model usage for Codex or Claude, including the current (most recent) model or a full model breakdown. Trigger when asked for model-level usage/cost data from codexbar, or when you need a scriptable per-model summary from codexbar cost JSON.
+description:
+  Use CodexBar CLI local cost usage to summarize per-model usage for Codex or Claude,
+  including the current (most recent) model or a full model breakdown. Trigger when asked
+  for model-level usage/cost data from codexbar, or when you need a scriptable per-model
+  summary from codexbar cost JSON.
 metadata:
   {
     "openclaw":
@@ -26,9 +30,11 @@ metadata:
 
 ## Overview
 
-Get per-model usage cost from CodexBar's local cost logs. Supports "current model" (most recent daily entry) or "all models" summaries for Codex or Claude.
+Get per-model usage cost from CodexBar's local cost logs. Supports "current model" (most
+recent daily entry) or "all models" summaries for Codex or Claude.
 
-TODO: add Linux CLI support guidance once CodexBar CLI install path is documented for Linux.
+TODO: add Linux CLI support guidance once CodexBar CLI install path is documented for
+Linux.
 
 ## Quick start
 

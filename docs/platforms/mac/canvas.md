@@ -9,9 +9,8 @@ title: "Canvas"
 
 # Canvas (macOS app)
 
-The macOS app embeds an agent‑controlled **Canvas panel** using `WKWebView`. It
-is a lightweight visual workspace for HTML/CSS/JS, A2UI, and small interactive
-UI surfaces.
+The macOS app embeds an agent‑controlled **Canvas panel** using `WKWebView`. It is a
+lightweight visual workspace for HTML/CSS/JS, A2UI, and small interactive UI surfaces.
 
 ## Where Canvas lives
 
@@ -38,8 +37,8 @@ If no `index.html` exists at the root, the app shows a **built‑in scaffold pag
 - Auto‑reloads when local canvas files change.
 - Only one Canvas panel is visible at a time (session is switched as needed).
 
-Canvas can be disabled from Settings → **Allow Canvas**. When disabled, canvas
-node commands return `CANVAS_DISABLED`.
+Canvas can be disabled from Settings → **Allow Canvas**. When disabled, canvas node
+commands return `CANVAS_DISABLED`.
 
 ## Agent API surface
 
@@ -66,9 +65,9 @@ Notes:
 
 ## A2UI in Canvas
 
-A2UI is hosted by the Gateway canvas host and rendered inside the Canvas panel.
-When the Gateway advertises a Canvas host, the macOS app auto‑navigates to the
-A2UI host page on first open.
+A2UI is hosted by the Gateway canvas host and rendered inside the Canvas panel. When the
+Gateway advertises a Canvas host, the macOS app auto‑navigates to the A2UI host page on
+first open.
 
 Default A2UI host URL:
 

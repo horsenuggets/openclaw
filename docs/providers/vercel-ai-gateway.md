@@ -8,7 +8,8 @@ read_when:
 
 # Vercel AI Gateway
 
-The [Vercel AI Gateway](https://vercel.com/ai-gateway) provides a unified API to access hundreds of models through a single endpoint.
+The [Vercel AI Gateway](https://vercel.com/ai-gateway) provides a unified API to access
+hundreds of models through a single endpoint.
 
 - Provider: `vercel-ai-gateway`
 - Auth: `AI_GATEWAY_API_KEY`
@@ -45,6 +46,5 @@ openclaw onboard --non-interactive \
 
 ## Environment note
 
-If the Gateway runs as a daemon (launchd/systemd), make sure `AI_GATEWAY_API_KEY`
-is available to that process (for example, in `~/.openclaw/.env` or via
-`env.shellEnv`).
+If the Gateway runs as a daemon (launchd/systemd), make sure `AI_GATEWAY_API_KEY` is
+available to that process (for example, in `~/.openclaw/.env` or via `env.shellEnv`).

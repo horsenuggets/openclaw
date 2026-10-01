@@ -31,7 +31,8 @@ Full forecast:
 curl -s "wttr.in/London?T"
 ```
 
-Format codes: `%c` condition · `%t` temp · `%h` humidity · `%w` wind · `%l` location · `%m` moon
+Format codes: `%c` condition · `%t` temp · `%h` humidity · `%w` wind · `%l` location ·
+`%m` moon
 
 Tips:
 

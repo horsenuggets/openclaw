@@ -9,7 +9,8 @@ title: "Configuration Examples"
 
 # Configuration Examples
 
-Examples below are aligned with the current config schema. For the exhaustive reference and per-field notes, see [Configuration](/gateway/configuration).
+Examples below are aligned with the current config schema. For the exhaustive reference
+and per-field notes, see [Configuration](/gateway/configuration).
 
 ## Quick start
 
@@ -67,7 +68,11 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
   // Auth profile metadata (secrets live in auth-profiles.json)
   auth: {
     profiles: {
-      "anthropic:me@example.com": { provider: "anthropic", mode: "oauth", email: "me@example.com" },
+      "anthropic:me@example.com": {
+        provider: "anthropic",
+        mode: "oauth",
+        email: "me@example.com",
+      },
       "anthropic:work": { provider: "anthropic", mode: "api_key" },
       "openai:default": { provider: "openai", mode: "api_key" },
       "openai-codex:default": { provider: "openai-codex", mode: "oauth" },
@@ -448,7 +453,9 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
 
 ### Secure DM mode (shared inbox / multi-user DMs)
 
-If more than one person can DM your bot (multiple entries in `allowFrom`, pairing approvals for multiple people, or `dmPolicy: "open"`), enable **secure DM mode** so DMs from different senders don’t share one context by default:
+If more than one person can DM your bot (multiple entries in `allowFrom`, pairing
+approvals for multiple people, or `dmPolicy: "open"`), enable **secure DM mode** so DMs
+from different senders don’t share one context by default:
 
 ```json5
 {
@@ -601,6 +608,9 @@ If more than one person can DM your bot (multiple entries in `allowFrom`, pairin
 ## Tips
 
 - If you set `dmPolicy: "open"`, the matching `allowFrom` list must include `"*"`.
-- Provider IDs differ (phone numbers, user IDs, channel IDs). Use the provider docs to confirm the format.
-- Optional sections to add later: `web`, `browser`, `ui`, `discovery`, `canvasHost`, `talk`, `signal`, `imessage`.
-- See [Providers](/channels/whatsapp) and [Troubleshooting](/gateway/troubleshooting) for deeper setup notes.
+- Provider IDs differ (phone numbers, user IDs, channel IDs). Use the provider docs to
+  confirm the format.
+- Optional sections to add later: `web`, `browser`, `ui`, `discovery`, `canvasHost`,
+  `talk`, `signal`, `imessage`.
+- See [Providers](/channels/whatsapp) and [Troubleshooting](/gateway/troubleshooting) for
+  deeper setup notes.

@@ -4,7 +4,8 @@ description: Update Clawdbot from upstream when branch has diverged (ahead/behin
 
 # Clawdbot Upstream Sync Workflow
 
-Use this workflow when your fork has diverged from upstream (e.g., "18 commits ahead, 29 commits behind").
+Use this workflow when your fork has diverged from upstream (e.g., "18 commits ahead, 29
+commits behind").
 
 ## Quick Reference
 
@@ -164,13 +165,15 @@ pnpm clawdbot agent --message "Verification: macOS app rebuild successful - agen
 # (Check your Telegram chat with the bot)
 ```
 
-**Important:** Always wait for the Telegram verification message before proceeding. If the agent doesn't respond, troubleshoot the gateway or model configuration before pushing.
+**Important:** Always wait for the Telegram verification message before proceeding. If the
+agent doesn't respond, troubleshoot the gateway or model configuration before pushing.
 
 ---
 
 ## Step 5: Handle Swift/macOS Build Issues (Common After Upstream Sync)
 
-Upstream updates may introduce Swift 6.2 / macOS 26 SDK incompatibilities. Use analyze-mode for systematic debugging:
+Upstream updates may introduce Swift 6.2 / macOS 26 SDK incompatibilities. Use
+analyze-mode for systematic debugging:
 
 ### Analyze-Mode Investigation
 
@@ -270,7 +273,8 @@ pnpm build
 
 ### Type Errors (Bun/Node Incompatibility)
 
-Common issue: `fetch.preconnect` type mismatch. Fix by using `FetchLike` type instead of `typeof fetch`.
+Common issue: `fetch.preconnect` type mismatch. Fix by using `FetchLike` type instead of
+`typeof fetch`.
 
 ### macOS App Crashes on Launch
 
@@ -293,7 +297,8 @@ pnpm install 2>&1 | grep -i patch
 
 ### Swift 6.2 / macOS 26 SDK Build Failures
 
-**Symptoms:** Build fails with deprecation warnings about `FileManager.default` or `Thread.isMainThread`
+**Symptoms:** Build fails with deprecation warnings about `FileManager.default` or
+`Thread.isMainThread`
 
 **Search-Mode Investigation:**
 

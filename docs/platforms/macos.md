@@ -15,27 +15,28 @@ capabilities to the agent as a node.
 ## What it does
 
 - Shows native notifications and status in the menu bar.
-- Owns TCC prompts (Notifications, Accessibility, Screen Recording, Microphone,
-  Speech Recognition, Automation/AppleScript).
+- Owns TCC prompts (Notifications, Accessibility, Screen Recording, Microphone, Speech
+  Recognition, Automation/AppleScript).
 - Runs or connects to the Gateway (local or remote).
 - Exposes macOS‑only tools (Canvas, Camera, Screen Recording, `system.run`).
-- Starts the local node host service in **remote** mode (launchd), and stops it in **local** mode.
+- Starts the local node host service in **remote** mode (launchd), and stops it in
+  **local** mode.
 - Optionally hosts **PeekabooBridge** for UI automation.
-- Installs the global CLI (`openclaw`) via npm/pnpm on request (bun not recommended for the Gateway runtime).
+- Installs the global CLI (`openclaw`) via npm/pnpm on request (bun not recommended for
+  the Gateway runtime).
 
 ## Local vs remote mode
 
-- **Local** (default): the app attaches to a running local Gateway if present;
-  otherwise it enables the launchd service via `openclaw gateway install`.
-- **Remote**: the app connects to a Gateway over SSH/Tailscale and never starts
-  a local process.
-  The app starts the local **node host service** so the remote Gateway can reach this Mac.
-  The app does not spawn the Gateway as a child process.
+- **Local** (default): the app attaches to a running local Gateway if present; otherwise
+  it enables the launchd service via `openclaw gateway install`.
+- **Remote**: the app connects to a Gateway over SSH/Tailscale and never starts a local
+  process. The app starts the local **node host service** so the remote Gateway can reach
+  this Mac. The app does not spawn the Gateway as a child process.
 
 ## Launchd control
 
-The app manages a per‑user LaunchAgent labeled `bot.molt.gateway`
-(or `bot.molt.<profile>` when using `--profile`/`OPENCLAW_PROFILE`; legacy `com.openclaw.*` still unloads).
+The app manages a per‑user LaunchAgent labeled `bot.molt.gateway` (or `bot.molt.<profile>`
+when using `--profile`/`OPENCLAW_PROFILE`; legacy `com.openclaw.*` still unloads).
 
 ```bash
 launchctl kickstart -k gui/$UID/bot.molt.gateway
@@ -51,7 +52,8 @@ If the LaunchAgent isn’t installed, enable it from the app or run
 
 The macOS app presents itself as a node. Common commands:
 
-- Canvas: `canvas.present`, `canvas.navigate`, `canvas.eval`, `canvas.snapshot`, `canvas.a2ui.*`
+- Canvas: `canvas.present`, `canvas.navigate`, `canvas.eval`, `canvas.snapshot`,
+  `canvas.a2ui.*`
 - Camera: `camera.snap`, `camera.clip`
 - Screen: `screen.record`
 - System: `system.run`, `system.notify`
@@ -60,8 +62,10 @@ The node reports a `permissions` map so agents can decide what’s allowed.
 
 Node service + app IPC:
 
-- When the headless node host service is running (remote mode), it connects to the Gateway WS as a node.
-- `system.run` executes in the macOS app (UI/TCC context) over a local Unix socket; prompts + output stay in-app.
+- When the headless node host service is running (remote mode), it connects to the Gateway
+  WS as a node.
+- `system.run` executes in the macOS app (UI/TCC context) over a local Unix socket;
+  prompts + output stay in-app.
 
 Diagram (SCI):
 
@@ -74,8 +78,8 @@ Gateway -> Node Service (WS)
 
 ## Exec approvals (system.run)
 
-`system.run` is controlled by **Exec approvals** in the macOS app (Settings → Exec approvals).
-Security + ask + allowlist are stored locally on the Mac in:
+`system.run` is controlled by **Exec approvals** in the macOS app (Settings → Exec
+approvals). Security + ask + allowlist are stored locally on the Mac in:
 
 ```
 ~/.openclaw/exec-approvals.json
@@ -104,7 +108,9 @@ Notes:
 
 - `allowlist` entries are glob patterns for resolved binary paths.
 - Choosing “Always Allow” in the prompt adds that command to the allowlist.
-- `system.run` environment overrides are filtered (drops `PATH`, `DYLD_*`, `LD_*`, `NODE_OPTIONS`, `PYTHON*`, `PERL*`, `RUBYOPT`) and then merged with the app’s environment.
+- `system.run` environment overrides are filtered (drops `PATH`, `DYLD_*`, `LD_*`,
+  `NODE_OPTIONS`, `PYTHON*`, `PERL*`, `RUBYOPT`) and then merged with the app’s
+  environment.
 
 ## Deep links
 
@@ -147,8 +153,8 @@ Safety:
 
 ## Debug gateway connectivity (macOS CLI)
 
-Use the debug CLI to exercise the same Gateway WebSocket handshake and discovery
-logic that the macOS app uses, without launching the app.
+Use the debug CLI to exercise the same Gateway WebSocket handshake and discovery logic
+that the macOS app uses, without launching the app.
 
 ```bash
 cd apps/macos
@@ -170,30 +176,30 @@ Discovery options:
 - `--timeout <ms>`: overall discovery window (default: `2000`)
 - `--json`: structured output for diffing
 
-Tip: compare against `openclaw gateway discover --json` to see whether the
-macOS app’s discovery pipeline (NWBrowser + tailnet DNS‑SD fallback) differs from
-the Node CLI’s `dns-sd` based discovery.
+Tip: compare against `openclaw gateway discover --json` to see whether the macOS app’s
+discovery pipeline (NWBrowser + tailnet DNS‑SD fallback) differs from the Node CLI’s
+`dns-sd` based discovery.
 
 ## Remote connection plumbing (SSH tunnels)
 
-When the macOS app runs in **Remote** mode, it opens an SSH tunnel so local UI
-components can talk to a remote Gateway as if it were on localhost.
+When the macOS app runs in **Remote** mode, it opens an SSH tunnel so local UI components
+can talk to a remote Gateway as if it were on localhost.
 
 ### Control tunnel (Gateway WebSocket port)
 
 - **Purpose:** health checks, status, Web Chat, config, and other control-plane calls.
 - **Local port:** the Gateway port (default `18789`), always stable.
 - **Remote port:** the same Gateway port on the remote host.
-- **Behavior:** no random local port; the app reuses an existing healthy tunnel
-  or restarts it if needed.
+- **Behavior:** no random local port; the app reuses an existing healthy tunnel or
+  restarts it if needed.
 - **SSH shape:** `ssh -N -L <local>:127.0.0.1:<remote>` with BatchMode +
   ExitOnForwardFailure + keepalive options.
-- **IP reporting:** the SSH tunnel uses loopback, so the gateway will see the node
-  IP as `127.0.0.1`. Use **Direct (ws/wss)** transport if you want the real client
-  IP to appear (see [macOS remote access](/platforms/mac/remote)).
+- **IP reporting:** the SSH tunnel uses loopback, so the gateway will see the node IP as
+  `127.0.0.1`. Use **Direct (ws/wss)** transport if you want the real client IP to appear
+  (see [macOS remote access](/platforms/mac/remote)).
 
-For setup steps, see [macOS remote access](/platforms/mac/remote). For protocol
-details, see [Gateway protocol](/gateway/protocol).
+For setup steps, see [macOS remote access](/platforms/mac/remote). For protocol details,
+see [Gateway protocol](/gateway/protocol).
 
 ## Related docs
 

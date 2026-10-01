@@ -9,8 +9,9 @@ If you believe you've found a security issue in OpenClaw, please report it priva
 
 ## Bug Bounties
 
-OpenClaw is a labor of love. There is no bug bounty program and no budget for paid reports. Please still disclose responsibly so we can fix issues quickly.
-The best way to help the project right now is by sending PRs.
+OpenClaw is a labor of love. There is no bug bounty program and no budget for paid
+reports. Please still disclose responsibly so we can fix issues quickly. The best way to
+help the project right now is by sending PRs.
 
 ## Out of Scope
 
@@ -20,19 +21,22 @@ The best way to help the project right now is by sending PRs.
 
 ## Operational Guidance
 
-For threat model + hardening guidance (including `openclaw security audit --deep` and `--fix`), see:
+For threat model + hardening guidance (including `openclaw security audit --deep` and
+`--fix`), see:
 
 - `https://docs.openclaw.ai/gateway/security`
 
 ### Web Interface Safety
 
-OpenClaw's web interface is intended for local use only. Do **not** bind it to the public internet; it is not hardened for public exposure.
+OpenClaw's web interface is intended for local use only. Do **not** bind it to the public
+internet; it is not hardened for public exposure.
 
 ## Runtime Requirements
 
 ### Node.js Version
 
-OpenClaw requires **Node.js 22.12.0 or later** (LTS). This version includes important security patches:
+OpenClaw requires **Node.js 22.12.0 or later** (LTS). This version includes important
+security patches:
 
 - CVE-2025-59466: async_hooks DoS vulnerability
 - CVE-2026-21636: Permission model bypass vulnerability
@@ -61,8 +65,8 @@ docker run --read-only --cap-drop=ALL \
 
 ## Security Scanning
 
-This project uses `detect-secrets` for automated secret detection in CI/CD.
-See `.detect-secrets.cfg` for configuration and `.secrets.baseline` for the baseline.
+This project uses `detect-secrets` for automated secret detection in CI/CD. See
+`.detect-secrets.cfg` for configuration and `.secrets.baseline` for the baseline.
 
 Run locally:
 

@@ -1,6 +1,9 @@
 ---
 name: himalaya
-description: "CLI to manage emails via IMAP/SMTP. Use `himalaya` to list, read, write, reply, forward, search, and organize emails from the terminal. Supports multiple accounts and message composition with MML (MIME Meta Language)."
+description:
+  "CLI to manage emails via IMAP/SMTP. Use `himalaya` to list, read, write, reply,
+  forward, search, and organize emails from the terminal. Supports multiple accounts and
+  message composition with MML (MIME Meta Language)."
 homepage: https://github.com/pimalaya/himalaya
 metadata:
   {
@@ -24,7 +27,8 @@ metadata:
 
 # Himalaya Email CLI
 
-Himalaya is a CLI email client that lets you manage emails from the terminal using IMAP, SMTP, Notmuch, or Sendmail backends.
+Himalaya is a CLI email client that lets you manage emails from the terminal using IMAP,
+SMTP, Notmuch, or Sendmail backends.
 
 ## References
 
@@ -253,5 +257,7 @@ RUST_LOG=trace RUST_BACKTRACE=1 himalaya envelope list
 
 - Use `himalaya --help` or `himalaya <command> --help` for detailed usage.
 - Message IDs are relative to the current folder; re-list after folder changes.
-- For composing rich emails with attachments, use MML syntax (see `references/message-composition.md`).
-- Store passwords securely using `pass`, system keyring, or a command that outputs the password.
+- For composing rich emails with attachments, use MML syntax (see
+  `references/message-composition.md`).
+- Store passwords securely using `pass`, system keyring, or a command that outputs the
+  password.

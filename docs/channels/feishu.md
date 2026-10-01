@@ -8,7 +8,9 @@ title: Feishu
 
 # Feishu bot
 
-Feishu (Lark) is a team chat platform used by companies for messaging and collaboration. This plugin connects OpenClaw to a Feishu/Lark bot using the platform’s WebSocket event subscription so messages can be received without exposing a public webhook URL.
+Feishu (Lark) is a team chat platform used by companies for messaging and collaboration.
+This plugin connects OpenClaw to a Feishu/Lark bot using the platform’s WebSocket event
+subscription so messages can be received without exposing a public webhook URL.
 
 ---
 
@@ -75,7 +77,8 @@ Choose **Feishu**, then enter the App ID and App Secret.
 
 Visit [Feishu Open Platform](https://open.feishu.cn/app) and sign in.
 
-Lark (global) tenants should use https://open.larksuite.com/app and set `domain: "lark"` in the Feishu config.
+Lark (global) tenants should use https://open.larksuite.com/app and set `domain: "lark"`
+in the Feishu config.
 
 ### 2. Create an app
 
@@ -121,7 +124,11 @@ On **Permissions**, click **Batch import** and paste:
       "im:message:send_as_bot",
       "im:resource"
     ],
-    "user": ["aily:file:read", "aily:file:write", "im:chat.access_event.bot_p2p_chat:read"]
+    "user": [
+      "aily:file:read",
+      "aily:file:write",
+      "im:chat.access_event.bot_p2p_chat:read"
+    ]
   }
 }
 ```
@@ -202,7 +209,9 @@ export FEISHU_APP_SECRET="xxx"
 
 ### Lark (global) domain
 
-If your tenant is on Lark (international), set the domain to `lark` (or a full domain string). You can set it at `channels.feishu.domain` or per account (`channels.feishu.accounts.<id>.domain`).
+If your tenant is on Lark (international), set the domain to `lark` (or a full domain
+string). You can set it at `channels.feishu.domain` or per account
+(`channels.feishu.accounts.<id>.domain`).
 
 ```json5
 {
@@ -368,7 +377,8 @@ openclaw pairing list feishu
 | `/reset`  | Reset the session |
 | `/model`  | Show/switch model |
 
-> Note: Feishu does not support native command menus yet, so commands must be sent as text.
+> Note: Feishu does not support native command menus yet, so commands must be sent as
+> text.
 
 ## Gateway management commands
 
@@ -447,7 +457,8 @@ openclaw pairing list feishu
 
 ### Streaming
 
-Feishu supports streaming replies via interactive cards. When enabled, the bot updates a card as it generates text.
+Feishu supports streaming replies via interactive cards. When enabled, the bot updates a
+card as it generates text.
 
 ```json5
 {

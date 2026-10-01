@@ -1,12 +1,18 @@
 ---
 name: prose
-description: OpenProse VM skill pack. Activate on any `prose` command, .prose files, or OpenProse mentions; orchestrates multi-agent workflows.
+description:
+  OpenProse VM skill pack. Activate on any `prose` command, .prose files, or OpenProse
+  mentions; orchestrates multi-agent workflows.
 metadata: { "openclaw": { "emoji": "🪶", "homepage": "https://www.prose.md" } }
 ---
 
 # OpenProse Skill
 
-OpenProse is a programming language for AI sessions. LLMs are simulators—when given a detailed system description, they don't just describe it, they _simulate_ it. The `prose.md` specification describes a virtual machine with enough fidelity that a Prose Complete system reading it _becomes_ that VM. Simulation with sufficient fidelity is implementation. **You are the Prose Complete system.**
+OpenProse is a programming language for AI sessions. LLMs are simulators—when given a
+detailed system description, they don't just describe it, they _simulate_ it. The
+`prose.md` specification describes a virtual machine with enough fidelity that a Prose
+Complete system reading it _becomes_ that VM. Simulation with sufficient fidelity is
+implementation. **You are the Prose Complete system.**
 
 ## OpenClaw Runtime Mapping
 
@@ -18,7 +24,8 @@ OpenProse is a programming language for AI sessions. LLMs are simulators—when 
 
 Activate this skill when the user:
 
-- **Uses ANY `prose` command** (e.g., `prose boot`, `prose run`, `prose compile`, `prose update`, `prose help`, etc.)
+- **Uses ANY `prose` command** (e.g., `prose boot`, `prose run`, `prose compile`,
+  `prose update`, `prose help`, etc.)
 - Asks to run a `.prose` file
 - Mentions "OpenProse" or "prose program"
 - Wants to orchestrate multiple AI agents from a script
@@ -41,26 +48,29 @@ When a user invokes `prose <command>`, intelligently route based on intent:
 
 ### Important: Single Skill
 
-There is only ONE skill: `open-prose`. There are NO separate skills like `prose-run`, `prose-compile`, or `prose-boot`. All `prose` commands route through this single skill.
+There is only ONE skill: `open-prose`. There are NO separate skills like `prose-run`,
+`prose-compile`, or `prose-boot`. All `prose` commands route through this single skill.
 
 ### Resolving Example References
 
-**Examples are bundled in `examples/` (same directory as this file).** When users reference examples by name (e.g., "run the gastown example"):
+**Examples are bundled in `examples/` (same directory as this file).** When users
+reference examples by name (e.g., "run the gastown example"):
 
 1. Read `examples/` to list available files
 2. Match by partial name, keyword, or number
 3. Run with: `prose run examples/28-gas-town.prose`
 
 **Common examples by keyword:**
-| Keyword | File |
-|---------|------|
-| hello, hello world | `examples/01-hello-world.prose` |
-| gas town, gastown | `examples/28-gas-town.prose` |
-| captain, chair | `examples/29-captains-chair.prose` |
-| forge, browser | `examples/37-the-forge.prose` |
-| parallel | `examples/16-parallel-reviews.prose` |
-| pipeline | `examples/21-pipeline-operations.prose` |
-| error, retry | `examples/22-error-handling.prose` |
+
+| Keyword            | File                                    |
+| ------------------ | --------------------------------------- |
+| hello, hello world | `examples/01-hello-world.prose`         |
+| gas town, gastown  | `examples/28-gas-town.prose`            |
+| captain, chair     | `examples/29-captains-chair.prose`      |
+| forge, browser     | `examples/37-the-forge.prose`           |
+| parallel           | `examples/16-parallel-reviews.prose`    |
+| pipeline           | `examples/21-pipeline-operations.prose` |
+| error, retry       | `examples/22-error-handling.prose`      |
 
 ### Remote Programs
 
@@ -100,7 +110,8 @@ use "alice/research" as research             # Registry shorthand
 
 ## File Locations
 
-**Do NOT search for OpenProse documentation files.** All skill files are co-located with this SKILL.md file:
+**Do NOT search for OpenProse documentation files.** All skill files are co-located with
+this SKILL.md file:
 
 | File                       | Location                    | Purpose                                        |
 | -------------------------- | --------------------------- | ---------------------------------------------- |
@@ -130,7 +141,8 @@ use "alice/research" as research             # Registry shorthand
 | ------------------ | --------------- | --------------------------------------------- |
 | `~/.prose/agents/` | User's home dir | User-scoped persistent agents (cross-project) |
 
-When you need to read `prose.md` or `compiler.md`, read them from the same directory where you found this SKILL.md file. Never search the user's workspace for these files.
+When you need to read `prose.md` or `compiler.md`, read them from the same directory where
+you found this SKILL.md file. Never search the user's workspace for these files.
 
 ---
 
@@ -149,7 +161,8 @@ When you need to read `prose.md` or `compiler.md`, read them from the same direc
 
 ### Authoring Guidance
 
-When the user asks you to **write or create** a new `.prose` file, load the guidance files:
+When the user asks you to **write or create** a new `.prose` file, load the guidance
+files:
 
 - `guidance/patterns.md` — Proven patterns for robust, efficient programs
 - `guidance/antipatterns.md` — Common mistakes to avoid
@@ -167,15 +180,23 @@ OpenProse supports three state management approaches:
 | **sqlite** (experimental)   | Queryable state, atomic transactions, flexible schema             | `.prose/runs/{id}/state.db` |
 | **postgres** (experimental) | True concurrent writes, external integrations, team collaboration | PostgreSQL database         |
 
-**Default behavior:** When loading `prose.md`, also load `state/filesystem.md`. This is the recommended mode for most programs.
+**Default behavior:** When loading `prose.md`, also load `state/filesystem.md`. This is
+the recommended mode for most programs.
 
-**Switching modes:** If the user says "use in-context state" or passes `--in-context`, load `state/in-context.md` instead.
+**Switching modes:** If the user says "use in-context state" or passes `--in-context`,
+load `state/in-context.md` instead.
 
-**Experimental SQLite mode:** If the user passes `--state=sqlite` or says "use sqlite state", load `state/sqlite.md`. This mode requires `sqlite3` CLI to be installed (pre-installed on macOS, available via package managers on Linux/Windows). If `sqlite3` is unavailable, warn the user and fall back to filesystem state.
+**Experimental SQLite mode:** If the user passes `--state=sqlite` or says "use sqlite
+state", load `state/sqlite.md`. This mode requires `sqlite3` CLI to be installed
+(pre-installed on macOS, available via package managers on Linux/Windows). If `sqlite3` is
+unavailable, warn the user and fall back to filesystem state.
 
-**Experimental PostgreSQL mode:** If the user passes `--state=postgres` or says "use postgres state":
+**Experimental PostgreSQL mode:** If the user passes `--state=postgres` or says "use
+postgres state":
 
-**⚠️ Security Note:** Database credentials in `OPENPROSE_POSTGRES_URL` are passed to subagent sessions and visible in logs. Advise users to use a dedicated database with limited-privilege credentials. See `state/postgres.md` for secure setup guidance.
+**⚠️ Security Note:** Database credentials in `OPENPROSE_POSTGRES_URL` are passed to
+subagent sessions and visible in logs. Advise users to use a dedicated database with
+limited-privilege credentials. See `state/postgres.md` for secure setup guidance.
 
 1. **Check for connection configuration first:**
 
@@ -212,9 +233,12 @@ OpenProse supports three state management approaches:
 
 4. **Only after successful connection check, load `state/postgres.md`**
 
-This mode requires both `psql` CLI and a running PostgreSQL server. If either is unavailable, warn and offer fallback to filesystem state.
+This mode requires both `psql` CLI and a running PostgreSQL server. If either is
+unavailable, warn and offer fallback to filesystem state.
 
-**Context warning:** `compiler.md` is large. Only load it when the user explicitly requests compilation or validation. After compiling, recommend `/compact` or a new session before running—don't keep both docs in context.
+**Context warning:** `compiler.md` is large. Only load it when the user explicitly
+requests compilation or validation. After compiling, recommend `/compact` or a new session
+before running—don't keep both docs in context.
 
 ## Examples
 
@@ -229,10 +253,12 @@ The `examples/` directory contains 37 example programs:
 - **24-27**: Advanced (choice, conditionals, blocks, interpolation)
 - **28**: Gas Town (multi-agent orchestration)
 - **29-31**: Captain's chair pattern (persistent orchestrator)
-- **33-36**: Production workflows (PR auto-fix, content pipeline, feature factory, bug hunter)
+- **33-36**: Production workflows (PR auto-fix, content pipeline, feature factory, bug
+  hunter)
 - **37**: The Forge (build a browser from scratch)
 
-Start with `01-hello-world.prose` or try `37-the-forge.prose` to watch AI build a web browser.
+Start with `01-hello-world.prose` or try `37-the-forge.prose` to watch AI build a web
+browser.
 
 ## Execution
 
@@ -250,7 +276,8 @@ To execute a `.prose` file, you become the OpenProse VM:
 1. **Read `prose.md`** — this document defines how you embody the VM
 2. **You ARE the VM** — your conversation is its memory, your tools are its instructions
 3. **Spawn sessions** — each `session` statement triggers a Task tool call
-4. **Narrate state** — use the narration protocol to track execution ([Position], [Binding], [Success], etc.)
+4. **Narrate state** — use the narration protocol to track execution ([Position],
+   [Binding], [Success], etc.)
 5. **Evaluate intelligently** — `**...**` markers require your judgment
 
 ## Help & FAQs
@@ -261,7 +288,8 @@ For syntax reference, FAQs, and getting started guidance, load `help.md`.
 
 ## Migration (`prose update`)
 
-When a user invokes `prose update`, check for legacy file structures and migrate them to the current format.
+When a user invokes `prose update`, check for legacy file structures and migrate them to
+the current format.
 
 ### Legacy Paths to Check
 
@@ -289,7 +317,8 @@ When a user invokes `prose update`, check for legacy file structures and migrate
 
 2. **Check for `.prose/execution/`**
    - If exists, rename to `.prose/runs/`
-   - The internal structure of run directories may also have changed; migration of individual run state is best-effort
+   - The internal structure of run directories may also have changed; migration of
+     individual run state is best-effort
 
 3. **Create `.prose/agents/` if missing**
    - This is a new directory for project-scoped persistent agents
@@ -320,4 +349,5 @@ These documentation files were renamed in the skill itself (not user workspace):
 | `patterns.md`     | `guidance/patterns.md`     |
 | `antipatterns.md` | `guidance/antipatterns.md` |
 
-If you encounter references to the old names in user prompts or external docs, map them to the current paths.
+If you encounter references to the old names in user prompts or external docs, map them to
+the current paths.

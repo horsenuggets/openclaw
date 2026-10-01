@@ -9,10 +9,9 @@ title: "Gateway Protocol"
 
 # Gateway protocol (WebSocket)
 
-The Gateway WS protocol is the **single control plane + node transport** for
-OpenClaw. All clients (CLI, web UI, macOS app, iOS/Android nodes, headless
-nodes) connect over WebSocket and declare their **role** + **scope** at
-handshake time.
+The Gateway WS protocol is the **single control plane + node transport** for OpenClaw. All
+clients (CLI, web UI, macOS app, iOS/Android nodes, headless nodes) connect over WebSocket
+and declare their **role** + **scope** at handshake time.
 
 ## Transport
 
@@ -162,18 +161,19 @@ The Gateway treats these as **claims** and enforces server-side allowlists.
 ## Presence
 
 - `system-presence` returns entries keyed by device identity.
-- Presence entries include `deviceId`, `roles`, and `scopes` so UIs can show a single row per device
-  even when it connects as both **operator** and **node**.
+- Presence entries include `deviceId`, `roles`, and `scopes` so UIs can show a single row
+  per device even when it connects as both **operator** and **node**.
 
 ### Node helper methods
 
-- Nodes may call `skills.bins` to fetch the current list of skill executables
-  for auto-allow checks.
+- Nodes may call `skills.bins` to fetch the current list of skill executables for
+  auto-allow checks.
 
 ## Exec approvals
 
 - When an exec request needs approval, the gateway broadcasts `exec.approval.requested`.
-- Operator clients resolve by calling `exec.approval.resolve` (requires `operator.approvals` scope).
+- Operator clients resolve by calling `exec.approval.resolve` (requires
+  `operator.approvals` scope).
 
 ## Versioning
 
@@ -186,23 +186,22 @@ The Gateway treats these as **claims** and enforces server-side allowlists.
 
 ## Auth
 
-- If `OPENCLAW_GATEWAY_TOKEN` (or `--token`) is set, `connect.params.auth.token`
-  must match or the socket is closed.
-- After pairing, the Gateway issues a **device token** scoped to the connection
-  role + scopes. It is returned in `hello-ok.auth.deviceToken` and should be
-  persisted by the client for future connects.
-- Device tokens can be rotated/revoked via `device.token.rotate` and
-  `device.token.revoke` (requires `operator.pairing` scope).
+- If `OPENCLAW_GATEWAY_TOKEN` (or `--token`) is set, `connect.params.auth.token` must
+  match or the socket is closed.
+- After pairing, the Gateway issues a **device token** scoped to the connection role +
+  scopes. It is returned in `hello-ok.auth.deviceToken` and should be persisted by the
+  client for future connects.
+- Device tokens can be rotated/revoked via `device.token.rotate` and `device.token.revoke`
+  (requires `operator.pairing` scope).
 
 ## Device identity + pairing
 
-- Nodes should include a stable device identity (`device.id`) derived from a
-  keypair fingerprint.
+- Nodes should include a stable device identity (`device.id`) derived from a keypair
+  fingerprint.
 - Gateways issue tokens per device + role.
-- Pairing approvals are required for new device IDs unless local auto-approval
-  is enabled.
-- **Local** connects include loopback and the gateway host’s own tailnet address
-  (so same‑host tailnet binds can still auto‑approve).
+- Pairing approvals are required for new device IDs unless local auto-approval is enabled.
+- **Local** connects include loopback and the gateway host’s own tailnet address (so
+  same‑host tailnet binds can still auto‑approve).
 - All WS clients must include `device` identity during `connect` (operator + node).
   Control UI can omit it **only** when `gateway.controlUi.allowInsecureAuth` is enabled
   (or `gateway.controlUi.dangerouslyDisableDeviceAuth` for break-glass use).
@@ -211,11 +210,11 @@ The Gateway treats these as **claims** and enforces server-side allowlists.
 ## TLS + pinning
 
 - TLS is supported for WS connections.
-- Clients may optionally pin the gateway cert fingerprint (see `gateway.tls`
-  config plus `gateway.remote.tlsFingerprint` or CLI `--tls-fingerprint`).
+- Clients may optionally pin the gateway cert fingerprint (see `gateway.tls` config plus
+  `gateway.remote.tlsFingerprint` or CLI `--tls-fingerprint`).
 
 ## Scope
 
-This protocol exposes the **full gateway API** (status, channels, models, chat,
-agent, sessions, nodes, approvals, etc.). The exact surface is defined by the
-TypeBox schemas in `src/gateway/protocol/schema.ts`.
+This protocol exposes the **full gateway API** (status, channels, models, chat, agent,
+sessions, nodes, approvals, etc.). The exact surface is defined by the TypeBox schemas in
+`src/gateway/protocol/schema.ts`.

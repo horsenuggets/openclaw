@@ -8,12 +8,15 @@ read_when:
 
 # Cloudflare AI Gateway
 
-Cloudflare AI Gateway sits in front of provider APIs and lets you add analytics, caching, and controls. For Anthropic, OpenClaw uses the Anthropic Messages API through your Gateway endpoint.
+Cloudflare AI Gateway sits in front of provider APIs and lets you add analytics, caching,
+and controls. For Anthropic, OpenClaw uses the Anthropic Messages API through your Gateway
+endpoint.
 
 - Provider: `cloudflare-ai-gateway`
 - Base URL: `https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/anthropic`
 - Default model: `cloudflare-ai-gateway/claude-sonnet-4-5`
-- API key: `CLOUDFLARE_AI_GATEWAY_API_KEY` (your provider API key for requests through the Gateway)
+- API key: `CLOUDFLARE_AI_GATEWAY_API_KEY` (your provider API key for requests through the
+  Gateway)
 
 For Anthropic models, use your Anthropic API key.
 
@@ -50,7 +53,8 @@ openclaw onboard --non-interactive \
 
 ## Authenticated gateways
 
-If you enabled Gateway authentication in Cloudflare, add the `cf-aig-authorization` header (this is in addition to your provider API key).
+If you enabled Gateway authentication in Cloudflare, add the `cf-aig-authorization` header
+(this is in addition to your provider API key).
 
 ```json5
 {
@@ -68,4 +72,6 @@ If you enabled Gateway authentication in Cloudflare, add the `cf-aig-authorizati
 
 ## Environment note
 
-If the Gateway runs as a daemon (launchd/systemd), make sure `CLOUDFLARE_AI_GATEWAY_API_KEY` is available to that process (for example, in `~/.openclaw/.env` or via `env.shellEnv`).
+If the Gateway runs as a daemon (launchd/systemd), make sure
+`CLOUDFLARE_AI_GATEWAY_API_KEY` is available to that process (for example, in
+`~/.openclaw/.env` or via `env.shellEnv`).

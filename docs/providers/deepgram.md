@@ -11,9 +11,9 @@ title: "Deepgram"
 Deepgram is a speech-to-text API. In OpenClaw it is used for **inbound audio/voice note
 transcription** via `tools.media.audio`.
 
-When enabled, OpenClaw uploads the audio file to Deepgram and injects the transcript
-into the reply pipeline (`{{Transcript}}` + `[Audio]` block). This is **not streaming**;
-it uses the pre-recorded transcription endpoint.
+When enabled, OpenClaw uploads the audio file to Deepgram and injects the transcript into
+the reply pipeline (`{{Transcript}}` + `[Audio]` block). This is **not streaming**; it
+uses the pre-recorded transcription endpoint.
 
 Website: https://deepgram.com  
 Docs: https://developers.deepgram.com
@@ -45,9 +45,11 @@ DEEPGRAM_API_KEY=dg_...
 
 - `model`: Deepgram model id (default: `nova-3`)
 - `language`: language hint (optional)
-- `tools.media.audio.providerOptions.deepgram.detect_language`: enable language detection (optional)
+- `tools.media.audio.providerOptions.deepgram.detect_language`: enable language detection
+  (optional)
 - `tools.media.audio.providerOptions.deepgram.punctuate`: enable punctuation (optional)
-- `tools.media.audio.providerOptions.deepgram.smart_format`: enable smart formatting (optional)
+- `tools.media.audio.providerOptions.deepgram.smart_format`: enable smart formatting
+  (optional)
 
 Example with language:
 
@@ -88,6 +90,9 @@ Example with Deepgram options:
 
 ## Notes
 
-- Authentication follows the standard provider auth order; `DEEPGRAM_API_KEY` is the simplest path.
-- Override endpoints or headers with `tools.media.audio.baseUrl` and `tools.media.audio.headers` when using a proxy.
-- Output follows the same audio rules as other providers (size caps, timeouts, transcript injection).
+- Authentication follows the standard provider auth order; `DEEPGRAM_API_KEY` is the
+  simplest path.
+- Override endpoints or headers with `tools.media.audio.baseUrl` and
+  `tools.media.audio.headers` when using a proxy.
+- Output follows the same audio rules as other providers (size caps, timeouts, transcript
+  injection).

@@ -118,7 +118,9 @@ These examples demonstrate workflows using OpenProse's full feature set.
 
 ## The Architect By Simulation Pattern
 
-The architect-by-simulation pattern is for designing systems by "implementing" them through reasoning. Instead of writing code, each phase produces specification documents that the next phase builds upon.
+The architect-by-simulation pattern is for designing systems by "implementing" them
+through reasoning. Instead of writing code, each phase produces specification documents
+that the next phase builds upon.
 
 **Key principles:**
 
@@ -162,7 +164,9 @@ See example 39 for the full implementation.
 
 ## The Captain's Chair Pattern
 
-The captain's chair is an orchestration paradigm where a coordinating agent (the "captain") dispatches specialized subagents for all execution. The captain never writes code directly—only plans, coordinates, and validates.
+The captain's chair is an orchestration paradigm where a coordinating agent (the
+"captain") dispatches specialized subagents for all execution. The captain never writes
+code directly—only plans, coordinates, and validates.
 
 **Key principles:**
 
@@ -207,7 +211,9 @@ See examples 29-31 for full implementations.
 
 ## The Recursive Language Model Pattern
 
-Recursive Language Models (RLMs) are a paradigm for handling inputs far beyond context limits. The key insight: treat the prompt as an external environment that the LLM can symbolically interact with, chunk, and recursively process.
+Recursive Language Models (RLMs) are a paradigm for handling inputs far beyond context
+limits. The key insight: treat the prompt as an external environment that the LLM can
+symbolically interact with, chunk, and recursively process.
 
 **Why RLMs matter:**
 
@@ -243,8 +249,10 @@ block process(data, depth):
 
 **OpenProse advantages for RLMs:**
 
-- **Scope isolation**: Each recursive call gets its own `execution_id`, preventing variable collisions
-- **Parallel fan-out**: `parallel for` enables concurrent processing at each recursion level
+- **Scope isolation**: Each recursive call gets its own `execution_id`, preventing
+  variable collisions
+- **Parallel fan-out**: `parallel for` enables concurrent processing at each recursion
+  level
 - **State persistence**: SQLite/PostgreSQL backends track the full call tree
 - **Natural aggregation**: Pipelines (`| reduce`) and explicit context passing
 

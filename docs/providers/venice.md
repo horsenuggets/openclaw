@@ -8,9 +8,12 @@ title: "Venice AI"
 
 # Venice AI (Venice highlight)
 
-**Venice** is our highlight Venice setup for privacy-first inference with optional anonymized access to proprietary models.
+**Venice** is our highlight Venice setup for privacy-first inference with optional
+anonymized access to proprietary models.
 
-Venice AI provides privacy-focused AI inference with support for uncensored models and access to major proprietary models through their anonymized proxy. All inference is private by default—no training on your data, no logging.
+Venice AI provides privacy-focused AI inference with support for uncensored models and
+access to major proprietary models through their anonymized proxy. All inference is
+private by default—no training on your data, no logging.
 
 ## Why Venice in OpenClaw
 
@@ -30,7 +33,8 @@ Venice offers two privacy levels — understanding this is key to choosing your 
 
 ## Features
 
-- **Privacy-focused**: Choose between "private" (fully private) and "anonymized" (proxied) modes
+- **Privacy-focused**: Choose between "private" (fully private) and "anonymized" (proxied)
+  modes
 - **Uncensored models**: Access to models without content restrictions
 - **Major model access**: Use Claude, GPT-5.2, Gemini, Grok via Venice's anonymized proxy
 - **OpenAI-compatible API**: Standard `/v1` endpoints for easy integration
@@ -87,9 +91,11 @@ openclaw chat --model venice/llama-3.3-70b "Hello, are you working?"
 After setup, OpenClaw shows all available Venice models. Pick based on your needs:
 
 - **Default (our pick)**: `venice/llama-3.3-70b` for private, balanced performance.
-- **Best overall quality**: `venice/claude-opus-45` for hard jobs (Opus remains the strongest).
+- **Best overall quality**: `venice/claude-opus-45` for hard jobs (Opus remains the
+  strongest).
 - **Privacy**: Choose "private" models for fully private inference.
-- **Capability**: Choose "anonymized" models to access Claude, GPT, Gemini via Venice's proxy.
+- **Capability**: Choose "anonymized" models to access Claude, GPT, Gemini via Venice's
+  proxy.
 
 Change your default model anytime:
 
@@ -162,9 +168,11 @@ openclaw models list | grep venice
 
 ## Model Discovery
 
-OpenClaw automatically discovers models from the Venice API when `VENICE_API_KEY` is set. If the API is unreachable, it falls back to a static catalog.
+OpenClaw automatically discovers models from the Venice API when `VENICE_API_KEY` is set.
+If the API is unreachable, it falls back to a static catalog.
 
-The `/models` endpoint is public (no auth needed for listing), but inference requires a valid API key.
+The `/models` endpoint is public (no auth needed for listing), but inference requires a
+valid API key.
 
 ## Streaming & Tool Support
 
@@ -177,7 +185,8 @@ The `/models` endpoint is public (no auth needed for listing), but inference req
 
 ## Pricing
 
-Venice uses a credit-based system. Check [venice.ai/pricing](https://venice.ai/pricing) for current rates:
+Venice uses a credit-based system. Check [venice.ai/pricing](https://venice.ai/pricing)
+for current rates:
 
 - **Private models**: Generally lower cost
 - **Anonymized models**: Similar to direct API pricing + small Venice fee
@@ -223,11 +232,13 @@ Ensure the key starts with `vapi_`.
 
 ### Model not available
 
-The Venice model catalog updates dynamically. Run `openclaw models list` to see currently available models. Some models may be temporarily offline.
+The Venice model catalog updates dynamically. Run `openclaw models list` to see currently
+available models. Some models may be temporarily offline.
 
 ### Connection issues
 
-Venice API is at `https://api.venice.ai/api/v1`. Ensure your network allows HTTPS connections.
+Venice API is at `https://api.venice.ai/api/v1`. Ensure your network allows HTTPS
+connections.
 
 ## Config file example
 

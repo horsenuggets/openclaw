@@ -11,7 +11,8 @@ see-also:
 
 # OpenProse Antipatterns
 
-This document catalogs patterns that lead to brittle, expensive, slow, or unmaintainable programs. Each antipattern includes recognition criteria and remediation guidance.
+This document catalogs patterns that lead to brittle, expensive, slow, or unmaintainable
+programs. Each antipattern includes recognition criteria and remediation guidance.
 
 ---
 
@@ -19,7 +20,8 @@ This document catalogs patterns that lead to brittle, expensive, slow, or unmain
 
 #### god-session
 
-A single session that tries to do everything. God sessions are hard to debug, impossible to parallelize, and produce inconsistent results.
+A single session that tries to do everything. God sessions are hard to debug, impossible
+to parallelize, and produce inconsistent results.
 
 ```prose
 # Bad: One session doing too much
@@ -35,7 +37,8 @@ session """
 """
 ```
 
-**Why it's bad**: The session has no clear completion criteria. It mixes concerns that could be parallelized. Failure anywhere fails everything.
+**Why it's bad**: The session has no clear completion criteria. It mixes concerns that
+could be parallelized. Failure anywhere fails everything.
 
 **Fix**: Decompose into focused sessions:
 
@@ -54,7 +57,8 @@ session "Create remediation plan"
 
 #### sequential-when-parallel
 
-Running independent operations sequentially when they could run concurrently. Wastes wall-clock time.
+Running independent operations sequentially when they could run concurrently. Wastes
+wall-clock time.
 
 ```prose
 # Bad: Sequential independent work
@@ -66,7 +70,8 @@ session "Synthesize"
   context: [market, tech, competition]
 ```
 
-**Why it's bad**: Total time is sum of all research times. Each session waits for the previous one unnecessarily.
+**Why it's bad**: Total time is sum of all research times. Each session waits for the
+previous one unnecessarily.
 
 **Fix**: Parallelize independent work:
 
@@ -83,7 +88,8 @@ session "Synthesize"
 
 #### spaghetti-context
 
-Context passed haphazardly without clear data flow. Makes programs hard to understand and modify.
+Context passed haphazardly without clear data flow. Makes programs hard to understand and
+modify.
 
 ```prose
 # Bad: Unclear what context is actually used
@@ -100,7 +106,8 @@ let f = session "Step F"
   context: [a, b, c, d, e]  # Everything?
 ```
 
-**Why it's bad**: Unclear which sessions depend on which outputs. Hard to parallelize or refactor.
+**Why it's bad**: Unclear which sessions depend on which outputs. Hard to parallelize or
+refactor.
 
 **Fix**: Minimize context to actual dependencies:
 
@@ -117,7 +124,8 @@ let report = session "Report"
 
 #### parallel-then-synthesize
 
-Spawning parallel agents for related analytical work, then synthesizing, when a single focused agent could do the entire job more efficiently.
+Spawning parallel agents for related analytical work, then synthesizing, when a single
+focused agent could do the entire job more efficiently.
 
 ```prose
 # Antipattern: Parallel investigation + synthesis
@@ -131,7 +139,9 @@ synthesis = session "Synthesize all findings"
 # 4 LLM calls, coordination overhead, fragmented context
 ```
 
-**Why it's bad**: For related analysis that feeds into one conclusion, the coordination overhead and context fragmentation often outweigh parallelism benefits. Each parallel agent sees only part of the picture.
+**Why it's bad**: For related analysis that feeds into one conclusion, the coordination
+overhead and context fragmentation often outweigh parallelism benefits. Each parallel
+agent sees only part of the picture.
 
 **Fix**: Use a single focused agent with multi-step instructions:
 
@@ -146,11 +156,14 @@ diagnosis = session "Investigate the error"
 # 1 LLM call, full context, no coordination
 ```
 
-**When parallel IS right**: When analyses are truly independent (security vs performance), when you want diverse perspectives that shouldn't influence each other, or when the work is so large it genuinely benefits from division.
+**When parallel IS right**: When analyses are truly independent (security vs performance),
+when you want diverse perspectives that shouldn't influence each other, or when the work
+is so large it genuinely benefits from division.
 
 #### copy-paste-workflows
 
-Duplicating session sequences instead of using blocks. Leads to inconsistent changes and maintenance burden.
+Duplicating session sequences instead of using blocks. Leads to inconsistent changes and
+maintenance burden.
 
 ```prose
 # Bad: Duplicated workflow
@@ -167,7 +180,8 @@ session "Performance review of module C"
 session "Synthesize reviews of module C"
 ```
 
-**Why it's bad**: If the workflow needs to change, you must change it everywhere. Easy to miss one.
+**Why it's bad**: If the workflow needs to change, you must change it everywhere. Easy to
+miss one.
 
 **Fix**: Extract into a block:
 
@@ -199,7 +213,8 @@ loop until **the code is perfect**:
   session "Improve the code"
 ```
 
-**Why it's bad**: "Perfect" may never be achieved. The program could run indefinitely, consuming resources.
+**Why it's bad**: "Perfect" may never be achieved. The program could run indefinitely,
+consuming resources.
 
 **Fix**: Always specify `max:`:
 
@@ -221,7 +236,8 @@ session "Store results in database"
 session "Send notification"
 ```
 
-**Why it's bad**: If the API fails, subsequent sessions receive no valid input. Silent corruption.
+**Why it's bad**: If the API fails, subsequent sessions receive no valid input. Silent
+corruption.
 
 **Fix**: Handle failures explicitly:
 
@@ -240,7 +256,8 @@ catch as err:
 
 #### ignored-errors
 
-Using `on-fail: "ignore"` when failures actually matter. Masks problems that should surface.
+Using `on-fail: "ignore"` when failures actually matter. Masks problems that should
+surface.
 
 ```prose
 # Bad: Ignoring failures that matter
@@ -349,7 +366,8 @@ for email in emails:
     prompt: "Classify: {email}"
 ```
 
-**Why it's bad**: Opus costs significantly more than haiku. Simple tasks don't benefit from advanced reasoning.
+**Why it's bad**: Opus costs significantly more than haiku. Simple tasks don't benefit
+from advanced reasoning.
 
 **Fix**: Match model to task complexity:
 
@@ -374,7 +392,8 @@ session "Fix the typo in the README"
   context: [full_codebase, all_docs, history]  # Massive overkill
 ```
 
-**Why it's bad**: Large contexts slow processing, increase costs, and can confuse the model with irrelevant information.
+**Why it's bad**: Large contexts slow processing, increase costs, and can confuse the
+model with irrelevant information.
 
 **Fix**: Pass minimal relevant context:
 
@@ -397,7 +416,8 @@ for item in items:
   session "Describe {item}"
 ```
 
-**Why it's bad**: Three sessions when one could handle all items. Session overhead multiplied.
+**Why it's bad**: Three sessions when one could handle all items. Session overhead
+multiplied.
 
 **Fix**: Batch when possible:
 
@@ -497,7 +517,8 @@ parallel for item in large_collection:  # 100 items
   session "Process {item}"
 ```
 
-**Why it's bad**: May overwhelm the system. Coordination overhead can exceed parallelism benefits.
+**Why it's bad**: May overwhelm the system. Coordination overhead can exceed parallelism
+benefits.
 
 **Fix**: Batch or limit concurrency:
 
@@ -520,7 +541,8 @@ parallel:
   c = session "Add 4 + 4"
 ```
 
-**Why it's bad**: Coordination overhead exceeds task time. Sequential would be simpler and possibly faster.
+**Why it's bad**: Coordination overhead exceeds task time. Sequential would be simpler and
+possibly faster.
 
 **Fix**: Keep it simple:
 
@@ -674,7 +696,8 @@ agent super-agent:
   """
 ```
 
-**Why it's bad**: No focus means mediocre results across the board. Can't optimize model choice.
+**Why it's bad**: No focus means mediocre results across the board. Can't optimize model
+choice.
 
 **Fix**: Specialized agents:
 
@@ -707,7 +730,8 @@ loop until **the code has zero bugs**:
   session "Find and fix bugs"
 ```
 
-**Why it's bad**: Zero bugs is unachievable. Loop runs until max (if specified) or forever.
+**Why it's bad**: Zero bugs is unachievable. Loop runs until max (if specified) or
+forever.
 
 **Fix**: Use achievable conditions:
 
@@ -760,7 +784,8 @@ parallel:
     context: processed
 ```
 
-**Why it's bad**: Despite being in parallel, these must run sequentially due to dependencies.
+**Why it's bad**: Despite being in parallel, these must run sequentially due to
+dependencies.
 
 **Fix**: Be honest about dependencies:
 
@@ -810,7 +835,8 @@ input "Diagnosis complete. Proceed to triage?"  # Always yes
 input "Tests pass. Deploy?"  # Almost always yes
 ```
 
-**Why it's bad**: Each checkpoint is a round-trip waiting for user input. If the answer is predictable 90% of the time, you're adding latency for no value.
+**Why it's bad**: Each checkpoint is a round-trip waiting for user input. If the answer is
+predictable 90% of the time, you're adding latency for no value.
 
 **Fix**: Auto-proceed for obvious cases, only prompt when genuinely ambiguous:
 
@@ -829,7 +855,9 @@ if observation.blocking_error:
     do deploy(...)
 ```
 
-**When checkpoints ARE right**: Irreversible actions (production deployments to critical systems), expensive operations (long-running jobs), or genuine decision points where the user's preference isn't predictable.
+**When checkpoints ARE right**: Irreversible actions (production deployments to critical
+systems), expensive operations (long-running jobs), or genuine decision points where the
+user's preference isn't predictable.
 
 #### fixed-observation-window
 
@@ -843,7 +871,8 @@ loop 30 times (wait: 2s each):  # Always 60 seconds
 # Runs all 30 iterations even if blocking error detected on iteration 1
 ```
 
-**Why it's bad**: Wastes time when the answer is already known. If the observer detected a fatal error at +5 seconds, why wait another 55 seconds?
+**Why it's bad**: Wastes time when the answer is already known. If the observer detected a
+fatal error at +5 seconds, why wait another 55 seconds?
 
 **Fix**: Use signal-driven exit conditions:
 

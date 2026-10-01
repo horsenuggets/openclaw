@@ -16,8 +16,8 @@ OpenClaw ships three update channels:
 - **beta**: npm dist-tag `beta` (builds under test).
 - **dev**: moving head of `main` (git). npm dist-tag: `dev` (when published).
 
-We ship builds to **beta**, test them, then **promote a vetted build to `latest`**
-without changing the version number — dist-tags are the source of truth for npm installs.
+We ship builds to **beta**, test them, then **promote a vetted build to `latest`** without
+changing the version number — dist-tags are the source of truth for npm installs.
 
 ## Switching channels
 
@@ -42,14 +42,15 @@ openclaw update --channel dev
 
 This updates via the corresponding npm dist-tag (`latest`, `beta`, `dev`).
 
-When you **explicitly** switch channels with `--channel`, OpenClaw also aligns
-the install method:
+When you **explicitly** switch channels with `--channel`, OpenClaw also aligns the install
+method:
 
 - `dev` ensures a git checkout (default `~/openclaw`, override with `OPENCLAW_GIT_DIR`),
   updates it, and installs the global CLI from that checkout.
 - `stable`/`beta` installs from npm using the matching dist-tag.
 
-Tip: if you want stable + dev in parallel, keep two clones and point your gateway at the stable one.
+Tip: if you want stable + dev in parallel, keep two clones and point your gateway at the
+stable one.
 
 ## Plugins and channels
 

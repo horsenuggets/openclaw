@@ -10,8 +10,8 @@ title: "acp"
 
 Run the ACP (Agent Client Protocol) bridge that talks to a OpenClaw Gateway.
 
-This command speaks ACP over stdio for IDEs and forwards prompts to the Gateway
-over WebSocket. It keeps ACP sessions mapped to Gateway session keys.
+This command speaks ACP over stdio for IDEs and forwards prompts to the Gateway over
+WebSocket. It keeps ACP sessions mapped to Gateway session keys.
 
 ## Usage
 
@@ -33,8 +33,8 @@ openclaw acp --session agent:main:main --reset-session
 
 ## ACP client (debug)
 
-Use the built-in ACP client to sanity-check the bridge without an IDE.
-It spawns the ACP bridge and lets you type prompts interactively.
+Use the built-in ACP client to sanity-check the bridge without an IDE. It spawns the ACP
+bridge and lets you type prompts interactively.
 
 ```bash
 openclaw acp client
@@ -48,8 +48,8 @@ openclaw acp client --server "node" --server-args openclaw.mjs acp --url ws://12
 
 ## How to use this
 
-Use ACP when an IDE (or other client) speaks Agent Client Protocol and you want
-it to drive a OpenClaw Gateway session.
+Use ACP when an IDE (or other client) speaks Agent Client Protocol and you want it to
+drive a OpenClaw Gateway session.
 
 1. Ensure the Gateway is running (local or remote).
 2. Configure the Gateway target (config or flags).
@@ -80,9 +80,8 @@ openclaw acp --session agent:design:main
 openclaw acp --session agent:qa:bug-123
 ```
 
-Each ACP session maps to a single Gateway session key. One agent can have many
-sessions; ACP defaults to an isolated `acp:<uuid>` session unless you override
-the key or label.
+Each ACP session maps to a single Gateway session key. One agent can have many sessions;
+ACP defaults to an isolated `acp:<uuid>` session unless you override the key or label.
 
 ## Zed editor setup
 
@@ -128,8 +127,8 @@ In Zed, open the Agent panel and select “OpenClaw ACP” to start a thread.
 
 ## Session mapping
 
-By default, ACP sessions get an isolated Gateway session key with an `acp:` prefix.
-To reuse a known session, pass a session key or label:
+By default, ACP sessions get an isolated Gateway session key with an `acp:` prefix. To
+reuse a known session, pass a session key or label:
 
 - `--session <key>`: use a specific Gateway session key.
 - `--session-label <label>`: resolve an existing session by label.

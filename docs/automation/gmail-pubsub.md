@@ -12,12 +12,14 @@ Goal: Gmail watch -> Pub/Sub push -> `gog gmail watch serve` -> OpenClaw webhook
 
 ## Prereqs
 
-- `gcloud` installed and logged in ([install guide](https://docs.cloud.google.com/sdk/docs/install-sdk)).
-- `gog` (gogcli) installed and authorized for the Gmail account ([gogcli.sh](https://gogcli.sh/)).
+- `gcloud` installed and logged in
+  ([install guide](https://docs.cloud.google.com/sdk/docs/install-sdk)).
+- `gog` (gogcli) installed and authorized for the Gmail account
+  ([gogcli.sh](https://gogcli.sh/)).
 - OpenClaw hooks enabled (see [Webhooks](/automation/webhook)).
-- `tailscale` logged in ([tailscale.com](https://tailscale.com/)). Supported setup uses Tailscale Funnel for the public HTTPS endpoint.
-  Other tunnel services can work, but are DIY/unsupported and require manual wiring.
-  Right now, Tailscale is what we support.
+- `tailscale` logged in ([tailscale.com](https://tailscale.com/)). Supported setup uses
+  Tailscale Funnel for the public HTTPS endpoint. Other tunnel services can work, but are
+  DIY/unsupported and require manual wiring. Right now, Tailscale is what we support.
 
 Example hook config (enable Gmail preset mapping):
 
@@ -32,8 +34,8 @@ Example hook config (enable Gmail preset mapping):
 }
 ```
 
-To deliver the Gmail summary to a chat surface, override the preset with a mapping
-that sets `deliver` + optional `channel`/`to`:
+To deliver the Gmail summary to a chat surface, override the preset with a mapping that
+sets `deliver` + optional `channel`/`to`:
 
 ```json5
 {
@@ -59,11 +61,11 @@ that sets `deliver` + optional `channel`/`to`:
 }
 ```
 
-If you want a fixed channel, set `channel` + `to`. Otherwise `channel: "last"`
-uses the last delivery route (falls back to WhatsApp).
+If you want a fixed channel, set `channel` + `to`. Otherwise `channel: "last"` uses the
+last delivery route (falls back to WhatsApp).
 
-To force a cheaper model for Gmail runs, set `model` in the mapping
-(`provider/model` or alias). If you enforce `agents.defaults.models`, include it there.
+To force a cheaper model for Gmail runs, set `model` in the mapping (`provider/model` or
+alias). If you enforce `agents.defaults.models`, include it there.
 
 To set a default model and thinking level specifically for Gmail hooks, add
 `hooks.gmail.model` / `hooks.gmail.thinking` in your config:
@@ -82,10 +84,11 @@ To set a default model and thinking level specifically for Gmail hooks, add
 Notes:
 
 - Per-hook `model`/`thinking` in the mapping still overrides these defaults.
-- Fallback order: `hooks.gmail.model` → `agents.defaults.model.fallbacks` → primary (auth/rate-limit/timeouts).
+- Fallback order: `hooks.gmail.model` → `agents.defaults.model.fallbacks` → primary
+  (auth/rate-limit/timeouts).
 - If `agents.defaults.models` is set, the Gmail model must be in the allowlist.
-- Gmail hook content is wrapped with external-content safety boundaries by default.
-  To disable (dangerous), set `hooks.gmail.allowUnsafeExternalContent: true`.
+- Gmail hook content is wrapped with external-content safety boundaries by default. To
+  disable (dangerous), set `hooks.gmail.allowUnsafeExternalContent: true`.
 
 To customize payload handling further, add `hooks.mappings` or a JS/TS transform module
 under `hooks.transformsDir` (see [Webhooks](/automation/webhook)).
@@ -106,17 +109,16 @@ Defaults:
 - Enables the Gmail hook preset (`hooks.presets: ["gmail"]`).
 
 Path note: when `tailscale.mode` is enabled, OpenClaw automatically sets
-`hooks.gmail.serve.path` to `/` and keeps the public path at
-`hooks.gmail.tailscale.path` (default `/gmail-pubsub`) because Tailscale
-strips the set-path prefix before proxying.
-If you need the backend to receive the prefixed path, set
-`hooks.gmail.tailscale.target` (or `--tailscale-target`) to a full URL like
-`http://127.0.0.1:8788/gmail-pubsub` and match `hooks.gmail.serve.path`.
+`hooks.gmail.serve.path` to `/` and keeps the public path at `hooks.gmail.tailscale.path`
+(default `/gmail-pubsub`) because Tailscale strips the set-path prefix before proxying. If
+you need the backend to receive the prefixed path, set `hooks.gmail.tailscale.target` (or
+`--tailscale-target`) to a full URL like `http://127.0.0.1:8788/gmail-pubsub` and match
+`hooks.gmail.serve.path`.
 
 Want a custom endpoint? Use `--push-endpoint <url>` or `--tailscale off`.
 
-Platform note: on macOS the wizard installs `gcloud`, `gogcli`, and `tailscale`
-via Homebrew; on Linux install them manually first.
+Platform note: on macOS the wizard installs `gcloud`, `gogcli`, and `tailscale` via
+Homebrew; on Linux install them manually first.
 
 Gateway auto-start (recommended):
 
@@ -141,7 +143,8 @@ gcloud auth login
 gcloud config set project <project-id>
 ```
 
-Note: Gmail watch requires the Pub/Sub topic to live in the same project as the OAuth client.
+Note: Gmail watch requires the Pub/Sub topic to live in the same project as the OAuth
+client.
 
 2. Enable APIs:
 

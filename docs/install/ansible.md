@@ -1,5 +1,7 @@
 ---
-summary: "Automated, hardened OpenClaw installation with Ansible, Tailscale VPN, and firewall isolation"
+summary:
+  "Automated, hardened OpenClaw installation with Ansible, Tailscale VPN, and firewall
+  isolation"
 read_when:
   - You want automated server deployment with security hardening
   - You need firewall-isolated setup with VPN access
@@ -9,7 +11,9 @@ title: "Ansible"
 
 # Ansible Installation
 
-The recommended way to deploy OpenClaw to production servers is via **[openclaw-ansible](https://github.com/openclaw/openclaw-ansible)** — an automated installer with security-first architecture.
+The recommended way to deploy OpenClaw to production servers is via
+**[openclaw-ansible](https://github.com/openclaw/openclaw-ansible)** — an automated
+installer with security-first architecture.
 
 ## Quick Start
 
@@ -19,9 +23,11 @@ One-command install:
 curl -fsSL https://raw.githubusercontent.com/openclaw/openclaw-ansible/main/install.sh | bash
 ```
 
-> **📦 Full guide: [github.com/openclaw/openclaw-ansible](https://github.com/openclaw/openclaw-ansible)**
+> **📦 Full guide:
+> [github.com/openclaw/openclaw-ansible](https://github.com/openclaw/openclaw-ansible)**
 >
-> The openclaw-ansible repo is the source of truth for Ansible deployment. This page is a quick overview.
+> The openclaw-ansible repo is the source of truth for Ansible deployment. This page is a
+> quick overview.
 
 ## What You Get
 
@@ -50,7 +56,8 @@ The Ansible playbook installs and configures:
 5. **OpenClaw** (host-based, not containerized)
 6. **Systemd service** (auto-start with security hardening)
 
-Note: The gateway runs **directly on the host** (not in Docker), but agent sandboxes use Docker for isolation. See [Sandboxing](/gateway/sandboxing) for details.
+Note: The gateway runs **directly on the host** (not in Docker), but agent sandboxes use
+Docker for isolation. See [Sandboxing](/gateway/sandboxing) for details.
 
 ## Post-Install Setup
 
@@ -101,11 +108,13 @@ Test external attack surface:
 nmap -p- YOUR_SERVER_IP
 ```
 
-Should show **only port 22** (SSH) open. All other services (gateway, Docker) are locked down.
+Should show **only port 22** (SSH) open. All other services (gateway, Docker) are locked
+down.
 
 ### Docker Availability
 
-Docker is installed for **agent sandboxes** (isolated tool execution), not for running the gateway itself. The gateway binds to localhost only and is accessible via Tailscale VPN.
+Docker is installed for **agent sandboxes** (isolated tool execution), not for running the
+gateway itself. The gateway binds to localhost only and is accessible via Tailscale VPN.
 
 See [Multi-Agent Sandbox & Tools](/multi-agent-sandbox-tools) for sandbox configuration.
 
@@ -133,7 +142,8 @@ ansible-galaxy collection install -r requirements.yml
 
 ## Updating OpenClaw
 
-The Ansible installer sets up OpenClaw for manual updates. See [Updating](/install/updating) for the standard update flow.
+The Ansible installer sets up OpenClaw for manual updates. See
+[Updating](/install/updating) for the standard update flow.
 
 To re-run the Ansible playbook (e.g., for configuration changes):
 

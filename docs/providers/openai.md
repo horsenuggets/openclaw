@@ -8,13 +8,14 @@ title: "OpenAI"
 
 # OpenAI
 
-OpenAI provides developer APIs for GPT models. Codex supports **ChatGPT sign-in** for subscription
-access or **API key** sign-in for usage-based access. Codex cloud requires ChatGPT sign-in.
+OpenAI provides developer APIs for GPT models. Codex supports **ChatGPT sign-in** for
+subscription access or **API key** sign-in for usage-based access. Codex cloud requires
+ChatGPT sign-in.
 
 ## Option A: OpenAI API key (OpenAI Platform)
 
-**Best for:** direct API access and usage-based billing.
-Get your API key from the OpenAI dashboard.
+**Best for:** direct API access and usage-based billing. Get your API key from the OpenAI
+dashboard.
 
 ### CLI setup
 
@@ -35,8 +36,8 @@ openclaw onboard --openai-api-key "$OPENAI_API_KEY"
 
 ## Option B: OpenAI Code (Codex) subscription
 
-**Best for:** using ChatGPT/Codex subscription access instead of an API key.
-Codex cloud requires ChatGPT sign-in, while the Codex CLI supports ChatGPT or API key sign-in.
+**Best for:** using ChatGPT/Codex subscription access instead of an API key. Codex cloud
+requires ChatGPT sign-in, while the Codex CLI supports ChatGPT or API key sign-in.
 
 ### CLI setup
 

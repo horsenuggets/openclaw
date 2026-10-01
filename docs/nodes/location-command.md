@@ -1,5 +1,6 @@
 ---
-summary: "Location command for nodes (location.get), permission modes, and background behavior"
+summary:
+  "Location command for nodes (location.get), permission modes, and background behavior"
 read_when:
   - Adding location node support or permissions UI
   - Designing background location + push flows
@@ -17,10 +18,13 @@ title: "Location Command"
 
 ## Why a selector (not just a switch)
 
-OS permissions are multi-level. We can expose a selector in-app, but the OS still decides the actual grant.
+OS permissions are multi-level. We can expose a selector in-app, but the OS still decides
+the actual grant.
 
-- iOS/macOS: user can choose **While Using** or **Always** in system prompts/Settings. App can request upgrade, but OS may require Settings.
-- Android: background location is a separate permission; on Android 10+ it often requires a Settings flow.
+- iOS/macOS: user can choose **While Using** or **Always** in system prompts/Settings. App
+  can request upgrade, but OS may require Settings.
+- Android: background location is a separate permission; on Android 10+ it often requires
+  a Settings flow.
 - Precise location is a separate grant (iOS 14+ “Precise”, Android “fine” vs “coarse”).
 
 Selector in UI drives our requested mode; actual grant lives in OS settings.
@@ -35,7 +39,8 @@ Per node device:
 UI behavior:
 
 - Selecting `whileUsing` requests foreground permission.
-- Selecting `always` first ensures `whileUsing`, then requests background (or sends user to Settings if required).
+- Selecting `always` first ensures `whileUsing`, then requests background (or sends user
+  to Settings if required).
 - If OS denies requested level, revert to the highest granted level and show status.
 
 ## Permissions mapping (node.permissions)
@@ -86,7 +91,8 @@ Goal: model can request location even when node is backgrounded, but only when:
 
 - User selected **Always**.
 - OS grants background location.
-- App is allowed to run in background for location (iOS background mode / Android foreground service or special allowance).
+- App is allowed to run in background for location (iOS background mode / Android
+  foreground service or special allowance).
 
 Push-triggered flow (future):
 
@@ -96,7 +102,8 @@ Push-triggered flow (future):
 
 Notes:
 
-- iOS: Always permission + background location mode required. Silent push may be throttled; expect intermittent failures.
+- iOS: Always permission + background location mode required. Silent push may be
+  throttled; expect intermittent failures.
 - Android: background location may require a foreground service; otherwise, expect denial.
 
 ## Model/tooling integration

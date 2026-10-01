@@ -1,5 +1,6 @@
 ---
-summary: "CLI onboarding wizard: guided setup for gateway, workspace, channels, and skills"
+summary:
+  "CLI onboarding wizard: guided setup for gateway, workspace, channels, and skills"
 read_when:
   - Running or configuring the onboarding wizard
   - Setting up a new machine
@@ -9,10 +10,9 @@ sidebarTitle: "Onboarding: CLI"
 
 # Onboarding Wizard (CLI)
 
-The onboarding wizard is the **recommended** way to set up OpenClaw on macOS,
-Linux, or Windows (via WSL2; strongly recommended).
-It configures a local Gateway or a remote Gateway connection, plus channels, skills,
-and workspace defaults in one guided flow.
+The onboarding wizard is the **recommended** way to set up OpenClaw on macOS, Linux, or
+Windows (via WSL2; strongly recommended). It configures a local Gateway or a remote
+Gateway connection, plus channels, skills, and workspace defaults in one guided flow.
 
 ```bash
 openclaw onboard
@@ -62,10 +62,13 @@ The wizard starts with **QuickStart** (defaults) vs **Advanced** (full control).
 
 **Local mode (default)** walks you through these steps:
 
-1. **Model/Auth** — Anthropic API key (recommended), OAuth, OpenAI, or other providers. Pick a default model.
-2. **Workspace** — Location for agent files (default `~/.openclaw/workspace`). Seeds bootstrap files.
+1. **Model/Auth** — Anthropic API key (recommended), OAuth, OpenAI, or other providers.
+   Pick a default model.
+2. **Workspace** — Location for agent files (default `~/.openclaw/workspace`). Seeds
+   bootstrap files.
 3. **Gateway** — Port, bind address, auth mode, Tailscale exposure.
-4. **Channels** — WhatsApp, Telegram, Discord, Google Chat, Mattermost, Signal, BlueBubbles, or iMessage.
+4. **Channels** — WhatsApp, Telegram, Discord, Google Chat, Mattermost, Signal,
+   BlueBubbles, or iMessage.
 5. **Daemon** — Installs a LaunchAgent (macOS) or systemd user unit (Linux/WSL2).
 6. **Health check** — Starts the Gateway and verifies it's running.
 7. **Skills** — Installs recommended skills and optional dependencies.
@@ -75,8 +78,8 @@ Re-running the wizard does **not** wipe anything unless you explicitly choose **
 If the config is invalid or contains legacy keys, the wizard asks you to run `openclaw doctor` first.
 </Note>
 
-**Remote mode** only configures the local client to connect to a Gateway elsewhere.
-It does **not** install or change anything on the remote host.
+**Remote mode** only configures the local client to connect to a Gateway elsewhere. It
+does **not** install or change anything on the remote host.
 
 ## Add another agent
 
@@ -97,8 +100,8 @@ Notes:
 
 ## Full reference
 
-For detailed step-by-step breakdowns, non-interactive scripting, Signal setup,
-RPC API, and a full list of config fields the wizard writes, see the
+For detailed step-by-step breakdowns, non-interactive scripting, Signal setup, RPC API,
+and a full list of config fields the wizard writes, see the
 [Wizard Reference](/reference/wizard).
 
 ## Related docs

@@ -11,7 +11,8 @@ title: "Raspberry Pi"
 
 ## Goal
 
-Run a persistent, always-on OpenClaw Gateway on a Raspberry Pi for **~$35-80** one-time cost (no monthly fees).
+Run a persistent, always-on OpenClaw Gateway on a Raspberry Pi for **~$35-80** one-time
+cost (no monthly fees).
 
 Perfect for:
 
@@ -125,7 +126,8 @@ npm run build
 npm link
 ```
 
-The hackable install gives you direct access to logs and code — useful for debugging ARM-specific issues.
+The hackable install gives you direct access to logs and code — useful for debugging
+ARM-specific issues.
 
 ## 7) Run Onboarding
 
@@ -190,7 +192,9 @@ SD cards are slow and wear out. A USB SSD dramatically improves performance:
 lsblk
 ```
 
-See [Pi USB boot guide](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#usb-mass-storage-boot) for setup.
+See
+[Pi USB boot guide](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#usb-mass-storage-boot)
+for setup.
 
 ### Reduce Memory Usage
 
@@ -261,7 +265,8 @@ Since the Pi is just the Gateway (models run in the cloud), use API-based models
 }
 ```
 
-**Don't try to run local LLMs on a Pi** — even small models are too slow. Let Claude/GPT do the heavy lifting.
+**Don't try to run local LLMs on a Pi** — even small models are too slow. Let Claude/GPT
+do the heavy lifting.
 
 ---
 

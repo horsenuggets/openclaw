@@ -8,14 +8,16 @@ metadata:
       {
         "emoji": "📝",
         "events": ["command"],
-        "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
+        "install":
+          [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OpenClaw" }],
       },
   }
 ---
 
 # Command Logger Hook
 
-Logs all command events (`/new`, `/reset`, `/stop`, etc.) to a centralized audit log file for debugging and monitoring purposes.
+Logs all command events (`/new`, `/reset`, `/stop`, etc.) to a centralized audit log file
+for debugging and monitoring purposes.
 
 ## What It Does
 
@@ -89,8 +91,7 @@ The hook does not automatically rotate logs. To manage log size, you can:
    mv ~/.openclaw/logs/commands.log ~/.openclaw/logs/commands.log.old
    ```
 
-2. **Use logrotate** (Linux):
-   Create `/etc/logrotate.d/openclaw`:
+2. **Use logrotate** (Linux): Create `/etc/logrotate.d/openclaw`:
    ```
    /home/username/.openclaw/logs/commands.log {
        weekly

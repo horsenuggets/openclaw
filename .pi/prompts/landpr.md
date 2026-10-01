@@ -8,8 +8,8 @@ Input
   - If missing: use the most recent PR mentioned in the conversation.
   - If ambiguous: ask.
 
-Do (end-to-end)
-Goal: PR must end in GitHub state = MERGED (never CLOSED). Use `gh pr merge` with `--rebase` or `--squash`.
+Do (end-to-end) Goal: PR must end in GitHub state = MERGED (never CLOSED). Use
+`gh pr merge` with `--rebase` or `--squash`.
 
 1. Repo clean: `git status`.
 2. Identify PR meta (author + head branch):

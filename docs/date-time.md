@@ -8,8 +8,9 @@ title: "Date and Time"
 
 # Date & Time
 
-OpenClaw defaults to **host-local time for transport timestamps** and **user timezone only in the system prompt**.
-Provider timestamps are preserved so tools keep their native semantics (current time is available via `session_status`).
+OpenClaw defaults to **host-local time for transport timestamps** and **user timezone only
+in the system prompt**. Provider timestamps are preserved so tools keep their native
+semantics (current time is available via `session_status`).
 
 ## Message envelopes (local by default)
 
@@ -37,7 +38,8 @@ You can override this behavior:
 
 - `envelopeTimezone: "utc"` uses UTC.
 - `envelopeTimezone: "local"` uses the host timezone.
-- `envelopeTimezone: "user"` uses `agents.defaults.userTimezone` (falls back to host timezone).
+- `envelopeTimezone: "user"` uses `agents.defaults.userTimezone` (falls back to host
+  timezone).
 - Use an explicit IANA timezone (e.g., `"America/Chicago"`) for a fixed zone.
 - `envelopeTimestamp: "off"` removes absolute timestamps from envelope headers.
 - `envelopeElapsed: "off"` removes elapsed time suffixes (the `+2m` style).
@@ -64,16 +66,16 @@ You can override this behavior:
 
 ## System prompt: Current Date & Time
 
-If the user timezone is known, the system prompt includes a dedicated
-**Current Date & Time** section with the **time zone only** (no clock/time format)
-to keep prompt caching stable:
+If the user timezone is known, the system prompt includes a dedicated **Current Date &
+Time** section with the **time zone only** (no clock/time format) to keep prompt caching
+stable:
 
 ```
 Time zone: America/Chicago
 ```
 
-When the agent needs the current time, use the `session_status` tool; the status
-card includes a timestamp line.
+When the agent needs the current time, use the `session_status` tool; the status card
+includes a timestamp line.
 
 ## System event lines (local by default)
 
@@ -102,13 +104,14 @@ System: [2026-01-12 12:19:17 PST] Model switched.
 
 ## Time format detection (auto)
 
-When `timeFormat: "auto"`, OpenClaw inspects the OS preference (macOS/Windows)
-and falls back to locale formatting. The detected value is **cached per process**
-to avoid repeated system calls.
+When `timeFormat: "auto"`, OpenClaw inspects the OS preference (macOS/Windows) and falls
+back to locale formatting. The detected value is **cached per process** to avoid repeated
+system calls.
 
 ## Tool payloads + connectors (raw provider time + normalized fields)
 
-Channel tools return **provider-native timestamps** and add normalized fields for consistency:
+Channel tools return **provider-native timestamps** and add normalized fields for
+consistency:
 
 - `timestampMs`: epoch milliseconds (UTC)
 - `timestampUtc`: ISO 8601 UTC string

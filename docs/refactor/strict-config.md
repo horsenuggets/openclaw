@@ -27,7 +27,8 @@ title: "Strict Config Validation"
 - Unknown keys are validation errors (no passthrough at root or nested).
 - `plugins.entries.<id>.config` must be validated by the plugin’s schema.
   - If a plugin lacks a schema, **reject plugin load** and surface a clear error.
-- Unknown `channels.<id>` keys are errors unless a plugin manifest declares the channel id.
+- Unknown `channels.<id>` keys are errors unless a plugin manifest declares the channel
+  id.
 - Plugin manifests (`openclaw.plugin.json`) are required for all plugins.
 
 ## Plugin schema enforcement

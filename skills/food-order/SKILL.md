@@ -7,11 +7,13 @@ metadata: {"openclaw":{"emoji":"🥡","requires":{"bins":["ordercli"]},"install"
 
 # Food order (Foodora via ordercli)
 
-Goal: reorder a previous Foodora order safely (preview first; confirm only on explicit user “yes/confirm/place the order”).
+Goal: reorder a previous Foodora order safely (preview first; confirm only on explicit
+user “yes/confirm/place the order”).
 
 Hard safety rules
 
-- Never run `ordercli foodora reorder ... --confirm` unless user explicitly confirms placing the order.
+- Never run `ordercli foodora reorder ... --confirm` unless user explicitly confirms
+  placing the order.
 - Prefer preview-only steps first; show what will happen; ask for confirmation.
 - If user is unsure: stop at preview and ask questions.
 
@@ -19,7 +21,8 @@ Setup (once)
 
 - Country: `ordercli foodora countries` → `ordercli foodora config set --country AT`
 - Login (password): `ordercli foodora login --email you@example.com --password-stdin`
-- Login (no password, preferred): `ordercli foodora session chrome --url https://www.foodora.at/ --profile "Default"`
+- Login (no password, preferred):
+  `ordercli foodora session chrome --url https://www.foodora.at/ --profile "Default"`
 
 Find what to reorder
 
@@ -34,7 +37,8 @@ Preview reorder (no cart changes)
 Place reorder (cart change; explicit confirmation required)
 
 - Confirm first, then run: `ordercli foodora reorder <orderCode> --confirm`
-- Multiple addresses? Ask user for the right `--address-id` (take from their Foodora account / prior order data) and run:
+- Multiple addresses? Ask user for the right `--address-id` (take from their Foodora
+  account / prior order data) and run:
   - `ordercli foodora reorder <orderCode> --confirm --address-id <id>`
 
 Track the order

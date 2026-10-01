@@ -4,7 +4,8 @@ Display HTML content on connected OpenClaw nodes (Mac app, iOS, Android).
 
 ## Overview
 
-The canvas tool lets you present web content on any connected node's canvas view. Great for:
+The canvas tool lets you present web content on any connected node's canvas view. Great
+for:
 
 - Displaying games, visualizations, dashboards
 - Showing generated HTML content
@@ -22,7 +23,8 @@ The canvas tool lets you present web content on any connected node's canvas view
 └─────────────────┘     └──────────────────┘     └─────────────┘
 ```
 
-1. **Canvas Host Server**: Serves static HTML/CSS/JS files from `canvasHost.root` directory
+1. **Canvas Host Server**: Serves static HTML/CSS/JS files from `canvasHost.root`
+   directory
 2. **Node Bridge**: Communicates canvas URLs to connected nodes
 3. **Node Apps**: Render the content in a WebView
 
@@ -37,13 +39,15 @@ The canvas host server binds based on `gateway.bind` setting:
 | `tailnet`  | Tailscale interface | Tailscale hostname         |
 | `auto`     | Best available      | Tailscale > LAN > loopback |
 
-**Key insight:** The `canvasHostHostForBridge` is derived from `bridgeHost`. When bound to Tailscale, nodes receive URLs like:
+**Key insight:** The `canvasHostHostForBridge` is derived from `bridgeHost`. When bound to
+Tailscale, nodes receive URLs like:
 
 ```
 http://<tailscale-hostname>:18793/__openclaw__/canvas/<file>.html
 ```
 
-This is why localhost URLs don't work - the node receives the Tailscale hostname from the bridge!
+This is why localhost URLs don't work - the node receives the Tailscale hostname from the
+bridge!
 
 ## Actions
 

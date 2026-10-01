@@ -8,14 +8,15 @@ title: "VPS Hosting"
 
 # VPS hosting
 
-This hub links to the supported VPS/hosting guides and explains how cloud
-deployments work at a high level.
+This hub links to the supported VPS/hosting guides and explains how cloud deployments work
+at a high level.
 
 ## Pick a provider
 
 - **Railway** (one‑click + browser setup): [Railway](/install/railway)
 - **Northflank** (one‑click + browser setup): [Northflank](/install/northflank)
-- **Oracle Cloud (Always Free)**: [Oracle](/platforms/oracle) — $0/month (Always Free, ARM; capacity/signup can be finicky)
+- **Oracle Cloud (Always Free)**: [Oracle](/platforms/oracle) — $0/month (Always Free,
+  ARM; capacity/signup can be finicky)
 - **Fly.io**: [Fly.io](/install/fly)
 - **Hetzner (Docker)**: [Hetzner](/install/hetzner)
 - **GCP (Compute Engine)**: [GCP](/install/gcp)
@@ -28,8 +29,9 @@ deployments work at a high level.
 - The **Gateway runs on the VPS** and owns state + workspace.
 - You connect from your laptop/phone via the **Control UI** or **Tailscale/SSH**.
 - Treat the VPS as the source of truth and **back up** the state + workspace.
-- Secure default: keep the Gateway on loopback and access it via SSH tunnel or Tailscale Serve.
-  If you bind to `lan`/`tailnet`, require `gateway.auth.token` or `gateway.auth.password`.
+- Secure default: keep the Gateway on loopback and access it via SSH tunnel or Tailscale
+  Serve. If you bind to `lan`/`tailnet`, require `gateway.auth.token` or
+  `gateway.auth.password`.
 
 Remote access: [Gateway remote](/gateway/remote)  
 Platforms hub: [Platforms](/platforms)

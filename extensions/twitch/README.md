@@ -14,13 +14,15 @@ openclaw plugins install ./extensions/twitch
 openclaw plugins install @openclaw/twitch
 ```
 
-Onboarding: select Twitch and confirm the install prompt to fetch the plugin automatically.
+Onboarding: select Twitch and confirm the install prompt to fetch the plugin
+automatically.
 
 ## Config
 
 Minimal config (simplified single-account):
 
-**⚠️ Important:** `requireMention` defaults to `true`. Add access control (`allowFrom` or `allowedRoles`) to prevent unauthorized users from triggering the bot.
+**⚠️ Important:** `requireMention` defaults to `true`. Add access control (`allowFrom` or
+`allowedRoles`) to prevent unauthorized users from triggering the bot.
 
 ```json5
 {
@@ -39,8 +41,10 @@ Minimal config (simplified single-account):
 
 **Access control options:**
 
-- `requireMention: false` - Disable the default mention requirement to respond to all messages
-- `allowFrom: ["your_user_id"]` - Restrict to your Twitch user ID only (find your ID at https://www.twitchangles.com/xqc or similar)
+- `requireMention: false` - Disable the default mention requirement to respond to all
+  messages
+- `allowFrom: ["your_user_id"]` - Restrict to your Twitch user ID only (find your ID at
+  https://www.twitchangles.com/xqc or similar)
 - `allowedRoles: ["moderator", "vip", "subscriber"]` - Restrict to specific roles
 
 Multi-account config (advanced):
@@ -71,7 +75,8 @@ Multi-account config (advanced):
 
 ## Setup
 
-1. Create a dedicated Twitch account for the bot, then generate credentials: [Twitch Token Generator](https://twitchtokengenerator.com/)
+1. Create a dedicated Twitch account for the bot, then generate credentials:
+   [Twitch Token Generator](https://twitchtokengenerator.com/)
    - Select **Bot Token**
    - Verify scopes `chat:read` and `chat:write` are selected
    - Copy the **Access Token** to `token` property

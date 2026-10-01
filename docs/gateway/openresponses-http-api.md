@@ -13,7 +13,8 @@ OpenClaw’s Gateway can serve an OpenResponses-compatible `POST /v1/responses` 
 This endpoint is **disabled by default**. Enable it in config first.
 
 - `POST /v1/responses`
-- Same port as the Gateway (WS + HTTP multiplex): `http://<gateway-host>:<port>/v1/responses`
+- Same port as the Gateway (WS + HTTP multiplex):
+  `http://<gateway-host>:<port>/v1/responses`
 
 Under the hood, requests are executed as a normal Gateway agent run (same codepath as
 `openclaw agent`), so routing/permissions/config match your Gateway.
@@ -26,8 +27,10 @@ Uses the Gateway auth configuration. Send a bearer token:
 
 Notes:
 
-- When `gateway.auth.mode="token"`, use `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`).
-- When `gateway.auth.mode="password"`, use `gateway.auth.password` (or `OPENCLAW_GATEWAY_PASSWORD`).
+- When `gateway.auth.mode="token"`, use `gateway.auth.token` (or
+  `OPENCLAW_GATEWAY_TOKEN`).
+- When `gateway.auth.mode="password"`, use `gateway.auth.password` (or
+  `OPENCLAW_GATEWAY_PASSWORD`).
 
 ## Choosing an agent
 
@@ -78,10 +81,11 @@ Set `gateway.http.endpoints.responses.enabled` to `false`:
 
 ## Session behavior
 
-By default the endpoint is **stateless per request** (a new session key is generated each call).
+By default the endpoint is **stateless per request** (a new session key is generated each
+call).
 
-If the request includes an OpenResponses `user` string, the Gateway derives a stable session key
-from it, so repeated calls can share an agent session.
+If the request includes an OpenResponses `user` string, the Gateway derives a stable
+session key from it, so repeated calls can share an agent session.
 
 ## Request shape (supported)
 
@@ -132,7 +136,8 @@ Accepted for schema compatibility but ignored when building the prompt.
 
 ## Tools (client-side function tools)
 
-Provide tools with `tools: [{ type: "function", function: { name, description?, parameters? } }]`.
+Provide tools with
+`tools: [{ type: "function", function: { name, description?, parameters? } }]`.
 
 If the agent decides to call a tool, the response returns a `function_call` output item.
 You then send a follow-up request with `function_call_output` to continue the turn.
@@ -148,8 +153,8 @@ Supports base64 or URL sources:
 }
 ```
 
-Allowed MIME types (current): `image/jpeg`, `image/png`, `image/gif`, `image/webp`.
-Max size (current): 10MB.
+Allowed MIME types (current): `image/jpeg`, `image/png`, `image/gif`, `image/webp`. Max
+size (current): 10MB.
 
 ## Files (`input_file`)
 
@@ -174,10 +179,10 @@ Max size (current): 5MB.
 
 Current behavior:
 
-- File content is decoded and added to the **system prompt**, not the user message,
-  so it stays ephemeral (not persisted in session history).
-- PDFs are parsed for text. If little text is found, the first pages are rasterized
-  into images and passed to the model.
+- File content is decoded and added to the **system prompt**, not the user message, so it
+  stays ephemeral (not persisted in session history).
+- PDFs are parsed for text. If little text is found, the first pages are rasterized into
+  images and passed to the model.
 
 PDF parsing uses the Node-friendly `pdfjs-dist` legacy build (no worker). The modern
 PDF.js build expects browser workers/DOM globals, so it is not used in the Gateway.

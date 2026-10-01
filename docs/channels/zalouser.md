@@ -1,5 +1,6 @@
 ---
-summary: "Zalo personal account support via zca-cli (QR login), capabilities, and configuration"
+summary:
+  "Zalo personal account support via zca-cli (QR login), capabilities, and configuration"
 read_when:
   - Setting up Zalo Personal for OpenClaw
   - Debugging Zalo Personal login or message flow
@@ -8,9 +9,11 @@ title: "Zalo Personal"
 
 # Zalo Personal (unofficial)
 
-Status: experimental. This integration automates a **personal Zalo account** via `zca-cli`.
+Status: experimental. This integration automates a **personal Zalo account** via
+`zca-cli`.
 
-> **Warning:** This is an unofficial integration and may result in account suspension/ban. Use at your own risk.
+> **Warning:** This is an unofficial integration and may result in account suspension/ban.
+> Use at your own risk.
 
 ## Plugin required
 
@@ -25,7 +28,8 @@ Zalo Personal ships as a plugin and is not bundled with the core install.
 The Gateway machine must have the `zca` binary available in `PATH`.
 
 - Verify: `zca --version`
-- If missing, install zca-cli (see `extensions/zalouser/README.md` or the upstream zca-cli docs).
+- If missing, install zca-cli (see `extensions/zalouser/README.md` or the upstream zca-cli
+  docs).
 
 ## Quick setup (beginner)
 
@@ -57,7 +61,9 @@ The Gateway machine must have the `zca` binary available in `PATH`.
 
 ## Naming
 
-Channel id is `zalouser` to make it explicit this automates a **personal Zalo user account** (unofficial). We keep `zalo` reserved for a potential future official Zalo API integration.
+Channel id is `zalouser` to make it explicit this automates a **personal Zalo user
+account** (unofficial). We keep `zalo` reserved for a potential future official Zalo API
+integration.
 
 ## Finding IDs (directory)
 
@@ -76,8 +82,9 @@ openclaw directory groups list --channel zalouser --query "work"
 
 ## Access control (DMs)
 
-`channels.zalouser.dmPolicy` supports: `pairing | allowlist | open | disabled` (default: `pairing`).
-`channels.zalouser.allowFrom` accepts user IDs or names. The wizard resolves names to IDs via `zca friend find` when available.
+`channels.zalouser.dmPolicy` supports: `pairing | allowlist | open | disabled` (default:
+`pairing`). `channels.zalouser.allowFrom` accepts user IDs or names. The wizard resolves
+names to IDs via `zca friend find` when available.
 
 Approve via:
 
@@ -86,13 +93,15 @@ Approve via:
 
 ## Group access (optional)
 
-- Default: `channels.zalouser.groupPolicy = "open"` (groups allowed). Use `channels.defaults.groupPolicy` to override the default when unset.
+- Default: `channels.zalouser.groupPolicy = "open"` (groups allowed). Use
+  `channels.defaults.groupPolicy` to override the default when unset.
 - Restrict to an allowlist with:
   - `channels.zalouser.groupPolicy = "allowlist"`
   - `channels.zalouser.groups` (keys are group IDs or names)
 - Block all groups: `channels.zalouser.groupPolicy = "disabled"`.
 - The configure wizard can prompt for group allowlists.
-- On startup, OpenClaw resolves group/user names in allowlists to IDs and logs the mapping; unresolved entries are kept as typed.
+- On startup, OpenClaw resolves group/user names in allowlists to IDs and logs the
+  mapping; unresolved entries are kept as typed.
 
 Example:
 
@@ -137,4 +146,5 @@ Accounts map to zca profiles. Example:
 **Login doesn’t stick:**
 
 - `openclaw channels status --probe`
-- Re-login: `openclaw channels logout --channel zalouser && openclaw channels login --channel zalouser`
+- Re-login:
+  `openclaw channels logout --channel zalouser && openclaw channels login --channel zalouser`

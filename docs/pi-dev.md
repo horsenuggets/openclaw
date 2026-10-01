@@ -47,11 +47,13 @@ Recommended flow:
 - Use the TUI for interactive debugging:
   - `pnpm tui`
 
-For tool call behavior, prompt for a `read` or `exec` action so you can see tool streaming and payload handling.
+For tool call behavior, prompt for a `read` or `exec` action so you can see tool streaming
+and payload handling.
 
 ## Clean Slate Reset
 
-State lives under the OpenClaw state directory. Default is `~/.openclaw`. If `OPENCLAW_STATE_DIR` is set, use that directory instead.
+State lives under the OpenClaw state directory. Default is `~/.openclaw`. If
+`OPENCLAW_STATE_DIR` is set, use that directory instead.
 
 To reset everything:
 
@@ -62,7 +64,9 @@ To reset everything:
 - `sessions/` if legacy paths exist
 - `workspace/` if you want a blank workspace
 
-If you only want to reset sessions, delete `agents/<agentId>/sessions/` and `agents/<agentId>/sessions.json` for that agent. Keep `credentials/` if you do not want to reauthenticate.
+If you only want to reset sessions, delete `agents/<agentId>/sessions/` and
+`agents/<agentId>/sessions.json` for that agent. Keep `credentials/` if you do not want to
+reauthenticate.
 
 ## References
 

@@ -8,23 +8,25 @@ title: "Web"
 
 # Web (Gateway)
 
-The Gateway serves a small **browser Control UI** (Vite + Lit) from the same port as the Gateway WebSocket:
+The Gateway serves a small **browser Control UI** (Vite + Lit) from the same port as the
+Gateway WebSocket:
 
 - default: `http://<host>:18789/`
 - optional prefix: set `gateway.controlUi.basePath` (e.g. `/openclaw`)
 
-Capabilities live in [Control UI](/web/control-ui).
-This page focuses on bind modes, security, and web-facing surfaces.
+Capabilities live in [Control UI](/web/control-ui). This page focuses on bind modes,
+security, and web-facing surfaces.
 
 ## Webhooks
 
-When `hooks.enabled=true`, the Gateway also exposes a small webhook endpoint on the same HTTP server.
-See [Gateway configuration](/gateway/configuration) → `hooks` for auth + payloads.
+When `hooks.enabled=true`, the Gateway also exposes a small webhook endpoint on the same
+HTTP server. See [Gateway configuration](/gateway/configuration) → `hooks` for auth +
+payloads.
 
 ## Config (default-on)
 
-The Control UI is **enabled by default** when assets are present (`dist/control-ui`).
-You can control it via config:
+The Control UI is **enabled by default** when assets are present (`dist/control-ui`). You
+can control it via config:
 
 ```json5
 {
@@ -105,7 +107,8 @@ Open:
   `gateway.auth.allowTailscale` is `true` (no token/password required). Set
   `gateway.auth.allowTailscale: false` to require explicit credentials. See
   [Tailscale](/gateway/tailscale) and [Security](/gateway/security).
-- `gateway.tailscale.mode: "funnel"` requires `gateway.auth.mode: "password"` (shared password).
+- `gateway.tailscale.mode: "funnel"` requires `gateway.auth.mode: "password"` (shared
+  password).
 
 ## Building the UI
 

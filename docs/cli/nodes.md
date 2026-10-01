@@ -1,5 +1,6 @@
 ---
-summary: "CLI reference for `openclaw nodes` (list/status/approve/invoke, camera/canvas/screen)"
+summary:
+  "CLI reference for `openclaw nodes` (list/status/approve/invoke, camera/canvas/screen)"
 read_when:
   - You’re managing paired nodes (cameras, screen, canvas)
   - You need to approve requests or invoke node commands
@@ -33,9 +34,10 @@ openclaw nodes status --connected
 openclaw nodes status --last-connected 24h
 ```
 
-`nodes list` prints pending/paired tables. Paired rows include the most recent connect age (Last Connect).
-Use `--connected` to only show currently-connected nodes. Use `--last-connected <duration>` to
-filter to nodes that connected within a duration (e.g. `24h`, `7d`).
+`nodes list` prints pending/paired tables. Paired rows include the most recent connect age
+(Last Connect). Use `--connected` to only show currently-connected nodes. Use
+`--last-connected <duration>` to filter to nodes that connected within a duration (e.g.
+`24h`, `7d`).
 
 ## Invoke / run
 
@@ -59,7 +61,8 @@ Invoke flags:
 - Reads `tools.exec.*` (plus `agents.list[].tools.exec.*` overrides).
 - Uses exec approvals (`exec.approval.request`) before invoking `system.run`.
 - `--node` can be omitted when `tools.exec.node` is set.
-- Requires a node that advertises `system.run` (macOS companion app or headless node host).
+- Requires a node that advertises `system.run` (macOS companion app or headless node
+  host).
 
 Flags:
 

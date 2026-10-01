@@ -8,10 +8,11 @@ title: "Linux App"
 
 # Linux App
 
-The Gateway is fully supported on Linux. **Node is the recommended runtime**.
-Bun is not recommended for the Gateway (WhatsApp/Telegram bugs).
+The Gateway is fully supported on Linux. **Node is the recommended runtime**. Bun is not
+recommended for the Gateway (WhatsApp/Telegram bugs).
 
-Native Linux companion apps are planned. Contributions are welcome if you want to help build one.
+Native Linux companion apps are planned. Contributions are welcome if you want to help
+build one.
 
 ## Beginner quick path (VPS)
 
@@ -27,7 +28,8 @@ Step-by-step VPS guide: [exe.dev](/install/exe-dev)
 
 - [Getting Started](/start/getting-started)
 - [Install & updates](/install/updating)
-- Optional flows: [Bun (experimental)](/install/bun), [Nix](/install/nix), [Docker](/install/docker)
+- Optional flows: [Bun (experimental)](/install/bun), [Nix](/install/nix),
+  [Docker](/install/docker)
 
 ## Gateway
 
@@ -64,9 +66,9 @@ openclaw doctor
 
 ## System control (systemd user unit)
 
-OpenClaw installs a systemd **user** service by default. Use a **system**
-service for shared or always-on servers. The full unit example and guidance
-live in the [Gateway runbook](/gateway).
+OpenClaw installs a systemd **user** service by default. Use a **system** service for
+shared or always-on servers. The full unit example and guidance live in the
+[Gateway runbook](/gateway).
 
 Minimal setup:
 

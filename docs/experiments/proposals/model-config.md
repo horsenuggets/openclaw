@@ -7,8 +7,8 @@ title: "Model Config Exploration"
 
 # Model Config (Exploration)
 
-This document captures **ideas** for future model configuration. It is not a
-shipping spec. For current behavior, see:
+This document captures **ideas** for future model configuration. It is not a shipping
+spec. For current behavior, see:
 
 - [Models](/concepts/models)
 - [Model failover](/concepts/model-failover)

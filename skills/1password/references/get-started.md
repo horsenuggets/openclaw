@@ -11,7 +11,8 @@
   - Open and unlock the app, then select your account/collection.
   - macOS: Settings > Developer > Integrate with 1Password CLI (Touch ID optional).
   - Windows: turn on Windows Hello, then Settings > Developer > Integrate.
-  - Linux: Settings > Security > Unlock using system authentication, then Settings > Developer > Integrate.
+  - Linux: Settings > Security > Unlock using system authentication, then Settings >
+    Developer > Integrate.
 - After integration, run any command to sign in (example in docs: `op vault list`).
 - If multiple accounts: use `op signin` to pick one, or `--account` / `OP_ACCOUNT`.
 - For non-integration auth, use `op account add`.

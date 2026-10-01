@@ -51,6 +51,9 @@ When a location is present, these fields are added to `ctx`:
 
 ## Channel notes
 
-- **Telegram**: venues map to `LocationName/LocationAddress`; live locations use `live_period`.
-- **WhatsApp**: `locationMessage.comment` and `liveLocationMessage.caption` are appended as the caption line.
-- **Matrix**: `geo_uri` is parsed as a pin location; altitude is ignored and `LocationIsLive` is always false.
+- **Telegram**: venues map to `LocationName/LocationAddress`; live locations use
+  `live_period`.
+- **WhatsApp**: `locationMessage.comment` and `liveLocationMessage.caption` are appended
+  as the caption line.
+- **Matrix**: `geo_uri` is parsed as a pin location; altitude is ignored and
+  `LocationIsLive` is always false.

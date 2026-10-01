@@ -1,13 +1,19 @@
 ---
 name: tmux
-description: Remote-control tmux sessions for interactive CLIs by sending keystrokes and scraping pane output.
+description:
+  Remote-control tmux sessions for interactive CLIs by sending keystrokes and scraping
+  pane output.
 metadata:
-  { "openclaw": { "emoji": "🧵", "os": ["darwin", "linux"], "requires": { "bins": ["tmux"] } } }
+  {
+    "openclaw":
+      { "emoji": "🧵", "os": ["darwin", "linux"], "requires": { "bins": ["tmux"] } },
+  }
 ---
 
 # tmux Skill (OpenClaw)
 
-Use tmux only when you need an interactive TTY. Prefer exec background mode for long-running, non-interactive tasks.
+Use tmux only when you need an interactive TTY. Prefer exec background mode for
+long-running, non-interactive tasks.
 
 ## Quickstart (isolated socket, exec tool)
 
@@ -44,17 +50,19 @@ To monitor:
 ## Finding sessions
 
 - List sessions on your socket: `{baseDir}/scripts/find-sessions.sh -S "$SOCKET"`.
-- Scan all sockets: `{baseDir}/scripts/find-sessions.sh --all` (uses `OPENCLAW_TMUX_SOCKET_DIR`).
+- Scan all sockets: `{baseDir}/scripts/find-sessions.sh --all` (uses
+  `OPENCLAW_TMUX_SOCKET_DIR`).
 
 ## Sending input safely
 
 - Prefer literal sends: `tmux -S "$SOCKET" send-keys -t target -l -- "$cmd"`.
 - Control keys: `tmux -S "$SOCKET" send-keys -t target C-c`.
-- For interactive TUI apps like Claude Code/Codex, this guidance covers **how to send commands**.
-  Do **not** append `Enter` in the same `send-keys`. These apps may treat a fast text+Enter
-  sequence as paste/multi-line input and not submit; this is timing-dependent. Send text and
-  `Enter` as separate commands with a small delay (tune per environment; increase if needed,
-  or use `sleep 1` if sub-second sleeps aren't supported):
+- For interactive TUI apps like Claude Code/Codex, this guidance covers **how to send
+  commands**. Do **not** append `Enter` in the same `send-keys`. These apps may treat a
+  fast text+Enter sequence as paste/multi-line input and not submit; this is
+  timing-dependent. Send text and `Enter` as separate commands with a small delay (tune
+  per environment; increase if needed, or use `sleep 1` if sub-second sleeps aren't
+  supported):
 
 ```bash
 tmux -S "$SOCKET" send-keys -t target -l -- "$cmd" && sleep 0.1 && tmux -S "$SOCKET" send-keys -t target Enter
@@ -117,12 +125,14 @@ tmux -S "$SOCKET" capture-pane -p -t agent-1 -S -500
 ## Cleanup
 
 - Kill a session: `tmux -S "$SOCKET" kill-session -t "$SESSION"`.
-- Kill all sessions on a socket: `tmux -S "$SOCKET" list-sessions -F '#{session_name}' | xargs -r -n1 tmux -S "$SOCKET" kill-session -t`.
+- Kill all sessions on a socket:
+  `tmux -S "$SOCKET" list-sessions -F '#{session_name}' | xargs -r -n1 tmux -S "$SOCKET" kill-session -t`.
 - Remove everything on the private socket: `tmux -S "$SOCKET" kill-server`.
 
 ## Helper: wait-for-text.sh
 
-`{baseDir}/scripts/wait-for-text.sh` polls a pane for a regex (or fixed string) with a timeout.
+`{baseDir}/scripts/wait-for-text.sh` polls a pane for a regex (or fixed string) with a
+timeout.
 
 ```bash
 {baseDir}/scripts/wait-for-text.sh -t session:0.0 -p 'pattern' [-F] [-T 20] [-i 0.5] [-l 2000]

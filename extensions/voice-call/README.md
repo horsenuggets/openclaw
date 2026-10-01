@@ -9,8 +9,8 @@ Providers:
 - **Plivo** (Voice API + XML transfer + GetInput speech)
 - **Mock** (dev/no network)
 
-Docs: `https://docs.openclaw.ai/plugins/voice-call`
-Plugin system: `https://docs.openclaw.ai/plugin`
+Docs: `https://docs.openclaw.ai/plugins/voice-call` Plugin system:
+`https://docs.openclaw.ai/plugin`
 
 ## Install (local dev)
 
@@ -76,13 +76,15 @@ Notes:
 
 - Twilio/Telnyx/Plivo require a **publicly reachable** webhook URL.
 - `mock` is a local dev provider (no network calls).
-- `tunnel.allowNgrokFreeTierLoopbackBypass: true` allows Twilio webhooks with invalid signatures **only** when `tunnel.provider="ngrok"` and `serve.bind` is loopback (ngrok local agent). Use for local dev only.
+- `tunnel.allowNgrokFreeTierLoopbackBypass: true` allows Twilio webhooks with invalid
+  signatures **only** when `tunnel.provider="ngrok"` and `serve.bind` is loopback (ngrok
+  local agent). Use for local dev only.
 
 ## TTS for calls
 
-Voice Call uses the core `messages.tts` configuration (OpenAI or ElevenLabs) for
-streaming speech on calls. You can override it under the plugin config with the
-same shape — overrides deep-merge with `messages.tts`.
+Voice Call uses the core `messages.tts` configuration (OpenAI or ElevenLabs) for streaming
+speech on calls. You can override it under the plugin config with the same shape —
+overrides deep-merge with `messages.tts`.
 
 ```json5
 {
@@ -97,8 +99,10 @@ same shape — overrides deep-merge with `messages.tts`.
 
 Notes:
 
-- Edge TTS is ignored for voice calls (telephony audio needs PCM; Edge output is unreliable).
-- Core TTS is used when Twilio media streaming is enabled; otherwise calls fall back to provider native voices.
+- Edge TTS is ignored for voice calls (telephony audio needs PCM; Edge output is
+  unreliable).
+- Core TTS is used when Twilio media streaming is enabled; otherwise calls fall back to
+  provider native voices.
 
 ## CLI
 
