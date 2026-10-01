@@ -33,7 +33,7 @@ for the same user/app.
 
 Practical symptom:
 
-- you log in via OpenClaw _and_ via Claude Code / Codex CLI → one of them randomly gets
+- you log in via OpenClaw *and* via Claude Code / Codex CLI → one of them randomly gets
   “logged out” later
 
 To reduce that, OpenClaw treats `auth-profiles.json` as a **token sink**:

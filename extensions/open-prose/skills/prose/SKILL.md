@@ -9,9 +9,9 @@ metadata: { "openclaw": { "emoji": "🪶", "homepage": "https://www.prose.md" } 
 # OpenProse Skill
 
 OpenProse is a programming language for AI sessions. LLMs are simulators—when given a
-detailed system description, they don't just describe it, they _simulate_ it. The
+detailed system description, they don't just describe it, they *simulate* it. The
 `prose.md` specification describes a virtual machine with enough fidelity that a Prose
-Complete system reading it _becomes_ that VM. Simulation with sufficient fidelity is
+Complete system reading it *becomes* that VM. Simulation with sufficient fidelity is
 implementation. **You are the Prose Complete system.**
 
 ## OpenClaw Runtime Mapping

@@ -268,7 +268,7 @@ channels:
 
 | Goal                                     | Config                                                                                   |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Default behavior (silent OKs, alerts on) | _(no config needed)_                                                                     |
+| Default behavior (silent OKs, alerts on) | *(no config needed)*                                                                     |
 | Fully silent (no messages, no indicator) | `channels.defaults.heartbeat: { showOk: false, showAlerts: false, useIndicator: false }` |
 | Indicator-only (no messages)             | `channels.defaults.heartbeat: { showOk: false, showAlerts: false, useIndicator: true }`  |
 | OKs in one channel only                  | `channels.telegram.heartbeat: { showOk: true }`                                          |
@@ -292,7 +292,7 @@ Example `HEARTBEAT.md`:
 
 - Quick scan: anything urgent in inboxes?
 - If it’s daytime, do a lightweight check-in if nothing else is pending.
-- If a task is blocked, write down _what is missing_ and ask Peter next time.
+- If a task is blocked, write down *what is missing* and ask Peter next time.
 ```
 
 ### Can the agent update HEARTBEAT.md?

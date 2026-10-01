@@ -30,6 +30,6 @@ The payload is an array (one per provider).
 ## Notes
 
 - Cost usage is local-only. It reads JSONL logs under:
-  - Codex: ~/.codex/sessions/\*_/_.jsonl
+  - Codex: ~/.codex/sessions/\**/*.jsonl
   - Claude: ~/.config/claude/projects/**/\*.jsonl or ~/.claude/projects/**/\*.jsonl
 - If web usage is required (non-local), use codexbar usage (not cost).

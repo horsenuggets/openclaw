@@ -218,7 +218,7 @@ Match model capability to task complexity:
 | **Opus 4.5**   | Hard/difficult work requiring deep reasoning | Complex analysis, strategic decisions, novel problem-solving |
 | **Haiku**      | Simple, self-evident tasks (use sparingly)   | Classification, summarization, formatting                    |
 
-**Key insight:** Sonnet 4.5 excels at _orchestrating_ agents and managing control
+**Key insight:** Sonnet 4.5 excels at *orchestrating* agents and managing control
 flow—it's the ideal model for the OpenProse VM itself and for "captain" agents that
 coordinate work. Opus 4.5 should be reserved for agents doing genuinely difficult
 intellectual work. Haiku can handle simple tasks but should generally be avoided where

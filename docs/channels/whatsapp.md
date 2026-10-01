@@ -260,7 +260,7 @@ and enable `channels.whatsapp.selfChatMode`.
 - `/activation mention|always` is owner-only and must be sent as a standalone message.
 - Owner = `channels.whatsapp.allowFrom` (or self E.164 if unset).
 - **History injection** (pending-only):
-  - Recent _unprocessed_ messages (default 50) inserted under:
+  - Recent *unprocessed* messages (default 50) inserted under:
     `[Chat messages since your last reply - for context]` (messages already in the session
     are not re-injected)
   - Current message under: `[Current message - respond to this]`

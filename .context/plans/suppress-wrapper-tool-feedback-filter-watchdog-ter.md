@@ -4,7 +4,7 @@
 
 1. **Discord shows "Claude Code" as tool feedback** — when the agent calls
    `mcp__claude-code-mcp__claude_code`, the tool feedback displays "🤖 Claude Code: ..."
-   in Discord. The user wants to see _inner_ tool names (Read, Bash, Edit) but these are
+   in Discord. The user wants to see *inner* tool names (Read, Bash, Edit) but these are
    architecturally invisible — the Claude CLI only reports top-level tool calls via
    `AgentStreamEvent`. Inner MCP tool calls are a black box.
 

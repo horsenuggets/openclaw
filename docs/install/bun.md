@@ -31,7 +31,7 @@ bun install
 ```
 
 Note: `bun.lock`/`bun.lockb` are gitignored, so there’s no repo churn either way. If you
-want _no lockfile writes_:
+want *no lockfile writes*:
 
 ```sh
 bun install --no-save

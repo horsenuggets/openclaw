@@ -15,7 +15,7 @@ title: "Cron Jobs"
 Cron is the Gateway’s built-in scheduler. It persists jobs, wakes the agent at the right
 time, and can optionally deliver output back to a chat.
 
-If you want _“run this every morning”_ or _“poke the agent in 20 minutes”_, cron is the
+If you want *“run this every morning”* or *“poke the agent in 20 minutes”*, cron is the
 mechanism.
 
 ## TL;DR

@@ -190,7 +190,7 @@ With the VCN locked down (only UDP 41641 open) and the Gateway bound to loopback
 strong defense-in-depth: public traffic is blocked at the network edge, and admin access
 happens over your tailnet.
 
-This setup often removes the _need_ for extra host-based firewall rules purely to stop
+This setup often removes the *need* for extra host-based firewall rules purely to stop
 Internet-wide SSH brute force — but you should still keep the OS updated, run
 `openclaw security audit`, and verify you aren’t accidentally listening on public
 interfaces.

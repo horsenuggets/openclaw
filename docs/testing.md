@@ -14,7 +14,7 @@ runners.
 
 This doc is a “how we test” guide:
 
-- What each suite covers (and what it deliberately does _not_ cover)
+- What each suite covers (and what it deliberately does *not* cover)
 - Which commands to run for common workflows (local, pre-push, debugging)
 - How live tests discover credentials and select models/providers
 - How to add regressions for real-world model/provider issues
@@ -133,7 +133,7 @@ Think of the suites as “increasing realism” (and increasing flakiness/cost):
 - Files: `src/**/*.live.test.ts`
 - Default: **enabled** by `pnpm test:live` (sets `OPENCLAW_LIVE_TEST=1`)
 - Scope:
-  - “Does this provider/model actually work _today_ with real creds?”
+  - “Does this provider/model actually work *today* with real creds?”
   - Catch provider format changes, tool-calling quirks, auth issues, and rate limit
     behavior
 - Expectations:

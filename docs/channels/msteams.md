@@ -472,7 +472,7 @@ responses may still cause issues.
 
 Teams markdown is more limited than Slack or Discord:
 
-- Basic formatting works: **bold**, _italic_, `code`, links
+- Basic formatting works: **bold**, *italic*, `code`, links
 - Complex markdown (tables, nested lists) may not render correctly
 - Adaptive Cards are supported for polls and arbitrary card sends (see below)
 

@@ -71,7 +71,7 @@ OpenClaw resolves these via `src/config/sessions.ts`.
 
 ## Session keys (`sessionKey`)
 
-A `sessionKey` identifies _which conversation bucket_ you’re in (routing + isolation).
+A `sessionKey` identifies *which conversation bucket* you’re in (routing + isolation).
 
 Common patterns:
 
@@ -147,9 +147,9 @@ The file is JSONL:
 Notable entry types:
 
 - `message`: user/assistant/toolResult messages
-- `custom_message`: extension-injected messages that _do_ enter model context (can be
+- `custom_message`: extension-injected messages that *do* enter model context (can be
   hidden from UI)
-- `custom`: extension state that does _not_ enter model context
+- `custom`: extension state that does *not* enter model context
 - `compaction`: persisted compaction summary with `firstKeptEntryId` and `tokensBefore`
 - `branch_summary`: persisted summary when navigating a tree branch
 

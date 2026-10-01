@@ -97,7 +97,7 @@ for the shared pattern.
 ### Group message visibility (Privacy Mode)
 
 Telegram bots default to **Privacy Mode**, which limits which group messages they receive.
-If your bot must see _all_ group messages, you have two options:
+If your bot must see *all* group messages, you have two options:
 
 - Disable privacy mode with `/setprivacy` **or**
 - Add the bot as a group **admin** (admin bots receive all messages).

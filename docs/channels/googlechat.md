@@ -38,7 +38,7 @@ Status: ready for DMs + spaces via Google Chat API webhooks (HTTP only).
    - Under **Connection settings**, select **HTTP endpoint URL**.
    - Under **Triggers**, select **Use a common HTTP endpoint URL for all triggers** and
      set it to your gateway's public URL followed by `/googlechat`.
-     - _Tip: Run `openclaw status` to find your gateway's public URL._
+     - *Tip: Run `openclaw status` to find your gateway's public URL.*
    - Under **Visibility**, check **Make this Chat app available to specific people and
      groups in &lt;Your Domain&gt;**.
    - Enter your email address (e.g. `user@example.com`) in the text box.
@@ -62,7 +62,7 @@ Once the gateway is running and your email is added to the visibility list:
 2. Click the **+** (plus) icon next to **Direct Messages**.
 3. In the search bar (where you usually add people), type the **App name** you configured
    in the Google Cloud Console.
-   - **Note**: The bot will _not_ appear in the "Marketplace" browse list because it is a
+   - **Note**: The bot will *not* appear in the "Marketplace" browse list because it is a
      private app. You must search for it by name.
 4. Select your bot from the results.
 5. Click **Add** or **Chat** to start a 1:1 conversation.

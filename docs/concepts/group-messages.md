@@ -33,7 +33,7 @@ For multi-agent setups, set `agents.list[].groupChat.mentionPatterns` per agent 
 - Per-group sessions: session keys look like `agent:<agentId>:whatsapp:group:<jid>` so
   commands such as `/verbose on` or `/think high` (sent as standalone messages) are scoped
   to that group; personal DM state is untouched. Heartbeats are skipped for group threads.
-- Context injection: **pending-only** group messages (default 50) that _did not_ trigger a
+- Context injection: **pending-only** group messages (default 50) that *did not* trigger a
   run are prefixed under `[Chat messages since your last reply - for context]`, with the
   triggering line under `[Current message - respond to this]`. Messages already in the
   session are not re-injected.

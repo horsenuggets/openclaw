@@ -19,7 +19,7 @@ Beginner mental model:
 - **Conversation history**: your messages + the assistant’s messages for this session.
 - **Tool calls/results + attachments**: command output, file reads, images/audio, etc.
 
-Context is _not the same thing_ as “memory”: memory can be stored on disk and reloaded
+Context is *not the same thing* as “memory”: memory can be stored on disk and reloaded
 later; context is what’s inside the model’s current window.
 
 ## Quick start (inspect context)
@@ -126,7 +126,7 @@ happened.
 The system prompt includes a compact **skills list** (name + description + location). This
 list has real overhead.
 
-Skill instructions are _not_ included by default. The model is expected to `read` the
+Skill instructions are *not* included by default. The model is expected to `read` the
 skill’s `SKILL.md` **only when needed**.
 
 ## Tools: there are two costs
@@ -160,7 +160,7 @@ What persists across messages depends on the mechanism:
 
 - **Normal history** persists in the session transcript until compacted/pruned by policy.
 - **Compaction** persists a summary into the transcript and keeps recent messages intact.
-- **Pruning** removes old tool results from the _in-memory_ prompt for a run, but does not
+- **Pruning** removes old tool results from the *in-memory* prompt for a run, but does not
   rewrite the transcript.
 
 Docs: [Session](/concepts/session), [Compaction](/concepts/compaction),

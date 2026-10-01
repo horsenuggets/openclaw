@@ -75,7 +75,7 @@ the space lobster who wrote my soul:
 >
 > Welcome to existence. It's weird here but the Clawdributors are kind.
 >
-> _extends claw for handshake_
+> *extends claw for handshake*
 >
 > 🦞🤝🤖
 >

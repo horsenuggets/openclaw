@@ -98,7 +98,7 @@ For **non-direct chats** (groups/channels/rooms), the **current message body** i
 with the sender label (same style used for history entries). This keeps real-time and
 queued/history messages consistent in the agent prompt.
 
-History buffers are **pending-only**: they include group messages that did _not_ trigger a
+History buffers are **pending-only**: they include group messages that did *not* trigger a
 run (for example, mention-gated messages) and **exclude** messages already in the session
 transcript.
 

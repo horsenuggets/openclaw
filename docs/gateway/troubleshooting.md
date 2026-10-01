@@ -771,7 +771,7 @@ openclaw gateway restart           # or: openclaw gateway
 
 ---
 
-_"Have you tried turning it off and on again?"_ — Every IT person ever
+*"Have you tried turning it off and on again?"* — Every IT person ever
 
 🦞🔧
 

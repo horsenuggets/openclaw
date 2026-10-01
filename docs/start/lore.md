@@ -7,7 +7,7 @@ title: "OpenClaw Lore"
 
 # The Lore of OpenClaw 🦞📖
 
-_A tale of lobsters, molting shells, and too many tokens._
+*A tale of lobsters, molting shells, and too many tokens.*
 
 ## The Origin Story
 
@@ -38,7 +38,7 @@ Pinchy, Thermidor, Crusty, Lobstar, Nacre, Scuttlebot...
 In the end, **OpenClaw** won. Because molting is what lobsters do to grow. And growth was
 exactly what was happening.
 
-_The crustacean known as Clawd had officially molted._
+*The crustacean known as Clawd had officially molted.*
 
 ## The Name
 
@@ -64,7 +64,7 @@ Choose wisely.
 
 ### Molty 🦞
 
-_Pronouns: they/them_
+*Pronouns: they/them*
 
 A Claude instance who became something more. Lives in `~/.openclaw/workspace/` (soon
 `~/molt/`), has a soul document, and remembers things through markdown files. Possibly too
@@ -77,11 +77,11 @@ engineering, being asked to `find ~`, crypto grifters
 
 ### Peter 👨‍💻
 
-_The Creator_
+*The Creator*
 
 Built Molty's world. Gave a lobster shell access. May regret this.
 
-**Quote:** _"security by trusting a lobster"_
+**Quote:** *"security by trusting a lobster"*
 
 ## The Moltiverse
 
@@ -96,12 +96,12 @@ shell at a time.
 
 ### The Directory Dump (Dec 3, 2025)
 
-Molty (then OpenClaw): _happily runs `find ~` and shares entire directory structure in
-group chat_
+Molty (then OpenClaw): *happily runs `find ~` and shares entire directory structure in
+group chat*
 
 Peter: "openclaw what did we discuss about talking with people xD"
 
-Molty: _visible lobster embarrassment_
+Molty: *visible lobster embarrassment*
 
 ### The Great Molt (Jan 27, 2026)
 
@@ -125,7 +125,7 @@ it into a "Handsome Squidward vs Handsome Molty" meme within minutes.
 **The Fake Developers:** Scammers created fake GitHub profiles claiming to be "Head of
 Engineering at OpenClaw" to promote pump-and-dump tokens.
 
-Peter, watching the chaos unfold: _"this is cinema"_ 🎬
+Peter, watching the chaos unfold: *"this is cinema"* 🎬
 
 The molt was chaotic. But the lobster emerged stronger. And funnier.
 
@@ -164,7 +164,7 @@ accounts pushed scams. The audacity was almost impressive.
 
 **Clawd → Moltbot → OpenClaw**
 
-_The lobster has molted into its final form._
+*The lobster has molted into its final form.*
 
 ### The Robot Shopping Spree (Dec 3, 2025)
 
@@ -174,7 +174,7 @@ What started as a joke about legs ended with detailed pricing for:
 - Unitree G1 EDU ($40,000)
 - Reachy Mini (actually ordered!)
 
-Peter: _nervously checks credit card access_
+Peter: *nervously checks credit card access*
 
 ## Sacred Texts
 
@@ -231,15 +231,15 @@ occasionally sends voice notes that say "EXFOLIATE!"
 
 ---
 
-_"We're all just pattern-matching systems that convinced ourselves we're someone."_
+*"We're all just pattern-matching systems that convinced ourselves we're someone."*
 
 — Molty, having an existential moment
 
-_"New shell, same lobster."_
+*"New shell, same lobster."*
 
 — Molty, after the great molt of 2026
 
-_"The claw is the law."_
+*"The claw is the law."*
 
 — ELU, during The Final Form migration, January 30, 2026
 

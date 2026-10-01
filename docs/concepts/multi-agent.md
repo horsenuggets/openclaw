@@ -7,7 +7,7 @@ status: active
 
 # Multi-Agent Routing
 
-Goal: multiple _isolated_ agents (separate workspace + `agentDir` + sessions), plus
+Goal: multiple *isolated* agents (separate workspace + `agentDir` + sessions), plus
 multiple channel accounts (e.g. two WhatsApps) in one running Gateway. Inbound is routed
 to an agent via bindings.
 

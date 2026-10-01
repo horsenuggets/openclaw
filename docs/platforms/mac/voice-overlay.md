@@ -13,7 +13,7 @@ and push-to-talk overlap.
 ### Current intent
 
 - If the overlay is already visible from wake-word and the user presses the hotkey, the
-  hotkey session _adopts_ the existing text instead of resetting it. The overlay stays up
+  hotkey session *adopts* the existing text instead of resetting it. The overlay stays up
   while the hotkey is held. When the user releases: send if there is trimmed text,
   otherwise dismiss.
 - Wake-word alone still auto-sends on silence; push-to-talk sends immediately on release.

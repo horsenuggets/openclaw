@@ -588,7 +588,7 @@ If you want the smoothest Windows setup, use **WSL2** instead of native Windows.
 ### The docs didnt answer my question how do I get a better answer
 
 Use the **hackable (git) install** so you have the full source and docs locally, then ask
-your bot (or Claude/Codex) _from that folder_ so it can read the repo and answer
+your bot (or Claude/Codex) *from that folder* so it can read the repo and answer
 precisely.
 
 ```bash

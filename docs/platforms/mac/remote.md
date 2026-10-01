@@ -10,7 +10,7 @@ title: "Remote Control"
 This flow lets the macOS app act as a full remote control for a OpenClaw gateway running
 on another host (desktop/server). It’s the app’s **Remote over SSH** (remote run) feature.
 All features—health checks, Voice Wake forwarding, and Web Chat—reuse the same remote SSH
-configuration from _Settings → General_.
+configuration from *Settings → General*.
 
 ## Modes
 
@@ -40,7 +40,7 @@ Remote mode supports two transports:
 
 ## macOS app setup
 
-1. Open _Settings → General_.
+1. Open *Settings → General*.
 2. Under **OpenClaw runs**, pick **Remote over SSH** and set:
    - **Transport**: **SSH tunnel** or **Direct (ws/wss)**.
    - **SSH target**: `user@host` (optional `:port`).
