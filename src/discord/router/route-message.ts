@@ -8,17 +8,11 @@ import { stripHorizontalRules } from "../markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
-import {
-  DISCORD_API,
-  TYPING_INTERVAL_MS,
-  chunkText,
-  discordSend,
-  discordTyping,
-  stripDashes,
-} from "./discord-api.js";
+import { DISCORD_API, TYPING_INTERVAL_MS, chunkText, discordSend, discordTyping, stripDashes } from "./discord-api.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
+import { resolveWhisperUrl } from "./whisper-url.js";
 
 type DiscordAttachment = {
   id: string;
@@ -80,16 +74,7 @@ export async function routeMessage(params: {
    */
   preacquiredInflight?: boolean;
 }): Promise<boolean> {
-  const {
-    authorId,
-    channelId,
-    attachments,
-    instance,
-    discordToken,
-    runtime,
-    agentTimeoutMs,
-    inflight,
-  } = params;
+  const { authorId, channelId, attachments, instance, discordToken, runtime, agentTimeoutMs, inflight } = params;
   const preacquiredInflight = params.preacquiredInflight === true;
   let messageContent = params.messageContent;
 
@@ -104,9 +89,7 @@ export async function routeMessage(params: {
     inflight.add(channelId);
   }
   try {
-    runtime.log(
-      `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
-    );
+    runtime.log(`[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`);
 
     // Typing indicator
     const typingInterval = setInterval(() => {
@@ -116,7 +99,7 @@ export async function routeMessage(params: {
 
     try {
       // Process attachments: transcribe audio locally, pass images to gateway
-      const WHISPER_URL = process.env.OPENCLAW_WHISPER_URL ?? "http://127.0.0.1:8787/inference";
+      const WHISPER_URL = resolveWhisperUrl();
       let gatewayAttachments: Array<{
         type: string;
         mimeType: string;
@@ -140,9 +123,7 @@ export async function routeMessage(params: {
 
             if (mime.startsWith("audio/")) {
               // Transcribe audio locally via whisper server
-              runtime.log(
-                `[router] transcribing ${att.filename} (${mime}, ${buf.length} bytes)...`,
-              );
+              runtime.log(`[router] transcribing ${att.filename} (${mime}, ${buf.length} bytes)...`);
               try {
                 const form = new FormData();
                 form.append("file", new Blob([buf], { type: mime }), att.filename);
@@ -180,16 +161,12 @@ export async function routeMessage(params: {
                 fileName: att.filename,
                 content: buf.toString("base64"),
               });
-              runtime.log(
-                `[router] downloaded image ${att.filename} (${mime}, ${buf.length} bytes)`,
-              );
+              runtime.log(`[router] downloaded image ${att.filename} (${mime}, ${buf.length} bytes)`);
             } else {
               runtime.log(`[router] skipping unsupported attachment ${att.filename} (${mime})`);
             }
           } catch (dlErr) {
-            runtime.error(
-              `[router] failed to download attachment ${att.filename}: ${String(dlErr)}`,
-            );
+            runtime.error(`[router] failed to download attachment ${att.filename}: ${String(dlErr)}`);
           }
         }
       }
@@ -365,9 +342,7 @@ export async function routeMessage(params: {
     } else if (kind === "auth") {
       // Auth/config failure is an admin problem the user cannot fix by retrying,
       // so don't echo a misleading "try again" — just log for the admin.
-      runtime.error(
-        `[router] auth/config error for channel ${channelId}, needs admin attention (re-auth or restart)`,
-      );
+      runtime.error(`[router] auth/config error for channel ${channelId}, needs admin attention (re-auth or restart)`);
     } else if (kind === "timeout") {
       await discordSend(
         discordToken,
@@ -428,14 +403,10 @@ export async function handleTextCommand(params: {
       const current = instance.preferences.lifecycleMessages ?? false;
       if (cmdArg === "on") {
         setUserPreference(instance, "lifecycleMessages", true);
-        await reply(
-          "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.",
-        );
+        await reply("Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.");
       } else if (cmdArg === "off") {
         setUserPreference(instance, "lifecycleMessages", false);
-        await reply(
-          "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.",
-        );
+        await reply("Lifecycle messages **disabled**. You won't see startup/shutdown notifications.");
       } else {
         await reply(
           current

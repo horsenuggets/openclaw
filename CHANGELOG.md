@@ -6,6 +6,23 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: move the local whisper speech-to-text server off port 8787, which
+  crash-looped the `services.whisper` container on hosts where 8787 was already taken
+  (e.g. WSL mirrored networking sharing the port with another distro, where a foreign
+  listener held `0.0.0.0:8787` and the whisper server could never bind `127.0.0.1:8787`).
+  The port is now a single ops knob: `boot.sh` exports `WHISPER_PORT` (default `18700`, a
+  new shared `DEFAULT_WHISPER_PORT` in `src/config/port-defaults.ts`) and passes it to
+  both the whisper server bind and the router client as `OPENCLAW_WHISPER_PORT`, so the
+  two can never drift. The default sits below the per-agent gateway allocation base
+  (18789): `openclawctl` hands out agent gateway ports ascending from 18789 and each agent
+  derives its browser relay/canvas/CDP ports upward from its own gateway port, so a
+  host-wide shared service must stay clear of that whole range (a fixed port inside it
+  would collide with some agent's derived browser relay as instances are added). 18700 is
+  also off RStudio and the Telegram webhook default. `boot.sh` normalizes the value with
+  the same 1-65535 rule the router applies, so a malformed override falls back to the
+  default on both sides instead of only the server. The router resolves its transcription
+  endpoint via `OPENCLAW_WHISPER_URL` > `OPENCLAW_WHISPER_PORT` > `DEFAULT_WHISPER_PORT`.
+  Override `WHISPER_PORT` in `~/.env` if the default collides on the host.
 - Agents: make workspace context file delivery configurable per file via
   `agents.defaults.context`. Each file
   (SOUL/AGENTS/IDENTITY/USER/TOOLS/HEARTBEAT/BOOTSTRAP/MEMORY) can be delivered `inline`

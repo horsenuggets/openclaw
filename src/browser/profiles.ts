@@ -9,7 +9,9 @@
  *   18789 - Gateway WebSocket
  *   18790 - Bridge
  *   18791 - Browser control server
- *   18792-18799 - Reserved for future one-off services (canvas at 18793)
+ *   18792 - Browser CDP relay (browser control port + 1)
+ *   18793 - Canvas host
+ *   18794-18799 - Reserved for future one-off services
  */
 
 export const CDP_PORT_RANGE_START = 18800;
@@ -24,10 +26,7 @@ export function isValidProfileName(name: string): boolean {
   return PROFILE_NAME_REGEX.test(name);
 }
 
-export function allocateCdpPort(
-  usedPorts: Set<number>,
-  range?: { start: number; end: number },
-): number | null {
+export function allocateCdpPort(usedPorts: Set<number>, range?: { start: number; end: number }): number | null {
   const start = range?.start ?? CDP_PORT_RANGE_START;
   const end = range?.end ?? CDP_PORT_RANGE_END;
   if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end <= 0) {
@@ -44,9 +43,7 @@ export function allocateCdpPort(
   return null;
 }
 
-export function getUsedPorts(
-  profiles: Record<string, { cdpPort?: number; cdpUrl?: string }> | undefined,
-): Set<number> {
+export function getUsedPorts(profiles: Record<string, { cdpPort?: number; cdpUrl?: string }> | undefined): Set<number> {
   if (!profiles) {
     return new Set();
   }
@@ -103,9 +100,7 @@ export function allocateColor(usedColors: Set<string>): string {
   return PROFILE_COLORS[index] ?? PROFILE_COLORS[0];
 }
 
-export function getUsedColors(
-  profiles: Record<string, { color: string }> | undefined,
-): Set<string> {
+export function getUsedColors(profiles: Record<string, { color: string }> | undefined): Set<string> {
   if (!profiles) {
     return new Set();
   }
