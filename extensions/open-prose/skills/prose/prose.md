@@ -411,8 +411,8 @@ statement* DEDENT | "reduce" "(" NAME "," NAME ")" ":" INDENT statement* DEDENT
 
 # Primitives
 
-discretion := "**" TEXT "**" | "_**" TEXT "**_" STRING := '"' ... '"' | '"""' ... '"""'
-collection := NAME | "[" expression* "]" comment := "#" TEXT
+discretion := "\*\*" TEXT "\*\*" | "\*\*\*" TEXT "\*\*\*" STRING := '"' ... '"' | '"""'
+... '"""' collection := NAME | "[" expression* "]" comment := "#" TEXT
 
 ````
 
