@@ -35,11 +35,15 @@ describe("resolveWhisperUrl", () => {
   });
 
   it("builds a loopback URL from OPENCLAW_WHISPER_PORT", () => {
-    expect(resolveWhisperUrl({ OPENCLAW_WHISPER_PORT: "9001" })).toBe("http://127.0.0.1:9001/inference");
+    expect(resolveWhisperUrl({ OPENCLAW_WHISPER_PORT: "9001" })).toBe(
+      "http://127.0.0.1:9001/inference",
+    );
   });
 
   it("trims surrounding whitespace on the overrides", () => {
-    expect(resolveWhisperUrl({ OPENCLAW_WHISPER_PORT: "  9001  " })).toBe("http://127.0.0.1:9001/inference");
+    expect(resolveWhisperUrl({ OPENCLAW_WHISPER_PORT: "  9001  " })).toBe(
+      "http://127.0.0.1:9001/inference",
+    );
     expect(resolveWhisperUrl({ OPENCLAW_WHISPER_URL: "  http://x/y  " })).toBe("http://x/y");
   });
 
