@@ -6,6 +6,17 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: restrict ordinary conversation in shared guild channels to the channel
+  owner; whitelisted admins keep `/channel` management but can no longer converse in
+  channels they do not own.
+- Agents: disable IDENTITY.md context by default behind a new
+  `agents.defaults.identityFile` flag (SOUL.md already covers identity); set it true to
+  re-enable.
+- Agents: unify the silent-reply convention on the `⁘ return` control command across all
+  channels (previously `NO_REPLY`), so it is a host-side no-op on Discord and suppressed
+  pre-send on other channels.
+- Workspace: revamp the prompt templates and add `SYSTEM.md` (editable system-prompt
+  source) plus `SYSTEM.port.md` (porting guide).
 - Discord router: move the local whisper speech-to-text server off port 8787, which
   crash-looped the `services.whisper` container on hosts where 8787 was already taken
   (e.g. WSL mirrored networking sharing the port with another distro, where a foreign
