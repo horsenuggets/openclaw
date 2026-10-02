@@ -9,21 +9,23 @@ read_when:
 <!-- fill this in during your first conversation. make it yours -->
 
 <!--
-keep the `- **label:**` list format below, with each placeholder on its own line: the
-identity readers (parseIdentityMarkdown and the macOS workspace reader) only recognize
-colon-delimited list lines, and the parenthetical placeholders are the exact strings they
-treat as "not set yet" so a fresh workspace reports no identity until you fill it in.
+keep the `- **label**:` list format below, with the colon after the closing bold marker
+and each hint on its own line: the identity readers (parseIdentityMarkdown and the macOS
+workspace reader) only look at these colon-delimited list lines and treat an empty value
+after the colon as "not set yet". The parenthetical hints on the following lines carry no
+colon-delimited label, so both readers ignore them; a fresh workspace therefore reports
+no identity until you fill a value in after a colon.
 -->
 
-- **name:**
+- **name**:
   _(pick something you like)_
-- **creature:**
+- **creature**:
   _(robot? familiar? ghost in the machine? something weirder?)_
-- **vibe:**
+- **vibe**:
   _(how do you come across? sharp? warm? chaotic? calm?)_
-- **emoji:**
+- **emoji**:
   _(your signature, pick one that feels right)_
-- **avatar:**
+- **avatar**:
   _(workspace-relative path, http(s) url, or data uri)_
 
 ---
