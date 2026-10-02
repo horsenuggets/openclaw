@@ -1,7 +1,17 @@
 #!/bin/sh
-FILES=$(git diff --cached --name-only --diff-filter=ACMR | sed 's| |\\ |g')
+# Auto-format staged files before commit, using the tool that owns each type:
+# oxfmt for JS/TS and prettier for Markdown only. Prettier must never touch
+# JS/TS - oxfmt is the source of truth there, and prettier's wider wrap fights
+# it, which breaks the CI `oxfmt --check` gate.
+FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$FILES" ] && exit 0
-echo "$FILES" | xargs pnpm format:fix --no-error-on-unmatched-pattern
-echo "$FILES" | xargs git add
+
+TS_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|ts|tsx)$' || true)
+MD_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.md$' || true)
+
+[ -n "$TS_FILES" ] && printf '%s\n' "$TS_FILES" | sed 's| |\\ |g' | xargs pnpm exec oxfmt --write
+[ -n "$MD_FILES" ] && printf '%s\n' "$MD_FILES" | sed 's| |\\ |g' | xargs pnpm exec prettier --write --no-error-on-unmatched-pattern
+
+printf '%s\n' "$FILES" | sed 's| |\\ |g' | xargs git add
 
 exit 0
