@@ -817,13 +817,13 @@ async function recoverUnansweredMessages(
         continue;
       }
 
-      // In a shared guild channel, only recover a message from the owner or a
-      // whitelisted admin, matching the live MESSAGE_CREATE gate. Fail closed.
+      // In a shared guild channel, only recover a message from the channel
+      // owner, matching the live MESSAGE_CREATE gate. Fail closed.
       if (isGuildChannel && isAuthorized) {
         const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
         if (!allowed) {
           runtime.log(
-            `[router] skipping recovery in guild channel ${channelId}: ${lastUserMsg.author.id} not owner or whitelisted`,
+            `[router] skipping recovery in guild channel ${channelId}: ${lastUserMsg.author.id} not the channel owner`,
           );
           continue;
         }

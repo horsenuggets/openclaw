@@ -250,19 +250,19 @@ You can observe compaction and session state via:
 
 ---
 
-## Silent housekeeping (`NO_REPLY`)
+## Silent housekeeping (silent-reply token)
 
 OpenClaw supports “silent” turns for background tasks where the user should not see
 intermediate output.
 
 Convention:
 
-- The assistant starts its output with `NO_REPLY` to indicate “do not deliver a reply to
+- The assistant starts its output with `⁘ return` to indicate “do not deliver a reply to
   the user”.
 - OpenClaw strips/suppresses this in the delivery layer.
 
 As of `2026.1.10`, OpenClaw also suppresses **draft/typing streaming** when a partial
-chunk begins with `NO_REPLY`, so silent operations don’t leak partial output mid-turn.
+chunk begins with `⁘ return`, so silent operations don’t leak partial output mid-turn.
 
 ---
 
@@ -277,7 +277,7 @@ OpenClaw uses the **pre-threshold flush** approach:
 1. Monitor session context usage.
 2. When it crosses a “soft threshold” (below Pi’s compaction threshold), run a silent
    “write memory now” directive to the agent.
-3. Use `NO_REPLY` so the user sees nothing.
+3. Use `⁘ return` so the user sees nothing.
 
 Config (`agents.defaults.compaction.memoryFlush`):
 
@@ -288,7 +288,7 @@ Config (`agents.defaults.compaction.memoryFlush`):
 
 Notes:
 
-- The default prompt/system prompt include a `NO_REPLY` hint to suppress delivery.
+- The default prompt/system prompt include a `⁘ return` hint to suppress delivery.
 - The flush runs once per compaction cycle (tracked in `sessions.json`).
 - The flush runs only for embedded Pi sessions (CLI backends skip it).
 - The flush is skipped when the session workspace is read-only (`workspaceAccess: "ro"` or
@@ -311,5 +311,5 @@ logic lives on the Gateway side today.
   - compaction settings (`reserveTokens` too high for the model window can cause earlier
     compaction)
   - tool-result bloat: enable/tune session pruning
-- Silent turns leaking? Confirm the reply starts with `NO_REPLY` (exact token) and you’re
+- Silent turns leaking? Confirm the reply starts with `⁘ return` (exact token) and you’re
   on a build that includes the streaming suppression fix.

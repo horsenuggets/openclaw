@@ -70,6 +70,13 @@ token with the real TypeScript interpolation and never type a literal value in i
   actual catalog.
 - `${ownerNumbers}` (written as `<owner>` in earlier drafts) →
   `${ownerNumbers.join(", ")}` in the owner line.
+- `${workspaceDir}` in the Workspace section → `${params.workspaceDir}` inline in
+  `buildAgentSystemPrompt`. The builder interpolates the configured or per-agent workspace
+  directory here, so never hardcode a path (that would point non-default agents at the
+  wrong directory).
+- `⁘ return` (the silent-reply token) → `${SILENT_REPLY_TOKEN}` from
+  `src/auto-reply/tokens.js`. The suppression paths recognize only this value, so never
+  hardcode the literal when the builder has the constant in scope.
 - The entire `## Runtime` line → produced by `buildRuntimeLine`. Treat the `## Runtime`
   block in `SYSTEM.md` as illustration only, and port any wording changes into
   `buildRuntimeLine` rather than as a literal line.
@@ -82,8 +89,10 @@ the model reads them and they must match real tag names.
 - `<id>` in `[[reply_to:<id>]]` → keep it exactly, because it is an instructional
   placeholder the model fills when it emits the tag.
 
-The following are also literal and must stay byte-exact: `NO_REPLY`, `HEARTBEAT_OK`,
-`[[reply_to_current]]`, every tool name, and file names like `MEMORY.md`.
+The following are also literal and must stay byte-exact: `HEARTBEAT_OK`,
+`[[reply_to_current]]`, every tool name, and file names like `MEMORY.md`. The silent-reply
+token `⁘ return` is the exception: it is a constant (`SILENT_REPLY_TOKEN`), so port it as
+the interpolation above rather than as a literal.
 
 ## Structure Rules
 
@@ -104,7 +113,7 @@ The following are also literal and must stay byte-exact: `NO_REPLY`, `HEARTBEAT_
 `SYSTEM.md` is written in the lowercase house style. Porting it verbatim will make the
 live system prompt lowercase too, which is the intent of this exercise. Copy the casing
 exactly as written in `SYSTEM.md`, including the lowercased brand names, and keep only the
-literal tokens (`NO_REPLY`, `HEARTBEAT_OK`, file names, tag names) in their original case.
+literal tokens (`HEARTBEAT_OK`, file names, tag names) in their original case.
 
 ## Special Cases
 

@@ -300,7 +300,7 @@ export type AgentCompactionMemoryFlushConfig = {
   enabled?: boolean;
   /** Run the memory flush when context is within this many tokens of the compaction threshold. */
   softThresholdTokens?: number;
-  /** User prompt used for the memory flush turn (NO_REPLY is enforced if missing). */
+  /** User prompt used for the memory flush turn (the silent-reply token is enforced if missing). */
   prompt?: string;
   /** System prompt appended for the memory flush turn. */
   systemPrompt?: string;
