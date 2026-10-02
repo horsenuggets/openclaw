@@ -5,11 +5,7 @@ import type {
   HumanDelayConfig,
   TypingMode,
 } from "./types.base.js";
-import type {
-  SandboxBrowserSettings,
-  SandboxDockerSettings,
-  SandboxPruneSettings,
-} from "./types.sandbox.js";
+import type { SandboxBrowserSettings, SandboxDockerSettings, SandboxPruneSettings } from "./types.sandbox.js";
 import type { MemorySearchConfig } from "./types.tools.js";
 
 export type AgentModelEntryConfig = {
@@ -140,6 +136,13 @@ export type AgentDefaultsConfig = {
   bootstrapMaxChars?: number;
   /** Per-file delivery mode for workspace context files (inline / preamble / off). */
   context?: WorkspaceContextConfig;
+  /**
+   * Load a separate IDENTITY.md into agent context. Default false: SOUL.md
+   * already carries the agent's identity, so IDENTITY.md is disabled (not loaded
+   * into the prompt) to avoid duplication. Set true to re-enable loading an
+   * IDENTITY.md when one is present in the workspace.
+   */
+  identityFile?: boolean;
   /** Optional IANA timezone for the user (used in system prompt; defaults to host timezone). */
   userTimezone?: string;
   /** Time format in system prompt: auto (OS preference), 12-hour, or 24-hour. */
