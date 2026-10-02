@@ -188,7 +188,8 @@ Behavior details:
 
 - Content: delivery uses the isolated run's outbound payloads (text/media) with normal
   chunking and channel formatting.
-- Heartbeat-only responses (`HEARTBEAT_OK` with no real content) are not delivered.
+- Heartbeat-only responses (the silent-reply token `⁘ return` with no real content) are
+  not delivered.
 - If the isolated run already sent a message to the same target via the message tool,
   delivery is skipped to avoid duplicates.
 - Missing or invalid delivery targets fail the job unless `delivery.bestEffort = true`.

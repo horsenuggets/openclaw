@@ -53,9 +53,6 @@ const parseChunk = (raw: string, options?: { silentToken?: string }): ParsedChun
   // Truncate at the first occurrence of a conversation tag.
   text = text.replace(/\n*<\/?(?:user|assistant)>[\s\S]*$/g, "").trimEnd();
 
-  // Strip stray HEARTBEAT_OK tokens
-  text = text.replace(/\s*HEARTBEAT_OK\s*$/g, "").trimEnd();
-
   const silentToken = options?.silentToken ?? SILENT_REPLY_TOKEN;
   const isSilent = isSilentReplyText(text, silentToken);
   if (isSilent) {

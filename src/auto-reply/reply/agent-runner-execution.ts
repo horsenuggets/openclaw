@@ -29,7 +29,6 @@ import {
   isMarkdownCapableMessageChannel,
   resolveMessageChannel,
 } from "../../utils/message-channel.js";
-import { stripHeartbeatToken } from "../heartbeat.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import { buildThreadingToolContext, resolveEnforceFinalTag } from "./agent-runner-utils.js";
 import { createBlockReplyPayloadKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
@@ -42,7 +41,6 @@ export type AgentRunLoopResult =
       runResult: Awaited<ReturnType<typeof runEmbeddedPiAgent>>;
       fallbackProvider?: string;
       fallbackModel?: string;
-      didLogHeartbeatStrip: boolean;
       autoCompactionCompleted: boolean;
       /** Payload keys sent directly (not via pipeline) during tool flush. */
       directlySentBlockKeys?: Set<string>;
@@ -96,7 +94,6 @@ export async function runAgentTurnWithFallback(params: {
 async function runAgentTurnWithFallbackInner(
   params: Parameters<typeof runAgentTurnWithFallback>[0],
 ): Promise<AgentRunLoopResult> {
-  let didLogHeartbeatStrip = false;
   let autoCompactionCompleted = false;
   // Track payloads sent directly (not via pipeline) during tool flush to avoid duplicates.
   const directlySentBlockKeys = new Set<string>();
@@ -128,20 +125,7 @@ async function runAgentTurnWithFallbackInner(
         if (!allowPartialStream) {
           return { skip: true };
         }
-        let text = payload.text;
-        if (!params.isHeartbeat && text?.includes("HEARTBEAT_OK")) {
-          const stripped = stripHeartbeatToken(text, {
-            mode: "message",
-          });
-          if (stripped.didStrip && !didLogHeartbeatStrip) {
-            didLogHeartbeatStrip = true;
-            logVerbose("Stripped stray HEARTBEAT_OK token from reply");
-          }
-          if (stripped.shouldSkip && (payload.mediaUrls?.length ?? 0) === 0) {
-            return { skip: true };
-          }
-          text = stripped.text;
-        }
+        const text = payload.text;
         if (isSilentReplyText(text, SILENT_REPLY_TOKEN) || text?.includes(SILENT_REPLY_TOKEN)) {
           return { skip: true };
         }
@@ -605,7 +589,6 @@ async function runAgentTurnWithFallbackInner(
     runResult,
     fallbackProvider,
     fallbackModel,
-    didLogHeartbeatStrip,
     autoCompactionCompleted,
     directlySentBlockKeys: directlySentBlockKeys.size > 0 ? directlySentBlockKeys : undefined,
   };

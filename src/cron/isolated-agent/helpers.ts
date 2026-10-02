@@ -1,7 +1,4 @@
-import {
-  DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
-  stripHeartbeatToken,
-} from "../../auto-reply/heartbeat.js";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { truncateUtf16Safe } from "../../utils.js";
 
 type DeliveryPayload = {
@@ -40,29 +37,29 @@ export function pickLastNonEmptyTextFromPayloads(payloads: Array<{ text?: string
 }
 
 /**
- * Check if all payloads are just heartbeat ack responses (HEARTBEAT_OK).
- * Returns true if delivery should be skipped because there's no real content.
+ * Clear the text of any payload whose text carries the silent-reply token (keeping its media)
+ * and drop payloads that end up with neither text nor media. Isolated cron bypasses
+ * `normalizeReplyPayload`, and `deliverOutboundPayloads`' directive parser only strips an edge
+ * token, so token-bearing text must be cleared here (contains-based, matching the universal
+ * contract) before it reaches delivery — even when a sibling payload is deliverable or the
+ * token-bearing payload also has media.
  */
-export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[], ackMaxChars: number) {
-  if (payloads.length === 0) {
-    return true;
-  }
-  return payloads.every((payload) => {
-    // If there's media, we should deliver regardless of text content.
+export function sanitizeHeartbeatDeliveryPayloads<T extends DeliveryPayload>(payloads: T[]): T[] {
+  return payloads.flatMap((payload) => {
     const hasMedia = (payload.mediaUrls?.length ?? 0) > 0 || Boolean(payload.mediaUrl);
-    if (hasMedia) {
-      return false;
+    const text = payload.text?.trim();
+    const isSilent = !text || text.includes(SILENT_REPLY_TOKEN);
+    if (!isSilent) {
+      return [payload];
     }
-    // Use heartbeat mode to check if text is just HEARTBEAT_OK or short ack.
-    const result = stripHeartbeatToken(payload.text, {
-      mode: "heartbeat",
-      maxAckChars: ackMaxChars,
-    });
-    return result.shouldSkip;
+    return hasMedia ? [{ ...payload, text: undefined }] : [];
   });
 }
 
-export function resolveHeartbeatAckMaxChars(agentCfg?: { heartbeat?: { ackMaxChars?: number } }) {
-  const raw = agentCfg?.heartbeat?.ackMaxChars ?? DEFAULT_HEARTBEAT_ACK_MAX_CHARS;
-  return Math.max(0, raw);
+/**
+ * Check if a response has no deliverable content after silent-token sanitization.
+ * Returns true if delivery should be skipped because nothing real remains.
+ */
+export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[]) {
+  return sanitizeHeartbeatDeliveryPayloads(payloads).length === 0;
 }

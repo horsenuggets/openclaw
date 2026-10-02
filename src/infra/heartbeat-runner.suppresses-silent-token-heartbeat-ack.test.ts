@@ -8,6 +8,7 @@ import { setTelegramRuntime } from "../../extensions/telegram/src/runtime.js";
 import { whatsappPlugin } from "../../extensions/whatsapp/src/channel.js";
 import { setWhatsAppRuntime } from "../../extensions/whatsapp/src/runtime.js";
 import * as replyModule from "../auto-reply/reply.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
@@ -31,7 +32,7 @@ beforeEach(() => {
 });
 
 describe("resolveHeartbeatIntervalMs", () => {
-  it("respects ackMaxChars for heartbeat acks", async () => {
+  it("suppresses a silent-token heartbeat ack", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
@@ -43,7 +44,6 @@ describe("resolveHeartbeatIntervalMs", () => {
             heartbeat: {
               every: "5m",
               target: "whatsapp",
-              ackMaxChars: 0,
             },
           },
         },
@@ -69,7 +69,7 @@ describe("resolveHeartbeatIntervalMs", () => {
         ),
       );
 
-      replySpy.mockResolvedValue({ text: "HEARTBEAT_OK 🦞" });
+      replySpy.mockResolvedValue({ text: SILENT_REPLY_TOKEN });
       const sendWhatsApp = vi.fn().mockResolvedValue({
         messageId: "m1",
         toJid: "jid",
@@ -86,14 +86,79 @@ describe("resolveHeartbeatIntervalMs", () => {
         },
       });
 
-      expect(sendWhatsApp).toHaveBeenCalled();
+      expect(sendWhatsApp).not.toHaveBeenCalled();
     } finally {
       replySpy.mockRestore();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
 
-  it("sends HEARTBEAT_OK when visibility.showOk is true", async () => {
+  it("suppresses a heartbeat reply with the silent token mid-text", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
+    const storePath = path.join(tmpDir, "sessions.json");
+    const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
+    try {
+      const cfg: OpenClawConfig = {
+        agents: {
+          defaults: {
+            workspace: tmpDir,
+            heartbeat: {
+              every: "5m",
+              target: "whatsapp",
+            },
+          },
+        },
+        channels: { whatsapp: { allowFrom: ["*"] } },
+        session: { store: storePath },
+      };
+      const sessionKey = resolveMainSessionKey(cfg);
+
+      await fs.writeFile(
+        storePath,
+        JSON.stringify(
+          {
+            [sessionKey]: {
+              sessionId: "sid",
+              updatedAt: Date.now(),
+              lastChannel: "whatsapp",
+              lastProvider: "whatsapp",
+              lastTo: "+1555",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
+      // The silent token buried mid-text must still suppress the reply so the control
+      // command never leaks to the user, matching the universal contains-based contract.
+      replySpy.mockResolvedValue({
+        text: `Checked tasks; ${SILENT_REPLY_TOKEN} because all clear`,
+      });
+      const sendWhatsApp = vi.fn().mockResolvedValue({
+        messageId: "m1",
+        toJid: "jid",
+      });
+
+      await runHeartbeatOnce({
+        cfg,
+        deps: {
+          sendWhatsApp,
+          getQueueSize: () => 0,
+          nowMs: () => 0,
+          webAuthExists: async () => true,
+          hasActiveWebListener: () => true,
+        },
+      });
+
+      expect(sendWhatsApp).not.toHaveBeenCalled();
+    } finally {
+      replySpy.mockRestore();
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("sends a visible OK when visibility.showOk is true", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
@@ -131,7 +196,7 @@ describe("resolveHeartbeatIntervalMs", () => {
         ),
       );
 
-      replySpy.mockResolvedValue({ text: "HEARTBEAT_OK" });
+      replySpy.mockResolvedValue({ text: SILENT_REPLY_TOKEN });
 
       await runHeartbeatOnce({
         cfg,
@@ -149,7 +214,7 @@ describe("resolveHeartbeatIntervalMs", () => {
         expect.objectContaining({
           channel: "whatsapp",
           to: "+1555",
-          payloads: [{ text: "HEARTBEAT_OK" }],
+          payloads: [{ text: "Heartbeat OK" }],
         }),
       );
     } finally {
@@ -226,7 +291,7 @@ describe("resolveHeartbeatIntervalMs", () => {
     }
   });
 
-  it("skips delivery for markup-wrapped HEARTBEAT_OK", async () => {
+  it("skips delivery for ack-like replies without the silent token", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
@@ -263,7 +328,7 @@ describe("resolveHeartbeatIntervalMs", () => {
         ),
       );
 
-      replySpy.mockResolvedValue({ text: "<b>HEARTBEAT_OK</b>" });
+      replySpy.mockResolvedValue({ text: "All caught up, nothing needs attention." });
       const sendWhatsApp = vi.fn().mockResolvedValue({
         messageId: "m1",
         toJid: "jid",

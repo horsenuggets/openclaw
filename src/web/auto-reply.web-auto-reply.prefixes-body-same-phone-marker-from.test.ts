@@ -15,7 +15,7 @@ vi.mock("../agents/pi-embedded.js", () => ({
 
 import { resetInboundDedupe } from "../auto-reply/reply/inbound-dedupe.js";
 import { resetLogger, setLoggerOverride } from "../logging.js";
-import { HEARTBEAT_TOKEN, monitorWebChannel } from "./auto-reply.js";
+import { monitorWebChannel, SILENT_REPLY_TOKEN } from "./auto-reply.js";
 import { resetBaileysMocks, resetLoadConfigMock, setLoadConfigMock } from "./test-helpers.js";
 
 let previousHome: string | undefined;
@@ -345,7 +345,7 @@ describe("web auto-reply", () => {
     expect(reply).toHaveBeenCalledWith("[Mainbot] hello there");
     resetLoadConfigMock();
   });
-  it("does not deliver HEARTBEAT_OK responses", async () => {
+  it("does not deliver silent-token responses", async () => {
     setLoadConfigMock(() => ({
       channels: { whatsapp: { allowFrom: ["*"] } },
       messages: {
@@ -365,8 +365,8 @@ describe("web auto-reply", () => {
       return { close: vi.fn() };
     };
 
-    // Resolver returns exact HEARTBEAT_OK
-    const resolver = vi.fn().mockResolvedValue({ text: HEARTBEAT_TOKEN });
+    // Resolver returns the silent-reply token
+    const resolver = vi.fn().mockResolvedValue({ text: SILENT_REPLY_TOKEN });
 
     await monitorWebChannel(false, listenerFactory, false, resolver);
     expect(capturedOnMessage).toBeDefined();

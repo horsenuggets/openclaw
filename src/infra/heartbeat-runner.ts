@@ -17,12 +17,12 @@ import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import {
   DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
   DEFAULT_HEARTBEAT_EVERY,
+  HEARTBEAT_OK_MESSAGE,
   isHeartbeatContentEffectivelyEmpty,
   resolveHeartbeatPrompt as resolveHeartbeatPromptText,
-  stripHeartbeatToken,
 } from "../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../auto-reply/reply.js";
-import { HEARTBEAT_TOKEN } from "../auto-reply/tokens.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
 import { loadConfig } from "../config/config.js";
@@ -92,7 +92,7 @@ const ACTIVE_HOURS_TIME_PATTERN = /^([01]\d|2[0-3]|24):([0-5]\d)$/;
 
 // Prompt used when an async exec has completed and the result should be relayed to the user.
 // This overrides the standard heartbeat prompt to ensure the model responds with the exec result
-// instead of just "HEARTBEAT_OK".
+// instead of the silent-reply token.
 const EXEC_EVENT_PROMPT =
   "An async command you ran earlier has completed. The result is shown in the system messages above. " +
   "Please relay the command output to the user in a helpful way. If the command succeeded, share the relevant output. " +
@@ -464,7 +464,7 @@ async function restoreHeartbeatUpdatedAt(params: {
 
 // Phrases that indicate the heartbeat found nothing actionable.
 // When the model responds with a short message containing these
-// patterns instead of the expected HEARTBEAT_OK token, suppress
+// patterns instead of the expected silent-reply token, suppress
 // the response so it doesn't leak to the user.
 const HEARTBEAT_NOTHING_PATTERNS = [
   /nothing needs attention/i,
@@ -496,27 +496,21 @@ function normalizeHeartbeatReply(
   responsePrefix: string | undefined,
   ackMaxChars: number,
 ) {
-  const stripped = stripHeartbeatToken(payload.text, {
-    mode: "heartbeat",
-    maxAckChars: ackMaxChars,
-  });
+  const rawText = (payload.text ?? "").trim();
   const hasMedia = Boolean(payload.mediaUrl || (payload.mediaUrls?.length ?? 0) > 0);
-  if (stripped.shouldSkip && !hasMedia) {
-    return {
-      shouldSkip: true,
-      text: "",
-      hasMedia,
-    };
+  // A no-op heartbeat acknowledges with the silent-reply token. Match `normalizeReplyPayload`'s
+  // contains-based contract (any occurrence, not just an edge) since this delivery path bypasses
+  // it: drop the text everywhere and suppress the message entirely unless media rides along.
+  if (rawText.includes(SILENT_REPLY_TOKEN)) {
+    return { shouldSkip: !hasMedia, text: "", hasMedia };
   }
   // Defense-in-depth: suppress responses that are clearly "nothing
-  // to do" acknowledgments even when the model omits HEARTBEAT_OK.
-  if (!stripped.didStrip && !hasMedia && looksLikeHeartbeatAck(stripped.text, ackMaxChars)) {
-    logVerbose(
-      `heartbeat: suppressing ack-like response without HEARTBEAT_OK token (${stripped.text.length} chars)`,
-    );
+  // to do" acknowledgments even when the model omits the silent token.
+  if (!hasMedia && looksLikeHeartbeatAck(rawText, ackMaxChars)) {
+    logVerbose(`heartbeat: suppressing ack-like response (${rawText.length} chars)`);
     return { shouldSkip: true, text: "", hasMedia };
   }
-  let finalText = stripped.text;
+  let finalText = rawText;
   if (responsePrefix && finalText && !finalText.startsWith(responsePrefix)) {
     finalText = `${responsePrefix} ${finalText}`;
   }
@@ -614,7 +608,7 @@ export async function runHeartbeatOnce(opts: {
 
   // Check if this is an exec event with pending exec completion system events.
   // If so, use a specialized prompt that instructs the model to relay the result
-  // instead of the standard heartbeat prompt with "reply HEARTBEAT_OK".
+  // instead of the standard heartbeat prompt that asks for the silent-reply token.
   const isExecEvent = opts.reason === "exec-event";
   const pendingEvents = isExecEvent ? peekSystemEvents(sessionKey) : [];
   const hasExecCompletion = pendingEvents.some((evt) => evt.includes("Exec finished"));
@@ -641,7 +635,9 @@ export async function runHeartbeatOnce(opts: {
     return { status: "skipped", reason: "alerts-disabled" };
   }
 
-  const heartbeatOkText = responsePrefix ? `${responsePrefix} ${HEARTBEAT_TOKEN}` : HEARTBEAT_TOKEN;
+  const heartbeatOkText = responsePrefix
+    ? `${responsePrefix} ${HEARTBEAT_OK_MESSAGE}`
+    : HEARTBEAT_OK_MESSAGE;
   const canAttemptHeartbeatOk = Boolean(
     visibility.showOk && delivery.channel !== "none" && delivery.to,
   );
@@ -703,12 +699,17 @@ export async function runHeartbeatOnce(opts: {
 
     const ackMaxChars = resolveHeartbeatAckMaxChars(cfg, heartbeat);
     const normalized = normalizeHeartbeatReply(replyPayload, responsePrefix, ackMaxChars);
-    // For exec completion events, don't skip even if the response looks like HEARTBEAT_OK.
-    // The model should be responding with exec results, not ack tokens.
-    // Also, if normalized.text is empty due to token stripping but we have exec completion,
-    // fall back to the original reply text.
+    // For exec completion events, don't skip even if the response looks like an ack.
+    // The model should be responding with exec results, not the silent-reply token.
+    // Also, if normalized.text is empty due to an ack-like reply but we have exec completion,
+    // fall back to the original reply text. Never restore text that carries the silent token,
+    // otherwise the contains-based suppression above would be undone and the control command
+    // could leak through the edge-only outbound directive parser.
     const execFallbackText =
-      hasExecCompletion && !normalized.text.trim() && replyPayload.text?.trim()
+      hasExecCompletion &&
+      !normalized.text.trim() &&
+      replyPayload.text?.trim() &&
+      !replyPayload.text.includes(SILENT_REPLY_TOKEN)
         ? replyPayload.text.trim()
         : null;
     if (execFallbackText) {

@@ -10,6 +10,7 @@ import { setWhatsAppRuntime } from "../../extensions/whatsapp/src/runtime.js";
 import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
 import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import * as replyModule from "../auto-reply/reply.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import {
   resolveAgentIdFromSessionKey,
   resolveAgentMainSessionKey,
@@ -743,7 +744,7 @@ describe("runHeartbeatOnce", () => {
     }
   });
 
-  it("delivers reasoning even when the main heartbeat reply is HEARTBEAT_OK", async () => {
+  it("delivers reasoning even when the main heartbeat reply is a silent-token ack", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
@@ -783,7 +784,7 @@ describe("runHeartbeatOnce", () => {
 
       replySpy.mockResolvedValue([
         { text: "Reasoning:\n_Because it helps_" },
-        { text: "HEARTBEAT_OK" },
+        { text: SILENT_REPLY_TOKEN },
       ]);
       const sendWhatsApp = vi.fn().mockResolvedValue({
         messageId: "m1",
@@ -1057,7 +1058,7 @@ describe("runHeartbeatOnce", () => {
         ),
       );
 
-      replySpy.mockResolvedValue({ text: "HEARTBEAT_OK" });
+      replySpy.mockResolvedValue({ text: SILENT_REPLY_TOKEN });
       const sendWhatsApp = vi.fn().mockResolvedValue({
         messageId: "m1",
         toJid: "jid",

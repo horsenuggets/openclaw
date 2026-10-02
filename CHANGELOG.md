@@ -33,6 +33,11 @@ Docs: https://docs.openclaw.ai
 - Agents: unify the silent-reply convention on the `⁘ return` control command across all
   channels (previously `NO_REPLY`), so it is a host-side no-op on Discord and suppressed
   pre-send on other channels.
+- Heartbeat: a no-op heartbeat now acknowledges with the `⁘ return` silent-reply token
+  instead of `HEARTBEAT_OK`, retiring the dedicated token-strip machinery so the existing
+  silent-reply suppression handles heartbeat acks on every channel. When
+  `channels.*.heartbeat.showOk` is enabled, the visible acknowledgment is now
+  `Heartbeat OK`.
 - Workspace: revamp the prompt templates (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md,
   USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
 - Docs: add the `SYSTEM.md` system-prompt source template and rewrite its `SYSTEM.port.md`

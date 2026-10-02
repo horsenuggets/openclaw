@@ -2147,10 +2147,11 @@ require `ZAI_API_KEY` (or legacy `Z_AI_API_KEY`) in the environment.
 - `target`: optional delivery channel (`last`, `whatsapp`, `telegram`, `discord`, `slack`,
   `msteams`, `signal`, `imessage`, `none`). Default: `last`.
 - `prompt`: optional override for the heartbeat body (default:
-  `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`).
+  `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`).
   Overrides are sent verbatim; include a `Read HEARTBEAT.md` line if you still want the
   file read.
-- `ackMaxChars`: max chars allowed after `HEARTBEAT_OK` before delivery (default: 300).
+- `ackMaxChars`: max chars for a tokenless ack-like heartbeat reply to still be suppressed
+  as a no-op (default: 300).
 
 Per-agent heartbeats:
 

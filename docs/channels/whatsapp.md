@@ -381,8 +381,8 @@ WhatsApp sends audio as **voice notes** (PTT bubble).
 - **Agent heartbeat** can be configured per agent (`agents.list[].heartbeat`) or globally
   via `agents.defaults.heartbeat` (fallback when no per-agent entries are set).
   - Uses the configured heartbeat prompt (default:
-    `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`) +
-    `HEARTBEAT_OK` skip behavior.
+    `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`) +
+    silent-reply token (`⁘ return`) skip behavior.
   - Delivery defaults to the last used channel (or configured target).
 
 ## Reconnect behavior

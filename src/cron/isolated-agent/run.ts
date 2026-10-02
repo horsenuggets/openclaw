@@ -52,11 +52,10 @@ import {
 import { resolveCronDeliveryPlan } from "../delivery.js";
 import { resolveDeliveryTarget } from "./delivery-target.js";
 import {
-  isHeartbeatOnlyResponse,
   pickLastNonEmptyTextFromPayloads,
   pickSummaryFromOutput,
   pickSummaryFromPayloads,
-  resolveHeartbeatAckMaxChars,
+  sanitizeHeartbeatDeliveryPayloads,
 } from "./helpers.js";
 import { resolveCronSession } from "./session.js";
 
@@ -412,9 +411,11 @@ export async function runCronIsolatedAgentTurn(params: {
   const outputText = pickLastNonEmptyTextFromPayloads(payloads);
   const deliveryBestEffort = resolveCronDeliveryBestEffort(params.job);
 
-  // Skip delivery for heartbeat-only responses (HEARTBEAT_OK with no real content).
-  const ackMaxChars = resolveHeartbeatAckMaxChars(agentCfg);
-  const skipHeartbeatDelivery = deliveryRequested && isHeartbeatOnlyResponse(payloads, ackMaxChars);
+  // Clear silent-token text (keeping media) before delivery and skip entirely when nothing
+  // deliverable remains. This bypasses the edge-only outbound directive parser so a token
+  // buried mid-text, or riding alongside a deliverable sibling, never leaks to the user.
+  const deliveryPayloads = sanitizeHeartbeatDeliveryPayloads(payloads);
+  const skipHeartbeatDelivery = deliveryRequested && deliveryPayloads.length === 0;
   const skipMessagingToolDelivery =
     deliveryRequested &&
     runResult.didSendViaMessagingTool === true &&
@@ -459,7 +460,7 @@ export async function runCronIsolatedAgentTurn(params: {
         to: resolvedDelivery.to,
         accountId: resolvedDelivery.accountId,
         threadId: resolvedDelivery.threadId,
-        payloads,
+        payloads: deliveryPayloads,
         bestEffort: deliveryBestEffort,
         deps: createOutboundSendDeps(params.deps),
       });

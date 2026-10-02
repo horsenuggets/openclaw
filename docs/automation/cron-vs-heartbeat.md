@@ -45,8 +45,8 @@ designed for the agent to check on things and surface anything important.
 - **Reduces API calls**: A single heartbeat is cheaper than 5 isolated cron jobs.
 - **Context-aware**: The agent knows what you've been working on and can prioritize
   accordingly.
-- **Smart suppression**: If nothing needs attention, the agent replies `HEARTBEAT_OK` and
-  no message is delivered.
+- **Smart suppression**: If nothing needs attention, the agent replies with the
+  silent-reply token `⁘ return` and no message is delivered.
 - **Natural timing**: Drifts slightly based on queue load, which is fine for most
   monitoring.
 
@@ -236,13 +236,13 @@ See [Lobster](/tools/lobster) for full usage and examples.
 
 Both heartbeat and cron can interact with the main session, but differently:
 
-|         | Heartbeat                       | Cron (main)              | Cron (isolated)            |
-| ------- | ------------------------------- | ------------------------ | -------------------------- |
-| Session | Main                            | Main (via system event)  | `cron:<jobId>`             |
-| History | Shared                          | Shared                   | Fresh each run             |
-| Context | Full                            | Full                     | None (starts clean)        |
-| Model   | Main session model              | Main session model       | Can override               |
-| Output  | Delivered if not `HEARTBEAT_OK` | Heartbeat prompt + event | Announce summary (default) |
+|         | Heartbeat                   | Cron (main)              | Cron (isolated)            |
+| ------- | --------------------------- | ------------------------ | -------------------------- |
+| Session | Main                        | Main (via system event)  | `cron:<jobId>`             |
+| History | Shared                      | Shared                   | Fresh each run             |
+| Context | Full                        | Full                     | None (starts clean)        |
+| Model   | Main session model          | Main session model       | Can override               |
+| Output  | Delivered if not `⁘ return` | Heartbeat prompt + event | Announce summary (default) |
 
 ### When to use main session cron
 

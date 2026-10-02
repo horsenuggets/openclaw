@@ -50,7 +50,7 @@ vi.mock("../agents/model-catalog.js", () => modelCatalogMocks);
 
 import { abortEmbeddedPiRun, runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { getReplyFromConfig } from "./reply.js";
-import { HEARTBEAT_TOKEN } from "./tokens.js";
+import { SILENT_REPLY_TOKEN } from "./tokens.js";
 
 const _MAIN_SESSION_KEY = "agent:main:main";
 
@@ -148,10 +148,10 @@ describe("trigger handling", () => {
       expect(call?.model).toBe("claude-haiku-4-5-20251001");
     });
   });
-  it("suppresses HEARTBEAT_OK replies outside heartbeat runs", async () => {
+  it("suppresses silent-token replies outside heartbeat runs", async () => {
     await withTempHome(async (home) => {
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
-        payloads: [{ text: HEARTBEAT_TOKEN }],
+        payloads: [{ text: SILENT_REPLY_TOKEN }],
         meta: {
           durationMs: 1,
           agentMeta: { sessionId: "s", provider: "p", model: "m" },
@@ -172,10 +172,10 @@ describe("trigger handling", () => {
       expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
     });
   });
-  it("strips HEARTBEAT_OK at edges outside heartbeat runs", async () => {
+  it("suppresses replies that mix text with the silent token", async () => {
     await withTempHome(async (home) => {
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
-        payloads: [{ text: `${HEARTBEAT_TOKEN} hello` }],
+        payloads: [{ text: `${SILENT_REPLY_TOKEN} hello` }],
         meta: {
           durationMs: 1,
           agentMeta: { sessionId: "s", provider: "p", model: "m" },
@@ -192,8 +192,7 @@ describe("trigger handling", () => {
         makeCfg(home),
       );
 
-      const text = Array.isArray(res) ? res[0]?.text : res?.text;
-      expect(text).toBe("hello");
+      expect(res).toBeUndefined();
     });
   });
   it("updates group activation when the owner sends /activation", async () => {
