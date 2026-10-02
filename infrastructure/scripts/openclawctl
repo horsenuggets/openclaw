@@ -683,7 +683,9 @@ cmd_restart() {
     echo "Channel $channelId is on the legacy layout and is not started under the" >&2
     echo "token-free agent.yml. Re-register it to adopt the new layout:" >&2
     echo "  openclawctl remove $channelId && rm -rf $INSTANCES_DIR/$channelId && openclawctl add-channel $channelId" >&2
-    exit 0
+    # Nonzero so callers can distinguish a refusal from a completed restart,
+    # consistent with the other restart error paths.
+    exit 1
   fi
 
   echo "Restarting container for channel $channelId on port $port..."
