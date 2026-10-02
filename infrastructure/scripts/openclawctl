@@ -231,11 +231,13 @@ except Exception as e:
 
 # --- Container helpers ---
 
-# Ensure the shared auth-profiles file exists as a regular file before any
-# container mounts it. Seeds from an existing per-instance auth store (one-time
-# migration off the old copy-per-instance model) or an empty store, so a fresh
-# host still comes up cleanly. Idempotent: never clobbers an existing shared
-# file (that file is the live, rotating source of truth).
+# Ensure the shared auth-profiles file exists as a regular file. It is the single
+# store of the REAL provider OAuth token and is read by the router's model proxy
+# (createSharedAuthTokenResolver) to inject the bearer on behalf of token-free
+# boxes. It is NOT mounted into any container. Seeds from an existing per-instance
+# auth store (one-time migration off the old copy-per-instance model) or an empty
+# store, so a fresh host still comes up cleanly. Idempotent: never clobbers an
+# existing shared file (that file is the live, rotating source of truth).
 #
 # Runs the check+seed under the same $PORT_LOCK_FILE lock reserve_port uses, so
 # two concurrent `add-*` invocations on a fresh host can't both see the file
@@ -246,11 +248,10 @@ except Exception as e:
 ensure_shared_auth() {
   (
     flock 9
-    # The shared auth store holds OAuth refresh tokens and is bind-mounted into
-    # every container, so require it to be a real regular file. Reject a symlink
-    # (which -f/-e would silently follow, letting the store be redirected outside
-    # the instances tree) and reject a non-file such as a Docker-created
-    # bind-mount directory. Fail fast rather than cp'ing *into* it.
+    # The shared auth store holds the real OAuth refresh token, so require it to be
+    # a real regular file. Reject a symlink (which -f/-e would silently follow,
+    # letting the store be redirected outside the instances tree) and reject a
+    # non-file such as a stray directory. Fail fast rather than cp'ing *into* it.
     if [ -L "$SHARED_AUTH_FILE" ] || { [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; }; then
       echo "ERROR: $SHARED_AUTH_FILE must be a regular file, not a symlink or directory (e.g. a Docker-created bind-mount dir)." >&2
       echo "       Stop the agent containers, remove that path, and re-run so it can be seeded as a file." >&2
@@ -308,7 +309,7 @@ seed_workspace() {
   local container="agents.channel-$channelId"
   local i
   for i in $(seq 1 10); do
-    if docker exec "$container" sh -lc 'openclaw setup --workspace "$HOME/.openclaw/workspace"' \
+    if docker exec "$container" sh -lc 'openclaw setup --workspace /workspace' \
       >/dev/null 2>&1; then
       return 0
     fi
@@ -329,6 +330,25 @@ seed_workspace() {
 # host.docker.internal only resolves under bridge networking and must NOT be used
 # here, or proactive/heartbeat sends silently fail at DNS resolution.
 CONTAINER_PROXY_URL="http://127.0.0.1:18800"
+
+# The router's model proxy (startModelProxyServer) also listens on loopback. Agent
+# containers are host-networked, so they reach it at 127.0.0.1. Boxes point their
+# provider baseUrl here and send only a placeholder token; the proxy injects the
+# real (refreshed) OAuth bearer, so no provider credential ever lives in a box.
+MODEL_PROXY_URL="http://127.0.0.1:18801"
+
+# The agent container runs as this non-root uid:gid (see agent.yml). Its writable
+# mounts (workspace, state) must be owned by it or writes fail on the read-only
+# rootfs box.
+AGENT_UID=1000
+AGENT_GID=1000
+
+# Placeholder OAuth access token seeded into each box. It makes pi-ai build a
+# subscription-shaped request without the box ever holding a real credential; the
+# model proxy replaces the bearer upstream. Intentionally NOT a secret. expires is
+# set far in the future so the box never attempts a refresh of its own.
+PLACEHOLDER_OAUTH_ACCESS="sk-ant-oat01-PLACEHOLDER-INJECTED-BY-ROUTER-MODEL-PROXY"
+PLACEHOLDER_OAUTH_EXPIRES="4102444800000"
 
 # Default primary model for a freshly-bootstrapped instance, used only when there
 # is no sibling instance to copy config from. Must match the model id seeded into
@@ -381,13 +401,15 @@ seed_instance_config() {
       # has nothing to copy, so seed it explicitly. Written with python because
       # `config set` cannot express the nested arrays/hyphenated header keys; the
       # file config-set just wrote is plain JSON at this point.
-      python3 - "$target" <<'PY' 2>/dev/null ||
-import json, sys
+      OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" python3 - "$target" <<'PY' 2>/dev/null ||
+import json, os, sys
 
 with open(sys.argv[1]) as f:
     cfg = json.load(f)
 cfg.setdefault("models", {}).setdefault("providers", {})["anthropic-subscription"] = {
-    "baseUrl": "https://api.anthropic.com",
+    # Point at the router's model proxy, not the Anthropic API directly. The proxy
+    # injects the real OAuth bearer so the box never holds a provider credential.
+    "baseUrl": os.environ["OPENCLAW_MODEL_PROXY_URL"],
     "api": "anthropic-messages",
     "auth": "oauth",
     "headers": {
@@ -431,10 +453,54 @@ PY
       else
         echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
       fi
+      # Force the model proxy baseUrl and the /workspace path regardless of what a
+      # copied-from-sibling config carried, so every box is token-free and uses the
+      # minimal mount layout (config read-only at /etc, workspace at /workspace).
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+        models.providers.anthropic-subscription.baseUrl "$MODEL_PROXY_URL" >/dev/null 2>&1 ||
+        echo "Warning: could not set model proxy baseUrl in $target; left unchanged" >&2
+      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+        agents.defaults.workspace /workspace >/dev/null 2>&1 ||
+        echo "Warning: could not set agents.defaults.workspace in $target; left unchanged" >&2
     else
       echo "Warning: openclaw CLI not found; left Discord proxyUrl in $target unchanged" >&2
     fi
   fi
+}
+
+# Create the per-instance writable mounts (workspace + state) and seed a
+# placeholder OAuth profile into the box's state dir. The box runs token-free: it
+# needs *a* bearer so pi-ai builds a subscription-shaped request, but the real
+# token lives only in the shared store the router reads — the model proxy swaps the
+# placeholder for the real one upstream. The box auth store lives under the state
+# dir (OPENCLAW_STATE_DIR=/state -> resolveOpenClawAgentDir = /state/agents/main/agent).
+prepare_instance_dirs() {
+  local channelId="$1"
+  local base="$INSTANCES_DIR/$channelId"
+  local agent_dir="$base/state/agents/main/agent"
+  mkdir -p "$base/workspace" "$agent_dir"
+
+  local auth_file="$agent_dir/auth-profiles.json"
+  if [ ! -f "$auth_file" ]; then
+    cat > "$auth_file" <<JSON
+{
+  "version": 1,
+  "profiles": {
+    "anthropic-subscription": {
+      "type": "oauth",
+      "provider": "anthropic-subscription",
+      "access": "$PLACEHOLDER_OAUTH_ACCESS",
+      "refresh": "",
+      "expires": $PLACEHOLDER_OAUTH_EXPIRES
+    }
+  }
+}
+JSON
+  fi
+
+  # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
+  # that uid or writes fail on the read-only-rootfs box.
+  chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" 2>/dev/null || true
 }
 
 # --- Commands ---
@@ -480,6 +546,9 @@ cmd_add_dm() {
   # Seed the instance config (copy from an existing instance, fix proxyUrl)
   seed_instance_config "$channelId"
 
+  # Create writable mounts and seed the placeholder (token-free) auth store.
+  prepare_instance_dirs "$channelId"
+
   # Start container
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
@@ -519,6 +588,9 @@ cmd_add_channel() {
 
   # Seed the instance config (copy from an existing instance, fix proxyUrl)
   seed_instance_config "$channelId"
+
+  # Create writable mounts and seed the placeholder (token-free) auth store.
+  prepare_instance_dirs "$channelId"
 
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"

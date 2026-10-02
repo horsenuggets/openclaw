@@ -6,6 +6,18 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: make per-channel agent containers token-free. Each box now holds no
+  provider credential at all: a new loopback model proxy in the router
+  (`src/discord/router/model-proxy.ts`, port 18801) injects the real (refreshed) Anthropic
+  OAuth bearer on the box's behalf, reusing the shared auth store's refresh-with-lock
+  path, while boxes send only a non-secret placeholder token. The hardened `agent.yml`
+  drops the `auth-profiles.json` and `~/.claude` mounts, splits the instance dir into a
+  read-only config at `/etc/openclaw/openclaw.json` (outside the agent's reach) plus
+  writable `/workspace` and `/state` mounts, moves the binary to `/bin/openclaw`, and runs
+  non-root with a read-only rootfs, dropped capabilities, and `no-new-privileges`.
+  `openclawctl` seeds the placeholder profile and points each box's provider `baseUrl` at
+  the model proxy. A shell escape in a box now finds no token to steal. (Follow-up tracked
+  separately: move boxes off `network_mode: host` to bridge networking.)
 - Discord router: move the local whisper speech-to-text server off port 8787, which
   crash-looped the `services.whisper` container on hosts where 8787 was already taken
   (e.g. WSL mirrored networking sharing the port with another distro, where a foreign
