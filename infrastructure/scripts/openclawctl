@@ -438,7 +438,10 @@ cfg = {
         }
     },
 }
-with open(target, "w") as f:
+# Create 0600 from the outset (not the deploy user's umask) so other host users
+# cannot read gateway.auth.token before the later chown runs.
+fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 PY
@@ -467,7 +470,10 @@ cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
     "anthropic-subscription", {}
 )["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
 cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
-with open(target, "w") as f:
+# Preserve owner-only permissions (the config holds gateway.auth.token).
+fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+os.chmod(target, 0o600)
+with os.fdopen(fd, "w") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 PY
