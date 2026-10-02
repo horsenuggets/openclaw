@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { loadConfig } from "../config/config.js";
 import {
   loadSessionStore,
@@ -444,7 +445,7 @@ export async function runSubagentAnnounceFlow(params: {
       "",
       "Summarize this naturally for the user. Keep it brief (1-2 sentences). Flow it into the conversation naturally.",
       "Do not mention technical details like tokens, stats, or that this was a background task.",
-      "You can respond with NO_REPLY if no announcement is needed (e.g., internal task with no user-facing result).",
+      `You can respond with ONLY ${SILENT_REPLY_TOKEN} if no announcement is needed (e.g., internal task with no user-facing result).`,
     ].join("\n");
 
     const queued = await maybeQueueSubagentAnnounce({

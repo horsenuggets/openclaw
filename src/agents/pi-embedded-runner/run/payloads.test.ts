@@ -1,6 +1,7 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { describe, expect, it } from "vitest";
-import { buildEmbeddedRunPayloads } from "./payloads.js";
+import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+import { buildEmbeddedRunPayloads, runRequestedSilentReply } from "./payloads.js";
 
 describe("buildEmbeddedRunPayloads", () => {
   const errorJson =
@@ -246,5 +247,47 @@ describe("buildEmbeddedRunPayloads", () => {
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.isError).toBe(true);
     expect(payloads[0]?.text).toContain("connection timeout");
+  });
+});
+
+describe("runRequestedSilentReply", () => {
+  const makeTextAssistant = (text: string): AssistantMessage =>
+    ({
+      stopReason: "stop",
+      content: [{ type: "text", text }],
+    }) as AssistantMessage;
+
+  it("detects the silent token in assistant texts", () => {
+    expect(
+      runRequestedSilentReply({ assistantTexts: [SILENT_REPLY_TOKEN], lastAssistant: undefined }),
+    ).toBe(true);
+    expect(
+      runRequestedSilentReply({
+        assistantTexts: [`note ${SILENT_REPLY_TOKEN}`],
+        lastAssistant: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it("falls back to the last assistant message when there are no answer texts", () => {
+    expect(
+      runRequestedSilentReply({
+        assistantTexts: [],
+        lastAssistant: makeTextAssistant(SILENT_REPLY_TOKEN),
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for a genuinely empty or non-silent turn", () => {
+    expect(runRequestedSilentReply({ assistantTexts: [], lastAssistant: undefined })).toBe(false);
+    expect(
+      runRequestedSilentReply({ assistantTexts: ["here you go"], lastAssistant: undefined }),
+    ).toBe(false);
+    expect(
+      runRequestedSilentReply({
+        assistantTexts: [],
+        lastAssistant: makeTextAssistant("all done"),
+      }),
+    ).toBe(false);
   });
 });

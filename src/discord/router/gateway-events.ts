@@ -36,7 +36,6 @@ export type GatewayContext = {
   /** Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may converse. */
   allowedBotIds: Set<string>;
   describeInstance: (channelId: string) => InstanceStatus | null;
-  isWhitelisted: (userId: string) => Promise<boolean>;
   channelCommandDeps: ChannelCommandDeps;
   runAgentCommand: RunAgentCommand;
   /** Tear an instance down through the same provisioning path as unregister. */
@@ -105,7 +104,6 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     channelGuild,
     allowedBotIds,
     describeInstance,
-    isWhitelisted,
     channelCommandDeps,
     runAgentCommand,
   } = ctx;
@@ -252,17 +250,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
 
   // Access control. DMs are inherently 1:1 with the owner, so they
   // pass through untouched (onboarding a brand-new user happens here).
-  // In a shared guild channel, restrict conversation to the channel
-  // owner (the user it was registered for) or a whitelisted admin, so
-  // other members cannot hijack someone else's agent. Fail closed.
-  if (guildId) {
+  // In a shared guild channel, restrict human conversation to the channel
+  // owner. Explicitly trusted automation bots remain allowed for E2E use.
+  if (guildId && !botAllowed) {
     void isAuthorizedForChannel(channelId, authorId, {
       describeInstance,
-      isWhitelisted,
     }).then((allowed) => {
       if (!allowed) {
         runtime.log(
-          `[router] denied message from ${authorId} in channel ${channelId} (not owner or whitelisted)`,
+          `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
         void discordSendEphemeral(
           discordToken,

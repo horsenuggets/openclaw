@@ -1,12 +1,18 @@
 #!/bin/sh
+# Auto-format staged files before commit, using the tool that owns each type:
+# oxfmt for every type it manages (JS/TS plus JSON/JSONC, per .oxfmtrc.jsonc) and
+# prettier for Markdown only. Prettier must never touch oxfmt-managed files - oxfmt
+# is the source of truth there and CI runs the unscoped `oxfmt --check`, so letting
+# prettier rewrite them (its wider wrap) would break the format gate.
 FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$FILES" ] && exit 0
-# Run the repo's canonical formatters (oxfmt for code, prettier for markdown).
-# Intentionally do NOT forward the staged paths into the format scripts. Appending
-# them made `pnpm format:fix` leak the paths into `prettier --write "**/*.md"`,
-# which then also reformatted the non-markdown staged files (TS/YAML) at prettier's
-# width. That conflicts with oxfmt, so the committed result failed `pnpm check`.
-pnpm format:fix
+
+OXFMT_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|mjs|cjs|ts|tsx|mts|cts|json|jsonc)$' || true)
+MD_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.md$' || true)
+
+[ -n "$OXFMT_FILES" ] && printf '%s\n' "$OXFMT_FILES" | sed 's| |\\ |g' | xargs pnpm exec oxfmt --write
+[ -n "$MD_FILES" ] && printf '%s\n' "$MD_FILES" | sed 's| |\\ |g' | xargs pnpm exec prettier --write --no-error-on-unmatched-pattern
+
 printf '%s\n' "$FILES" | sed 's| |\\ |g' | xargs git add
 
 exit 0

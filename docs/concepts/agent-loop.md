@@ -120,7 +120,7 @@ See [Plugins](/plugin#plugin-hooks) for the hook API and registration details.
   - assistant text (and optional reasoning)
   - inline tool summaries (when verbose + allowed)
   - assistant error text when the model errors
-- `NO_REPLY` is treated as a silent token and filtered from outgoing payloads.
+- `⁘ return` is treated as the silent-reply token and filtered from outgoing payloads.
 - Messaging tool duplicates are removed from the final payload list.
 - If no renderable payloads remain and a tool errored, a fallback tool error reply is
   emitted (unless a messaging tool already sent a user-visible reply).

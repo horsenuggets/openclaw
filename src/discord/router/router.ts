@@ -362,7 +362,6 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     channelGuild,
     allowedBotIds,
     describeInstance,
-    isWhitelisted: whitelist.isWhitelisted,
     channelCommandDeps,
     runAgentCommand,
     cleanupDeletedChannel,
@@ -531,7 +530,6 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 (channelId, userId) =>
                   isAuthorizedForChannel(channelId, userId, {
                     describeInstance,
-                    isWhitelisted: whitelist.isWhitelisted,
                   }),
               );
             }, 10_000);
@@ -667,14 +665,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 /** Deps for {@link isAuthorizedForChannel}; kept minimal for unit testing. */
 export type ChannelAuthDeps = {
   describeInstance: (channelId: string) => InstanceStatus | null;
-  isWhitelisted: (userId: string) => Promise<boolean>;
 };
 
 /**
  * Decide whether a user may converse with a registered channel's agent. Allowed
- * when the user is the channel owner (recorded at registration) or a whitelisted
- * admin. Fails closed: if the owner is unknown and the user is not whitelisted,
- * access is denied. Used to gate ordinary messages in shared guild channels.
+ * ONLY for the channel owner (recorded at registration). Whitelisted admins can
+ * still manage channels via `/channel` commands, but they do not get to converse
+ * in a channel they do not own, so another member (even an admin) cannot hijack
+ * someone else's agent. Fails closed: if the owner is unknown, access is denied.
+ * Used to gate ordinary messages in shared guild channels.
  */
 export async function isAuthorizedForChannel(
   channelId: string,
@@ -682,10 +681,7 @@ export async function isAuthorizedForChannel(
   deps: ChannelAuthDeps,
 ): Promise<boolean> {
   const status = deps.describeInstance(channelId);
-  if (status?.ownerId && status.ownerId === userId) {
-    return true;
-  }
-  return deps.isWhitelisted(userId);
+  return Boolean(status?.ownerId && status.ownerId === userId);
 }
 
 /** Deps for {@link handleChannelDeleted}; kept minimal so it is unit-testable. */
@@ -746,7 +742,7 @@ async function recoverUnansweredMessages(
    * recoverable; every other bot's message is treated as a reply/banner.
    */
   allowedBotIds: Set<string>,
-  /** Same guild access control applied to live messages (owner/admin only). */
+  /** Same guild access control applied to live messages (owner only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
   const botId = (
@@ -810,11 +806,13 @@ async function recoverUnansweredMessages(
       // checked first so a user literally typing "*Back online.*" is not mistaken
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
+      let lastUserMsgIsTrustedBot = false;
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
-        const isTrustedBot =
-          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
+        const isTrustedBot = Boolean(
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
+        );
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {
@@ -823,6 +821,7 @@ async function recoverUnansweredMessages(
           break;
         }
         lastUserMsg = msg;
+        lastUserMsgIsTrustedBot = isTrustedBot;
         break;
       }
 
@@ -835,13 +834,13 @@ async function recoverUnansweredMessages(
         continue;
       }
 
-      // In a shared guild channel, only recover a message from the owner or a
-      // whitelisted admin, matching the live MESSAGE_CREATE gate. Fail closed.
-      if (isGuildChannel && isAuthorized) {
+      // In a shared guild channel, only recover a message from the channel
+      // owner, matching the live MESSAGE_CREATE gate. Fail closed.
+      if (isGuildChannel && isAuthorized && !lastUserMsgIsTrustedBot) {
         const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
         if (!allowed) {
           runtime.log(
-            `[router] skipping recovery in guild channel ${channelId}: ${lastUserMsg.author.id} not owner or whitelisted`,
+            `[router] skipping recovery in guild channel ${channelId}: ${lastUserMsg.author.id} not the channel owner`,
           );
           continue;
         }

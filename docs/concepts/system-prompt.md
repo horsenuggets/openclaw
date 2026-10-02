@@ -62,14 +62,15 @@ identity and profile context without needing explicit reads:
 - `AGENTS.md`
 - `SOUL.md`
 - `TOOLS.md`
-- `IDENTITY.md`
+- `IDENTITY.md` (only when `agents.defaults.identityFile` is `true`; off by default)
 - `USER.md`
 - `HEARTBEAT.md`
 - `BOOTSTRAP.md` (only on brand-new workspaces)
 
-Large files are truncated with a marker. The max per-file size is controlled by
-`agents.defaults.bootstrapMaxChars` (default: 20000). Missing files inject a short
-missing-file marker.
+`IDENTITY.md` is omitted by default because `SOUL.md` already carries identity; set
+`agents.defaults.identityFile: true` to inject it. Large files are truncated with a
+marker. The max per-file size is controlled by `agents.defaults.bootstrapMaxChars`
+(default: 20000). Missing files inject a short missing-file marker.
 
 Internal hooks can intercept this step via `agent:bootstrap` to mutate or replace the
 injected bootstrap files (for example swapping `SOUL.md` for an alternate persona).

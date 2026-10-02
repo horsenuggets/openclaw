@@ -3,6 +3,7 @@ import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import { applyBootstrapHookOverrides } from "./bootstrap-hooks.js";
 import { buildBootstrapContextFiles, resolveBootstrapMaxChars } from "./pi-embedded-helpers.js";
 import {
+  DEFAULT_IDENTITY_FILENAME,
   filterBootstrapFilesForSession,
   loadWorkspaceBootstrapFiles,
   type WorkspaceBootstrapFile,
@@ -26,10 +27,18 @@ export async function resolveBootstrapFilesForRun(params: {
   agentId?: string;
 }): Promise<WorkspaceBootstrapFile[]> {
   const sessionKey = params.sessionKey ?? params.sessionId;
-  const bootstrapFiles = filterBootstrapFilesForSession(
+  const loaded = filterBootstrapFilesForSession(
     await loadWorkspaceBootstrapFiles(params.workspaceDir),
     sessionKey,
   );
+  // IDENTITY.md is disabled by default: SOUL.md already carries identity, so we
+  // drop IDENTITY.md from context unless explicitly re-enabled. This gates both
+  // real files and the synthesized "[MISSING]" marker, so neither reaches the
+  // model when the flag is off.
+  const identityEnabled = params.config?.agents?.defaults?.identityFile === true;
+  const bootstrapFiles = identityEnabled
+    ? loaded
+    : loaded.filter((file) => file.name !== DEFAULT_IDENTITY_FILENAME);
   return applyBootstrapHookOverrides({
     files: bootstrapFiles,
     workspaceDir: params.workspaceDir,

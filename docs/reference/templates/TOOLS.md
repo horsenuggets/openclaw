@@ -1,48 +1,48 @@
 ---
-summary: "Workspace template for TOOLS.md"
+summary: "This is the workspace template for TOOLS.md."
 read_when:
-  - Bootstrapping a workspace manually
+  - "Read this when bootstrapping a workspace manually."
 ---
 
-# TOOLS.md - Local Notes
+# TOOLS.md » local notes
 
-Skills define *how* tools work. This file is for *your* specifics, the stuff that's unique
-to your setup.
+skills define *how* tools work. this file is for *your* specifics, the stuff that's unique
+to your setup
 
-## What Goes Here
+## what goes here
 
-Things like:
+things like...
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+- camera names and locations
+- ssh hosts and aliases
+- preferred voices for tts
+- speaker/room names
+- device nicknames
+- anything environment-specific
 
-## Examples
+## examples
 
 ```markdown
-### Cameras
+### cameras
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
+- living-room → main area, 180° wide angle
+- front-door → entrance, motion-triggered
 
-### SSH
+### ssh
 
 - home-server → 192.168.1.100, user: admin
 
-### TTS
+### tts
 
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
+- preferred voice → "Nova" (warm, slightly british)
+- default speaker → kitchen homepod
 ```
 
-## Why Separate?
+## why separate?
 
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills
-without losing your notes, and share skills without leaking your infrastructure.
+skills are shared. your setup is yours. keeping them apart means you can update skills
+without losing your notes, and share skills without leaking your infrastructure
 
 ---
 
-Add whatever helps you do your job. This is your cheat sheet.
+add whatever helps you do your job. this is your cheat sheet

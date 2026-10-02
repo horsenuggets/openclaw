@@ -20,6 +20,25 @@ import {
 
 type ToolMetaEntry = { toolName: string; meta?: string };
 
+/**
+ * Whether the model deliberately asked to stay silent by emitting the silent-reply
+ * token as its answer. Callers pair this with an empty payload list to distinguish an
+ * intentional silent reply from a genuinely empty turn (no text, suppressed recoverable
+ * tool error), which must still surface a fallback. Mirrors the answer-text source used
+ * by buildEmbeddedRunPayloads so the two never drift.
+ */
+export function runRequestedSilentReply(params: {
+  assistantTexts: string[];
+  lastAssistant: AssistantMessage | undefined;
+}): boolean {
+  const texts = params.assistantTexts.length
+    ? params.assistantTexts
+    : params.lastAssistant
+      ? [extractAssistantText(params.lastAssistant)]
+      : [];
+  return texts.some((text) => isSilentReplyText(text, SILENT_REPLY_TOKEN));
+}
+
 export function buildEmbeddedRunPayloads(params: {
   assistantTexts: string[];
   toolMetas: ToolMetaEntry[];

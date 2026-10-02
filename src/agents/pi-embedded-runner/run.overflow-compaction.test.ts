@@ -106,6 +106,7 @@ vi.mock("./logger.js", () => ({
 
 vi.mock("./run/payloads.js", () => ({
   buildEmbeddedRunPayloads: vi.fn(() => []),
+  runRequestedSilentReply: vi.fn(() => false),
 }));
 
 vi.mock("./utils.js", () => ({

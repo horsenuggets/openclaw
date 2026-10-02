@@ -6,11 +6,6 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- Dev: fix the `git-hooks/pre-commit` hook leaking staged file paths into
-  `prettier --write "**/*.md"`, which reformatted staged TS/YAML files at prettier's width
-  and conflicted with oxfmt so `pnpm check` rejected the committed result. The hook now
-  runs the canonical `pnpm format:fix` without forwarding paths, then re-stages the
-  originally staged files.
 - Discord router: make per-channel agent containers token-free. Each box now holds no
   provider credential at all: a new loopback model proxy in the router
   (`src/discord/router/model-proxy.ts`, port 18702) injects the real (refreshed) Anthropic
@@ -28,6 +23,19 @@ Docs: https://docs.openclaw.ai
   only `shared/auth` writable so it can rotate the shared token. A shell escape in a box
   now finds no token to steal. (Follow-up tracked separately: move boxes off
   `network_mode: host` to bridge networking.)
+- Discord router: restrict ordinary conversation in shared guild channels to the channel
+  owner; whitelisted admins keep `/channel` management but can no longer converse in
+  channels they do not own.
+- Agents: disable IDENTITY.md context by default behind a new
+  `agents.defaults.identityFile` flag (SOUL.md already covers identity); set it true to
+  re-enable.
+- Agents: unify the silent-reply convention on the `⁘ return` control command across all
+  channels (previously `NO_REPLY`), so it is a host-side no-op on Discord and suppressed
+  pre-send on other channels.
+- Workspace: revamp the prompt templates (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md,
+  USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
+- Heartbeat: treat a HEARTBEAT.md that contains only HTML comments as empty, so a freshly
+  seeded workspace no longer starts periodic heartbeat API calls.
 - Discord router: move the local whisper speech-to-text server off port 8787, which
   crash-looped the `services.whisper` container on hosts where 8787 was already taken
   (e.g. WSL mirrored networking sharing the port with another distro, where a foreign

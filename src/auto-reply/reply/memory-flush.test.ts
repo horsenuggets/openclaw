@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
   DEFAULT_MEMORY_FLUSH_SOFT_TOKENS,
   resolveMemoryFlushContextWindowTokens,
@@ -25,7 +26,7 @@ describe("memory flush settings", () => {
     ).toBeNull();
   });
 
-  it("appends NO_REPLY hint when missing", () => {
+  it("appends the silent-reply hint when missing", () => {
     const settings = resolveMemoryFlushSettings({
       agents: {
         defaults: {
@@ -38,8 +39,8 @@ describe("memory flush settings", () => {
         },
       },
     });
-    expect(settings?.prompt).toContain("NO_REPLY");
-    expect(settings?.systemPrompt).toContain("NO_REPLY");
+    expect(settings?.prompt).toContain(SILENT_REPLY_TOKEN);
+    expect(settings?.systemPrompt).toContain(SILENT_REPLY_TOKEN);
   });
 });
 
