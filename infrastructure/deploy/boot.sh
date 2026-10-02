@@ -107,7 +107,8 @@ else
     # a re-register hint instead. Migrating legacy instances in place is a follow-up.
     if [ ! -f "$INSTANCES_DIR/$channelId/.token-free" ]; then
       echo "Skipping channel $channelId: legacy layout (no .token-free marker)." >&2
-      echo "  Re-register it to adopt the token-free layout: openclawctl remove $channelId && rm -rf $INSTANCES_DIR/$channelId && openclawctl add-channel $channelId" >&2
+      echo "  Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
+      echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
       continue
     fi
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \

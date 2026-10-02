@@ -693,8 +693,9 @@ cmd_restart() {
 
   if ! is_prepared "$channelId"; then
     echo "Channel $channelId is on the legacy layout and is not started under the" >&2
-    echo "token-free agent.yml. Re-register it to adopt the new layout:" >&2
-    echo "  openclawctl remove $channelId && rm -rf $INSTANCES_DIR/$channelId && openclawctl add-channel $channelId" >&2
+    echo "token-free agent.yml. Re-register it to adopt the new layout (non-destructive:" >&2
+    echo "remove preserves the instance data and add rebuilds the config fresh):" >&2
+    echo "  openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
     # Nonzero so callers can distinguish a refusal from a completed restart,
     # consistent with the other restart error paths.
     exit 1
