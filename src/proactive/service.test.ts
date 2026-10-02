@@ -1,17 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { ProactiveService, type ProactiveServiceDeps } from "./service.js";
 
 // Mock the session store and route-reply modules
 vi.mock("../config/sessions.js", () => ({
   loadSessionStore: vi.fn(),
   resolveStorePath: vi.fn(() => "/tmp/test-sessions.json5"),
-  updateSessionStore: vi.fn(
-    async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
-      mutator({});
-    },
-  ),
+  updateSessionStore: vi.fn(async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
+    mutator({});
+  }),
 }));
 
 vi.mock("../auto-reply/reply/route-reply.js", () => ({
@@ -163,7 +162,7 @@ describe("ProactiveService", () => {
   });
 
   it("does not count silent replies as sent messages", async () => {
-    const runAgent = vi.fn(async () => ({ payloads: [{ text: "NO_REPLY" }] }));
+    const runAgent = vi.fn(async () => ({ payloads: [{ text: SILENT_REPLY_TOKEN }] }));
     mockedLoadSessionStore.mockReturnValue({
       "discord:user-123": makeEntry(),
     });
