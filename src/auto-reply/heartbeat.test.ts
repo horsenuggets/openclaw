@@ -26,11 +26,20 @@ describe("appendHeartbeatAck", () => {
     expect(result).toContain(HEARTBEAT_ACK_INSTRUCTION);
   });
 
-  it("does not duplicate the ack when the prompt already contains the token", () => {
+  it("does not duplicate the ack when the prompt already contains the instruction", () => {
     expect(appendHeartbeatAck(HEARTBEAT_PROMPT)).toBe(HEARTBEAT_PROMPT);
-    expect(appendHeartbeatAck(`do a thing ${SILENT_REPLY_TOKEN}`)).toBe(
-      `do a thing ${SILENT_REPLY_TOKEN}`,
+    expect(appendHeartbeatAck(`do a thing. ${HEARTBEAT_ACK_INSTRUCTION}`)).toBe(
+      `do a thing. ${HEARTBEAT_ACK_INSTRUCTION}`,
     );
+  });
+
+  it("still appends when the prompt only mentions the token without the ack instruction", () => {
+    // A prompt that references `⁘ return` for another reason (e.g. "report accidental
+    // ⁘ return output") must not be mistaken for already carrying the ack instruction.
+    const custom = `Report any accidental ${SILENT_REPLY_TOKEN} output in the logs.`;
+    const result = appendHeartbeatAck(custom);
+    expect(result.startsWith(custom)).toBe(true);
+    expect(result).toContain(HEARTBEAT_ACK_INSTRUCTION);
   });
 });
 

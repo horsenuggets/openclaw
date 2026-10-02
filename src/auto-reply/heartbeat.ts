@@ -74,8 +74,12 @@ export function resolveHeartbeatPrompt(raw?: string): string {
  * Guarantee the silent-reply ack instruction on an injected heartbeat turn body. Custom
  * prompts are returned verbatim by `resolveHeartbeatPrompt` and may omit the ack; without it
  * an idle heartbeat could produce a user-visible reply (the system prompt no longer carries a
- * heartbeat section). The default prompt already includes the token, so avoid duplicating it.
+ * heartbeat section). We detect the exact `HEARTBEAT_ACK_INSTRUCTION` rather than a bare token
+ * occurrence — a prompt that merely mentions `⁘ return` for another reason still needs the
+ * instruction — so the default prompt (which embeds it) is never duplicated.
  */
 export function appendHeartbeatAck(prompt: string): string {
-  return prompt.includes(SILENT_REPLY_TOKEN) ? prompt : `${prompt}\n\n${HEARTBEAT_ACK_INSTRUCTION}`;
+  return prompt.includes(HEARTBEAT_ACK_INSTRUCTION)
+    ? prompt
+    : `${prompt}\n\n${HEARTBEAT_ACK_INSTRUCTION}`;
 }
