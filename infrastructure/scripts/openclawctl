@@ -501,6 +501,14 @@ JSON
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
   chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" 2>/dev/null || true
+
+  # `openclaw config set` writes openclaw.json mode 600 (root-owned). The box
+  # mounts it read-only and runs as AGENT_UID, so hand ownership to that uid or the
+  # gateway crash-loops on "EACCES ... openclaw.json". Keeping it 600 (owner-only)
+  # means it is not world-readable on the host tree.
+  if [ -f "$base/openclaw.json" ]; then
+    chown "$AGENT_UID:$AGENT_GID" "$base/openclaw.json" 2>/dev/null || true
+  fi
 }
 
 # --- Commands ---

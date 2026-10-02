@@ -27,12 +27,20 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 512
-    mem_limit: 2g
+    # Resource limits (pids_limit / mem_limit) are intentionally omitted: they
+    # require cgroup v2 controller delegation that is not reliably available in
+    # the deploy environment (the container fails to start with "cannot enter
+    # cgroupv2 ... with domain controllers -- it is in threaded mode"). The
+    # security-relevant hardening above does not depend on cgroup delegation.
+    # Reintroduce DoS limits only once the host's cgroup setup is confirmed.
     volumes:
       - ~/deploy/bin/openclaw:/bin/openclaw:ro
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro
-      - ~/deploy/docs:/usr/local/bin/docs:ro
+      # Docs must sit next to the binary: openclaw resolves workspace templates as
+      # <binary-dir>/docs (resolveOpenClawDocsPath). The binary is /bin/openclaw,
+      # so docs mount at /bin/docs (not /usr/local/bin/docs) or `openclaw setup`
+      # fails with "Missing workspace template".
+      - ~/deploy/docs:/bin/docs:ro
       # Config is read-only and lives outside /workspace, so the agent's
       # workspace-confined file tools cannot read it. The gateway process reads
       # it once at startup. It carries no provider keys (the model proxy injects
