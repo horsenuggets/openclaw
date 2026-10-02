@@ -158,6 +158,7 @@ describe("discord router channel-delete cleanup", () => {
     delete process.env.OPENCLAW_PROVISIONER_TOKEN;
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -244,6 +245,29 @@ describe("discord router channel-delete cleanup", () => {
     expect(unregisterCalls).toEqual([]);
   });
 
+  it("routes messages from trusted bots in guild channels", async () => {
+    vi.stubEnv("OPENCLAW_ROUTER_ALLOW_BOT_IDS", "trusted-bot");
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "bot-msg-1",
+      author: { id: "trusted-bot", bot: true },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "run the test",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("routing message from trusted-bot"))).toBe(true);
+    expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
+  });
+
   it("learns a channel's guild from interactions so GUILD_DELETE still cleans up", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
@@ -305,6 +329,43 @@ describe("discord router channel-delete cleanup", () => {
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
+  });
+
+  it("recovers trusted bot messages in guild channels", async () => {
+    vi.stubEnv("OPENCLAW_ROUTER_ALLOW_BOT_IDS", "trusted-bot");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({ guild_id: GUILD }) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: "bot-msg-2",
+                author: { id: "trusted-bot", bot: true },
+                content: "recover this test",
+              },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(true);
+    expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(false);
   });
 
   it("does not re-recover a message that already got an error reply", async () => {

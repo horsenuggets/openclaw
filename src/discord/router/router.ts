@@ -792,11 +792,13 @@ async function recoverUnansweredMessages(
       // checked first so a user literally typing "*Back online.*" is not mistaken
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
+      let lastUserMsgIsTrustedBot = false;
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
-        const isTrustedBot =
-          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
+        const isTrustedBot = Boolean(
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
+        );
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {
@@ -805,6 +807,7 @@ async function recoverUnansweredMessages(
           break;
         }
         lastUserMsg = msg;
+        lastUserMsgIsTrustedBot = isTrustedBot;
         break;
       }
 
@@ -819,7 +822,7 @@ async function recoverUnansweredMessages(
 
       // In a shared guild channel, only recover a message from the channel
       // owner, matching the live MESSAGE_CREATE gate. Fail closed.
-      if (isGuildChannel && isAuthorized) {
+      if (isGuildChannel && isAuthorized && !lastUserMsgIsTrustedBot) {
         const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
         if (!allowed) {
           runtime.log(

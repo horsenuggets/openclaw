@@ -250,10 +250,9 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
 
   // Access control. DMs are inherently 1:1 with the owner, so they
   // pass through untouched (onboarding a brand-new user happens here).
-  // In a shared guild channel, restrict conversation to the channel
-  // owner (the user it was registered for), so no other member (even a
-  // whitelisted admin) can hijack someone else's agent. Fail closed.
-  if (guildId) {
+  // In a shared guild channel, restrict human conversation to the channel
+  // owner. Explicitly trusted automation bots remain allowed for E2E use.
+  if (guildId && !botAllowed) {
     void isAuthorizedForChannel(channelId, authorId, {
       describeInstance,
     }).then((allowed) => {
