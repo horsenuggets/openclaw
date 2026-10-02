@@ -368,33 +368,25 @@ PLACEHOLDER_OAUTH_EXPIRES="4102444800000"
 # the anthropic-subscription provider block below.
 BASE_MODEL="anthropic-subscription/claude-sonnet-4-6"
 
-# Seed a new instance's openclaw.json from an existing instance (if any), then
-# force the Discord proxyUrl to the correct loopback address regardless of what
-# the copy source had.
+# Build a new instance's openclaw.json from an allowlist of the non-secret settings
+# a token-free box needs (gateway mode + per-instance auth token, model selection,
+# and the anthropic-subscription provider block). Deliberately does NOT copy a
+# sibling instance's config: a sibling could carry external secrets (channel
+# tokens, inline provider keys, credential-bearing headers) that a shell inside the
+# box could then read from the mounted config despite the read-only mount.
 seed_instance_config() {
   local channelId="$1"
   local target="$INSTANCES_DIR/$channelId/openclaw.json"
-  local dir
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$target"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
 
-  # Fresh host: no sibling instance to copy from, so seed a minimal valid base
-  # config. Without this the first channel on a brand-new host gets no
-  # openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
+  # Build the base config from the allowlist below. Without this the channel gets
+  # no openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
   # gateway.mode=local). The router reads each instance's gateway.auth.token back
   # from this file to authenticate to the agent (see src/discord/router/config.ts),
-  # so a fresh per-instance token is all that is required. Guarded like the
-  # proxyUrl edit below so a failure warns rather than aborting under set -e after
-  # the port is already reserved.
+  # so a fresh per-instance token is all that is required. Guarded so a failure
+  # warns rather than aborting under set -e after the port is already reserved.
   if [ ! -f "$target" ]; then
     if [ -n "$OPENCLAW_BIN" ]; then
-      echo "No existing instance to copy; seeding base config for $channelId"
+      echo "Seeding base config for $channelId"
       local token
       token=$(python3 -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null || true)
       OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.mode local >/dev/null 2>&1 ||
