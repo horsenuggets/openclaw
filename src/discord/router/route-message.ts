@@ -247,17 +247,25 @@ export async function routeMessage(params: {
 
         const payloads = result?.result?.payloads ?? [];
         if (payloads.length === 0) {
-          // Zero payloads from a `deliver:false` run means the gateway reply
-          // pipeline suppressed everything, which is the intended outcome of the
-          // silent-reply token (`⁘ return`, the router's host-side no-op): the
-          // model chose to stay silent. The token is stripped pre-router, so the
-          // `return` control command never reaches runCommand here; treat the
-          // empty result itself as that no-op and stay silent rather than posting
-          // a visible "wasn't able to generate a response" error. Genuine model
-          // failures surface as error payloads (filtered as leaked errors below)
-          // or as thrown errors, not as a clean empty payload list.
+          // A `deliver:false` run returns zero payloads in two very different cases.
+          // The silent-reply token (`⁘ return`, the router's host-side no-op) is
+          // stripped pre-router, so the agent flags it via `meta.silent`: that means
+          // the model deliberately chose to stay silent, and we post nothing. Any
+          // other empty result (no text, a suppressed recoverable tool error, etc.)
+          // is a genuine non-response and still gets the retry fallback so the user
+          // is not left hanging.
+          const silent = Boolean(result?.result?.meta?.silent);
           if (!handled) {
-            runtime.log(`[router] silent (no-op) response for channel ${channelId}`);
+            if (silent) {
+              runtime.log(`[router] silent (no-op) response for channel ${channelId}`);
+            } else {
+              runtime.log(`[router] empty response for channel ${channelId}`);
+              await discordSend(
+                discordToken,
+                channelId,
+                "*I processed your message but wasn't able to generate a response. Please try again.*",
+              );
+            }
           }
           break;
         }
