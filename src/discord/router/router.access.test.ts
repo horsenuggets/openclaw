@@ -16,34 +16,18 @@ function status(over: Partial<InstanceStatus> = {}): InstanceStatus {
 }
 
 describe("isAuthorizedForChannel", () => {
-  it("allows the channel owner without consulting the whitelist", async () => {
-    const isWhitelisted = vi.fn(async () => false);
-    const deps: ChannelAuthDeps = { describeInstance: () => status(), isWhitelisted };
+  it("allows the channel owner", async () => {
+    const deps: ChannelAuthDeps = { describeInstance: () => status() };
     expect(await isAuthorizedForChannel(CHANNEL, OWNER, deps)).toBe(true);
-    expect(isWhitelisted).not.toHaveBeenCalled();
   });
 
-  it("allows a whitelisted admin who is not the owner", async () => {
-    const deps: ChannelAuthDeps = {
-      describeInstance: () => status(),
-      isWhitelisted: async (u) => u === OTHER,
-    };
-    expect(await isAuthorizedForChannel(CHANNEL, OTHER, deps)).toBe(true);
-  });
-
-  it("denies a non-owner, non-whitelisted user", async () => {
-    const deps: ChannelAuthDeps = {
-      describeInstance: () => status(),
-      isWhitelisted: async () => false,
-    };
+  it("denies a non-owner even if they are a whitelisted admin elsewhere", async () => {
+    const deps: ChannelAuthDeps = { describeInstance: () => status() };
     expect(await isAuthorizedForChannel(CHANNEL, OTHER, deps)).toBe(false);
   });
 
-  it("fails closed when the owner is unknown and the user is not whitelisted", async () => {
-    const deps: ChannelAuthDeps = {
-      describeInstance: () => status({ ownerId: undefined }),
-      isWhitelisted: async () => false,
-    };
+  it("fails closed when the owner is unknown", async () => {
+    const deps: ChannelAuthDeps = { describeInstance: () => status({ ownerId: undefined }) };
     expect(await isAuthorizedForChannel(CHANNEL, OWNER, deps)).toBe(false);
   });
 });

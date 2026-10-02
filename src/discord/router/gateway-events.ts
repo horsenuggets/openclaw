@@ -36,7 +36,6 @@ export type GatewayContext = {
   /** Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may converse. */
   allowedBotIds: Set<string>;
   describeInstance: (channelId: string) => InstanceStatus | null;
-  isWhitelisted: (userId: string) => Promise<boolean>;
   channelCommandDeps: ChannelCommandDeps;
   runAgentCommand: RunAgentCommand;
   /** Tear an instance down through the same provisioning path as unregister. */
@@ -105,7 +104,6 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     channelGuild,
     allowedBotIds,
     describeInstance,
-    isWhitelisted,
     channelCommandDeps,
     runAgentCommand,
   } = ctx;
@@ -253,22 +251,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // Access control. DMs are inherently 1:1 with the owner, so they
   // pass through untouched (onboarding a brand-new user happens here).
   // In a shared guild channel, restrict conversation to the channel
-  // owner (the user it was registered for) or a whitelisted admin, so
-  // other members cannot hijack someone else's agent. Fail closed.
+  // owner (the user it was registered for), so no other member (even a
+  // whitelisted admin) can hijack someone else's agent. Fail closed.
   if (guildId) {
     void isAuthorizedForChannel(channelId, authorId, {
       describeInstance,
-      isWhitelisted,
     }).then((allowed) => {
       if (!allowed) {
-        runtime.log(
-          `[router] denied message from ${authorId} in channel ${channelId} (not owner or whitelisted)`,
-        );
-        void discordSendEphemeral(
-          discordToken,
-          channelId,
-          "*You are not authorized to use this channel's agent.*",
-        );
+        runtime.log(`[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`);
+        void discordSendEphemeral(discordToken, channelId, "*You are not authorized to use this channel's agent.*");
         return;
       }
       routeInstanceMessage();
@@ -335,15 +326,14 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
 
     const current = instance.preferences.lifecycleMessages ?? false;
-    const setting = (
-      interactionData.options as Array<{ name: string; value: string }> | undefined
-    )?.find((o: { name: string }) => o.name === "setting")?.value;
+    const setting = (interactionData.options as Array<{ name: string; value: string }> | undefined)?.find(
+      (o: { name: string }) => o.name === "setting",
+    )?.value;
 
     let statusText: string;
     if (setting === "on") {
       setUserPreference(instance, "lifecycleMessages", true);
-      statusText =
-        "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
+      statusText = "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
     } else if (setting === "off") {
       setUserPreference(instance, "lifecycleMessages", false);
       statusText = "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
@@ -403,14 +393,11 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
                 // clear a previous action row (e.g. the confirm button).
                 components: payload.components ?? [],
               };
-        void fetch(
-          `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          },
-        )
+        void fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
           .then((resp) => {
             if (!resp.ok) {
               runtime.error(`[router] channel followup failed (${resp.status})`);
@@ -470,30 +457,25 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: 6 }),
       }).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
-      void handleUnregisterButtonClick({ customId, clickerId }, channelCommandDeps).then(
-        (result) => {
-          if (!result.update) {
-            return;
-          }
-          void fetch(
-            `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                embeds: result.update.embeds,
-                components: result.update.components satisfies DiscordActionRow[],
-              }),
-            },
-          )
-            .then((resp) => {
-              if (!resp.ok) {
-                runtime.error(`[router] button followup failed (${resp.status})`);
-              }
-            })
-            .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
-        },
-      );
+      void handleUnregisterButtonClick({ customId, clickerId }, channelCommandDeps).then((result) => {
+        if (!result.update) {
+          return;
+        }
+        void fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            embeds: result.update.embeds,
+            components: result.update.components satisfies DiscordActionRow[],
+          }),
+        })
+          .then((resp) => {
+            if (!resp.ok) {
+              runtime.error(`[router] button followup failed (${resp.status})`);
+            }
+          })
+          .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
+      });
     }
   }
 }
@@ -503,11 +485,7 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
  * tear it down so we don't keep a dead route around. `eventType` is the
  * originating dispatch name (CHANNEL_DELETE / THREAD_DELETE) used as the reason.
  */
-export function handleChannelDelete(
-  ctx: GatewayContext,
-  d: ChannelDeleteData,
-  eventType: string,
-): void {
+export function handleChannelDelete(ctx: GatewayContext, d: ChannelDeleteData, eventType: string): void {
   const deletedChannelId = d.id;
   if (deletedChannelId) {
     // Drop the learned guild mapping so deleted channels don't
