@@ -17,8 +17,8 @@ context that isn't in memory files.
 
 ## Location
 
-Session logs live at: `~/.openclaw/agents/<agentId>/sessions/` (use the `agent=<id>` value
-from the system prompt Runtime line).
+Session logs live at: `~/.openclaw/agents/<agentId>/sessions/` (use the `agent` value from
+the system prompt Runtime JSON block).
 
 - **`sessions.json`** - Index mapping session keys to session IDs
 - **`<session-id>.jsonl`** - Full conversation transcript per session

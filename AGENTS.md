@@ -327,10 +327,10 @@
 - Tool schema guardrails: avoid raw `format` property names in tool schemas; some
   validators treat `format` as a reserved keyword and reject the schema.
 - When asked to open a “session” file, open the Pi session logs under
-  `~/.openclaw/agents/<agentId>/sessions/*.jsonl` (use the `agent=<id>` value in the
-  Runtime line of the system prompt; newest unless a specific ID is given), not the
-  default `sessions.json`. If logs are needed from another machine, SSH via Tailscale and
-  read the same path there.
+  `~/.openclaw/agents/<agentId>/sessions/*.jsonl` (use the `agent` value in the Runtime
+  JSON block of the system prompt; newest unless a specific ID is given), not the default
+  `sessions.json`. If logs are needed from another machine, SSH via Tailscale and read the
+  same path there.
 - Do not rebuild the macOS app over SSH; rebuilds must be run directly on the Mac.
 - Never send streaming/partial replies to external messaging surfaces (WhatsApp,
   Telegram); only final replies should be delivered there. Streaming/tool events may still

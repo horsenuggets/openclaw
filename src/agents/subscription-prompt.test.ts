@@ -62,6 +62,33 @@ describe("wrapForSubscription", () => {
     expect(wrapped).toContain("Keep this trailing section.");
   });
 
+  it("still strips legacy Title-case headings from caller-provided text", () => {
+    // extraSystemPrompt / older configs may carry the pre-rename Title-case
+    // spellings (and the removed Heartbeats section); these must keep being
+    // stripped or they spill the OAuth request to paid extra usage.
+    const prompt = [
+      "## Persona",
+      "Keep me.",
+      "",
+      "## Reply Tags",
+      "Legacy reply-tag copy.",
+      "",
+      "## Messaging",
+      "Legacy messaging copy.",
+      "",
+      "## Heartbeats",
+      "Any message containing HEARTBEAT_OK will be suppressed from the user.",
+    ].join("\n");
+    const wrapped = wrapForSubscription(prompt);
+    expect(wrapped).not.toContain("## Reply Tags");
+    expect(wrapped).not.toContain("Legacy reply-tag copy.");
+    expect(wrapped).not.toContain("## Messaging");
+    expect(wrapped).not.toContain("Legacy messaging copy.");
+    expect(wrapped).not.toContain("## Heartbeats");
+    expect(wrapped).not.toContain("suppressed from the user");
+    expect(wrapped).toContain("Keep me.");
+  });
+
   it("strips every occurrence of a messaging section (caller + builder copies)", () => {
     const prompt = [
       "## reply tags",

@@ -39,10 +39,13 @@ written in the lowercase house style that mirrors the `SYSTEM.md` template sourc
   capabilities, thinking level, reasoning level; only present fields are emitted). The
   `agent` field is how the session-logs skill locates `~/.openclaw/agents/<agentId>/`.
 
-The identity line, date/time, user identity, and heartbeat guidance are no longer emitted
-as system-prompt sections; identity and workspace context come from the injected AGENTS.md
-/ SOUL.md preamble, the current time from `session_status`, and the heartbeat ack
-instruction from the separately injected heartbeat prompt.
+The base identity line (`actually, you are openclaw...`) is still emitted as the first
+line of every full and `none`-mode prompt. What was removed are the separate **User
+Identity** (owner numbers), **Current Date & Time**, and **Heartbeats** sections, plus the
+**Writing Style** and CLI quick-reference blocks: owner/identity and workspace context now
+come from the injected AGENTS.md / SOUL.md preamble, the current time from
+`session_status`, and the heartbeat ack instruction from the separately injected heartbeat
+prompt.
 
 Safety guardrails in the system prompt are advisory. They guide model behavior but do not
 enforce policy. Use tool policy, exec approvals, sandboxing, and channel allowlists for

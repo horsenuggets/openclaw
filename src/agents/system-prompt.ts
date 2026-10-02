@@ -29,7 +29,21 @@ export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 // wrapForSubscription() strips these for the subscription path.
 export const REPLY_TAGS_HEADING = "## reply tags";
 export const MESSAGING_HEADING = "## messaging";
-export const SUBSCRIPTION_OMIT_HEADINGS = [REPLY_TAGS_HEADING, MESSAGING_HEADING] as const;
+// Legacy Title-case headings (and the removed "## Heartbeats" section) can still
+// arrive via caller-provided extraSystemPrompt or older configs. stripSection runs
+// over that text too, so keep stripping the legacy spellings as well; otherwise a
+// pasted "## Reply Tags" / "## Messaging" / "## Heartbeats" block would reach the
+// OAuth request and spill it to paid extra usage.
+export const LEGACY_SUBSCRIPTION_OMIT_HEADINGS = [
+  "## Reply Tags",
+  "## Messaging",
+  "## Heartbeats",
+] as const;
+export const SUBSCRIPTION_OMIT_HEADINGS = [
+  REPLY_TAGS_HEADING,
+  MESSAGING_HEADING,
+  ...LEGACY_SUBSCRIPTION_OMIT_HEADINGS,
+] as const;
 
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.
