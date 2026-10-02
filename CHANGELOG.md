@@ -17,6 +17,8 @@ Docs: https://docs.openclaw.ai
   pre-send on other channels.
 - Workspace: revamp the prompt templates (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md,
   USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
+- Docs: add the `SYSTEM.md` system-prompt source template and rewrite its `SYSTEM.port.md`
+  porting guide under `docs/reference/templates/` (#72).
 - Heartbeat: treat a HEARTBEAT.md that contains only HTML comments as empty, so a freshly
   seeded workspace no longer starts periodic heartbeat API calls.
 - Discord router: move the local whisper speech-to-text server off port 8787, which
