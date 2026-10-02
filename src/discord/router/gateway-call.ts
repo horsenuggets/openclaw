@@ -11,6 +11,9 @@ type AgentResult = {
   status: string;
   result?: {
     payloads?: Array<{ text?: string; mediaUrl?: string; mediaUrls?: string[] }>;
+    // Set by the agent run when the model deliberately emitted the silent-reply
+    // token, so the router can treat an empty result as an intentional no-op.
+    meta?: { silent?: boolean };
   };
 };
 

@@ -1559,6 +1559,19 @@ with a marker.
 }
 ```
 
+### `agents.defaults.identityFile`
+
+Controls whether `IDENTITY.md` is injected into the agent context. Default: `false`.
+`IDENTITY.md` is omitted by default because `SOUL.md` already carries the persona and
+identity, so injecting both wastes context. Set this to `true` to restore the old behavior
+of injecting `IDENTITY.md` alongside the other workspace bootstrap files.
+
+```json5
+{
+  agents: { defaults: { identityFile: true } },
+}
+```
+
 ### `agents.defaults.userTimezone`
 
 Sets the user’s timezone for **system prompt context** (not for timestamps in message
@@ -2044,7 +2057,7 @@ Legacy defaults:
 
 - `memoryFlush.enabled`: `true`
 - `memoryFlush.softThresholdTokens`: `4000`
-- `memoryFlush.prompt` / `memoryFlush.systemPrompt`: built-in defaults with `NO_REPLY`
+- `memoryFlush.prompt` / `memoryFlush.systemPrompt`: built-in defaults with `⁘ return`
 - Note: memory flush is skipped when the session workspace is read-only
   (`agents.defaults.sandbox.workspaceAccess: "ro"` or `"none"`).
 
@@ -2061,7 +2074,7 @@ Example (tuned):
           enabled: true,
           softThresholdTokens: 6000,
           systemPrompt: "Session nearing compaction. Store durable memories now.",
-          prompt: "Write any lasting notes to memory/YYYY-MM-DD.md; reply with NO_REPLY if nothing to store.",
+          prompt: "Write any lasting notes to memory/YYYY-MM-DD.md; reply with ⁘ return if nothing to store.",
         },
       },
     },

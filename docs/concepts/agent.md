@@ -37,6 +37,10 @@ Inside `agents.defaults.workspace`, OpenClaw expects these user-editable files:
 On the first turn of a new session, OpenClaw injects the contents of these files directly
 into the agent context.
 
+`IDENTITY.md` is the exception: it is no longer injected by default because `SOUL.md`
+already carries the persona and identity. Set `agents.defaults.identityFile: true` to
+re-enable injecting it (see [Configuration](/gateway/configuration)).
+
 Blank files are skipped. Large files are trimmed and truncated with a marker so prompts
 stay lean (read the file for full content).
 

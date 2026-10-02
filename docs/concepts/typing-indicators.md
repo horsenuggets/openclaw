@@ -30,8 +30,8 @@ Set `agents.defaults.typingMode` to one of:
   returns only the silent reply token.
 - `thinking` — start typing on the **first reasoning delta** (requires
   `reasoningLevel: "stream"` for the run).
-- `message` — start typing on the **first non-silent text delta** (ignores the `NO_REPLY`
-  silent token).
+- `message` — start typing on the **first non-silent text delta** (ignores the `⁘ return`
+  silent-reply token).
 
 Order of “how early it fires”: `never` → `message` → `thinking` → `instant`
 
@@ -59,7 +59,7 @@ You can override mode or cadence per session:
 
 ## Notes
 
-- `message` mode won’t show typing for silent-only replies (e.g. the `NO_REPLY` token used
+- `message` mode won’t show typing for silent-only replies (e.g. the `⁘ return` token used
   to suppress output).
 - `thinking` only fires if the run streams reasoning (`reasoningLevel: "stream"`). If the
   model doesn’t emit reasoning deltas, typing won’t start.

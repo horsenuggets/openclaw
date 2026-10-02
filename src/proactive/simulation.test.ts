@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { ProactiveService } from "./service.js";
 
 // ── mocks ──────────────────────────────────────────────────────────
@@ -133,7 +134,7 @@ describe("Multi-day proactive messaging simulation", () => {
       if (hour >= 17 && hour < 22) {
         return "Hope you're having a good evening!";
       }
-      return "NO_REPLY";
+      return SILENT_REPLY_TOKEN;
     });
 
     // Reset the session store with a realistic DM session
@@ -163,7 +164,7 @@ describe("Multi-day proactive messaging simulation", () => {
       const now = Date.now();
       const responder = agentResponses.get(opts.sessionKey) ?? agentResponses.get("default")!;
       const response = responder(opts.message, now);
-      const isSilent = response === "NO_REPLY" || response.trim() === "";
+      const isSilent = response === SILENT_REPLY_TOKEN || response.trim() === "";
 
       events.push({
         type: isSilent ? "silent" : "trigger",
@@ -185,7 +186,7 @@ describe("Multi-day proactive messaging simulation", () => {
       }
 
       return {
-        payloads: isSilent ? [{ text: "NO_REPLY" }] : [{ text: response }],
+        payloads: isSilent ? [{ text: SILENT_REPLY_TOKEN }] : [{ text: response }],
       };
     });
 

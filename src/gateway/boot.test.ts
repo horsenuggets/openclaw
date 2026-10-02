@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 
 const agentCommand = vi.fn();
 
@@ -65,7 +66,7 @@ describe("runBootOnce", () => {
     );
     expect(call?.message).toContain("BOOT.md:");
     expect(call?.message).toContain(content);
-    expect(call?.message).toContain("NO_REPLY");
+    expect(call?.message).toContain(SILENT_REPLY_TOKEN);
 
     await fs.rm(workspaceDir, { recursive: true, force: true });
   });

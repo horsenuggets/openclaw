@@ -27,7 +27,13 @@ export function isHeartbeatContentEffectivelyEmpty(content: string | undefined |
     return false;
   }
 
-  const lines = content.split("\n");
+  // Strip HTML comments (including multi-line blocks) before inspecting lines.
+  // The workspace HEARTBEAT.md template keeps its guidance in `<!-- ... -->`
+  // blocks and explicitly promises that a file with "only comments" skips
+  // heartbeat API calls, so comment-only content must read as empty.
+  const withoutComments = content.replace(/<!--[\s\S]*?-->/g, "");
+
+  const lines = withoutComments.split("\n");
   for (const line of lines) {
     const trimmed = line.trim();
     // Skip empty lines

@@ -40,7 +40,7 @@ These files live under the workspace (`agents.defaults.workspace`, default `~/cl
 
 When a session is **close to auto-compaction**, OpenClaw triggers a **silent, agentic
 turn** that reminds the model to write durable memory **before** the context is compacted.
-The default prompts explicitly say the model *may reply*, but usually `NO_REPLY` is the
+The default prompts explicitly say the model *may reply*, but usually `⁘ return` is the
 correct response so the user never sees this turn.
 
 This is controlled by `agents.defaults.compaction.memoryFlush`:
@@ -55,7 +55,7 @@ This is controlled by `agents.defaults.compaction.memoryFlush`:
           enabled: true,
           softThresholdTokens: 4000,
           systemPrompt: "Session nearing compaction. Store durable memories now.",
-          prompt: "Write any lasting notes to memory/YYYY-MM-DD.md; reply with NO_REPLY if nothing to store.",
+          prompt: "Write any lasting notes to memory/YYYY-MM-DD.md; reply with ⁘ return if nothing to store.",
         },
       },
     },
@@ -67,7 +67,7 @@ Details:
 
 - **Soft threshold**: flush triggers when the session token estimate crosses
   `contextWindow - reserveTokensFloor - softThresholdTokens`.
-- **Silent** by default: prompts include `NO_REPLY` so nothing is delivered.
+- **Silent** by default: prompts include `⁘ return` so nothing is delivered.
 - **Two prompts**: a user prompt plus a system prompt append the reminder.
 - **One flush per compaction cycle** (tracked in `sessions.json`).
 - **Workspace must be writable**: if the session runs sandboxed with

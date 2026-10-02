@@ -51,7 +51,7 @@ import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { resolveModel } from "./model.js";
 import { runEmbeddedAttempt } from "./run/attempt.js";
-import { buildEmbeddedRunPayloads } from "./run/payloads.js";
+import { buildEmbeddedRunPayloads, runRequestedSilentReply } from "./run/payloads.js";
 import { describeUnknownError } from "./utils.js";
 
 type ApiKeyInfo = ResolvedProviderAuth;
@@ -679,6 +679,17 @@ export async function runEmbeddedPiAgent(
             inlineToolResultsAllowed: false,
           });
 
+          // Distinguish an intentional silent reply (model emitted the silent-reply
+          // token) from a genuinely empty turn, so callers that drive the agent
+          // themselves (e.g. the Discord router) can stay silent for the former while
+          // still surfacing a fallback for the latter.
+          const silent =
+            payloads.length === 0 &&
+            runRequestedSilentReply({
+              assistantTexts: attempt.assistantTexts,
+              lastAssistant: attempt.lastAssistant,
+            });
+
           log.debug(
             `embedded run done: runId=${params.runId} sessionId=${params.sessionId} durationMs=${Date.now() - started} aborted=${aborted}`,
           );
@@ -702,6 +713,7 @@ export async function runEmbeddedPiAgent(
               agentMeta,
               aborted,
               systemPromptReport: attempt.systemPromptReport,
+              silent: silent || undefined,
               // Handle client tool calls (OpenResponses hosted tools)
               stopReason: attempt.clientToolCall ? "tool_calls" : undefined,
               pendingToolCalls: attempt.clientToolCall

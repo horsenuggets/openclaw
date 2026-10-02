@@ -1,8 +1,8 @@
 ---
-summary: "Dev agent tools notes (C-3PO)"
+summary: "These are the dev agent tool notes for C-3PO."
 read_when:
-  - Using the dev gateway templates
-  - Updating the default dev agent identity
+  - "Read this when using the dev gateway templates."
+  - "Read this when updating the default dev agent identity."
 ---
 
 # TOOLS.md - User Tool Notes (editable)

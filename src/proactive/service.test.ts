@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { ProactiveService, type ProactiveServiceDeps } from "./service.js";
 
 // Mock the session store and route-reply modules
@@ -163,7 +164,7 @@ describe("ProactiveService", () => {
   });
 
   it("does not count silent replies as sent messages", async () => {
-    const runAgent = vi.fn(async () => ({ payloads: [{ text: "NO_REPLY" }] }));
+    const runAgent = vi.fn(async () => ({ payloads: [{ text: SILENT_REPLY_TOKEN }] }));
     mockedLoadSessionStore.mockReturnValue({
       "discord:user-123": makeEntry(),
     });
@@ -172,7 +173,7 @@ describe("ProactiveService", () => {
     const service = new ProactiveService(deps);
     await service.checkNow();
 
-    // The agent was called but returned NO_REPLY, so info should
+    // The agent was called but returned the silent-reply token, so info should
     // show 0 triggered
     expect(deps.log.info).toHaveBeenCalledWith(expect.stringContaining("triggered 0"));
 

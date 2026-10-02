@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { TemplateContext } from "../templating.js";
 import type { FollowupRun, QueueSettings } from "./queue.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { DEFAULT_MEMORY_FLUSH_PROMPT } from "./memory-flush.js";
 import { createMockTypingController } from "./test-helpers.js";
 
@@ -188,10 +189,10 @@ describe("runReplyAgent memory flush", () => {
 
     const flushCall = calls[0];
     expect(flushCall?.prompt).toContain("Write notes.");
-    expect(flushCall?.prompt).toContain("NO_REPLY");
+    expect(flushCall?.prompt).toContain(SILENT_REPLY_TOKEN);
     expect(flushCall?.extraSystemPrompt).toContain("extra system");
     expect(flushCall?.extraSystemPrompt).toContain("Flush memory now.");
-    expect(flushCall?.extraSystemPrompt).toContain("NO_REPLY");
+    expect(flushCall?.extraSystemPrompt).toContain(SILENT_REPLY_TOKEN);
     expect(calls[1]?.prompt).toBe("hello");
   });
   it("skips memory flush after a prior flush in the same compaction cycle", async () => {

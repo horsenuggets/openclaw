@@ -25,6 +25,13 @@ export type EmbeddedPiRunMeta = {
   };
   /** Stop reason for the agent run (e.g., "completed", "tool_calls"). */
   stopReason?: string;
+  /**
+   * True when the run produced no payloads because the model deliberately emitted the
+   * silent-reply token. Consumers that drive the agent themselves (e.g. the Discord
+   * router) use this to treat an empty result as an intentional no-op rather than a
+   * failed turn that warrants a retry fallback.
+   */
+  silent?: boolean;
   /** Pending tool calls when stopReason is "tool_calls". */
   pendingToolCalls?: Array<{
     id: string;

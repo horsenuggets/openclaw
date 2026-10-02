@@ -22,8 +22,8 @@ For multi-agent setups, set `agents.list[].groupChat.mentionPatterns` per agent 
 - Activation modes: `mention` (default) or `always`. `mention` requires a ping (real
   WhatsApp @-mentions via `mentionedJids`, regex patterns, or the bot’s E.164 anywhere in
   the text). `always` wakes the agent on every message but it should reply only when it
-  can add meaningful value; otherwise it returns the silent token `NO_REPLY`. Defaults can
-  be set in config (`channels.whatsapp.groups`) and overridden per group via
+  can add meaningful value; otherwise it returns the silent-reply token `⁘ return`.
+  Defaults can be set in config (`channels.whatsapp.groups`) and overridden per group via
   `/activation`. When `channels.whatsapp.groups` is set, it also acts as a group allowlist
   (include `"*"` to allow all).
 - Group policy: `channels.whatsapp.groupPolicy` controls whether group messages are

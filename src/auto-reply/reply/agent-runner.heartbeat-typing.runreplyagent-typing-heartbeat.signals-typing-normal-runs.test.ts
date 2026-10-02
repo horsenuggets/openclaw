@@ -4,6 +4,7 @@ import type { TypingMode } from "../../config/types.js";
 import type { TemplateContext } from "../templating.js";
 import type { GetReplyOptions } from "../types.js";
 import type { FollowupRun, QueueSettings } from "./queue.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { createMockTypingController } from "./test-helpers.js";
 
 const runEmbeddedPiAgentMock = vi.fn();
@@ -163,11 +164,11 @@ describe("runReplyAgent typing (heartbeat)", () => {
     expect(typing.startTypingOnText).not.toHaveBeenCalled();
     expect(typing.startTypingLoop).not.toHaveBeenCalled();
   });
-  it("suppresses partial streaming for NO_REPLY", async () => {
+  it("suppresses partial streaming for the silent-reply token", async () => {
     const onPartialReply = vi.fn();
     runEmbeddedPiAgentMock.mockImplementationOnce(async (params: EmbeddedPiAgentParams) => {
-      await params.onPartialReply?.({ text: "NO_REPLY" });
-      return { payloads: [{ text: "NO_REPLY" }], meta: {} };
+      await params.onPartialReply?.({ text: SILENT_REPLY_TOKEN });
+      return { payloads: [{ text: SILENT_REPLY_TOKEN }], meta: {} };
     });
 
     const { run, typing } = createMinimalRun({

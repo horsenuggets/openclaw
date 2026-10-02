@@ -7,6 +7,7 @@ import type { TypingMode } from "../../config/types.js";
 import type { TemplateContext } from "../templating.js";
 import type { GetReplyOptions } from "../types.js";
 import type { FollowupRun, QueueSettings } from "./queue.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { createMockTypingController } from "./test-helpers.js";
 
 const runEmbeddedPiAgentMock = vi.fn();
@@ -165,7 +166,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
   it("skips typing for silent tool results", async () => {
     const onToolResult = vi.fn();
     runEmbeddedPiAgentMock.mockImplementationOnce(async (params: EmbeddedPiAgentParams) => {
-      await params.onToolResult?.({ text: "NO_REPLY", mediaUrls: [] });
+      await params.onToolResult?.({ text: SILENT_REPLY_TOKEN, mediaUrls: [] });
       return { payloads: [{ text: "final" }], meta: {} };
     });
 

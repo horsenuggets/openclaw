@@ -1,11 +1,12 @@
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { OpenClawConfig } from "../config/config.js";
 import {
   clearInternalHooks,
   registerInternalHook,
   type AgentBootstrapHookContext,
 } from "../hooks/internal-hooks.js";
-import { makeTempWorkspace } from "../test-helpers/workspace.js";
+import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace.js";
 import { resolveBootstrapContextForRun, resolveBootstrapFilesForRun } from "./bootstrap-files.js";
 
 describe("resolveBootstrapFilesForRun", () => {
@@ -30,6 +31,27 @@ describe("resolveBootstrapFilesForRun", () => {
     const files = await resolveBootstrapFilesForRun({ workspaceDir });
 
     expect(files.some((file) => file.name === "EXTRA.md")).toBe(true);
+  });
+
+  it("excludes IDENTITY.md from context by default", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-identity-");
+    await writeWorkspaceFile({ dir: workspaceDir, name: "IDENTITY.md", content: "identity" });
+
+    const files = await resolveBootstrapFilesForRun({ workspaceDir });
+
+    expect(files.some((file) => file.name === "IDENTITY.md")).toBe(false);
+  });
+
+  it("includes IDENTITY.md when identityFile is enabled", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-identity-");
+    await writeWorkspaceFile({ dir: workspaceDir, name: "IDENTITY.md", content: "identity" });
+
+    const files = await resolveBootstrapFilesForRun({
+      workspaceDir,
+      config: { agents: { defaults: { identityFile: true } } } as OpenClawConfig,
+    });
+
+    expect(files.some((file) => file.name === "IDENTITY.md")).toBe(true);
   });
 });
 

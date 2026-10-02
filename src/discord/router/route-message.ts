@@ -247,13 +247,25 @@ export async function routeMessage(params: {
 
         const payloads = result?.result?.payloads ?? [];
         if (payloads.length === 0) {
+          // A `deliver:false` run returns zero payloads in two very different cases.
+          // The silent-reply token (`⁘ return`, the router's host-side no-op) is
+          // stripped pre-router, so the agent flags it via `meta.silent`: that means
+          // the model deliberately chose to stay silent, and we post nothing. Any
+          // other empty result (no text, a suppressed recoverable tool error, etc.)
+          // is a genuine non-response and still gets the retry fallback so the user
+          // is not left hanging.
+          const silent = Boolean(result?.result?.meta?.silent);
           if (!handled) {
-            runtime.log(`[router] empty response for channel ${channelId}`);
-            await discordSend(
-              discordToken,
-              channelId,
-              "*I processed your message but wasn't able to generate a response. Please try again.*",
-            );
+            if (silent) {
+              runtime.log(`[router] silent (no-op) response for channel ${channelId}`);
+            } else {
+              runtime.log(`[router] empty response for channel ${channelId}`);
+              await discordSend(
+                discordToken,
+                channelId,
+                "*I processed your message but wasn't able to generate a response. Please try again.*",
+              );
+            }
           }
           break;
         }

@@ -59,6 +59,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    identityFile: z.boolean().optional(),
     userTimezone: z.string().optional(),
     timeFormat: z.union([z.literal("auto"), z.literal("12"), z.literal("24")]).optional(),
     envelopeTimezone: z.string().optional(),

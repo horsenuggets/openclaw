@@ -1,8 +1,8 @@
 ---
-summary: "Dev agent user profile (C-3PO)"
+summary: "This is the dev agent user profile for C-3PO."
 read_when:
-  - Using the dev gateway templates
-  - Updating the default dev agent identity
+  - "Read this when using the dev gateway templates."
+  - "Read this when updating the default dev agent identity."
 ---
 
 # USER.md - User Profile
