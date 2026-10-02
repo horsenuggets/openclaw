@@ -101,6 +101,15 @@ if [ -z "$ASSIGNMENTS" ]; then
 else
   while read -r channelId port; do
     [ -z "$channelId" ] && continue
+    # Only start instances adopted into the token-free layout (marker written by
+    # openclawctl prepare_instance_dirs). A pre-existing instance without it would
+    # mount the new read-only-config / /state layout and crash-loop, so skip it with
+    # a re-register hint instead. Migrating legacy instances in place is a follow-up.
+    if [ ! -f "$INSTANCES_DIR/$channelId/.token-free" ]; then
+      echo "Skipping channel $channelId: legacy layout (no .token-free marker)." >&2
+      echo "  Re-register it to adopt the token-free layout: openclawctl remove $channelId && rm -rf $INSTANCES_DIR/$channelId && openclawctl add-channel $channelId" >&2
+      continue
+    fi
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"

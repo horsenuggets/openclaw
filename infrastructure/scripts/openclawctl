@@ -350,6 +350,11 @@ MODEL_PROXY_URL="http://127.0.0.1:18702"
 AGENT_UID=1000
 AGENT_GID=1000
 
+# Per-instance marker written by prepare_instance_dirs once an instance is adopted
+# into the token-free layout. Its presence gates starting an instance under the new
+# agent.yml, so legacy (unprepared) instances are skipped rather than broken.
+LAYOUT_MARKER=".token-free"
+
 # Canonical profile id the gateway resolves for the anthropic-subscription
 # provider (matches ANTHROPIC_SUBSCRIPTION_PROFILE_ID in the source and what
 # `openclaw auth mint-anthropic` writes), so a config referencing it still
@@ -523,6 +528,17 @@ JSON
   if [ -f "$base/openclaw.json" ]; then
     chown "$AGENT_UID:$AGENT_GID" "$base/openclaw.json" 2>/dev/null || true
   fi
+
+  # Mark the instance as adopted into the token-free layout. boot.sh and restart
+  # start an instance under the new agent.yml only when this marker is present, so
+  # pre-existing (legacy) instances are never mounted into the new layout and
+  # broken; they are skipped with a re-register hint until the migration follow-up.
+  touch "$base/$LAYOUT_MARKER" 2>/dev/null || true
+}
+
+# True when an instance has been prepared for the token-free layout.
+is_prepared() {
+  [ -f "$INSTANCES_DIR/$1/$LAYOUT_MARKER" ]
 }
 
 # --- Commands ---
@@ -656,6 +672,13 @@ cmd_restart() {
   if [ -z "$port" ]; then
     echo "Error: Channel $channelId is not registered."
     exit 1
+  fi
+
+  if ! is_prepared "$channelId"; then
+    echo "Channel $channelId is on the legacy layout and is not started under the" >&2
+    echo "token-free agent.yml. Re-register it to adopt the new layout:" >&2
+    echo "  openclawctl remove $channelId && rm -rf $INSTANCES_DIR/$channelId && openclawctl add-channel $channelId" >&2
+    exit 0
   fi
 
   echo "Restarting container for channel $channelId on port $port..."

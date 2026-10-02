@@ -19,9 +19,11 @@ Docs: https://docs.openclaw.ai
   capabilities, and `no-new-privileges`. `openclawctl` seeds the canonical placeholder
   profile and points each new box's provider `baseUrl` at the model proxy; the router
   mounts only `shared/auth` writable so it can rotate the shared token. A shell escape in
-  a box now finds no token to steal. Applies to newly registered channels; migrating
-  pre-existing instances onto the layout is a tracked follow-up. (Also tracked separately:
-  move boxes off `network_mode: host` to bridge networking.)
+  a box now finds no token to steal. Applies to newly registered channels; a pre-existing
+  instance is left on its old layout (`boot.sh`/`restart` skip any instance without the
+  `.token-free` marker and print a re-register hint) rather than being mounted into the
+  new layout and broken, until in-place migration lands as a tracked follow-up. (Also
+  tracked separately: move boxes off `network_mode: host` to bridge networking.)
 - Discord router: restrict ordinary conversation in shared guild channels to the channel
   owner; whitelisted admins keep `/channel` management but can no longer converse in
   channels they do not own.
