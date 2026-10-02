@@ -1,15 +1,16 @@
 #!/bin/sh
 # Auto-format staged files before commit, using the tool that owns each type:
-# oxfmt for JS/TS and prettier for Markdown only. Prettier must never touch
-# JS/TS - oxfmt is the source of truth there, and prettier's wider wrap fights
-# it, which breaks the CI `oxfmt --check` gate.
+# oxfmt for every type it manages (JS/TS plus JSON/JSONC, per .oxfmtrc.jsonc) and
+# prettier for Markdown only. Prettier must never touch oxfmt-managed files - oxfmt
+# is the source of truth there and CI runs the unscoped `oxfmt --check`, so letting
+# prettier rewrite them (its wider wrap) would break the format gate.
 FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$FILES" ] && exit 0
 
-TS_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|ts|tsx)$' || true)
+OXFMT_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|mjs|cjs|ts|tsx|json|jsonc)$' || true)
 MD_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.md$' || true)
 
-[ -n "$TS_FILES" ] && printf '%s\n' "$TS_FILES" | sed 's| |\\ |g' | xargs pnpm exec oxfmt --write
+[ -n "$OXFMT_FILES" ] && printf '%s\n' "$OXFMT_FILES" | sed 's| |\\ |g' | xargs pnpm exec oxfmt --write
 [ -n "$MD_FILES" ] && printf '%s\n' "$MD_FILES" | sed 's| |\\ |g' | xargs pnpm exec prettier --write --no-error-on-unmatched-pattern
 
 printf '%s\n' "$FILES" | sed 's| |\\ |g' | xargs git add
