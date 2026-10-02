@@ -40,7 +40,13 @@ grepping its heading instead.
 The mapping from `SYSTEM.md` heading to its home in the builder is below. The function
 names are stable even when line numbers move.
 
-- `## tooling` maps to inline in `buildAgentSystemPrompt`.
+- `## tooling` maps to inline in `buildAgentSystemPrompt`, but the tool list is generated,
+  not literal. The builder filters `params.toolNames` by policy, orders them by the
+  internal `toolOrder`, and labels each entry with a description from `coreToolSummaries`
+  (core tools) or `params.toolSummaries` (extension tools). Port wording by editing the
+  matching `coreToolSummaries` description; never paste the `SYSTEM.md` bullet list as a
+  fixed block, or you will advertise unavailable tools and omit dynamically supplied ones.
+  The `SYSTEM.md` list is an illustrative snapshot of the core tools.
 - `## tool call style` maps to inline in `buildAgentSystemPrompt`.
 - `## safety` maps to inline in `buildAgentSystemPrompt`.
 - `## skills (mandatory)` maps to `buildSkillsSection`. The catalog is injected here, so
@@ -51,8 +57,9 @@ names are stable even when line numbers move.
 - `## workspace files (injected)` maps to inline in `buildAgentSystemPrompt`.
 - `## reply tags` maps to `buildReplyTagsSection`. This is stripped on the subscription
   path, so read Special Cases.
-- `## messaging` and `### message tool` map to `buildMessagingSection`. Also stripped on
-  the subscription path.
+- `## messaging` and `### message tool` map to `buildMessagingSection`. The channel list
+  and the inline-button channel are interpolated, not literal (see Tokens). Also stripped
+  on the subscription path.
 - `## silent replies` maps to inline in `buildAgentSystemPrompt`. It uses the
   `SILENT_REPLY_TOKEN` interpolation, so read the Tokens section before touching it.
 - `## message priority` maps to inline in `buildAgentSystemPrompt`.
@@ -87,6 +94,13 @@ with the real TypeScript interpolation and never type a literal value in its pla
   actual catalog.
 - `${workspaceDir}` maps to `${params.workspaceDir}` in the inline workspace lines. Leave
   it as the interpolation; do not hardcode a path.
+- `${messageChannelOptions}` maps to `${params.messageChannelOptions}` in
+  `buildMessagingSection` (the configured channel list in `### message tool`). Leave it as
+  the interpolation; do not hardcode the channel names, or extension channels will be
+  lost.
+- `${runtimeChannel}` maps to `${params.runtimeChannel}` in `buildMessagingSection` (the
+  current channel named in the inline-buttons line). Leave it as the interpolation; do not
+  hardcode a channel name.
 - `⁘ return` in Silent Replies is emitted via the `SILENT_REPLY_TOKEN` constant imported
   from `src/auto-reply/tokens.ts`. Keep the interpolation rather than typing the literal
   marker, so the convention stays in one place.
