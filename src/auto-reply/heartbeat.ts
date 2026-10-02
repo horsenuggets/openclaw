@@ -99,7 +99,10 @@ function stripTokenAtEdges(raw: string): { text: string; didStrip: boolean } {
   return { text: collapsed, didStrip };
 }
 
-export function stripHeartbeatToken(raw?: string, opts: { mode?: StripHeartbeatMode; maxAckChars?: number } = {}) {
+export function stripHeartbeatToken(
+  raw?: string,
+  opts: { mode?: StripHeartbeatMode; maxAckChars?: number } = {},
+) {
   if (!raw) {
     return { shouldSkip: true, text: "", didStrip: false };
   }
@@ -110,7 +113,8 @@ export function stripHeartbeatToken(raw?: string, opts: { mode?: StripHeartbeatM
 
   const mode: StripHeartbeatMode = opts.mode ?? "message";
   const maxAckCharsRaw = opts.maxAckChars;
-  const parsedAckChars = typeof maxAckCharsRaw === "string" ? Number(maxAckCharsRaw) : maxAckCharsRaw;
+  const parsedAckChars =
+    typeof maxAckCharsRaw === "string" ? Number(maxAckCharsRaw) : maxAckCharsRaw;
   const maxAckChars = Math.max(
     0,
     typeof parsedAckChars === "number" && Number.isFinite(parsedAckChars)
@@ -138,7 +142,8 @@ export function stripHeartbeatToken(raw?: string, opts: { mode?: StripHeartbeatM
 
   const strippedOriginal = stripTokenAtEdges(trimmed);
   const strippedNormalized = stripTokenAtEdges(trimmedNormalized);
-  const picked = strippedOriginal.didStrip && strippedOriginal.text ? strippedOriginal : strippedNormalized;
+  const picked =
+    strippedOriginal.didStrip && strippedOriginal.text ? strippedOriginal : strippedNormalized;
   if (!picked.didStrip) {
     return { shouldSkip: false, text: trimmed, didStrip: false };
   }
