@@ -187,6 +187,26 @@ describe("startModelProxyServer", () => {
     expect(health.status).toBe(200);
   });
 
+  it("rejects a non-JSON content-type with 415 before resolving auth or forwarding", async () => {
+    const resolveAccessToken = vi.fn(async () => "REAL-TOKEN");
+    const fetchImpl = vi.fn();
+    const started = await startTestProxy({
+      resolveAccessToken,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    close = started.close;
+
+    const res = await fetch(`${started.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(415);
+    expect(resolveAccessToken).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("serves /health and rejects anything outside the proxied surface", async () => {
     const started = await startTestProxy({
       resolveAccessToken: async () => "REAL-TOKEN",

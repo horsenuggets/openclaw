@@ -70,6 +70,19 @@ export function startModelProxyServer(opts: {
       return;
     }
 
+    // Require application/json before buffering or resolving the credential. A
+    // browser can send a cross-origin text/plain POST as a CORS "simple request"
+    // without a preflight; omitting CORS response headers stops the page reading
+    // the reply but not the request being sent (and billed with the real bearer).
+    // Requiring JSON forces a preflight, which the browser then blocks. Mirrors the
+    // container proxy's guard.
+    const contentType = req.headers["content-type"] ?? "";
+    if (!contentType.split(";")[0].trim().toLowerCase().startsWith("application/json")) {
+      res.writeHead(415, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "content-type must be application/json" }));
+      return;
+    }
+
     const chunks: Buffer[] = [];
     let size = 0;
     let rejected = false;
