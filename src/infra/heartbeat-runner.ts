@@ -22,7 +22,7 @@ import {
   resolveHeartbeatPrompt as resolveHeartbeatPromptText,
 } from "../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../auto-reply/reply.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
 import { loadConfig } from "../config/config.js";
@@ -498,9 +498,10 @@ function normalizeHeartbeatReply(
 ) {
   const rawText = (payload.text ?? "").trim();
   const hasMedia = Boolean(payload.mediaUrl || (payload.mediaUrls?.length ?? 0) > 0);
-  // A no-op heartbeat acknowledges with the silent-reply token; drop the text everywhere and
-  // suppress the message entirely unless media rides along.
-  if (isSilentReplyText(rawText, SILENT_REPLY_TOKEN)) {
+  // A no-op heartbeat acknowledges with the silent-reply token. Match `normalizeReplyPayload`'s
+  // contains-based contract (any occurrence, not just an edge) since this delivery path bypasses
+  // it: drop the text everywhere and suppress the message entirely unless media rides along.
+  if (rawText.includes(SILENT_REPLY_TOKEN)) {
     return { shouldSkip: !hasMedia, text: "", hasMedia };
   }
   // Defense-in-depth: suppress responses that are clearly "nothing

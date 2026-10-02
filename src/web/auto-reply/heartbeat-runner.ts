@@ -1,7 +1,7 @@
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import { HEARTBEAT_OK_MESSAGE, resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../../auto-reply/reply.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { resolveWhatsAppHeartbeatRecipients } from "../../channels/plugins/whatsapp-heartbeat.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -207,9 +207,12 @@ export async function runWebHeartbeatOnce(opts: {
     }
 
     const hasMedia = Boolean(replyPayload.mediaUrl || (replyPayload.mediaUrls?.length ?? 0) > 0);
-    // A no-op heartbeat acknowledges with the silent-reply token; suppress it like every channel.
-    const isAck = isSilentReplyText(replyPayload.text ?? "", SILENT_REPLY_TOKEN);
-    if (isAck && !hasMedia) {
+    // A no-op heartbeat acknowledges with the silent-reply token; suppress it like every
+    // channel. Match `normalizeReplyPayload`'s contains-based contract (any occurrence, not just
+    // an edge) and ignore media here: this runner sends text only, so a token-bearing reply is a
+    // no-op regardless of attached media.
+    const isAck = (replyPayload.text ?? "").includes(SILENT_REPLY_TOKEN);
+    if (isAck) {
       // Don't let heartbeats keep sessions alive: restore previous updatedAt so idle expiry still works.
       const storePath = resolveStorePath(cfg.session?.store);
       const store = loadSessionStore(storePath);

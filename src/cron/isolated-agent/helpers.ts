@@ -1,4 +1,4 @@
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { truncateUtf16Safe } from "../../utils.js";
 
 type DeliveryPayload = {
@@ -51,6 +51,8 @@ export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[]) {
       return false;
     }
     const text = payload.text?.trim();
-    return !text || isSilentReplyText(text, SILENT_REPLY_TOKEN);
+    // Isolated cron bypasses `normalizeReplyPayload`, so apply the same contains-based
+    // silent-token contract here: any occurrence (not just an edge) marks a no-op ack.
+    return !text || text.includes(SILENT_REPLY_TOKEN);
   });
 }
