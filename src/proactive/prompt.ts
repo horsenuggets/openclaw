@@ -38,7 +38,7 @@ export type BuildProactivePromptParams = {
 /**
  * Build the proactive messaging system prompt injected into a user session.
  * The agent sees this and decides whether to send a natural message or
- * stay silent with NO_REPLY.
+ * stay silent with the silent-reply token.
  */
 export function buildProactivePrompt(params: BuildProactivePromptParams): string {
   const { formattedTime, userIdleMs, agentIdleMs, isStartup } = params;

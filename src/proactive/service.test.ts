@@ -173,7 +173,7 @@ describe("ProactiveService", () => {
     const service = new ProactiveService(deps);
     await service.checkNow();
 
-    // The agent was called but returned NO_REPLY, so info should
+    // The agent was called but returned the silent-reply token, so info should
     // show 0 triggered
     expect(deps.log.info).toHaveBeenCalledWith(expect.stringContaining("triggered 0"));
 
