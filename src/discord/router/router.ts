@@ -11,7 +11,13 @@ import {
 } from "./channel-commands.js";
 import { loadRouterConfig } from "./config.js";
 import { startContainerProxyServer } from "./container-proxy.js";
-import { DISCORD_API, discordSend, discordSendEmbed, openDMChannel, probePort } from "./discord-api.js";
+import {
+  DISCORD_API,
+  discordSend,
+  discordSendEmbed,
+  openDMChannel,
+  probePort,
+} from "./discord-api.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -72,7 +78,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         },
       ],
     }),
-  }).catch((err) => runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`));
+  }).catch((err) =>
+    runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
+  );
 
   // Register the /channel management command (register/status/unregister).
   await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
@@ -179,7 +187,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     }
     let ownerId: string | undefined;
     try {
-      const raw = JSON.parse(fs.readFileSync(path.join(inst.instanceDir, ".onboarding.json"), "utf-8"));
+      const raw = JSON.parse(
+        fs.readFileSync(path.join(inst.instanceDir, ".onboarding.json"), "utf-8"),
+      );
       ownerId = typeof raw?.ownerId === "string" ? raw.ownerId : undefined;
     } catch {
       // no owner recorded yet
@@ -223,7 +233,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     }),
     unregister: async () => ({
       ok: false,
-      message: "Unregistration is not available on this deployment (provisioning service not wired).",
+      message:
+        "Unregistration is not available on this deployment (provisioning service not wired).",
     }),
   };
   const daemonProvisioning =
@@ -282,7 +293,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         inflight,
         probe: (port) => probePort(port),
         runtime,
-        route: ({ channelId: cId, ownerId: oId, instance: inst, systemTurn, preacquiredInflight }) =>
+        route: ({
+          channelId: cId,
+          ownerId: oId,
+          instance: inst,
+          systemTurn,
+          preacquiredInflight,
+        }) =>
           routeMessage({
             authorId: oId,
             channelId: cId,
@@ -409,7 +426,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     connectionSeq += 1;
     liveSockets += 1;
     const attempt = connectionSeq;
-    runtime.log(`[router] connect() attempt #${attempt} (resume=${resume}, liveSockets=${liveSockets})`);
+    runtime.log(
+      `[router] connect() attempt #${attempt} (resume=${resume}, liveSockets=${liveSockets})`,
+    );
     const url = resume && resumeGatewayUrl ? resumeGatewayUrl : gatewayUrl;
     const ws = new WebSocket(`${url}/?v=10&encoding=json`);
     currentWs = ws;
@@ -561,7 +580,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             sessionId = undefined;
             lastSequence = null;
           }
-          runtime.log(`[router] invalid session (resumable=${d === true}), reconnecting (attempt #${attempt})`);
+          runtime.log(
+            `[router] invalid session (resumable=${d === true}), reconnecting (attempt #${attempt})`,
+          );
           ws.close();
           break;
       }
@@ -569,7 +590,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
 
     ws.on("close", (code: number) => {
       liveSockets = Math.max(0, liveSockets - 1);
-      runtime.log(`[router] WebSocket closed (${code}) (attempt #${attempt}, liveSockets=${liveSockets})`);
+      runtime.log(
+        `[router] WebSocket closed (${code}) (attempt #${attempt}, liveSockets=${liveSockets})`,
+      );
       // Ignore a close from a socket we've already superseded — only the
       // authoritative socket may drive reconnection. Guarding *before* the
       // heartbeat cleanup is essential: `heartbeatInterval` is shared and owned
@@ -682,7 +705,11 @@ export type ChannelDeletedDeps = {
  * channel had no registered instance. Uses the same provisioning path as
  * `/channel unregister`, so the instance map is reconciled on success.
  */
-export async function handleChannelDeleted(channelId: string, reason: string, deps: ChannelDeletedDeps): Promise<void> {
+export async function handleChannelDeleted(
+  channelId: string,
+  reason: string,
+  deps: ChannelDeletedDeps,
+): Promise<void> {
   if (!deps.describeInstance(channelId)) {
     return; // nothing registered for this channel
   }
@@ -786,7 +813,8 @@ async function recoverUnansweredMessages(
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
-        const isTrustedBot = msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
+        const isTrustedBot =
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds);
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg.content)) {

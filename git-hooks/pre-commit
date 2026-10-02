@@ -1,7 +1,12 @@
 #!/bin/sh
-FILES=$(git diff --cached --name-only --diff-filter=ACMR | sed 's| |\\ |g')
+FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$FILES" ] && exit 0
-echo "$FILES" | xargs pnpm format:fix --no-error-on-unmatched-pattern
-echo "$FILES" | xargs git add
+# Run the repo's canonical formatters (oxfmt for code, prettier for markdown).
+# Intentionally do NOT forward the staged paths into the format scripts. Appending
+# them made `pnpm format:fix` leak the paths into `prettier --write "**/*.md"`,
+# which then also reformatted the non-markdown staged files (TS/YAML) at prettier's
+# width. That conflicts with oxfmt, so the committed result failed `pnpm check`.
+pnpm format:fix
+printf '%s\n' "$FILES" | sed 's| |\\ |g' | xargs git add
 
 exit 0

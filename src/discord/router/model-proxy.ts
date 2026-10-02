@@ -149,7 +149,9 @@ export function createSharedAuthTokenResolver(instancesDir: string): ResolveAcce
       return profile?.type === "oauth" && profile.provider === ANTHROPIC_SUBSCRIPTION_PROVIDER;
     });
     if (!profileId) {
-      throw new Error(`No ${ANTHROPIC_SUBSCRIPTION_PROVIDER} OAuth profile in shared auth store at ${sharedAuthDir}`);
+      throw new Error(
+        `No ${ANTHROPIC_SUBSCRIPTION_PROVIDER} OAuth profile in shared auth store at ${sharedAuthDir}`,
+      );
     }
     const resolved = await resolveApiKeyForProfile({
       store,

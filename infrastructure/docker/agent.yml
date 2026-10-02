@@ -58,4 +58,5 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["/bin/openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]
+    command:
+      ["/bin/openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]
