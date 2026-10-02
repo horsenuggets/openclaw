@@ -27,7 +27,13 @@ export function isHeartbeatContentEffectivelyEmpty(content: string | undefined |
     return false;
   }
 
-  const lines = content.split("\n");
+  // Strip HTML comments (including multi-line blocks) before inspecting lines.
+  // The workspace HEARTBEAT.md template keeps its guidance in `<!-- ... -->`
+  // blocks and explicitly promises that a file with "only comments" skips
+  // heartbeat API calls, so comment-only content must read as empty.
+  const withoutComments = content.replace(/<!--[\s\S]*?-->/g, "");
+
+  const lines = withoutComments.split("\n");
   for (const line of lines) {
     const trimmed = line.trim();
     // Skip empty lines
@@ -93,10 +99,7 @@ function stripTokenAtEdges(raw: string): { text: string; didStrip: boolean } {
   return { text: collapsed, didStrip };
 }
 
-export function stripHeartbeatToken(
-  raw?: string,
-  opts: { mode?: StripHeartbeatMode; maxAckChars?: number } = {},
-) {
+export function stripHeartbeatToken(raw?: string, opts: { mode?: StripHeartbeatMode; maxAckChars?: number } = {}) {
   if (!raw) {
     return { shouldSkip: true, text: "", didStrip: false };
   }
@@ -107,8 +110,7 @@ export function stripHeartbeatToken(
 
   const mode: StripHeartbeatMode = opts.mode ?? "message";
   const maxAckCharsRaw = opts.maxAckChars;
-  const parsedAckChars =
-    typeof maxAckCharsRaw === "string" ? Number(maxAckCharsRaw) : maxAckCharsRaw;
+  const parsedAckChars = typeof maxAckCharsRaw === "string" ? Number(maxAckCharsRaw) : maxAckCharsRaw;
   const maxAckChars = Math.max(
     0,
     typeof parsedAckChars === "number" && Number.isFinite(parsedAckChars)
@@ -136,8 +138,7 @@ export function stripHeartbeatToken(
 
   const strippedOriginal = stripTokenAtEdges(trimmed);
   const strippedNormalized = stripTokenAtEdges(trimmedNormalized);
-  const picked =
-    strippedOriginal.didStrip && strippedOriginal.text ? strippedOriginal : strippedNormalized;
+  const picked = strippedOriginal.didStrip && strippedOriginal.text ? strippedOriginal : strippedNormalized;
   if (!picked.didStrip) {
     return { shouldSkip: false, text: trimmed, didStrip: false };
   }

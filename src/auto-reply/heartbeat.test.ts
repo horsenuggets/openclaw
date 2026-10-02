@@ -137,6 +137,21 @@ describe("isHeartbeatContentEffectivelyEmpty", () => {
     expect(isHeartbeatContentEffectivelyEmpty("## Subheader\n### Another")).toBe(true);
   });
 
+  it("returns true for HTML-comment-only content", () => {
+    // The revamped HEARTBEAT.md template keeps its guidance in HTML comments,
+    // and the template promises a comments-only file skips heartbeat calls.
+    expect(isHeartbeatContentEffectivelyEmpty("<!-- keep this file empty -->")).toBe(true);
+    expect(
+      isHeartbeatContentEffectivelyEmpty(
+        "# HEARTBEAT.md » workspace heartbeat\n\n<!-- keep this file empty (or with only comments) to skip heartbeat API calls -->\n<!-- add tasks below when you want the agent to check something periodically -->",
+      ),
+    ).toBe(true);
+    // Multi-line comment blocks are skipped too.
+    expect(isHeartbeatContentEffectivelyEmpty("<!--\nline one\nline two\n-->")).toBe(true);
+    // Real content outside a comment is still actionable.
+    expect(isHeartbeatContentEffectivelyEmpty("<!-- note -->\n- Check email")).toBe(false);
+  });
+
   it("returns true for default template content (header + comment)", () => {
     const defaultTemplate = `# HEARTBEAT.md
 
