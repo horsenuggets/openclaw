@@ -24,6 +24,15 @@ prose strings, and nothing else.
 
 The rule of thumb is simple: edit the words, never the wiring.
 
+This guide describes the builder as it stands after the `SYSTEM.md` revamp was ported into
+it. That one-time port rewrote the surviving sections to the lowercase wording and removed
+six sections that the revamp dropped (their content now lives in the AGENTS.md preamble):
+Writing Style, OpenClaw CLI Quick Reference, Current Date and Time, User Identity,
+Runtime, and Heartbeats. Those removals are done, so they are absent from the mapping
+below; do not re-add them. Everything after that point is ongoing maintenance: porting a
+wording change from `SYSTEM.md` into the matching builder string, which is a pure reword
+that leaves the wiring alone.
+
 `SYSTEM.md` is a subset of the builder, not a mirror. The builder emits several sections
 that `SYSTEM.md` does not list (see Builder Only Sections), and `SYSTEM.md` contains one
 section that is never emitted into the shared prompt at all (see Control Commands). Keep
@@ -46,11 +55,17 @@ names are stable even when line numbers move.
   (core tools) or `params.toolSummaries` (extension tools). Port wording by editing the
   matching `coreToolSummaries` description; never paste the `SYSTEM.md` bullet list as a
   fixed block, or you will advertise unavailable tools and omit dynamically supplied ones.
-  The `SYSTEM.md` list is an illustrative snapshot of the core tools.
+  The generator also owns the separator: it emits each entry as `- <name>: <summary>`, so
+  the `→` in `SYSTEM.md` illustrates the mapping only. Port the summary text, not the
+  arrow. The `SYSTEM.md` list is an illustrative snapshot of the core tools.
 - `## tool call style` maps to inline in `buildAgentSystemPrompt`.
 - `## safety` maps to inline in `buildAgentSystemPrompt`.
 - `## skills (mandatory)` maps to `buildSkillsSection`. The catalog is injected here, so
-  read the Tokens section before touching it.
+  read the Tokens section before touching it. One exception: the trailing session_status
+  sentence that `SYSTEM.md` places under this heading (if you need the current date, time,
+  or day of week, run session_status) is not part of `buildSkillsSection`. The builder
+  emits it as a standalone inline line just before the `## Workspace` block, guarded by
+  `userTimezone`, so edit it there and keep the guard.
 - `## workspace` maps to inline in `buildAgentSystemPrompt`. The working-directory lines
   interpolate `${params.workspaceDir}`, so read the Tokens section before touching them.
 - `## documentation` maps to `buildDocsSection`.
@@ -118,11 +133,14 @@ tool name, and file names like `MEMORY.md`.
 
 ## Structure Rules
 
-- **One array element per line.** The builder stores each line of a section as its own
-  string and joins them with `\n`. `SYSTEM.md` word-wraps paragraphs for readability, so
-  dump the built prompt (see Verification) as the authority on where the real line breaks
-  are. Reconstruct the per-line elements, and do not collapse a section into one long
-  string.
+- **Retain each block's existing string structure.** Most sections store each line as its
+  own array element joined with `\n`, but some do not: `buildMessagingSection` builds the
+  whole `### message tool` subsection as a nested array that is `.join("\n")`-ed into a
+  single multiline string element. Match whatever shape the block already uses rather than
+  forcing one element per line, since reshaping it is a wiring change. `SYSTEM.md`
+  word-wraps paragraphs for readability, so dump the built prompt (see Verification) as
+  the authority on where the real line breaks are, and do not collapse a multi-line block
+  into one long unbroken string.
 - **Keep the trailing blank line.** Most blocks end with a `""` element that renders as a
   blank line between sections. Preserve it.
 - **Never remove a guard.** Several sections are conditional. For example,
