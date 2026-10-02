@@ -6,6 +6,11 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Dev: fix the `git-hooks/pre-commit` hook leaking staged file paths into
+  `prettier --write "**/*.md"`, which reformatted staged TS/YAML files at prettier's width
+  and conflicted with oxfmt so `pnpm check` rejected the committed result. The hook now
+  runs the canonical `pnpm format:fix` without forwarding paths, then re-stages the
+  originally staged files.
 - Discord router: make per-channel agent containers token-free. Each box now holds no
   provider credential at all: a new loopback model proxy in the router
   (`src/discord/router/model-proxy.ts`, port 18801) injects the real (refreshed) Anthropic
