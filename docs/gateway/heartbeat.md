@@ -47,7 +47,7 @@ Example config:
   Set `agents.defaults.heartbeat.every` or per-agent `agents.list[].heartbeat.every`; use
   `0m` to disable.
 - Prompt body (configurable via `agents.defaults.heartbeat.prompt`):
-  `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`
+  `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`
 - The heartbeat prompt is sent **verbatim** as the user message. The system prompt
   includes a “Heartbeat” section and the run is flagged internally.
 - Active hours (`heartbeat.activeHours`) are checked in the configured timezone. Outside
@@ -69,15 +69,15 @@ If you want a heartbeat to do something very specific (e.g. “check Gmail PubSu
 
 ## Response contract
 
-- If nothing needs attention, reply with **`HEARTBEAT_OK`**.
-- During heartbeat runs, OpenClaw treats `HEARTBEAT_OK` as an ack when it appears at the
-  **start or end** of the reply. The token is stripped and the reply is dropped if the
-  remaining content is **≤ `ackMaxChars`** (default: 300).
-- If `HEARTBEAT_OK` appears in the **middle** of a reply, it is not treated specially.
-- For alerts, **do not** include `HEARTBEAT_OK`; return only the alert text.
-
-Outside heartbeats, stray `HEARTBEAT_OK` at the start/end of a message is stripped and
-logged; a message that is only `HEARTBEAT_OK` is dropped.
+- If nothing needs attention, reply with only the silent-reply token **`⁘ return`**.
+- `⁘ return` is the universal silent-reply convention used across every channel: the
+  auto-reply pipeline suppresses any reply containing it, so a no-op heartbeat delivers
+  nothing to the user.
+- For alerts, **do not** include `⁘ return`; return only the alert text.
+- As a safety net, short replies that clearly say nothing needs attention (for example
+  "all caught up") are also suppressed even without the token. `ackMaxChars`
+  (default: 300) bounds how long such an ack-like reply can be and still be treated as a
+  no-op.
 
 ## Config
 
@@ -92,8 +92,8 @@ logged; a message that is only `HEARTBEAT_OK` is dropped.
         target: "last", // last | none | <channel id> (core or plugin, e.g. "bluebubbles")
         to: "+15551234567", // optional channel-specific override
         accountId: "ops-bot", // optional multi-account channel id
-        prompt: "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
-        ackMaxChars: 300, // max chars allowed after HEARTBEAT_OK
+        prompt: "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.",
+        ackMaxChars: 300, // max chars for a tokenless ack-like reply to still be suppressed
       },
     },
   },
@@ -135,7 +135,7 @@ Example: two agents, only the second agent runs heartbeats.
           every: "1h",
           target: "whatsapp",
           to: "+15551234567",
-          prompt: "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
+          prompt: "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.",
         },
       },
     ],
@@ -195,7 +195,8 @@ Use `accountId` to target a specific account on multi-account channels like Tele
   ignored. If the account id does not match a configured account for the resolved channel,
   delivery is skipped.
 - `prompt`: overrides the default prompt body (not merged).
-- `ackMaxChars`: max chars allowed after `HEARTBEAT_OK` before delivery.
+- `ackMaxChars`: max chars for a tokenless ack-like reply to still be suppressed as a
+  no-op.
 
 ## Delivery behavior
 
@@ -213,14 +214,14 @@ Use `accountId` to target a specific account on multi-account channels like Tele
 
 ## Visibility controls
 
-By default, `HEARTBEAT_OK` acknowledgments are suppressed while alert content is
+By default, no-op heartbeat acknowledgments are suppressed while alert content is
 delivered. You can adjust this per channel or per account:
 
 ```yaml
 channels:
   defaults:
     heartbeat:
-      showOk: false # Hide HEARTBEAT_OK (default)
+      showOk: false # Hide the OK acknowledgment (default)
       showAlerts: true # Show alert messages (default)
       useIndicator: true # Emit indicator events (default)
   telegram:
@@ -237,7 +238,8 @@ Precedence: per-account → per-channel → channel defaults → built-in defaul
 
 ### What each flag does
 
-- `showOk`: sends a `HEARTBEAT_OK` acknowledgment when the model returns an OK-only reply.
+- `showOk`: sends a visible `Heartbeat OK` acknowledgment when the model returns an
+  OK-only reply (the silent-reply token).
 - `showAlerts`: sends the alert content when the model returns a non-OK reply.
 - `useIndicator`: emits indicator events for UI status surfaces.
 

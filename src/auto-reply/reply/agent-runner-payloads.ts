@@ -1,7 +1,6 @@
 import type { ReplyToMode } from "../../config/types.js";
 import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
-import { logVerbose } from "../../globals.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { formatBunFetchSocketError, isBunFetchSocketError } from "./agent-runner-utils.js";
 import { createBlockReplyPayloadKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
@@ -16,7 +15,6 @@ import {
 export function buildReplyPayloads(params: {
   payloads: ReplyPayload[];
   isHeartbeat: boolean;
-  didLogHeartbeatStrip: boolean;
   blockStreamingEnabled: boolean;
   blockReplyPipeline: BlockReplyPipeline | null;
   /** Payload keys sent directly (not via pipeline) during tool flush. */
@@ -31,27 +29,15 @@ export function buildReplyPayloads(params: {
   >[0]["messagingToolSentTargets"];
   originatingTo?: string;
   accountId?: string;
-}): { replyPayloads: ReplyPayload[]; didLogHeartbeatStrip: boolean } {
-  let didLogHeartbeatStrip = params.didLogHeartbeatStrip;
+}): { replyPayloads: ReplyPayload[] } {
   const sanitizedPayloads = params.isHeartbeat
     ? params.payloads
-    : params.payloads.flatMap((payload) => {
+    : params.payloads.map((payload) => {
         let text = payload.text;
-
         if (payload.isError && text && isBunFetchSocketError(text)) {
           text = formatBunFetchSocketError(text);
         }
-
-        if (!text || !text.includes("HEARTBEAT_OK")) {
-          return [{ ...payload, text }];
-        }
-        // If HEARTBEAT_OK appears anywhere in the text, suppress the entire message.
-        // The model should either reply with ONLY HEARTBEAT_OK (silent) or a real message without it.
-        if (!didLogHeartbeatStrip) {
-          didLogHeartbeatStrip = true;
-          logVerbose("Suppressed message containing HEARTBEAT_OK token");
-        }
-        return [];
+        return { ...payload, text };
       });
 
   const replyTaggedPayloads: ReplyPayload[] = applyReplyThreading({
@@ -110,8 +96,5 @@ export function buildReplyPayloads(params: {
         : dedupedPayloads;
   const replyPayloads = suppressMessagingToolReplies ? [] : filteredPayloads;
 
-  return {
-    replyPayloads,
-    didLogHeartbeatStrip,
-  };
+  return { replyPayloads };
 }

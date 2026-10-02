@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
-import { HEARTBEAT_TOKEN, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { createReplyDispatcher } from "./reply-dispatcher.js";
 import { createReplyToModeFilter, resolveReplyToMode } from "./reply-threading.js";
 
@@ -21,25 +21,21 @@ describe("createReplyDispatcher", () => {
     expect(deliver).not.toHaveBeenCalled();
   });
 
-  it("strips heartbeat tokens and applies responsePrefix", async () => {
+  it("applies responsePrefix to delivered replies", async () => {
     const deliver = vi.fn().mockResolvedValue(undefined);
-    const onHeartbeatStrip = vi.fn();
     const dispatcher = createReplyDispatcher({
       deliver,
       responsePrefix: "PFX",
-      onHeartbeatStrip,
     });
 
-    expect(dispatcher.sendFinalReply({ text: HEARTBEAT_TOKEN })).toBe(false);
-    expect(dispatcher.sendToolResult({ text: `${HEARTBEAT_TOKEN} hello` })).toBe(true);
+    expect(dispatcher.sendToolResult({ text: "hello" })).toBe(true);
     await dispatcher.waitForIdle();
 
     expect(deliver).toHaveBeenCalledTimes(1);
     expect(deliver.mock.calls[0][0].text).toBe("PFX hello");
-    expect(onHeartbeatStrip).toHaveBeenCalledTimes(2);
   });
 
-  it("avoids double-prefixing and keeps media when heartbeat is the only text", async () => {
+  it("avoids double-prefixing and keeps media when the silent token is the only text", async () => {
     const deliver = vi.fn().mockResolvedValue(undefined);
     const dispatcher = createReplyDispatcher({
       deliver,
@@ -54,7 +50,7 @@ describe("createReplyDispatcher", () => {
     ).toBe(true);
     expect(
       dispatcher.sendFinalReply({
-        text: HEARTBEAT_TOKEN,
+        text: SILENT_REPLY_TOKEN,
         mediaUrl: "file:///tmp/photo.jpg",
       }),
     ).toBe(true);

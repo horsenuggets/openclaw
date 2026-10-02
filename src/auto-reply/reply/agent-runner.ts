@@ -351,7 +351,7 @@ export async function runReplyAgent(params: {
     }
 
     const { runResult, fallbackProvider, fallbackModel, directlySentBlockKeys } = runOutcome;
-    let { didLogHeartbeatStrip, autoCompactionCompleted } = runOutcome;
+    const { autoCompactionCompleted } = runOutcome;
 
     if (
       shouldInjectGroupIntro &&
@@ -416,7 +416,6 @@ export async function runReplyAgent(params: {
     const payloadResult = buildReplyPayloads({
       payloads: payloadArray,
       isHeartbeat,
-      didLogHeartbeatStrip,
       blockStreamingEnabled,
       blockReplyPipeline,
       directlySentBlockKeys,
@@ -430,7 +429,6 @@ export async function runReplyAgent(params: {
       accountId: sessionCtx.AccountId,
     });
     const { replyPayloads } = payloadResult;
-    didLogHeartbeatStrip = payloadResult.didLogHeartbeatStrip;
 
     if (replyPayloads.length === 0) {
       return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);

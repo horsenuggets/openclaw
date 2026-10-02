@@ -10,7 +10,7 @@ import type { TelegramConfig } from "./types.telegram.js";
 import type { WhatsAppConfig } from "./types.whatsapp.js";
 
 export type ChannelHeartbeatVisibilityConfig = {
-  /** Show HEARTBEAT_OK acknowledgments in chat (default: false). */
+  /** Send a visible OK acknowledgment in chat when a heartbeat finds nothing (default: false). */
   showOk?: boolean;
   /** Show heartbeat alerts with actual content (default: true). */
   showAlerts?: boolean;

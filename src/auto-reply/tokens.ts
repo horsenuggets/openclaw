@@ -1,4 +1,3 @@
-export const HEARTBEAT_TOKEN = "HEARTBEAT_OK";
 // Silent-reply token. This is the `⁘ return` control command (marker U+2058 +
 // " return"): on the Discord router it is a host-side no-op command, and on every
 // other channel the auto-reply path detects it here and suppresses the message

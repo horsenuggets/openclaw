@@ -1,11 +1,7 @@
 import type { ReplyPayload } from "../../auto-reply/types.js";
-import {
-  DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
-  resolveHeartbeatPrompt,
-  stripHeartbeatToken,
-} from "../../auto-reply/heartbeat.js";
+import { HEARTBEAT_OK_MESSAGE, resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../../auto-reply/reply.js";
-import { HEARTBEAT_TOKEN } from "../../auto-reply/tokens.js";
+import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { resolveWhatsAppHeartbeatRecipients } from "../../channels/plugins/whatsapp-heartbeat.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -70,7 +66,7 @@ export async function runWebHeartbeatOnce(opts: {
 
   // Resolve heartbeat visibility settings for WhatsApp
   const visibility = resolveHeartbeatVisibility({ cfg, channel: "whatsapp" });
-  const heartbeatOkText = HEARTBEAT_TOKEN;
+  const heartbeatOkText = HEARTBEAT_OK_MESSAGE;
 
   const sessionCfg = cfg.session;
   const sessionScope = sessionCfg?.scope ?? "per-sender";
@@ -211,15 +207,9 @@ export async function runWebHeartbeatOnce(opts: {
     }
 
     const hasMedia = Boolean(replyPayload.mediaUrl || (replyPayload.mediaUrls?.length ?? 0) > 0);
-    const ackMaxChars = Math.max(
-      0,
-      cfg.agents?.defaults?.heartbeat?.ackMaxChars ?? DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
-    );
-    const stripped = stripHeartbeatToken(replyPayload.text, {
-      mode: "heartbeat",
-      maxAckChars: ackMaxChars,
-    });
-    if (stripped.shouldSkip && !hasMedia) {
+    // A no-op heartbeat acknowledges with the silent-reply token; suppress it like every channel.
+    const isAck = isSilentReplyText(replyPayload.text ?? "", SILENT_REPLY_TOKEN);
+    if (isAck && !hasMedia) {
       // Don't let heartbeats keep sessions alive: restore previous updatedAt so idle expiry still works.
       const storePath = resolveStorePath(cfg.session?.store);
       const store = loadSessionStore(storePath);
@@ -274,7 +264,7 @@ export async function runWebHeartbeatOnce(opts: {
       heartbeatLogger.warn({ to }, "heartbeat reply contained media; sending text only");
     }
 
-    const finalText = stripped.text || replyPayload.text || "";
+    const finalText = replyPayload.text || "";
 
     // Check if alerts are disabled for WhatsApp
     if (!visibility.showAlerts) {

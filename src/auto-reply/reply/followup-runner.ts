@@ -13,7 +13,6 @@ import { resolveAgentIdFromSessionKey, type SessionEntry } from "../../config/se
 import { logVerbose } from "../../globals.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { defaultRuntime } from "../../runtime.js";
-import { stripHeartbeatToken } from "../heartbeat.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
   applyReplyThreading,
@@ -219,15 +218,15 @@ export function createFollowupRunner(params: {
       }
       const sanitizedPayloads = payloadArray.flatMap((payload) => {
         const text = payload.text;
-        if (!text || !text.includes("HEARTBEAT_OK")) {
+        if (!text || !isSilentReplyText(text, SILENT_REPLY_TOKEN)) {
           return [payload];
         }
-        const stripped = stripHeartbeatToken(text, { mode: "message" });
         const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
-        if (stripped.shouldSkip && !hasMedia) {
+        // Silent-reply ack: suppress entirely unless media rides along, in which case drop the text.
+        if (!hasMedia) {
           return [];
         }
-        return [{ ...payload, text: stripped.text }];
+        return [{ ...payload, text: undefined }];
       });
       const replyToChannel =
         queued.originatingChannel ??

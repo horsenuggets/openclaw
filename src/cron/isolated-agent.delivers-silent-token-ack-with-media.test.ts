@@ -20,6 +20,7 @@ vi.mock("../agents/model-catalog.js", () => ({
 
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
@@ -97,7 +98,7 @@ describe("runCronIsolatedAgentTurn", () => {
     );
   });
 
-  it("delivers when response has HEARTBEAT_OK but includes media", async () => {
+  it("delivers when a silent-token ack includes media", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -110,9 +111,9 @@ describe("runCronIsolatedAgentTurn", () => {
         sendMessageSignal: vi.fn(),
         sendMessageIMessage: vi.fn(),
       };
-      // Media should still be delivered even if text is just HEARTBEAT_OK.
+      // Media should still be delivered even if the text is just the silent-reply token.
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
-        payloads: [{ text: "HEARTBEAT_OK", mediaUrl: "https://example.com/img.png" }],
+        payloads: [{ text: SILENT_REPLY_TOKEN, mediaUrl: "https://example.com/img.png" }],
         meta: {
           durationMs: 5,
           agentMeta: { sessionId: "s", provider: "p", model: "m" },
@@ -139,7 +140,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("delivers when heartbeat ack padding exceeds configured limit", async () => {
+  it("delivers a real reply that is not a silent-token ack", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -153,7 +154,7 @@ describe("runCronIsolatedAgentTurn", () => {
         sendMessageIMessage: vi.fn(),
       };
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
-        payloads: [{ text: "HEARTBEAT_OK 🦞" }],
+        payloads: [{ text: "Reminder: the server disk is almost full 🦞" }],
         meta: {
           durationMs: 5,
           agentMeta: { sessionId: "s", provider: "p", model: "m" },
@@ -161,13 +162,6 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       const cfg = makeCfg(home, storePath);
-      cfg.agents = {
-        ...cfg.agents,
-        defaults: {
-          ...cfg.agents?.defaults,
-          heartbeat: { ackMaxChars: 0 },
-        },
-      };
 
       const res = await runCronIsolatedAgentTurn({
         cfg,

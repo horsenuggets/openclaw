@@ -1,7 +1,4 @@
-import {
-  DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
-  stripHeartbeatToken,
-} from "../../auto-reply/heartbeat.js";
+import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { truncateUtf16Safe } from "../../utils.js";
 
 type DeliveryPayload = {
@@ -40,10 +37,10 @@ export function pickLastNonEmptyTextFromPayloads(payloads: Array<{ text?: string
 }
 
 /**
- * Check if all payloads are just heartbeat ack responses (HEARTBEAT_OK).
+ * Check if all payloads are just heartbeat ack responses (the silent-reply token).
  * Returns true if delivery should be skipped because there's no real content.
  */
-export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[], ackMaxChars: number) {
+export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[]) {
   if (payloads.length === 0) {
     return true;
   }
@@ -53,16 +50,7 @@ export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[], ackMaxChars
     if (hasMedia) {
       return false;
     }
-    // Use heartbeat mode to check if text is just HEARTBEAT_OK or short ack.
-    const result = stripHeartbeatToken(payload.text, {
-      mode: "heartbeat",
-      maxAckChars: ackMaxChars,
-    });
-    return result.shouldSkip;
+    const text = payload.text?.trim();
+    return !text || isSilentReplyText(text, SILENT_REPLY_TOKEN);
   });
-}
-
-export function resolveHeartbeatAckMaxChars(agentCfg?: { heartbeat?: { ackMaxChars?: number } }) {
-  const raw = agentCfg?.heartbeat?.ackMaxChars ?? DEFAULT_HEARTBEAT_ACK_MAX_CHARS;
-  return Math.max(0, raw);
 }

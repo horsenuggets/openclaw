@@ -186,15 +186,15 @@ Example:
 ## Heartbeats (proactive mode)
 
 By default, OpenClaw runs a heartbeat every 30 minutes with the prompt:
-`Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`
+`Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`
 Set `agents.defaults.heartbeat.every: "0m"` to disable.
 
 - If `HEARTBEAT.md` exists but is effectively empty (only blank lines and markdown headers
   like `# Heading`), OpenClaw skips the heartbeat run to save API calls.
 - If the file is missing, the heartbeat still runs and the model decides what to do.
-- If the agent replies with `HEARTBEAT_OK` (optionally with short padding; see
-  `agents.defaults.heartbeat.ackMaxChars`), OpenClaw suppresses outbound delivery for that
-  heartbeat.
+- If the agent replies with the silent-reply token `⁘ return`, OpenClaw suppresses
+  outbound delivery for that heartbeat. Short ack-like replies without the token (bounded
+  by `agents.defaults.heartbeat.ackMaxChars`) are also suppressed.
 - Heartbeats run full agent turns — shorter intervals burn more tokens.
 
 ```json5
