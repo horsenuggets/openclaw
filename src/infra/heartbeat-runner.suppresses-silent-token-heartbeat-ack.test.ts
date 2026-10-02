@@ -158,6 +158,70 @@ describe("resolveHeartbeatIntervalMs", () => {
     }
   });
 
+  it("injects the silent-reply ack into a custom heartbeat prompt", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
+    const storePath = path.join(tmpDir, "sessions.json");
+    const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
+    try {
+      const customPrompt = "Check Gmail PubSub stats and report anomalies.";
+      const cfg: OpenClawConfig = {
+        agents: {
+          defaults: {
+            workspace: tmpDir,
+            heartbeat: {
+              every: "5m",
+              target: "whatsapp",
+              prompt: customPrompt,
+            },
+          },
+        },
+        channels: { whatsapp: { allowFrom: ["*"] } },
+        session: { store: storePath },
+      };
+      const sessionKey = resolveMainSessionKey(cfg);
+
+      await fs.writeFile(
+        storePath,
+        JSON.stringify(
+          {
+            [sessionKey]: {
+              sessionId: "sid",
+              updatedAt: Date.now(),
+              lastChannel: "whatsapp",
+              lastProvider: "whatsapp",
+              lastTo: "+1555",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
+      replySpy.mockResolvedValue({ text: SILENT_REPLY_TOKEN });
+
+      await runHeartbeatOnce({
+        cfg,
+        deps: {
+          sendWhatsApp: vi.fn(),
+          getQueueSize: () => 0,
+          nowMs: () => 0,
+          webAuthExists: async () => true,
+          hasActiveWebListener: () => true,
+        },
+      });
+
+      // The custom prompt omits the ack, so the runner must append it to the injected turn
+      // body; otherwise an idle heartbeat on a custom prompt could leak a user-visible reply.
+      expect(replySpy).toHaveBeenCalled();
+      const injectedBody = replySpy.mock.calls[0]?.[0]?.Body ?? "";
+      expect(injectedBody).toContain(customPrompt);
+      expect(injectedBody).toContain(SILENT_REPLY_TOKEN);
+    } finally {
+      replySpy.mockRestore();
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("sends a visible OK when visibility.showOk is true", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");

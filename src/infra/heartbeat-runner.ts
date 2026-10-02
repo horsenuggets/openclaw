@@ -15,6 +15,7 @@ import { resolveUserTimezone } from "../agents/date-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import {
+  appendHeartbeatAck,
   DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
   DEFAULT_HEARTBEAT_EVERY,
   HEARTBEAT_OK_MESSAGE,
@@ -613,7 +614,12 @@ export async function runHeartbeatOnce(opts: {
   const pendingEvents = isExecEvent ? peekSystemEvents(sessionKey) : [];
   const hasExecCompletion = pendingEvents.some((evt) => evt.includes("Exec finished"));
 
-  const prompt = hasExecCompletion ? EXEC_EVENT_PROMPT : resolveHeartbeatPrompt(cfg, heartbeat);
+  // Non-exec heartbeats always carry the silent-reply ack instruction, even for custom
+  // prompts that omit it, so an idle turn is suppressed instead of leaking to the user.
+  // Exec-completion turns must relay their result, so they are left unmodified.
+  const prompt = hasExecCompletion
+    ? EXEC_EVENT_PROMPT
+    : appendHeartbeatAck(resolveHeartbeatPrompt(cfg, heartbeat));
   const ctx = {
     // Mark the heartbeat as a system-injected turn (not a human message): the
     // model treats it as system context, and the transcript classifier attributes
