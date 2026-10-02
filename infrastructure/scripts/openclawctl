@@ -478,78 +478,28 @@ force_box_config() {
     echo "Warning: could not set agents.defaults.workspace in $target; left unchanged" >&2
 }
 
-# Strip external secrets from a box's openclaw.json. The box reaches Discord only
-# via proxyUrl and the model only via the router proxy, so no channel token or
-# inline provider credential should ever live inside a box (a shell escape there
-# could otherwise read the read-only-mounted config). Uses the JSON5-aware config
-# CLI so it is safe on copied configs with comments/trailing commas. Idempotent:
-# unset of an absent path is a no-op. gateway.auth.token is deliberately kept — it
-# is local-scope (only authorizes talking to this agent's own loopback gateway).
-sanitize_config() {
-  local target="$1"
-  [ -n "$OPENCLAW_BIN" ] || return 0
-  [ -f "$target" ] || return 0
-
-  local key
-  for key in \
-    channels.discord.token channels.telegram.token channels.slack.token \
-    channels.slack.appToken channels.signal.token channels.whatsapp.token \
-    gateway.remote.password; do
-    OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config unset "$key" >/dev/null 2>&1 || true
-  done
-
-  # Drop inline API keys and auth headers from every provider. The
-  # anthropic-subscription block only carries non-secret stealth headers
-  # (user-agent, anthropic-beta) and resolves its token via the router proxy, so
-  # it is unaffected.
-  local names
-  names=$(OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config get models.providers --json 2>/dev/null |
-    python3 -c 'import json,sys
-try: d=json.load(sys.stdin)
-except Exception: d={}
-print("\n".join((d or {}).keys()))' 2>/dev/null || true)
-  local name
-  while IFS= read -r name; do
-    [ -z "$name" ] && continue
-    OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config unset "models.providers.$name.apiKey" >/dev/null 2>&1 || true
-    OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config unset "models.providers.$name.headers.authorization" >/dev/null 2>&1 || true
-    OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config unset "models.providers.$name.headers.x-api-key" >/dev/null 2>&1 || true
-  done <<EOF
-$names
-EOF
-}
-
-# Idempotent per-instance preparation. Runs on every startup path (add, restart,
-# boot) so new AND existing instances converge on the token-free layout:
-#   - create the writable /workspace and /state mounts
-#   - migrate legacy top-level state (old layout mounted the instance dir at
-#     /root/.openclaw, so sessions/memory lived directly under the instance dir;
-#     the new layout puts them under state/). ensure_shared_auth captures any real
-#     token from the old agents/ dir into the shared store before this runs.
-#   - seed the placeholder OAuth profile (always overwritten, so a migrated real
-#     token is replaced by the non-secret placeholder — the real one already lives
-#     in the shared store the router reads)
-#   - sanitize the config of external secrets
-#   - fix ownership for the non-root container uid
+# Idempotent per-instance preparation for the token-free layout. Scoped to NEW
+# instances created on or after this change; migrating pre-existing instances (old
+# state tree, legacy secrets in copied configs) is handled separately so it can be
+# designed safely. Creates the writable /workspace and /state mounts, seeds the
+# placeholder OAuth profile, re-asserts the proxy URLs, and fixes ownership for the
+# non-root container uid.
 prepare_instance_dirs() {
   local channelId="$1"
   local base="$INSTANCES_DIR/$channelId"
-  mkdir -p "$base/workspace" "$base/state"
-
-  # Migrate legacy top-level state into state/ (only when not already migrated).
-  if [ -d "$base/agents" ] && [ ! -e "$base/state/agents" ]; then
-    mv "$base/agents" "$base/state/agents"
-  fi
-  if [ -f "$base/sessions.json" ] && [ ! -e "$base/state/sessions.json" ]; then
-    mv "$base/sessions.json" "$base/state/sessions.json"
-  fi
-
   local agent_dir="$base/state/agents/main/agent"
-  mkdir -p "$agent_dir"
+  mkdir -p "$base/workspace" "$agent_dir"
 
-  # Always (re)write the placeholder so a migrated real token can never linger in
-  # the box. Keyed by the canonical profile id so configs referencing it resolve.
-  cat > "$agent_dir/auth-profiles.json" <<JSON
+  # Seed the placeholder OAuth profile under the canonical profile id so a config
+  # referencing it resolves. The box runs token-free: it needs *a* bearer so pi-ai
+  # builds a subscription-shaped request, but the real token lives only in the
+  # shared store the router reads — the model proxy swaps the placeholder upstream.
+  # Written only when absent: a fresh instance has no auth file, and not rewriting
+  # on restart avoids following any path a running box may have planted under
+  # /state.
+  local auth_file="$agent_dir/auth-profiles.json"
+  if [ ! -f "$auth_file" ]; then
+    cat > "$auth_file" <<JSON
 {
   "version": 1,
   "profiles": {
@@ -563,10 +513,11 @@ prepare_instance_dirs() {
   }
 }
 JSON
+  fi
 
-  sanitize_config "$base/openclaw.json"
-  # Re-assert the proxy URLs and /workspace path so an existing instance picks up
-  # a changed model-proxy port or layout on restart/boot, not just on first add.
+  # Re-assert the proxy URLs and /workspace path so a changed model-proxy port or
+  # layout reaches the box on restart, not just on first add. Operates on the host
+  # config (not box-writable), so it is safe to re-run.
   force_box_config "$base/openclaw.json"
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
@@ -721,20 +672,6 @@ cmd_restart() {
   echo "Done."
 }
 
-cmd_prepare() {
-  local channelId="${1:-}"
-  if [ -z "$channelId" ]; then
-    echo "Usage: openclawctl prepare <channelId>"
-    exit 1
-  fi
-  require_channel_id "$channelId"
-  if [ ! -d "$INSTANCES_DIR/$channelId" ]; then
-    echo "Error: Channel $channelId is not registered."
-    exit 1
-  fi
-  prepare_instance_dirs "$channelId"
-}
-
 cmd_list() {
   BASE_PORT="$BASE_PORT" PORT_FILENAME="$PORT_FILENAME" python3 -c "
 import os, re, subprocess
@@ -790,7 +727,6 @@ case "${1:-}" in
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
-  prepare)     cmd_prepare "${2:-}" ;;
   list)        cmd_list ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
@@ -800,7 +736,6 @@ case "${1:-}" in
     echo "  add-channel <channelId> Register a text channel"
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
-    echo "  prepare <channelId>     Idempotently prepare an instance's token-free layout"
     echo "  list                    List all registered channels and ports"
     ;;
 esac

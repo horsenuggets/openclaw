@@ -17,12 +17,11 @@ Docs: https://docs.openclaw.ai
   (outside the agent's reach) plus writable `/workspace` and `/state` mounts, moves the
   binary to `/bin/openclaw`, and runs non-root with a read-only rootfs, dropped
   capabilities, and `no-new-privileges`. `openclawctl` seeds the canonical placeholder
-  profile, points each box's provider `baseUrl` at the model proxy, and (idempotently, on
-  add/restart/boot) migrates existing instances onto the layout and sanitizes external
-  secrets (channel tokens, inline provider keys) out of the box config. The router mounts
-  only `shared/auth` writable so it can rotate the shared token. A shell escape in a box
-  now finds no token to steal. (Follow-up tracked separately: move boxes off
-  `network_mode: host` to bridge networking.)
+  profile and points each new box's provider `baseUrl` at the model proxy; the router
+  mounts only `shared/auth` writable so it can rotate the shared token. A shell escape in
+  a box now finds no token to steal. Applies to newly registered channels; migrating
+  pre-existing instances onto the layout is a tracked follow-up. (Also tracked separately:
+  move boxes off `network_mode: host` to bridge networking.)
 - Discord router: restrict ordinary conversation in shared guild channels to the channel
   owner; whitelisted admins keep `/channel` management but can no longer converse in
   channels they do not own.

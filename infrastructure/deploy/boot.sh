@@ -101,11 +101,6 @@ if [ -z "$ASSIGNMENTS" ]; then
 else
   while read -r channelId port; do
     [ -z "$channelId" ] && continue
-    # Converge the instance on the token-free layout before starting it (create
-    # /state + /workspace, migrate legacy state, seed placeholder auth, sanitize
-    # config, fix ownership). The shared auth was already captured above, so this
-    # never loses a real token. Idempotent, so re-running on every boot is safe.
-    ~/deploy/bin/openclawctl prepare "$channelId" || true
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"
