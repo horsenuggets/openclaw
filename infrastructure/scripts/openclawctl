@@ -231,11 +231,13 @@ except Exception as e:
 
 # --- Container helpers ---
 
-# Ensure the shared auth-profiles file exists as a regular file before any
-# container mounts it. Seeds from an existing per-instance auth store (one-time
-# migration off the old copy-per-instance model) or an empty store, so a fresh
-# host still comes up cleanly. Idempotent: never clobbers an existing shared
-# file (that file is the live, rotating source of truth).
+# Ensure the shared auth-profiles file exists as a regular file. It is the single
+# store of the REAL provider OAuth token and is read by the router's model proxy
+# (createSharedAuthTokenResolver) to inject the bearer on behalf of token-free
+# boxes. It is NOT mounted into any container. Seeds from an existing per-instance
+# auth store (one-time migration off the old copy-per-instance model) or an empty
+# store, so a fresh host still comes up cleanly. Idempotent: never clobbers an
+# existing shared file (that file is the live, rotating source of truth).
 #
 # Runs the check+seed under the same $PORT_LOCK_FILE lock reserve_port uses, so
 # two concurrent `add-*` invocations on a fresh host can't both see the file
@@ -246,11 +248,10 @@ except Exception as e:
 ensure_shared_auth() {
   (
     flock 9
-    # The shared auth store holds OAuth refresh tokens and is bind-mounted into
-    # every container, so require it to be a real regular file. Reject a symlink
-    # (which -f/-e would silently follow, letting the store be redirected outside
-    # the instances tree) and reject a non-file such as a Docker-created
-    # bind-mount directory. Fail fast rather than cp'ing *into* it.
+    # The shared auth store holds the real OAuth refresh token, so require it to be
+    # a real regular file. Reject a symlink (which -f/-e would silently follow,
+    # letting the store be redirected outside the instances tree) and reject a
+    # non-file such as a stray directory. Fail fast rather than cp'ing *into* it.
     if [ -L "$SHARED_AUTH_FILE" ] || { [ -e "$SHARED_AUTH_FILE" ] && [ ! -f "$SHARED_AUTH_FILE" ]; }; then
       echo "ERROR: $SHARED_AUTH_FILE must be a regular file, not a symlink or directory (e.g. a Docker-created bind-mount dir)." >&2
       echo "       Stop the agent containers, remove that path, and re-run so it can be seeded as a file." >&2
@@ -282,7 +283,11 @@ ensure_shared_auth() {
 start_container() {
   local channelId="$1"
   local port="$2"
+  # ensure_shared_auth captures any legacy real token into the shared store BEFORE
+  # prepare_instance_dirs migrates/overwrites the per-instance auth with the
+  # placeholder, so the real credential is never lost nor left inside the box.
   ensure_shared_auth
+  prepare_instance_dirs "$channelId"
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
     docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d
 }
@@ -308,7 +313,7 @@ seed_workspace() {
   local container="agents.channel-$channelId"
   local i
   for i in $(seq 1 10); do
-    if docker exec "$container" sh -lc 'openclaw setup --workspace "$HOME/.openclaw/workspace"' \
+    if docker exec "$container" sh -lc 'openclaw setup --workspace /workspace' \
       >/dev/null 2>&1; then
       return 0
     fi
@@ -330,111 +335,215 @@ seed_workspace() {
 # here, or proactive/heartbeat sends silently fail at DNS resolution.
 CONTAINER_PROXY_URL="http://127.0.0.1:18800"
 
+# The router's model proxy (startModelProxyServer) also listens on loopback. Agent
+# containers are host-networked, so they reach it at 127.0.0.1. Boxes point their
+# provider baseUrl here and send only a placeholder token; the proxy injects the
+# real (refreshed) OAuth bearer, so no provider credential ever lives in a box.
+# Port must match MODEL_PROXY_PORT in src/discord/router/model-proxy.ts. It sits
+# below the 18789 agent-gateway base and clear of the container proxy (18800) and
+# health monitor (18801), which share the router container's host network.
+MODEL_PROXY_URL="http://127.0.0.1:18702"
+
+# The agent container runs as this non-root uid:gid (see agent.yml). Its writable
+# mounts (workspace, state) must be owned by it or writes fail on the read-only
+# rootfs box.
+AGENT_UID=1000
+AGENT_GID=1000
+
+# Per-instance marker written by prepare_instance_dirs once an instance is adopted
+# into the token-free layout. Its presence gates starting an instance under the new
+# agent.yml, so legacy (unprepared) instances are skipped rather than broken.
+LAYOUT_MARKER=".token-free"
+
+# Canonical profile id the gateway resolves for the anthropic-subscription
+# provider (matches ANTHROPIC_SUBSCRIPTION_PROFILE_ID in the source and what
+# `openclaw auth mint-anthropic` writes), so a config referencing it still
+# resolves the placeholder.
+PLACEHOLDER_OAUTH_PROFILE_ID="anthropic-subscription:default"
+
+# Placeholder OAuth access token seeded into each box. It makes pi-ai build a
+# subscription-shaped request without the box ever holding a real credential; the
+# model proxy replaces the bearer upstream. Intentionally NOT a secret. expires is
+# set far in the future so the box never attempts a refresh of its own.
+PLACEHOLDER_OAUTH_ACCESS="sk-ant-oat01-PLACEHOLDER-INJECTED-BY-ROUTER-MODEL-PROXY"
+PLACEHOLDER_OAUTH_EXPIRES="4102444800000"
+
 # Default primary model for a freshly-bootstrapped instance, used only when there
 # is no sibling instance to copy config from. Must match the model id seeded into
 # the anthropic-subscription provider block below.
 BASE_MODEL="anthropic-subscription/claude-sonnet-4-6"
 
-# Seed a new instance's openclaw.json from an existing instance (if any), then
-# force the Discord proxyUrl to the correct loopback address regardless of what
-# the copy source had.
+# Build a new instance's openclaw.json from an allowlist of the non-secret settings
+# a token-free box needs (gateway mode + a fresh per-instance auth token, model
+# selection, /workspace, the Discord send proxy, and the anthropic-subscription
+# provider block). Written as RAW JSON, deliberately NOT via `openclaw config set`:
+# config set loads the fully-resolved config, whose defaults pull host credentials
+# (e.g. talk.apiKey from ELEVENLABS_API_KEY or the host shell profiles) and would
+# persist them into the box-readable config. Does not copy a sibling config either.
+# Fail-closed: returns nonzero if the config cannot be written, and callers abort
+# rather than start a box with a missing or stale config.
 seed_instance_config() {
   local channelId="$1"
   local target="$INSTANCES_DIR/$channelId/openclaw.json"
-  local dir
-  for dir in "$INSTANCES_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    if [ -f "${dir}openclaw.json" ]; then
-      cp "${dir}openclaw.json" "$target"
-      echo "Copied config from $(basename "$dir")"
-      break
-    fi
-  done
 
-  # Fresh host: no sibling instance to copy from, so seed a minimal valid base
-  # config. Without this the first channel on a brand-new host gets no
-  # openclaw.json and the agent gateway crash-loops on "Missing config" (it needs
-  # gateway.mode=local). The router reads each instance's gateway.auth.token back
-  # from this file to authenticate to the agent (see src/discord/router/config.ts),
-  # so a fresh per-instance token is all that is required. Guarded like the
-  # proxyUrl edit below so a failure warns rather than aborting under set -e after
-  # the port is already reserved.
-  if [ ! -f "$target" ]; then
-    if [ -n "$OPENCLAW_BIN" ]; then
-      echo "No existing instance to copy; seeding base config for $channelId"
-      local token
-      token=$(python3 -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null || true)
-      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.mode local >/dev/null 2>&1 ||
-        echo "Warning: could not seed gateway.mode for $channelId" >&2
-      if [ -n "$token" ]; then
-        OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set gateway.auth.token "$token" >/dev/null 2>&1 ||
-          echo "Warning: could not seed gateway.auth.token for $channelId" >&2
-      fi
-      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set agents.defaults.model.primary "$BASE_MODEL" >/dev/null 2>&1 ||
-        echo "Warning: could not seed model for $channelId" >&2
-      # Seed the anthropic-subscription provider definition: baseUrl, the
-      # anthropic-messages api, oauth auth, the Claude Code user-agent + beta
-      # headers that bill the request to the subscription, and the model catalog.
-      # Without this the model resolves as "Unknown model" even with a valid OAuth
-      # token, because the provider is not built into the binary. Every instance
-      # copied from an onboarded original already carries this block; a fresh host
-      # has nothing to copy, so seed it explicitly. Written with python because
-      # `config set` cannot express the nested arrays/hyphenated header keys; the
-      # file config-set just wrote is plain JSON at this point.
-      python3 - "$target" <<'PY' 2>/dev/null ||
-import json, sys
+  # Always start fresh so a removed-then-re-added channel (data dir preserved by
+  # `remove`) cannot reuse a retained, possibly secret-bearing config. The config
+  # lives on the host instances tree (not box-writable), so rm -f is safe.
+  rm -f "$target"
+  echo "Seeding base config for $channelId"
+  OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
+    OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
+    OPENCLAW_BASE_MODEL="$BASE_MODEL" \
+    python3 - "$target" <<'PY'
+import json, os, secrets, sys
 
-with open(sys.argv[1]) as f:
-    cfg = json.load(f)
-cfg.setdefault("models", {}).setdefault("providers", {})["anthropic-subscription"] = {
-    "baseUrl": "https://api.anthropic.com",
-    "api": "anthropic-messages",
-    "auth": "oauth",
-    "headers": {
-        "user-agent": "claude-cli/2.1.119 (external, cli)",
-        "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-    },
-    "models": [
-        {
-            "id": "claude-sonnet-4-6",
-            "name": "Claude Sonnet 4.6",
-            "reasoning": False,
-            "input": ["text", "image"],
-            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-            "contextWindow": 200000,
-            "maxTokens": 64000,
+target = sys.argv[1]
+cfg = {
+    "gateway": {"mode": "local", "auth": {"token": secrets.token_hex(16)}},
+    "agents": {
+        "defaults": {
+            "model": {"primary": os.environ["OPENCLAW_BASE_MODEL"]},
+            "workspace": "/workspace",
         }
-    ],
+    },
+    # The box reaches Discord only through the router's container proxy.
+    "channels": {"discord": {"proxyUrl": os.environ["OPENCLAW_CONTAINER_PROXY_URL"]}},
+    # Point at the router's model proxy, not the Anthropic API directly; the proxy
+    # injects the real OAuth bearer so the box never holds a provider credential.
+    # The headers are the non-secret Claude Code user-agent + beta flags that bill
+    # the request to the subscription. Defining the provider here is required or the
+    # model resolves as "Unknown model" (it is not built into the binary).
+    "models": {
+        "providers": {
+            "anthropic-subscription": {
+                "baseUrl": os.environ["OPENCLAW_MODEL_PROXY_URL"],
+                "api": "anthropic-messages",
+                "auth": "oauth",
+                "headers": {
+                    "user-agent": "claude-cli/2.1.119 (external, cli)",
+                    "anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+                },
+                "models": [
+                    {
+                        "id": "claude-sonnet-4-6",
+                        "name": "Claude Sonnet 4.6",
+                        "reasoning": False,
+                        "input": ["text", "image"],
+                        "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                        "contextWindow": 200000,
+                        "maxTokens": 64000,
+                    }
+                ],
+            }
+        }
+    },
 }
-with open(sys.argv[1], "w") as f:
+# Create 0600 from the outset (not the deploy user's umask) so other host users
+# cannot read gateway.auth.token before the later chown runs.
+fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 PY
-        echo "Warning: could not seed subscription provider for $channelId" >&2
-    else
-      echo "Warning: openclaw CLI not found; cannot seed base config for $channelId" >&2
-    fi
+}
+
+# Re-assert the box-side values a changed deploy must reach existing prepared
+# instances on restart: the Discord send proxy, the model proxy baseUrl, and the
+# /workspace path. Edits the raw JSON directly (NOT `openclaw config set`, which
+# would resolve+persist host credential defaults). Only ever runs on prepared boxes
+# whose config this script wrote as plain JSON, so json.load is safe.
+force_box_config() {
+  local target="$1"
+  [ -f "$target" ] || return 0
+  OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
+    OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
+    python3 - "$target" <<'PY' 2>/dev/null ||
+import json, os, sys
+
+target = sys.argv[1]
+with open(target) as f:
+    cfg = json.load(f)
+cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = os.environ[
+    "OPENCLAW_CONTAINER_PROXY_URL"
+]
+cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
+    "anthropic-subscription", {}
+)["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
+cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
+# Preserve owner-only permissions (the config holds gateway.auth.token).
+fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+os.chmod(target, 0o600)
+with os.fdopen(fd, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+    echo "Warning: could not re-assert box config in $target; left unchanged" >&2
+}
+
+# Idempotent per-instance preparation for the token-free layout. Scoped to NEW
+# instances created on or after this change; migrating pre-existing instances (old
+# state tree, legacy secrets in copied configs) is handled separately so it can be
+# designed safely. Creates the writable /workspace and /state mounts, seeds the
+# placeholder OAuth profile, re-asserts the proxy URLs, and fixes ownership for the
+# non-root container uid.
+prepare_instance_dirs() {
+  local channelId="$1"
+  local base="$INSTANCES_DIR/$channelId"
+  local agent_dir="$base/state/agents/main/agent"
+  mkdir -p "$base/workspace" "$agent_dir"
+
+  # Seed the placeholder OAuth profile under the canonical profile id so a config
+  # referencing it resolves. The box runs token-free: it needs *a* bearer so pi-ai
+  # builds a subscription-shaped request, but the real token lives only in the
+  # shared store the router reads — the model proxy swaps the placeholder upstream.
+  # Written only when absent: a fresh instance has no auth file, and not rewriting
+  # on restart avoids following any path a running box may have planted under
+  # /state.
+  local auth_file="$agent_dir/auth-profiles.json"
+  if [ ! -f "$auth_file" ]; then
+    cat > "$auth_file" <<JSON
+{
+  "version": 1,
+  "profiles": {
+    "$PLACEHOLDER_OAUTH_PROFILE_ID": {
+      "type": "oauth",
+      "provider": "anthropic-subscription",
+      "access": "$PLACEHOLDER_OAUTH_ACCESS",
+      "refresh": "",
+      "expires": $PLACEHOLDER_OAUTH_EXPIRES
+    }
+  }
+}
+JSON
   fi
 
-  if [ -f "$target" ]; then
-    # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
-    # single-quoted strings), so we must not parse them with a stdlib JSON reader
-    # or a partial regex conversion. Use the CLI's own JSON5-aware `config set`
-    # against this file (OPENCLAW_CONFIG_PATH), which loads/validates/writes with
-    # the same parser the gateway uses. Guarded so a failure only warns and lets
-    # provisioning continue rather than aborting under `set -e` after the port is
-    # reserved.
-    if [ -n "$OPENCLAW_BIN" ]; then
-      if OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
-        channels.discord.proxyUrl "$CONTAINER_PROXY_URL" >/dev/null 2>&1; then
-        echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
-      else
-        echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
-      fi
-    else
-      echo "Warning: openclaw CLI not found; left Discord proxyUrl in $target unchanged" >&2
-    fi
+  # Re-assert the proxy URLs and /workspace path so a changed model-proxy port or
+  # layout reaches the box on restart, not just on first add. Operates on the host
+  # config (not box-writable), so it is safe to re-run.
+  force_box_config "$base/openclaw.json"
+
+  # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
+  # that uid or writes fail on the read-only-rootfs box.
+  chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" 2>/dev/null || true
+
+  # `openclaw config set` writes openclaw.json mode 600 (root-owned). The box
+  # mounts it read-only and runs as AGENT_UID, so hand ownership to that uid or the
+  # gateway crash-loops on "EACCES ... openclaw.json". Keeping it 600 (owner-only)
+  # means it is not world-readable on the host tree.
+  if [ -f "$base/openclaw.json" ]; then
+    chown "$AGENT_UID:$AGENT_GID" "$base/openclaw.json" 2>/dev/null || true
   fi
+
+  # Mark the instance as adopted into the token-free layout. boot.sh and restart
+  # start an instance under the new agent.yml only when this marker is present, so
+  # pre-existing (legacy) instances are never mounted into the new layout and
+  # broken; they are skipped with a re-register hint until the migration follow-up.
+  touch "$base/$LAYOUT_MARKER" 2>/dev/null || true
+}
+
+# True when an instance has been prepared for the token-free layout.
+is_prepared() {
+  [ -f "$INSTANCES_DIR/$1/$LAYOUT_MARKER" ]
 }
 
 # --- Commands ---
@@ -477,10 +586,17 @@ cmd_add_dm() {
   # Create instance directory
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Seed the instance config (copy from an existing instance, fix proxyUrl)
-  seed_instance_config "$channelId"
+  # Build the token-free instance config from the allowlist. Fail-closed: if it
+  # cannot be written, deregister and abort rather than start a box without a
+  # freshly-built config.
+  if ! seed_instance_config "$channelId"; then
+    echo "Error: could not build config for $channelId; aborting." >&2
+    free_port "$channelId"
+    exit 1
+  fi
 
-  # Start container
+  # Start container (start_container runs prepare_instance_dirs for the token-free
+  # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
   seed_workspace "$channelId" || true
@@ -517,9 +633,17 @@ cmd_add_channel() {
 
   mkdir -p "$INSTANCES_DIR/$channelId"
 
-  # Seed the instance config (copy from an existing instance, fix proxyUrl)
-  seed_instance_config "$channelId"
+  # Build the token-free instance config from the allowlist. Fail-closed: if it
+  # cannot be written, deregister and abort rather than start a box without a
+  # freshly-built config.
+  if ! seed_instance_config "$channelId"; then
+    echo "Error: could not build config for $channelId; aborting." >&2
+    free_port "$channelId"
+    exit 1
+  fi
 
+  # Start container (start_container runs prepare_instance_dirs for the token-free
+  # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
   seed_workspace "$channelId" || true
@@ -564,6 +688,16 @@ cmd_restart() {
   port=$(get_port "$channelId")
   if [ -z "$port" ]; then
     echo "Error: Channel $channelId is not registered."
+    exit 1
+  fi
+
+  if ! is_prepared "$channelId"; then
+    echo "Channel $channelId is on the legacy layout and is not started under the" >&2
+    echo "token-free agent.yml. Re-register it to adopt the new layout (non-destructive:" >&2
+    echo "remove preserves the instance data and add rebuilds the config fresh):" >&2
+    echo "  openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
+    # Nonzero so callers can distinguish a refusal from a completed restart,
+    # consistent with the other restart error paths.
     exit 1
   fi
 

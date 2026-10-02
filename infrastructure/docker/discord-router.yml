@@ -8,6 +8,12 @@ services:
       - ~/deploy/bin/discord-router:/usr/local/bin/discord-router:ro
       - ~/deploy/bin/health-monitor:/usr/local/bin/health-monitor:ro
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
+      # The model proxy owns OAuth refresh for the token-free agent boxes: when the
+      # shared token expires it creates a proper-lockfile lock directory and
+      # atomically rewrites shared/auth/auth-profiles.json. That one subtree must be
+      # writable; the rest of the instances tree stays read-only. The nested rw bind
+      # over the ro mount above makes only shared/auth writable.
+      - ~/.openclaw-instances/shared/auth:/root/.openclaw-instances/shared/auth:rw
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       # Whitelist for /channel register/unregister: the auth guild id and the

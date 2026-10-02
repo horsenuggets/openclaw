@@ -1,6 +1,10 @@
-# Per-channel agent container.
-# Each registered channel gets its own isolated agent with workspace, memory, tools.
-# The discord-router forwards messages to these containers by channel ID.
+# Per-channel agent container (token-free box).
+#
+# The agent runs entirely in here and holds NO external secrets:
+#   - model requests go to the router's model proxy (real OAuth injected there)
+#   - Discord sends go to the router's container proxy (bot token lives in the router)
+# Only /workspace and /state are writable; the config is read-only and outside the
+# agent's reach; nothing lives under the home directory.
 #
 # Usage:
 #   OPENCLAW_CHANNEL_ID=... OPENCLAW_CHANNEL_PORT=18789 \
@@ -10,36 +14,57 @@ services:
     image: ubuntu:24.04
     container_name: agents.channel-${OPENCLAW_CHANNEL_ID}
     restart: unless-stopped
+    # network_mode host lets the box reach the router proxies on loopback.
+    # Follow-up (tracked separately): move to bridge networking and publish only
+    # the two proxy ports so a box cannot reach neighbor loopback services.
     network_mode: host
+    # Non-root; the host workspace/state dirs are chown 1000:1000 by openclawctl.
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits (pids_limit / mem_limit) are intentionally omitted: they
+    # require cgroup v2 controller delegation that is not reliably available in
+    # the deploy environment (the container fails to start with "cannot enter
+    # cgroupv2 ... with domain controllers -- it is in threaded mode"). The
+    # security-relevant hardening above does not depend on cgroup delegation.
+    # Reintroduce DoS limits only once the host's cgroup setup is confirmed.
     volumes:
-      - ~/deploy/bin/openclaw:/usr/local/bin/openclaw:ro
+      - ~/deploy/bin/openclaw:/bin/openclaw:ro
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro
-      - ~/deploy/docs:/usr/local/bin/docs:ro
-      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}:/root/.openclaw
-      # Shared auth-profiles: a single host file mounted (read-write) over every
-      # instance's own auth store. OAuth refresh tokens rotate, so a per-instance
-      # copy goes stale (invalid_grant) once another instance refreshes. Sharing
-      # one file means a refresh in any container is immediately seen by all.
-      # boot.sh / openclawctl seed this file before the container starts (Docker
-      # would otherwise create it as an empty directory).
-      #
-      # We deliberately do NOT bind-mount the sibling proper-lockfile lock
-      # (`auth-profiles.json.lock`): that lock is a *directory* the library
-      # creates with mkdir and removes with rmdir. Pre-creating it via a Docker
-      # bind-mount makes the very first `mkdir` return EEXIST, so lock
-      # acquisition fails with ELOCKED forever and token refresh permanently
-      # breaks. Writes are already atomic (tmp file + rename), so the worst case
-      # from an unshared lock is two containers refreshing the same rotated
-      # token near-simultaneously and both landing a valid fresh token
-      # (last-writer-wins) - rare and self-healing.
-      - ~/.openclaw-instances/shared/auth/auth-profiles.json:/root/.openclaw/agents/main/agent/auth-profiles.json
-      - ~/.claude:/root/.claude
-      - ~/logs/channel-${OPENCLAW_CHANNEL_ID}:/tmp/openclaw
+      # Docs must sit next to the binary: openclaw resolves workspace templates as
+      # <binary-dir>/docs (resolveOpenClawDocsPath). The binary is /bin/openclaw,
+      # so docs mount at /bin/docs (not /usr/local/bin/docs) or `openclaw setup`
+      # fails with "Missing workspace template".
+      - ~/deploy/docs:/bin/docs:ro
+      # Config is read-only and lives outside /workspace, so the agent's
+      # workspace-confined file tools cannot read it. The gateway process reads
+      # it once at startup. It carries no provider keys (the model proxy injects
+      # the real token); gateway.auth.token is the only local-scope secret and
+      # only authorizes talking to this agent's own gateway on loopback.
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/openclaw.json:/etc/openclaw/openclaw.json:ro
+      # The agent's work. Writable; the only mount the file tools can see.
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/workspace:/workspace
+      # Runtime state: sessions, memory index, caches. Writable, not agent work.
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/state:/state
+      # NOTE: no auth-profiles.json mount, no ~/.claude mount, no credentials/
+      # mount. The box holds no external secrets by design.
     environment:
       - OPENCLAW_SKIP_CHANNELS=1
+      - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
+      - OPENCLAW_STATE_DIR=/state
+      # Home points at the writable state mount so any stray home-relative write
+      # (node/npm caches, etc.) lands there instead of failing on the read-only
+      # rootfs.
+      - HOME=/state
     logging:
       driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
-    command: ["openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]
+    command:
+      ["/bin/openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]

@@ -26,6 +26,7 @@ import {
   handleMessageCreate,
   handleSlashInteraction,
 } from "./gateway-events.js";
+import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { WELCOME_EMBED, bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { routeMessage } from "./route-message.js";
@@ -125,6 +126,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         runCommand: runAgentCommand,
       }).then(() => {});
     },
+  });
+
+  // Start the model proxy: token-free agent containers POST model requests here
+  // and the router injects the real (refreshed) OAuth token, so no provider
+  // credential ever lives inside an agent box.
+  const modelProxy = startModelProxyServer({
+    runtime,
+    resolveAccessToken: createSharedAuthTokenResolver(config.instancesDir),
   });
 
   const inflight = new Set<string>();
@@ -638,6 +647,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       proxy.server.close((err) => {
         if (err) {
           runtime.error(`[router] failed to close container proxy server: ${String(err)}`);
+        }
+      });
+      modelProxy.server.close((err) => {
+        if (err) {
+          runtime.error(`[router] failed to close model proxy server: ${String(err)}`);
         }
       });
       // Lifecycle messages ("Shutting down") handled by health-monitor sidecar.
