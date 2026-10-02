@@ -451,34 +451,31 @@ PY
     fi
   fi
 
-  if [ -f "$target" ]; then
-    # OpenClaw configs are JSON5 (comments, trailing commas, unquoted keys,
-    # single-quoted strings), so we must not parse them with a stdlib JSON reader
-    # or a partial regex conversion. Use the CLI's own JSON5-aware `config set`
-    # against this file (OPENCLAW_CONFIG_PATH), which loads/validates/writes with
-    # the same parser the gateway uses. Guarded so a failure only warns and lets
-    # provisioning continue rather than aborting under `set -e` after the port is
-    # reserved.
-    if [ -n "$OPENCLAW_BIN" ]; then
-      if OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
-        channels.discord.proxyUrl "$CONTAINER_PROXY_URL" >/dev/null 2>&1; then
-        echo "Set Discord proxyUrl to $CONTAINER_PROXY_URL"
-      else
-        echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
-      fi
-      # Force the model proxy baseUrl and the /workspace path regardless of what a
-      # copied-from-sibling config carried, so every box is token-free and uses the
-      # minimal mount layout (config read-only at /etc, workspace at /workspace).
-      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
-        models.providers.anthropic-subscription.baseUrl "$MODEL_PROXY_URL" >/dev/null 2>&1 ||
-        echo "Warning: could not set model proxy baseUrl in $target; left unchanged" >&2
-      OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
-        agents.defaults.workspace /workspace >/dev/null 2>&1 ||
-        echo "Warning: could not set agents.defaults.workspace in $target; left unchanged" >&2
-    else
-      echo "Warning: openclaw CLI not found; left Discord proxyUrl in $target unchanged" >&2
-    fi
+  force_box_config "$target"
+}
+
+# Force the box-side config values every per-channel agent needs, regardless of
+# what a copied-from-sibling config carried: the Discord send proxy, the model
+# proxy baseUrl (token-free), and the /workspace path. OpenClaw configs are JSON5,
+# so this uses the CLI's own JSON5-aware `config set`. Guarded so a failure only
+# warns. Idempotent, so it is safe (and necessary) to re-run on every startup path
+# (add, restart, boot) — otherwise an existing instance keeps a stale baseUrl.
+force_box_config() {
+  local target="$1"
+  [ -f "$target" ] || return 0
+  if [ -z "$OPENCLAW_BIN" ]; then
+    echo "Warning: openclaw CLI not found; left box config in $target unchanged" >&2
+    return 0
   fi
+  OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+    channels.discord.proxyUrl "$CONTAINER_PROXY_URL" >/dev/null 2>&1 ||
+    echo "Warning: could not set Discord proxyUrl in $target; left unchanged" >&2
+  OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+    models.providers.anthropic-subscription.baseUrl "$MODEL_PROXY_URL" >/dev/null 2>&1 ||
+    echo "Warning: could not set model proxy baseUrl in $target; left unchanged" >&2
+  OPENCLAW_CONFIG_PATH="$target" "$OPENCLAW_BIN" config set \
+    agents.defaults.workspace /workspace >/dev/null 2>&1 ||
+    echo "Warning: could not set agents.defaults.workspace in $target; left unchanged" >&2
 }
 
 # Strip external secrets from a box's openclaw.json. The box reaches Discord only
@@ -568,6 +565,9 @@ prepare_instance_dirs() {
 JSON
 
   sanitize_config "$base/openclaw.json"
+  # Re-assert the proxy URLs and /workspace path so an existing instance picks up
+  # a changed model-proxy port or layout on restart/boot, not just on first add.
+  force_box_config "$base/openclaw.json"
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
