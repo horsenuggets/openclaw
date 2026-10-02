@@ -37,22 +37,29 @@ export function pickLastNonEmptyTextFromPayloads(payloads: Array<{ text?: string
 }
 
 /**
- * Check if all payloads are just heartbeat ack responses (the silent-reply token).
- * Returns true if delivery should be skipped because there's no real content.
+ * Clear the text of any payload whose text carries the silent-reply token (keeping its media)
+ * and drop payloads that end up with neither text nor media. Isolated cron bypasses
+ * `normalizeReplyPayload`, and `deliverOutboundPayloads`' directive parser only strips an edge
+ * token, so token-bearing text must be cleared here (contains-based, matching the universal
+ * contract) before it reaches delivery — even when a sibling payload is deliverable or the
+ * token-bearing payload also has media.
+ */
+export function sanitizeHeartbeatDeliveryPayloads<T extends DeliveryPayload>(payloads: T[]): T[] {
+  return payloads.flatMap((payload) => {
+    const hasMedia = (payload.mediaUrls?.length ?? 0) > 0 || Boolean(payload.mediaUrl);
+    const text = payload.text?.trim();
+    const isSilent = !text || text.includes(SILENT_REPLY_TOKEN);
+    if (!isSilent) {
+      return [payload];
+    }
+    return hasMedia ? [{ ...payload, text: undefined }] : [];
+  });
+}
+
+/**
+ * Check if a response has no deliverable content after silent-token sanitization.
+ * Returns true if delivery should be skipped because nothing real remains.
  */
 export function isHeartbeatOnlyResponse(payloads: DeliveryPayload[]) {
-  if (payloads.length === 0) {
-    return true;
-  }
-  return payloads.every((payload) => {
-    // If there's media, we should deliver regardless of text content.
-    const hasMedia = (payload.mediaUrls?.length ?? 0) > 0 || Boolean(payload.mediaUrl);
-    if (hasMedia) {
-      return false;
-    }
-    const text = payload.text?.trim();
-    // Isolated cron bypasses `normalizeReplyPayload`, so apply the same contains-based
-    // silent-token contract here: any occurrence (not just an edge) marks a no-op ack.
-    return !text || text.includes(SILENT_REPLY_TOKEN);
-  });
+  return sanitizeHeartbeatDeliveryPayloads(payloads).length === 0;
 }

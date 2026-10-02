@@ -701,10 +701,15 @@ export async function runHeartbeatOnce(opts: {
     const normalized = normalizeHeartbeatReply(replyPayload, responsePrefix, ackMaxChars);
     // For exec completion events, don't skip even if the response looks like an ack.
     // The model should be responding with exec results, not the silent-reply token.
-    // Also, if normalized.text is empty due to token stripping but we have exec completion,
-    // fall back to the original reply text.
+    // Also, if normalized.text is empty due to an ack-like reply but we have exec completion,
+    // fall back to the original reply text. Never restore text that carries the silent token,
+    // otherwise the contains-based suppression above would be undone and the control command
+    // could leak through the edge-only outbound directive parser.
     const execFallbackText =
-      hasExecCompletion && !normalized.text.trim() && replyPayload.text?.trim()
+      hasExecCompletion &&
+      !normalized.text.trim() &&
+      replyPayload.text?.trim() &&
+      !replyPayload.text.includes(SILENT_REPLY_TOKEN)
         ? replyPayload.text.trim()
         : null;
     if (execFallbackText) {
