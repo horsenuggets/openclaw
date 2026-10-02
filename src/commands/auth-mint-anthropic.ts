@@ -4,17 +4,20 @@ import path from "node:path";
 import lockfile from "proper-lockfile";
 import type { AuthProfileStore, OAuthCredential } from "../agents/auth-profiles/types.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { AUTH_STORE_LOCK_OPTIONS } from "../agents/auth-profiles/constants.js";
+import {
+  ANTHROPIC_SUBSCRIPTION_PROFILE_ID,
+  ANTHROPIC_SUBSCRIPTION_PROVIDER,
+  AUTH_STORE_LOCK_OPTIONS,
+} from "../agents/auth-profiles/constants.js";
 import { ensureAuthStoreFile, resolveAuthStorePath } from "../agents/auth-profiles/paths.js";
 import { saveAuthProfileStore } from "../agents/auth-profiles/store.js";
 import { loadJsonFile } from "../infra/json-file.js";
 import { loginAnthropicViaCallback } from "./auth-anthropic-login.js";
 
-// The profile id every per-channel agent resolves for the Claude Max OAuth
-// ("anthropic-subscription") provider, and the provider name stored alongside
-// the credential. Mint writes the minted token here so the gateway picks it up.
-export const ANTHROPIC_SUBSCRIPTION_PROFILE_ID = "anthropic-subscription:default";
-export const ANTHROPIC_SUBSCRIPTION_PROVIDER = "anthropic-subscription";
+// Re-exported for existing importers; canonical definitions live in
+// agents/auth-profiles/constants.ts so the router model proxy can share them
+// without importing this CLI login module.
+export { ANTHROPIC_SUBSCRIPTION_PROFILE_ID, ANTHROPIC_SUBSCRIPTION_PROVIDER };
 
 export type MintStore = "shared" | "main";
 

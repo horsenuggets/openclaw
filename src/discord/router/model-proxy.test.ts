@@ -4,9 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouterRuntime } from "./types.js";
+import { ANTHROPIC_SUBSCRIPTION_PROFILE_ID } from "../../agents/auth-profiles/constants.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 
 const runtime: RouterRuntime = { log: vi.fn(), error: vi.fn() };
+const FUTURE = 4102444800000;
 
 type StartedProxy = { baseUrl: string; close: () => Promise<void> };
 
@@ -124,6 +126,67 @@ describe("startModelProxyServer", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("rejects an oversized request body with 413 and never forwards", async () => {
+    const fetchImpl = vi.fn();
+    const started = await startTestProxy({
+      resolveAccessToken: async () => "REAL-TOKEN",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      maxBodyBytes: 16,
+    });
+    close = started.close;
+
+    const res = await fetch(`${started.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "x".repeat(64),
+    }).catch((err) => err as Error);
+
+    if (res instanceof Error) {
+      // Some runtimes surface the mid-upload reset as a fetch error instead of a
+      // 413 response; either way the key guarantee is that we never forwarded.
+      expect(fetchImpl).not.toHaveBeenCalled();
+    } else {
+      expect(res.status).toBe(413);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("survives an upstream stream failure after headers are sent (no router crash)", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("partial"));
+      },
+      pull(controller) {
+        controller.error(new Error("stream broke"));
+      },
+    });
+    const fetchImpl = (async () =>
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      })) as typeof fetch;
+
+    const started = await startTestProxy({
+      resolveAccessToken: async () => "REAL-TOKEN",
+      fetchImpl,
+    });
+    close = started.close;
+
+    // The streamed request fails mid-body; swallow whatever the client observes.
+    await fetch(`${started.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => r.text())
+      .catch(() => undefined);
+
+    // The server must still be alive and serving (it did not crash on the
+    // ERR_HTTP_HEADERS_SENT path).
+    const health = await fetch(`${started.baseUrl}/health`);
+    expect(health.status).toBe(200);
+  });
+
   it("serves /health and rejects anything outside the proxied surface", async () => {
     const started = await startTestProxy({
       resolveAccessToken: async () => "REAL-TOKEN",
@@ -161,32 +224,81 @@ describe("createSharedAuthTokenResolver", () => {
     await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
   });
 
-  it("resolves the access token from a valid anthropic-subscription OAuth profile", async () => {
+  it("resolves the access token from the canonical anthropic-subscription profile", async () => {
     const instancesDir = await seedSharedStore({
-      "anthropic-subscription": {
+      [ANTHROPIC_SUBSCRIPTION_PROFILE_ID]: {
         type: "oauth",
         provider: "anthropic-subscription",
         access: "sk-ant-oat01-REAL-ACCESS",
         refresh: "refresh-token",
-        // Far-future expiry so the resolver returns the access token without refreshing.
-        expires: 4102444800000,
+        expires: FUTURE,
       },
     });
     const resolver = createSharedAuthTokenResolver(instancesDir);
     await expect(resolver()).resolves.toBe("sk-ant-oat01-REAL-ACCESS");
   });
 
-  it("ignores OAuth profiles for other providers", async () => {
+  it("does not resolve a profile stored under a non-canonical id", async () => {
     const instancesDir = await seedSharedStore({
-      openai: {
+      "anthropic-subscription": {
         type: "oauth",
-        provider: "openai",
-        access: "oai-access",
-        refresh: "oai-refresh",
-        expires: 4102444800000,
+        provider: "anthropic-subscription",
+        access: "legacy-id-token",
+        refresh: "",
+        expires: FUTURE,
       },
     });
     const resolver = createSharedAuthTokenResolver(instancesDir);
     await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
+  });
+
+  it("ignores OAuth profiles for other providers", async () => {
+    const instancesDir = await seedSharedStore({
+      [ANTHROPIC_SUBSCRIPTION_PROFILE_ID]: {
+        type: "oauth",
+        provider: "openai",
+        access: "oai-access",
+        refresh: "oai-refresh",
+        expires: FUTURE,
+      },
+    });
+    const resolver = createSharedAuthTokenResolver(instancesDir);
+    await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
+  });
+
+  it("reads only the shared store and never the router's main-agent store", async () => {
+    // Populate a main-agent store (what ensureAuthProfileStore would cross-merge).
+    const prev = process.env.OPENCLAW_STATE_DIR;
+    const mainState = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-main-state-"));
+    const mainAgentDir = path.join(mainState, "agents", "main", "agent");
+    await fs.mkdir(mainAgentDir, { recursive: true });
+    await fs.writeFile(
+      path.join(mainAgentDir, "auth-profiles.json"),
+      JSON.stringify({
+        version: 1,
+        profiles: {
+          [ANTHROPIC_SUBSCRIPTION_PROFILE_ID]: {
+            type: "oauth",
+            provider: "anthropic-subscription",
+            access: "MAIN-ACCOUNT-TOKEN",
+            refresh: "",
+            expires: FUTURE,
+          },
+        },
+      }),
+    );
+    process.env.OPENCLAW_STATE_DIR = mainState;
+    try {
+      // Shared store is empty: a correct resolver must NOT fall back to main.
+      const instancesDir = await seedSharedStore({});
+      const resolver = createSharedAuthTokenResolver(instancesDir);
+      await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.OPENCLAW_STATE_DIR;
+      } else {
+        process.env.OPENCLAW_STATE_DIR = prev;
+      }
+    }
   });
 });

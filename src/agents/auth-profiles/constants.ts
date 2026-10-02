@@ -9,6 +9,13 @@ export const CODEX_CLI_PROFILE_ID = "openai-codex:codex-cli";
 export const QWEN_CLI_PROFILE_ID = "qwen-portal:qwen-cli";
 export const MINIMAX_CLI_PROFILE_ID = "minimax-portal:minimax-cli";
 
+// The Claude Max OAuth ("anthropic-subscription") provider name and the canonical
+// profile id that `openclaw auth mint-anthropic` writes and every per-channel
+// agent resolves. Kept here (not in the mint command) so the router's model proxy
+// can reference them without importing the CLI login flow.
+export const ANTHROPIC_SUBSCRIPTION_PROVIDER = "anthropic-subscription";
+export const ANTHROPIC_SUBSCRIPTION_PROFILE_ID = "anthropic-subscription:default";
+
 export const AUTH_STORE_LOCK_OPTIONS = {
   retries: {
     retries: 10,
