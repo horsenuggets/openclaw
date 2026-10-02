@@ -1,7 +1,7 @@
 /**
- * Persona/context preamble: delivers selected workspace files (plus optional
- * heartbeat guidance and a pointer to withheld files) as a leading
- * `<system-reminder>` user message instead of the system prompt.
+ * Persona/context preamble: delivers selected workspace files (plus an optional
+ * pointer to withheld files) as a leading `<system-reminder>` user message
+ * instead of the system prompt.
  *
  * Why conversation content instead of the system prompt: on the subscription
  * (OAuth) path the system prompt is collapsed to a Claude Code-compatible base
@@ -45,18 +45,15 @@ function hasPersonaFile(files: EmbeddedContextFile[]): boolean {
 }
 
 export type PersonaPreambleOptions = {
-  /** The "## Heartbeats" block, delivered here on the subscription path. */
-  heartbeatGuidance?: string;
   /** Pointer listing withheld ("off") files so the model can Read them. */
   pointer?: string;
 };
 
 /**
  * Build the `<system-reminder>`-wrapped preamble from the given files plus any
- * heartbeat guidance and pointer. Returns undefined when there is no content at
- * all, so callers can skip injection entirely. Wrapped in `<system-reminder>` so
- * the model treats it as system-injected context rather than words the human
- * typed.
+ * pointer. Returns undefined when there is no content at all, so callers can skip
+ * injection entirely. Wrapped in `<system-reminder>` so the model treats it as
+ * system-injected context rather than words the human typed.
  */
 function buildPersonaPreambleContent(
   files: EmbeddedContextFile[],
@@ -70,10 +67,6 @@ function buildPersonaPreambleContent(
     blocks.push(PERSONA_IDENTITY_LINE);
   }
   blocks.push(...sections);
-  const heartbeat = opts?.heartbeatGuidance?.trim();
-  if (heartbeat) {
-    blocks.push(heartbeat);
-  }
   const pointer = opts?.pointer?.trim();
   if (pointer) {
     blocks.push(pointer);
