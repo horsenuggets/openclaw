@@ -37,6 +37,11 @@ Docs: https://docs.openclaw.ai
   USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
 - Docs: add the `SYSTEM.md` system-prompt source template and rewrite its `SYSTEM.port.md`
   porting guide under `docs/reference/templates/` (#72).
+- Agents: port the revamped SYSTEM.md wording into the system-prompt builder so every
+  channel's live prompt matches the lowercase house style, drop the Writing Style, CLI
+  quick reference, date/time, user identity, and heartbeats sections (that guidance now
+  lives in the workspace AGENTS.md preamble or the injected heartbeat prompt), and render
+  the Runtime section as a JSON block.
 - Heartbeat: treat a HEARTBEAT.md that contains only HTML comments as empty, so a freshly
   seeded workspace no longer starts periodic heartbeat API calls.
 - Discord router: move the local whisper speech-to-text server off port 8787, which

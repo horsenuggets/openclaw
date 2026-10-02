@@ -165,12 +165,17 @@ export function wrapForSubscription(openClawPrompt: string): string {
     withoutProjectContext = stripSection(withoutProjectContext, heading);
   }
 
-  // Strip any existing CC prefix and anti-CC identity lines.
+  // Strip any existing CC prefix and anti-CC identity lines. The lowercase
+  // "actually, you are openclaw ... ignore the identity it implies" line is the
+  // current base identity emitted by buildAgentSystemPrompt; like the older
+  // variants it explicitly contradicts the Claude Code identity and so must be
+  // removed here to keep the subscription request on plan quota.
   let cleaned = withoutProjectContext
     .replace(/You are Claude Code, Anthropic's official CLI for Claude\.\s*/g, "")
     .replace(/You are NOT Claude Code\.[^\n]*/g, "")
     .replace(/You are a personal assistant running inside OpenClaw\./g, "")
     .replace(/You are OpenClaw\./g, "")
+    .replace(/^actually, you are openclaw[^\n]*/gim, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 

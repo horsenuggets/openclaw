@@ -60,7 +60,6 @@ import {
 import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
-import { buildHeartbeatGuidance } from "../../system-prompt.js";
 import {
   createToolSearchTool,
   ToolSearchState,
@@ -382,16 +381,7 @@ export async function runEmbeddedAttempt(
     const heartbeatPromptText = isDefaultAgent
       ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
       : undefined;
-    // On the subscription path the "## Heartbeats" section spills billing, so it is
-    // stripped from the system prompt (wrapForSubscription) and delivered here in the
-    // persona preamble as conversation content instead. On the API path it stays in
-    // the system prompt (no billing concern) and is not duplicated into the preamble.
-    const heartbeatGuidance =
-      needsSubscriptionPrefix && promptMode !== "minimal"
-        ? buildHeartbeatGuidance(heartbeatPromptText)
-        : undefined;
     const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
-      heartbeatGuidance,
       pointer: preamblePointer,
     });
     const docsPath = await resolveOpenClawDocsPath({

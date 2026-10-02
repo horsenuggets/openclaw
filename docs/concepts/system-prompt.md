@@ -1,7 +1,7 @@
 ---
 summary: "What the OpenClaw system prompt contains and how it is assembled"
 read_when:
-  - Editing system prompt text, tools list, or time/heartbeat sections
+  - Editing system prompt text, tools list, or the Runtime section
   - Changing workspace bootstrap or skills injection behavior
 title: "System Prompt"
 ---
@@ -15,25 +15,37 @@ The prompt is assembled by OpenClaw and injected into each agent run.
 
 ## Structure
 
-The prompt is intentionally compact and uses fixed sections:
+The prompt is intentionally compact and uses fixed sections. The ported sections are
+written in the lowercase house style that mirrors the `SYSTEM.md` template source:
 
-- **Tooling**: current tool list + short descriptions.
-- **Safety**: short guardrail reminder to avoid power-seeking behavior or bypassing
+- **tooling**: current tool list + short descriptions.
+- **tool call style**: how to narrate and acknowledge before running tools.
+- **safety**: short guardrail reminder to avoid power-seeking behavior or bypassing
   oversight.
-- **Skills** (when available): tells the model how to load skill instructions on demand.
+- **skills** (when available): tells the model how to load skill instructions on demand.
 - **OpenClaw Self-Update**: how to run `config.apply` and `update.run`.
-- **Workspace**: working directory (`agents.defaults.workspace`).
-- **Documentation**: local path to OpenClaw docs (repo or npm package) and when to read
+- **workspace**: working directory (`agents.defaults.workspace`).
+- **documentation**: local path to OpenClaw docs (repo or npm package) and when to read
   them.
-- **Workspace Files (injected)**: indicates bootstrap files are included below.
+- **workspace files (injected)**: indicates bootstrap files are included below.
 - **Sandbox** (when enabled): indicates sandboxed runtime, sandbox paths, and whether
   elevated exec is available.
-- **Current Date & Time**: user-local time, timezone, and time format.
-- **Reply Tags**: optional reply tag syntax for supported providers.
-- **Heartbeats**: heartbeat prompt and ack behavior.
-- **Runtime**: host, OS, node, model, repo root (when detected), thinking level (one
-  line).
-- **Reasoning**: current visibility level + /reasoning toggle hint.
+- **reply tags**: optional reply tag syntax for supported providers.
+- **messaging** + **silent replies**: routing, the `message` tool, and the `⁘ return`
+  silent-reply convention.
+- **message priority** / **output boundaries**: how to prioritize the incoming message and
+  never fabricate user turns.
+- **Runtime**: a JSON block of runtime facts (agent id, host, OS, node, model, channel,
+  capabilities, thinking level, reasoning level; only present fields are emitted). The
+  `agent` field is how the session-logs skill locates `~/.openclaw/agents/<agentId>/`.
+
+The base identity line (`actually, you are openclaw...`) is still emitted as the first
+line of every full and `none`-mode prompt. What was removed are the separate **User
+Identity** (owner numbers), **Current Date & Time**, and **Heartbeats** sections, plus the
+**Writing Style** and CLI quick-reference blocks: owner/identity and workspace context now
+come from the injected AGENTS.md / SOUL.md preamble, the current time from
+`session_status`, and the heartbeat ack instruction from the separately injected heartbeat
+prompt.
 
 Safety guardrails in the system prompt are advisory. They guide model behavior but do not
 enforce policy. Use tool policy, exec approvals, sandboxing, and channel allowlists for
@@ -45,10 +57,10 @@ OpenClaw can render smaller system prompts for sub-agents. The runtime sets a `p
 for each run (not a user-facing config):
 
 - `full` (default): includes all sections above.
-- `minimal`: used for sub-agents; omits **Skills**, **Memory Recall**, **OpenClaw
-  Self-Update**, **Model Aliases**, **User Identity**, **Reply Tags**, **Messaging**,
-  **Silent Replies**, and **Heartbeats**. Tooling, **Safety**, Workspace, Sandbox, Current
-  Date & Time (when known), Runtime, and injected context stay available.
+- `minimal`: used for sub-agents; omits **skills**, **Memory Recall**, **OpenClaw
+  Self-Update**, **Model Aliases**, **reply tags**, **messaging**, and **silent replies**.
+  **tooling**, **safety**, **workspace**, **Sandbox**, **Runtime**, and injected context
+  stay available.
 - `none`: returns only the base identity line.
 
 When `promptMode=minimal`, extra injected prompts are labeled **Subagent Context** instead
@@ -81,12 +93,10 @@ schema overhead), use `/context list` or `/context detail`. See
 
 ## Time handling
 
-The system prompt includes a dedicated **Current Date & Time** section when the user
-timezone is known. To keep the prompt cache-stable, it now only includes the **time zone**
-(no dynamic clock or time format).
-
-Use `session_status` when the agent needs the current time; the status card includes a
-timestamp line.
+The system prompt does not include the current date/time (this keeps the prompt
+cache-stable). When a user timezone is configured, the prompt only adds a one-line hint
+telling the model to run `session_status` for the current date, time, or day of week; the
+status card includes a timestamp line.
 
 Configure with:
 
@@ -116,10 +126,9 @@ This keeps the base prompt small while still enabling targeted skill usage.
 
 ## Documentation
 
-When available, the system prompt includes a **Documentation** section that points to the
+When available, the system prompt includes a **documentation** section that points to the
 local OpenClaw docs directory (either `docs/` in the repo workspace or the bundled npm
-package docs) and also notes the public mirror, source repo, community Discord, and
-ClawHub (https://clawhub.com) for skills discovery. The prompt instructs the model to
-consult local docs first for OpenClaw behavior, commands, configuration, or architecture,
-and to run `openclaw status` itself when possible (asking the user only when it lacks
-access).
+package docs) and also notes the source repo and ClawHub (https://clawhub.com) for skills
+discovery. The prompt instructs the model to consult local docs first for OpenClaw
+behavior, commands, configuration, or architecture, and to run `openclaw status` itself
+when possible (asking the user only when it lacks access).
