@@ -7,7 +7,7 @@
 FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$FILES" ] && exit 0
 
-OXFMT_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|mjs|cjs|ts|tsx|json|jsonc)$' || true)
+OXFMT_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.(js|jsx|mjs|cjs|ts|tsx|mts|cts|json|jsonc)$' || true)
 MD_FILES=$(printf '%s\n' "$FILES" | grep -iE '\.md$' || true)
 
 [ -n "$OXFMT_FILES" ] && printf '%s\n' "$OXFMT_FILES" | sed 's| |\\ |g' | xargs pnpm exec oxfmt --write
