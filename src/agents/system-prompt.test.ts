@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import {
   buildAgentSystemPrompt,
+  buildRuntimeInfo,
   PROJECT_CONTEXT_BEGIN,
   PROJECT_CONTEXT_END,
 } from "./system-prompt.js";
@@ -317,6 +318,65 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("`message` → send messages and channel actions");
     expect(prompt).toContain("### message tool");
     expect(prompt).toContain(`respond with only \`${SILENT_REPLY_TOKEN}\``);
+  });
+
+  it("emits a Runtime JSON block with agent and channel details", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      reasoningLevel: "off",
+      runtimeInfo: {
+        agentId: "work",
+        os: "macOS",
+        arch: "arm64",
+        node: "v20",
+        model: "anthropic/claude",
+        channel: "telegram",
+        capabilities: ["inlineButtons"],
+      },
+    });
+
+    expect(prompt).toContain("## Runtime");
+    expect(prompt).toContain("```json");
+    expect(prompt).toContain('"agent": "work"');
+    expect(prompt).toContain('"channel": "telegram"');
+    expect(prompt).toContain('"capabilities": "inlineButtons"');
+    expect(prompt).toContain('"reasoning": "off"');
+  });
+
+  it("builds runtime info JSON with only the present fields", () => {
+    const info = buildRuntimeInfo(
+      {
+        agentId: "work",
+        host: "host",
+        repoRoot: "/repo",
+        os: "macOS",
+        arch: "arm64",
+        node: "v20",
+        model: "anthropic/claude",
+        defaultModel: "anthropic/claude-opus-4-5",
+      },
+      "telegram",
+      ["inlineButtons"],
+      "low",
+      "on",
+    );
+    const parsed = JSON.parse(info) as Record<string, string>;
+
+    expect(parsed).toMatchObject({
+      agent: "work",
+      host: "host",
+      repo: "/repo",
+      os: "macOS (arm64)",
+      node: "v20",
+      model: "anthropic/claude",
+      default_model: "anthropic/claude-opus-4-5",
+      channel: "telegram",
+      capabilities: "inlineButtons",
+      thinking: "low",
+      reasoning: "on",
+    });
+    // Absent fields (e.g. build) are omitted rather than emitted as empty.
+    expect(parsed).not.toHaveProperty("build");
   });
 
   it("describes sandboxed runtime and elevated when allowed", () => {

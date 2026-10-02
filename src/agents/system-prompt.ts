@@ -187,7 +187,7 @@ function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readT
   return [
     "## documentation",
     `- openclaw docs → ${docsPath}`,
-    "- source → https://github.com/horsenuggets/openclaw",
+    "- source → https://github.com/openclaw/openclaw",
     "- find new skills → https://clawhub.com",
     "",
     "for openclaw behavior, commands, config, or architecture, consult local docs first",
@@ -386,6 +386,7 @@ export function buildAgentSystemPrompt(params: {
         "<final>Hey there! What would you like to do next?</final>",
       ].join(" ")
     : undefined;
+  const reasoningLevel = params.reasoningLevel ?? "off";
   const userTimezone = params.userTimezone?.trim();
   const skillsPrompt = params.skillsPrompt?.trim();
   const runtimeInfo = params.runtimeInfo;
@@ -669,6 +670,19 @@ export function buildAgentSystemPrompt(params: {
     lines.push("## Conversation History", params.conversationHistory, "");
   }
 
+  lines.push(
+    "## Runtime",
+    "```json",
+    buildRuntimeInfo(
+      runtimeInfo,
+      runtimeChannel,
+      runtimeCapabilities,
+      params.defaultThinkLevel,
+      reasoningLevel,
+    ),
+    "```",
+  );
+
   if (!wrapProjectContext) {
     return lines.filter(Boolean).join("\n");
   }
@@ -697,4 +711,63 @@ export function buildAgentSystemPrompt(params: {
   return [before, PROJECT_CONTEXT_BEGIN, block, PROJECT_CONTEXT_END, after]
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * Build the body of the `## Runtime` section: a pretty-printed JSON object of the
+ * current runtime facts (agent id, host, model, channel, think/reasoning level,
+ * ...). Only present fields are emitted. The `agent` field is read by the
+ * session-logs skill and AGENTS.md to locate `~/.openclaw/agents/<agentId>/`.
+ */
+export function buildRuntimeInfo(
+  runtimeInfo?: {
+    agentId?: string;
+    buildHash?: string;
+    host?: string;
+    os?: string;
+    arch?: string;
+    node?: string;
+    model?: string;
+    defaultModel?: string;
+    repoRoot?: string;
+  },
+  runtimeChannel?: string,
+  runtimeCapabilities: string[] = [],
+  defaultThinkLevel?: ThinkLevel,
+  reasoningLevel: ReasoningLevel = "off",
+): string {
+  const info: Record<string, string> = {};
+  if (runtimeInfo?.agentId) {
+    info.agent = runtimeInfo.agentId;
+  }
+  if (runtimeInfo?.buildHash) {
+    info.build = runtimeInfo.buildHash;
+  }
+  if (runtimeInfo?.host) {
+    info.host = runtimeInfo.host;
+  }
+  if (runtimeInfo?.repoRoot) {
+    info.repo = runtimeInfo.repoRoot;
+  }
+  if (runtimeInfo?.os) {
+    info.os = `${runtimeInfo.os}${runtimeInfo.arch ? ` (${runtimeInfo.arch})` : ""}`;
+  } else if (runtimeInfo?.arch) {
+    info.arch = runtimeInfo.arch;
+  }
+  if (runtimeInfo?.node) {
+    info.node = runtimeInfo.node;
+  }
+  if (runtimeInfo?.model) {
+    info.model = runtimeInfo.model;
+  }
+  if (runtimeInfo?.defaultModel) {
+    info.default_model = runtimeInfo.defaultModel;
+  }
+  if (runtimeChannel) {
+    info.channel = runtimeChannel;
+    info.capabilities = runtimeCapabilities.length > 0 ? runtimeCapabilities.join(",") : "none";
+  }
+  info.thinking = defaultThinkLevel ?? "off";
+  info.reasoning = reasoningLevel;
+  return JSON.stringify(info, null, 2);
 }
