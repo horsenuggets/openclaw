@@ -15,8 +15,10 @@ Docs: https://docs.openclaw.ai
 - Agents: unify the silent-reply convention on the `⁘ return` control command across all
   channels (previously `NO_REPLY`), so it is a host-side no-op on Discord and suppressed
   pre-send on other channels.
-- Workspace: revamp the prompt templates and add `SYSTEM.md` (editable system-prompt
-  source) plus `SYSTEM.port.md` (porting guide).
+- Workspace: revamp the prompt templates (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md,
+  USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
+- Heartbeat: treat a HEARTBEAT.md that contains only HTML comments as empty, so a freshly
+  seeded workspace no longer starts periodic heartbeat API calls.
 - Discord router: move the local whisper speech-to-text server off port 8787, which
   crash-looped the `services.whisper` container on hosts where 8787 was already taken
   (e.g. WSL mirrored networking sharing the port with another distro, where a foreign
