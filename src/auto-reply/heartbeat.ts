@@ -1,10 +1,13 @@
 import { SILENT_REPLY_TOKEN } from "./tokens.js";
 
+// Instruction that makes a no-op heartbeat acknowledge with the universal silent-reply token,
+// which the auto-reply pipeline suppresses on every channel (see `isSilentReplyText`). It is
+// appended to every injected heartbeat turn via `appendHeartbeatAck`, so the ack is present
+// even when a custom `heartbeat.prompt` omits it.
+export const HEARTBEAT_ACK_INSTRUCTION = `If nothing needs attention, your ENTIRE response must be exactly ${SILENT_REPLY_TOKEN} — no preamble, no status summary, no other text.`;
 // Default heartbeat prompt (used when config.agents.defaults.heartbeat.prompt is unset).
 // Keep it tight and avoid encouraging the model to invent/rehash "open loops" from prior chat context.
-// A no-op heartbeat acknowledges with the universal silent-reply token, which the auto-reply
-// pipeline suppresses on every channel (see `isSilentReplyText`).
-export const HEARTBEAT_PROMPT = `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, your ENTIRE response must be exactly ${SILENT_REPLY_TOKEN} — no preamble, no status summary, no other text.`;
+export const HEARTBEAT_PROMPT = `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. ${HEARTBEAT_ACK_INSTRUCTION}`;
 // Visible acknowledgment delivered when `channels.*.heartbeat.showOk` is enabled. The agent's
 // own no-op reply is the silent token (and is suppressed); this is the opt-in human-readable
 // "all good" ping the runtime sends in its place.
@@ -65,4 +68,14 @@ export function isHeartbeatContentEffectivelyEmpty(content: string | undefined |
 export function resolveHeartbeatPrompt(raw?: string): string {
   const trimmed = typeof raw === "string" ? raw.trim() : "";
   return trimmed || HEARTBEAT_PROMPT;
+}
+
+/**
+ * Guarantee the silent-reply ack instruction on an injected heartbeat turn body. Custom
+ * prompts are returned verbatim by `resolveHeartbeatPrompt` and may omit the ack; without it
+ * an idle heartbeat could produce a user-visible reply (the system prompt no longer carries a
+ * heartbeat section). The default prompt already includes the token, so avoid duplicating it.
+ */
+export function appendHeartbeatAck(prompt: string): string {
+  return prompt.includes(SILENT_REPLY_TOKEN) ? prompt : `${prompt}\n\n${HEARTBEAT_ACK_INSTRUCTION}`;
 }

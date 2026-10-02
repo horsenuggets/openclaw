@@ -38,6 +38,10 @@ Docs: https://docs.openclaw.ai
   silent-reply suppression handles heartbeat acks on every channel. When
   `channels.*.heartbeat.showOk` is enabled, the visible acknowledgment is now
   `Heartbeat OK`.
+- Heartbeat: always append the silent-reply ack instruction to the injected heartbeat
+  turn, even for a custom `agents.*.heartbeat.prompt` that omits it. Without this, a
+  custom prompt combined with the removal of the system-prompt heartbeat section left idle
+  heartbeats with no ack instruction, so they could produce a user-visible reply.
 - Workspace: revamp the prompt templates (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md,
   USER.md, HEARTBEAT.md, BOOTSTRAP.md) for the lowercase house style.
 - Docs: add the `SYSTEM.md` system-prompt source template and rewrite its `SYSTEM.port.md`

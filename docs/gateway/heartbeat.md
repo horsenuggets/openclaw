@@ -48,8 +48,10 @@ Example config:
   `0m` to disable.
 - Prompt body (configurable via `agents.defaults.heartbeat.prompt`):
   `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`
-- The heartbeat prompt is sent **verbatim** as the user message. The system prompt
-  includes a “Heartbeat” section and the run is flagged internally.
+- The heartbeat prompt is injected as the user message and the run is flagged internally.
+  The silent-reply ack instruction (reply with only `⁘ return` when nothing needs
+  attention) is appended automatically if your prompt omits it, so a custom prompt still
+  suppresses no-op turns.
 - Active hours (`heartbeat.activeHours`) are checked in the configured timezone. Outside
   the window, heartbeats are skipped until the next tick inside the window.
 
@@ -65,7 +67,9 @@ The default prompt is intentionally broad:
 
 If you want a heartbeat to do something very specific (e.g. “check Gmail PubSub stats” or
 “verify gateway health”), set `agents.defaults.heartbeat.prompt` (or
-`agents.list[].heartbeat.prompt`) to a custom body (sent verbatim).
+`agents.list[].heartbeat.prompt`) to a custom body. The silent-reply ack instruction is
+appended automatically if your prompt omits it, so idle turns on a custom prompt are still
+suppressed.
 
 ## Response contract
 

@@ -1,13 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { HEARTBEAT_PROMPT, isHeartbeatContentEffectivelyEmpty } from "./heartbeat.js";
+import {
+  appendHeartbeatAck,
+  HEARTBEAT_ACK_INSTRUCTION,
+  HEARTBEAT_PROMPT,
+  isHeartbeatContentEffectivelyEmpty,
+} from "./heartbeat.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "./tokens.js";
 
 describe("HEARTBEAT_PROMPT", () => {
   it("instructs the agent to acknowledge a no-op with only the silent-reply token", () => {
     expect(HEARTBEAT_PROMPT).toContain(SILENT_REPLY_TOKEN);
+    expect(HEARTBEAT_PROMPT).toContain(HEARTBEAT_ACK_INSTRUCTION);
     // The silent-reply token the prompt asks for must itself read as a silent reply so the
     // auto-reply pipeline suppresses the ack on every channel.
     expect(isSilentReplyText(SILENT_REPLY_TOKEN, SILENT_REPLY_TOKEN)).toBe(true);
+  });
+});
+
+describe("appendHeartbeatAck", () => {
+  it("appends the ack instruction to a custom prompt that omits the silent token", () => {
+    const custom = "Check Gmail PubSub stats and report anomalies.";
+    const result = appendHeartbeatAck(custom);
+    expect(result.startsWith(custom)).toBe(true);
+    expect(result).toContain(SILENT_REPLY_TOKEN);
+    expect(result).toContain(HEARTBEAT_ACK_INSTRUCTION);
+  });
+
+  it("does not duplicate the ack when the prompt already contains the token", () => {
+    expect(appendHeartbeatAck(HEARTBEAT_PROMPT)).toBe(HEARTBEAT_PROMPT);
+    expect(appendHeartbeatAck(`do a thing ${SILENT_REPLY_TOKEN}`)).toBe(
+      `do a thing ${SILENT_REPLY_TOKEN}`,
+    );
   });
 });
 

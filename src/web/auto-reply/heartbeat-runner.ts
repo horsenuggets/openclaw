@@ -1,5 +1,9 @@
 import type { ReplyPayload } from "../../auto-reply/types.js";
-import { HEARTBEAT_OK_MESSAGE, resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
+import {
+  appendHeartbeatAck,
+  HEARTBEAT_OK_MESSAGE,
+  resolveHeartbeatPrompt,
+} from "../../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../../auto-reply/reply.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { resolveWhatsAppHeartbeatRecipients } from "../../channels/plugins/whatsapp-heartbeat.js";
@@ -155,7 +159,7 @@ export async function runWebHeartbeatOnce(opts: {
 
     const replyResult = await replyResolver(
       {
-        Body: resolveHeartbeatPrompt(cfg.agents?.defaults?.heartbeat?.prompt),
+        Body: appendHeartbeatAck(resolveHeartbeatPrompt(cfg.agents?.defaults?.heartbeat?.prompt)),
         From: to,
         To: to,
         MessageSid: sessionId ?? sessionSnapshot.entry?.sessionId,

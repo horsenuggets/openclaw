@@ -2148,8 +2148,9 @@ require `ZAI_API_KEY` (or legacy `Z_AI_API_KEY`) in the environment.
   `msteams`, `signal`, `imessage`, `none`). Default: `last`.
 - `prompt`: optional override for the heartbeat body (default:
   `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`).
-  Overrides are sent verbatim; include a `Read HEARTBEAT.md` line if you still want the
-  file read.
+  Overrides replace the body; include a `Read HEARTBEAT.md` line if you still want the
+  file read. The silent-reply ack instruction (reply with only `⁘ return` when nothing
+  needs attention) is appended automatically if your override omits it.
 - `ackMaxChars`: max chars for a tokenless ack-like heartbeat reply to still be suppressed
   as a no-op (default: 300).
 

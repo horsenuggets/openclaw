@@ -8,7 +8,7 @@ import { setTelegramRuntime } from "../../extensions/telegram/src/runtime.js";
 import { whatsappPlugin } from "../../extensions/whatsapp/src/channel.js";
 import { setWhatsAppRuntime } from "../../extensions/whatsapp/src/runtime.js";
 import { wrapSystemReminder } from "../agents/conversation/system-reminder.js";
-import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
+import { appendHeartbeatAck, HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import * as replyModule from "../auto-reply/reply.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import {
@@ -519,9 +519,10 @@ describe("runHeartbeatOnce", () => {
       expect(replySpy).toHaveBeenCalledWith(
         // The heartbeat prompt is wrapped as a system-reminder so the model treats
         // it as system context and the transcript classifier attributes it as
-        // `system` rather than a human `user` message.
+        // `system` rather than a human `user` message. The custom prompt omits the ack,
+        // so the runner appends the silent-reply ack instruction before wrapping.
         expect.objectContaining({
-          Body: wrapSystemReminder("Ops check"),
+          Body: wrapSystemReminder(appendHeartbeatAck("Ops check")),
           SessionKey: sessionKey,
         }),
         { isHeartbeat: true },
