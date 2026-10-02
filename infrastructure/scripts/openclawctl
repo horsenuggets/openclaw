@@ -389,6 +389,11 @@ seed_instance_config() {
   # from this file to authenticate to the agent (see src/discord/router/config.ts),
   # so a fresh per-instance token is all that is required. Guarded so a failure
   # warns rather than aborting under set -e after the port is already reserved.
+  #
+  # Remove any pre-existing config first so a removed-then-re-added channel (whose
+  # data dir is preserved by `remove`) is always rebuilt from the allowlist and can
+  # never reuse a stale config that carried external secrets.
+  [ -n "$OPENCLAW_BIN" ] && rm -f "$target"
   if [ ! -f "$target" ]; then
     if [ -n "$OPENCLAW_BIN" ]; then
       echo "Seeding base config for $channelId"
