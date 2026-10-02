@@ -48,9 +48,17 @@ vi.mock("./queue.js", async () => {
 
 import { runReplyAgent } from "./agent-runner.js";
 
-async function seedSessionStore(params: { storePath: string; sessionKey: string; entry: Record<string, unknown> }) {
+async function seedSessionStore(params: {
+  storePath: string;
+  sessionKey: string;
+  entry: Record<string, unknown>;
+}) {
   await fs.mkdir(path.dirname(params.storePath), { recursive: true });
-  await fs.writeFile(params.storePath, JSON.stringify({ [params.sessionKey]: params.entry }, null, 2), "utf-8");
+  await fs.writeFile(
+    params.storePath,
+    JSON.stringify({ [params.sessionKey]: params.entry }, null, 2),
+    "utf-8",
+  );
 }
 
 function createBaseRun(params: {

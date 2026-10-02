@@ -33,9 +33,11 @@ let sessionStore: Record<string, SessionEntry> = {};
 vi.mock("../config/sessions.js", () => ({
   loadSessionStore: vi.fn(() => sessionStore),
   resolveStorePath: vi.fn(() => "/tmp/sim-sessions.json5"),
-  updateSessionStore: vi.fn(async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
-    mutator(sessionStore);
-  }),
+  updateSessionStore: vi.fn(
+    async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
+      mutator(sessionStore);
+    },
+  ),
 }));
 
 // ── helpers ─────────────────────────────────────────────────────────
@@ -153,7 +155,9 @@ describe("Multi-day proactive messaging simulation", () => {
     vi.useRealTimers();
   });
 
-  function buildService(configOverrides: Partial<OpenClawConfig["proactive"]> = {}): ProactiveService {
+  function buildService(
+    configOverrides: Partial<OpenClawConfig["proactive"]> = {},
+  ): ProactiveService {
     const config = makeConfig(configOverrides);
 
     const runAgentCommand = vi.fn(async (opts: { message: string; sessionKey: string }) => {
@@ -202,7 +206,11 @@ describe("Multi-day proactive messaging simulation", () => {
    * Advance the simulation clock by the given milliseconds and run
    * a proactive check at each step interval.
    */
-  async function advanceAndCheck(service: ProactiveService, totalMs: number, stepMs: number = 5 * MINUTE) {
+  async function advanceAndCheck(
+    service: ProactiveService,
+    totalMs: number,
+    stepMs: number = 5 * MINUTE,
+  ) {
     let elapsed = 0;
     while (elapsed < totalMs) {
       const step = Math.min(stepMs, totalMs - elapsed);
@@ -319,7 +327,9 @@ describe("Multi-day proactive messaging simulation", () => {
 
     // Day 2: 6 AM - 2 PM (8 hours)
     await advanceAndCheck(service, 8 * HOUR);
-    const day2Triggers = events.filter((e) => e.type === "trigger" && e.atMs > SIM_START + 24 * HOUR);
+    const day2Triggers = events.filter(
+      (e) => e.type === "trigger" && e.atMs > SIM_START + 24 * HOUR,
+    );
     // Day 2 should have new triggers (daily count reset)
     expect(day2Triggers.length).toBeGreaterThanOrEqual(1);
 
@@ -372,7 +382,9 @@ describe("Multi-day proactive messaging simulation", () => {
       await advanceAndCheck(service, 20 * MINUTE);
       userSendsMessage("discord:peter-123");
     }
-    const day2Morning = events.filter((e) => e.type === "trigger" && e.atMs > SIM_START + 24 * HOUR);
+    const day2Morning = events.filter(
+      (e) => e.type === "trigger" && e.atMs > SIM_START + 24 * HOUR,
+    );
     // Should not trigger while user is active
     expect(day2Morning.length).toBe(0);
 
@@ -456,7 +468,9 @@ describe("Multi-day proactive messaging simulation", () => {
     await advanceAndCheck(service, 4 * HOUR);
 
     // Only DM session should get triggers
-    const groupTriggers = events.filter((e) => e.sessionKey === "discord:group-456" && e.type === "trigger");
+    const groupTriggers = events.filter(
+      (e) => e.sessionKey === "discord:group-456" && e.type === "trigger",
+    );
     expect(groupTriggers.length).toBe(0);
 
     service.stop();

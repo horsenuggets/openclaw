@@ -9,7 +9,10 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function isSilentReplyText(text: string | undefined, token: string = SILENT_REPLY_TOKEN): boolean {
+export function isSilentReplyText(
+  text: string | undefined,
+  token: string = SILENT_REPLY_TOKEN,
+): boolean {
   if (!text) {
     return false;
   }

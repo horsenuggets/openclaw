@@ -1,7 +1,11 @@
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { clearInternalHooks, registerInternalHook, type AgentBootstrapHookContext } from "../hooks/internal-hooks.js";
+import {
+  clearInternalHooks,
+  registerInternalHook,
+  type AgentBootstrapHookContext,
+} from "../hooks/internal-hooks.js";
 import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace.js";
 import { resolveBootstrapContextForRun, resolveBootstrapFilesForRun } from "./bootstrap-files.js";
 

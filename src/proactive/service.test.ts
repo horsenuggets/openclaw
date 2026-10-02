@@ -8,9 +8,11 @@ import { ProactiveService, type ProactiveServiceDeps } from "./service.js";
 vi.mock("../config/sessions.js", () => ({
   loadSessionStore: vi.fn(),
   resolveStorePath: vi.fn(() => "/tmp/test-sessions.json5"),
-  updateSessionStore: vi.fn(async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
-    mutator({});
-  }),
+  updateSessionStore: vi.fn(
+    async (_path: string, mutator: (s: Record<string, SessionEntry>) => void) => {
+      mutator({});
+    },
+  ),
 }));
 
 vi.mock("../auto-reply/reply/route-reply.js", () => ({

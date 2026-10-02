@@ -5,7 +5,11 @@ import type {
   HumanDelayConfig,
   TypingMode,
 } from "./types.base.js";
-import type { SandboxBrowserSettings, SandboxDockerSettings, SandboxPruneSettings } from "./types.sandbox.js";
+import type {
+  SandboxBrowserSettings,
+  SandboxDockerSettings,
+  SandboxPruneSettings,
+} from "./types.sandbox.js";
 import type { MemorySearchConfig } from "./types.tools.js";
 
 export type AgentModelEntryConfig = {

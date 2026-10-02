@@ -180,12 +180,17 @@ describe("runReplyAgent typing (heartbeat)", () => {
     expect(onToolResult).not.toHaveBeenCalled();
   });
   it("announces auto-compaction in verbose mode and tracks count", async () => {
-    const storePath = path.join(await fs.mkdtemp(path.join(tmpdir(), "openclaw-compaction-")), "sessions.json");
+    const storePath = path.join(
+      await fs.mkdtemp(path.join(tmpdir(), "openclaw-compaction-")),
+      "sessions.json",
+    );
     const sessionEntry = { sessionId: "session", updatedAt: Date.now() };
     const sessionStore = { main: sessionEntry };
 
     runEmbeddedPiAgentMock.mockImplementationOnce(
-      async (params: { onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void }) => {
+      async (params: {
+        onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void;
+      }) => {
         params.onAgentEvent?.({
           stream: "compaction",
           data: { phase: "end", willRetry: false },

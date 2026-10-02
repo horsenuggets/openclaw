@@ -13,7 +13,11 @@ import {
   HumanDelaySchema,
 } from "./zod-schema.core.js";
 
-const WorkspaceContextModeSchema = z.union([z.literal("inline"), z.literal("preamble"), z.literal("off")]);
+const WorkspaceContextModeSchema = z.union([
+  z.literal("inline"),
+  z.literal("preamble"),
+  z.literal("off"),
+]);
 
 export const AgentDefaultsSchema = z
   .object({
@@ -125,7 +129,9 @@ export const AgentDefaultsSchema = z
       ])
       .optional(),
     verboseDefault: z.union([z.literal("off"), z.literal("on"), z.literal("full")]).optional(),
-    elevatedDefault: z.union([z.literal("off"), z.literal("on"), z.literal("ask"), z.literal("full")]).optional(),
+    elevatedDefault: z
+      .union([z.literal("off"), z.literal("on"), z.literal("ask"), z.literal("full")])
+      .optional(),
     blockStreamingDefault: z.union([z.literal("off"), z.literal("on")]).optional(),
     blockStreamingBreak: z.union([z.literal("text_end"), z.literal("message_end")]).optional(),
     blockStreamingChunk: BlockStreamingChunkSchema.optional(),
@@ -135,7 +141,12 @@ export const AgentDefaultsSchema = z
     mediaMaxMb: z.number().positive().optional(),
     typingIntervalSeconds: z.number().int().positive().optional(),
     typingMode: z
-      .union([z.literal("never"), z.literal("instant"), z.literal("thinking"), z.literal("message")])
+      .union([
+        z.literal("never"),
+        z.literal("instant"),
+        z.literal("thinking"),
+        z.literal("message"),
+      ])
       .optional(),
     heartbeat: HeartbeatSchema,
     maxConcurrent: z.number().int().positive().optional(),
