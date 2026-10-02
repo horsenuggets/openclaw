@@ -144,9 +144,48 @@ describe("startModelProxyServer", () => {
 });
 
 describe("createSharedAuthTokenResolver", () => {
-  it("throws when the shared store has no anthropic-subscription OAuth profile", async () => {
+  async function seedSharedStore(profiles: Record<string, unknown>): Promise<string> {
     const instancesDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-shared-auth-"));
-    await fs.mkdir(path.join(instancesDir, "shared", "auth"), { recursive: true });
+    const authDir = path.join(instancesDir, "shared", "auth");
+    await fs.mkdir(authDir, { recursive: true });
+    await fs.writeFile(
+      path.join(authDir, "auth-profiles.json"),
+      JSON.stringify({ version: 1, profiles }, null, 2),
+    );
+    return instancesDir;
+  }
+
+  it("throws when the shared store has no anthropic-subscription OAuth profile", async () => {
+    const instancesDir = await seedSharedStore({});
+    const resolver = createSharedAuthTokenResolver(instancesDir);
+    await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
+  });
+
+  it("resolves the access token from a valid anthropic-subscription OAuth profile", async () => {
+    const instancesDir = await seedSharedStore({
+      "anthropic-subscription": {
+        type: "oauth",
+        provider: "anthropic-subscription",
+        access: "sk-ant-oat01-REAL-ACCESS",
+        refresh: "refresh-token",
+        // Far-future expiry so the resolver returns the access token without refreshing.
+        expires: 4102444800000,
+      },
+    });
+    const resolver = createSharedAuthTokenResolver(instancesDir);
+    await expect(resolver()).resolves.toBe("sk-ant-oat01-REAL-ACCESS");
+  });
+
+  it("ignores OAuth profiles for other providers", async () => {
+    const instancesDir = await seedSharedStore({
+      openai: {
+        type: "oauth",
+        provider: "openai",
+        access: "oai-access",
+        refresh: "oai-refresh",
+        expires: 4102444800000,
+      },
+    });
     const resolver = createSharedAuthTokenResolver(instancesDir);
     await expect(resolver()).rejects.toThrow(/No anthropic-subscription OAuth profile/);
   });
