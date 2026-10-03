@@ -44,6 +44,12 @@ services:
       - OPENCLAW_WHISPER_PORT=${WHISPER_PORT}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
+      # Interface the model + container proxies bind. boot.sh sets this to the
+      # agent bridge's gateway IP so the token-free boxes (now on that bridge, not
+      # the host network) can reach the proxies while they stay off the public NIC.
+      # The router is host-networked, so it shares the host netns and can bind that
+      # bridge gateway address. No default: an unset value is a deploy error.
+      - OPENCLAW_PROXY_BIND=${OPENCLAW_PROXY_BIND}
     healthcheck:
       test:
         [

@@ -6,6 +6,14 @@
 # Only /workspace and /state are writable; the config is read-only and outside the
 # agent's reach; nothing lives under the home directory.
 #
+# Networking: the box runs on the shared `oc-agents` bridge (created by openclawctl /
+# boot.sh with a fixed gateway IP), NOT the host network. This gives it its own
+# netns, so it can reach only the two router proxies (at the bridge gateway IP) and
+# the public internet via NAT — not the host's loopback services (browser CDP,
+# whisper, the health monitor) or, via the host, sibling boxes' published ports. The
+# gateway port is published to host loopback only (127.0.0.1) so the host-networked
+# router can still reach this box's gateway; it is never exposed on the public NIC.
+#
 # Usage:
 #   OPENCLAW_CHANNEL_ID=... OPENCLAW_CHANNEL_PORT=18789 \
 #     docker compose -f ~/deploy/docker/agent.yml up -d
@@ -14,10 +22,14 @@ services:
     image: ubuntu:24.04
     container_name: agents.channel-${OPENCLAW_CHANNEL_ID}
     restart: unless-stopped
-    # network_mode host lets the box reach the router proxies on loopback.
-    # Follow-up (tracked separately): move to bridge networking and publish only
-    # the two proxy ports so a box cannot reach neighbor loopback services.
-    network_mode: host
+    networks:
+      - oc-agents
+    # Publish the gateway to host loopback ONLY. The router shares the host network
+    # and dials this box at 127.0.0.1:${OPENCLAW_CHANNEL_PORT}; binding the publish
+    # to 127.0.0.1 keeps it off the public NIC and off sibling boxes (a bridge box
+    # reaching the host gateway IP cannot see a 127.0.0.1-only published port).
+    ports:
+      - "127.0.0.1:${OPENCLAW_CHANNEL_PORT}:${OPENCLAW_CHANNEL_PORT}"
     # Non-root; the host workspace/state dirs are chown 1000:1000 by openclawctl.
     user: "1000:1000"
     read_only: true
@@ -45,7 +57,10 @@ services:
       # workspace-confined file tools cannot read it. The gateway process reads
       # it once at startup. It carries no provider keys (the model proxy injects
       # the real token); gateway.auth.token is the only local-scope secret and
-      # only authorizes talking to this agent's own gateway on loopback.
+      # only authorizes talking to this agent's own gateway. The gateway binds all
+      # interfaces inside the container (--bind lan) so the host loopback publish
+      # works, so that token is what gates a sibling box on oc-agents from driving
+      # this gateway directly.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/openclaw.json:/etc/openclaw/openclaw.json:ro
       # The agent's work. Writable; the only mount the file tools can see.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/workspace:/workspace
@@ -66,5 +81,18 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    command:
-      ["/bin/openclaw", "gateway", "--bind", "loopback", "--port", "${OPENCLAW_CHANNEL_PORT}"]
+    # --bind lan => 0.0.0.0 inside the container's own netns (NOT the host LAN), so
+    # the 127.0.0.1 host publish above can forward to it. Sibling-box access is
+    # gated by gateway.auth.token.
+    command: ["/bin/openclaw", "gateway", "--bind", "lan", "--port", "${OPENCLAW_CHANNEL_PORT}"]
+
+# The shared agent bridge, created by openclawctl / boot.sh with a fixed subnet so
+# the router can bind the proxies on its gateway IP. External here: this per-channel
+# compose project joins it but never creates or destroys it. The compose-local key
+# `oc-agents` maps to the real network named by OPENCLAW_AGENT_NETWORK, so a
+# configured name other than the default still attaches to the network the scripts
+# actually created.
+networks:
+  oc-agents:
+    external: true
+    name: ${OPENCLAW_AGENT_NETWORK}

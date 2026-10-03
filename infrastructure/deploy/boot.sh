@@ -17,6 +17,61 @@ fi
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
 
+# Agent bridge network. Agent boxes run on this user-defined bridge (not the host
+# network) so each gets its own netns and can reach only the two router proxies
+# (bound to the bridge gateway IP) plus the public internet — not the host's
+# loopback services or sibling boxes. The subnet is fixed so the gateway IP is
+# stable and the host-networked router can bind its proxies there. All three come
+# from ~/.env (no defaults): a missing value is a deployment error, not something
+# to paper over with a guessed subnet that might collide on the host.
+: "${OPENCLAW_AGENT_NETWORK:?OPENCLAW_AGENT_NETWORK must be set in ~/.env (agent bridge name, e.g. oc-agents)}"
+: "${OPENCLAW_AGENT_SUBNET:?OPENCLAW_AGENT_SUBNET must be set in ~/.env (agent bridge subnet, e.g. 172.30.0.0/24)}"
+: "${OPENCLAW_AGENT_GATEWAY:?OPENCLAW_AGENT_GATEWAY must be set in ~/.env (agent bridge gateway IP, e.g. 172.30.0.1)}"
+
+# The router binds its loopback proxies to the bridge gateway IP so boxes on the
+# bridge can reach them while they stay off the public NIC. discord-router.yml
+# substitutes this; export it here from the single source of truth above.
+export OPENCLAW_PROXY_BIND="$OPENCLAW_AGENT_GATEWAY"
+
+# Create the agent bridge if absent, with the fixed subnet/gateway. Must exist
+# before the router starts (it binds the gateway IP) and before any agent box
+# starts (it joins the network), so this runs ahead of both. When it already
+# exists, validate its driver/subnet/gateway: docker does not update IPAM on an
+# existing network and setup.sh removes containers but not networks, so a stale
+# bridge from an earlier .env would leave the router binding a gateway IP the
+# bridge no longer owns and boxes on the wrong subnet. Fail with remediation
+# rather than silently proceeding.
+if docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
+  if ! docker network inspect "$OPENCLAW_AGENT_NETWORK" | python3 -c '
+import json, os, sys
+
+net = json.load(sys.stdin)[0]
+cfg = ((net.get("IPAM") or {}).get("Config") or [{}])[0]
+ok = (
+    net.get("Driver") == "bridge"
+    and cfg.get("Subnet") == os.environ["OPENCLAW_AGENT_SUBNET"]
+    and cfg.get("Gateway") == os.environ["OPENCLAW_AGENT_GATEWAY"]
+)
+if not ok:
+    sys.stderr.write(
+        f"  found driver={net.get('Driver')} subnet={cfg.get('Subnet')} gateway={cfg.get('Gateway')}\n"
+    )
+sys.exit(0 if ok else 1)
+'; then
+    echo "ERROR: existing docker network '$OPENCLAW_AGENT_NETWORK' does not match the" >&2
+    echo "  configured driver=bridge subnet=$OPENCLAW_AGENT_SUBNET gateway=$OPENCLAW_AGENT_GATEWAY." >&2
+    echo "  Stop the agent boxes and remove it so it can be recreated:" >&2
+    echo "    docker network rm $OPENCLAW_AGENT_NETWORK" >&2
+    exit 1
+  fi
+else
+  echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY)..."
+  docker network create --driver bridge \
+    --subnet "$OPENCLAW_AGENT_SUBNET" \
+    --gateway "$OPENCLAW_AGENT_GATEWAY" \
+    "$OPENCLAW_AGENT_NETWORK"
+fi
+
 # Shared auth-profiles store mounted into every agent container (see
 # infrastructure/docker/agent.yml). Must exist as a regular file before any
 # container starts, or Docker bind-mounts it as an empty directory. Seed it once

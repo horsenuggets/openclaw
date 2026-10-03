@@ -38,6 +38,13 @@ export function startContainerProxyServer(opts: {
   routeMessage?: RouteMessageFn;
   /** Listen port; defaults to the fixed proxy port. Tests pass 0 for ephemeral. */
   port?: number;
+  /**
+   * Interface to bind. Defaults to loopback (the secure baseline used by dev runs
+   * and tests). Under bridge networking the router is given the agent bridge's
+   * gateway IP so boxes on that bridge can reach it while it stays off the public
+   * NIC; see OPENCLAW_PROXY_BIND in the router wiring.
+   */
+  bindHost?: string;
 }): { server: http.Server } {
   const { runtime } = opts;
   // Prefer the router-resolved token; fall back to the env var for compatibility.
@@ -321,12 +328,14 @@ export function startContainerProxyServer(opts: {
     res.end("not found");
   });
 
-  // Loopback-only by design: these endpoints are unauthenticated and act through
-  // the router's bot token. Containers run with `network_mode host`, so they reach
-  // the proxy over loopback and never need a public bind. We deliberately do NOT
-  // honor the legacy `OPENCLAW_OAUTH_HOST` override (from the removed OAuth server),
-  // which could otherwise expose these endpoints on a public interface.
-  const proxyHost = "127.0.0.1";
+  // Binds loopback by default (dev/tests). In prod the router passes the agent
+  // bridge's gateway IP so boxes on that bridge can reach these endpoints over the
+  // bridge while they stay off the public NIC. They are unauthenticated and act
+  // through the router's bot token, so they must never bind a routable/public
+  // interface. We deliberately do NOT honor the legacy `OPENCLAW_OAUTH_HOST`
+  // override (from the removed OAuth server), which could otherwise expose these
+  // endpoints on a public interface.
+  const proxyHost = opts.bindHost ?? "127.0.0.1";
   server.on("error", (err) => {
     runtime.error(`[proxy] server error: ${String(err)}`);
   });

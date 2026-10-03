@@ -9,7 +9,7 @@ import {
   type InstanceStatus,
   type ProvisioningClient,
 } from "./channel-commands.js";
-import { loadRouterConfig } from "./config.js";
+import { loadRouterConfig, resolveProxyBindHost } from "./config.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
@@ -98,10 +98,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }).then((r) => r.json())) as { url?: string };
   const gatewayUrl = gatewayInfo?.url ?? "wss://gateway.discord.gg";
 
+  // Interface the loopback proxies bind. Unset (dev/tests) keeps the loopback
+  // default. In prod the agent boxes run on the `oc-agents` bridge instead of the
+  // host network, so boot.sh passes that bridge's gateway IP here: boxes reach the
+  // proxies over the bridge while they stay off the public NIC. resolveProxyBindHost
+  // rejects a wildcard or public value (fail-closed) so the credential-bearing
+  // proxies can never be exposed beyond loopback or the private bridge.
+  const proxyBindHost = resolveProxyBindHost(process.env.OPENCLAW_PROXY_BIND);
+
   // Start the container proxy server: agent containers POST here to send/read
-  // Discord messages via the router (network_mode host, loopback only).
+  // Discord messages via the router.
   const proxy = startContainerProxyServer({
     runtime,
+    bindHost: proxyBindHost,
     discordToken,
     discordSend: async (channelId, content) => {
       await discordSend(discordToken, channelId, content);
@@ -133,6 +142,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // credential ever lives inside an agent box.
   const modelProxy = startModelProxyServer({
     runtime,
+    bindHost: proxyBindHost,
     resolveAccessToken: createSharedAuthTokenResolver(config.instancesDir),
   });
 

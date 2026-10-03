@@ -224,6 +224,33 @@ describe("startModelProxyServer", () => {
     const wrongMethod = await fetch(`${started.baseUrl}/v1/messages`);
     expect(wrongMethod.status).toBe(404);
   });
+
+  it("binds loopback by default", async () => {
+    const { server } = startModelProxyServer({
+      runtime,
+      resolveAccessToken: async () => "REAL-TOKEN",
+      port: 0,
+    });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    close = () => new Promise<void>((done) => server.close(() => done()));
+    expect((server.address() as AddressInfo).address).toBe("127.0.0.1");
+  });
+
+  it("honors an explicitly provided bindHost (prod passes the bridge gateway IP)", async () => {
+    // Bind a loopback address distinct from the 127.0.0.1 default so the test fails
+    // if bindHost were ignored. ::1 stands in for the private bridge gateway here (a
+    // real gateway IP is not bindable in CI); wildcard/public values are rejected
+    // upstream by resolveProxyBindHost.
+    const { server } = startModelProxyServer({
+      runtime,
+      resolveAccessToken: async () => "REAL-TOKEN",
+      port: 0,
+      bindHost: "::1",
+    });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    close = () => new Promise<void>((done) => server.close(() => done()));
+    expect((server.address() as AddressInfo).address).toBe("::1");
+  });
 });
 
 describe("createSharedAuthTokenResolver", () => {

@@ -4,9 +4,11 @@
 # Docker Engine + compose plugin, so it can run the REAL deploy pipeline
 # (deploy.sh -> setup.sh -> boot.sh) and spin up the router + provisioner +
 # per-channel agent containers INSIDE itself (docker-in-docker). Because the
-# inner Docker daemon is a real Linux daemon, `network_mode: host` works, so the
-# prod compose files run unmodified and the router<->agent<->proxy loopback mesh
-# behaves exactly like prod (unlike a bare container on macOS Docker Desktop).
+# inner Docker daemon is a real Linux daemon, the router's `network_mode: host`
+# and the agent `oc-agents` bridge both work, so the prod compose files run
+# unmodified and the router<->agent<->proxy mesh (boxes reach the host-networked
+# router's proxies at the bridge gateway IP) behaves exactly like prod (unlike a
+# bare container on macOS Docker Desktop).
 #
 # Built and driven by scripts/prod-mirror.sh; not meant to be run by hand.
 FROM ubuntu:24.04
