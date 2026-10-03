@@ -302,47 +302,57 @@ ensure_shared_auth() {
 # Create the agent bridge if absent, with the fixed subnet/gateway from ~/.env.
 # agent.yml references it as an external network, so it must exist before a box
 # starts. boot.sh creates it at startup too; this covers a channel registered at
-# runtime before a reboot. When the network already exists, validate its
-# driver/subnet/gateway against the configured values: a stale bridge left over
-# from an earlier .env (docker does not update IPAM on an existing network, and
-# setup.sh removes containers but not networks) would leave the router binding a
-# gateway IP the bridge no longer owns and boxes on the wrong subnet, so fail with
-# remediation instead of silently proceeding.
+# runtime before a reboot. The bridge is created with inter-container communication
+# disabled (enable_icc=false) so a box cannot reach a sibling box over the shared
+# bridge; each box still reaches the router proxies (at the gateway IP) and the
+# internet (NAT), and the host-networked router still reaches each box's published
+# gateway port. When the network already exists, validate its driver/subnet/gateway
+# AND that icc is disabled: a stale bridge left over from an earlier .env or from the
+# pre-isolation layout (docker does not update options/IPAM on an existing network,
+# and setup.sh removes containers but not networks) would leave boxes able to reach
+# each other or on the wrong subnet, so fail with remediation instead of silently
+# proceeding.
 ensure_agent_network() {
   if docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
     if ! docker network inspect "$OPENCLAW_AGENT_NETWORK" | validate_agent_network; then
       echo "ERROR: existing docker network '$OPENCLAW_AGENT_NETWORK' does not match the" >&2
-      echo "  configured driver=bridge subnet=$OPENCLAW_AGENT_SUBNET gateway=$OPENCLAW_AGENT_GATEWAY." >&2
+      echo "  configured driver=bridge subnet=$OPENCLAW_AGENT_SUBNET gateway=$OPENCLAW_AGENT_GATEWAY" >&2
+      echo "  with inter-container communication disabled (enable_icc=false)." >&2
       echo "  Stop the agent boxes and remove it so it can be recreated:" >&2
       echo "    docker network rm $OPENCLAW_AGENT_NETWORK" >&2
       exit 1
     fi
     return 0
   fi
-  echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY)..."
+  echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY, icc off)..."
   docker network create --driver bridge \
+    -o com.docker.network.bridge.enable_icc=false \
     --subnet "$OPENCLAW_AGENT_SUBNET" \
     --gateway "$OPENCLAW_AGENT_GATEWAY" \
     "$OPENCLAW_AGENT_NETWORK"
 }
 
 # Read `docker network inspect` JSON on stdin and exit nonzero unless the network's
-# driver is bridge and its first IPAM config matches OPENCLAW_AGENT_SUBNET /
-# OPENCLAW_AGENT_GATEWAY. Shared by the ensure path above.
+# driver is bridge, its first IPAM config matches OPENCLAW_AGENT_SUBNET /
+# OPENCLAW_AGENT_GATEWAY, and inter-container communication is disabled
+# (com.docker.network.bridge.enable_icc=false). Shared by the ensure path above.
 validate_agent_network() {
   python3 -c '
 import json, os, sys
 
 net = json.load(sys.stdin)[0]
 cfg = ((net.get("IPAM") or {}).get("Config") or [{}])[0]
+icc = (net.get("Options") or {}).get("com.docker.network.bridge.enable_icc")
 ok = (
     net.get("Driver") == "bridge"
     and cfg.get("Subnet") == os.environ["OPENCLAW_AGENT_SUBNET"]
     and cfg.get("Gateway") == os.environ["OPENCLAW_AGENT_GATEWAY"]
+    and icc == "false"
 )
 if not ok:
     sys.stderr.write(
-        f"  found driver={net.get('Driver')} subnet={cfg.get('Subnet')} gateway={cfg.get('Gateway')}\n"
+        f"  found driver={net.get('Driver')} subnet={cfg.get('Subnet')} "
+        f"gateway={cfg.get('Gateway')} enable_icc={icc}\n"
     )
 sys.exit(0 if ok else 1)
 '

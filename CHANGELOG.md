@@ -31,9 +31,18 @@ Docs: https://docs.openclaw.ai
   internet, no longer the host's loopback services (browser CDP, whisper, the health
   monitor) or, via the host, sibling boxes' published ports. The box gateway binds all
   interfaces inside its own netns and publishes only to host loopback (`127.0.0.1`) so the
-  host-networked router still reaches it; a sibling box reaching another box's gateway
-  over the shared bridge stays gated by that box's `gateway.auth.token`. Full box-to-box
-  isolation (per-box networks) is a tracked follow-up.
+  host-networked router still reaches it; box-to-box traffic over the shared bridge is
+  blocked by the next entry.
+- Discord router: block box-to-box traffic on the `oc-agents` bridge by creating it with
+  inter-container communication disabled (`com.docker.network.bridge.enable_icc=false`). A
+  box can no longer reach a sibling box over the shared bridge (previously only gated by
+  the sibling's `gateway.auth.token`); it still reaches the router proxies at the bridge
+  gateway IP and the internet via NAT, and the host-networked router still reaches each
+  box's published gateway port. `boot.sh`/`openclawctl` now also require an existing
+  `oc-agents` network to have icc disabled, so upgrading from the previous bridge layout
+  needs the network recreated once: stop the boxes, `docker network rm oc-agents`, and
+  re-run (boot.sh/openclawctl recreate it with icc off). Closes the last box-to-box gap
+  from the host-networking migration.
 - Discord router: restrict ordinary conversation in shared guild channels to the channel
   owner; whitelisted admins keep `/channel` management but can no longer converse in
   channels they do not own.

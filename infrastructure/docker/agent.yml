@@ -7,12 +7,14 @@
 # agent's reach; nothing lives under the home directory.
 #
 # Networking: the box runs on the shared `oc-agents` bridge (created by openclawctl /
-# boot.sh with a fixed gateway IP), NOT the host network. This gives it its own
-# netns, so it can reach only the two router proxies (at the bridge gateway IP) and
-# the public internet via NAT — not the host's loopback services (browser CDP,
-# whisper, the health monitor) or, via the host, sibling boxes' published ports. The
-# gateway port is published to host loopback only (127.0.0.1) so the host-networked
-# router can still reach this box's gateway; it is never exposed on the public NIC.
+# boot.sh with a fixed gateway IP and inter-container communication disabled), NOT
+# the host network. This gives it its own netns, so it can reach only the two router
+# proxies (at the bridge gateway IP) and the public internet via NAT — not the host's
+# loopback services (browser CDP, whisper, the health monitor). A sibling box is
+# unreachable both ways: via the host its gateway is published to 127.0.0.1 only, and
+# over the bridge the network's enable_icc=false drops box-to-box traffic. The gateway
+# port is published to host loopback only (127.0.0.1) so the host-networked router can
+# still reach this box's gateway; it is never exposed on the public NIC.
 #
 # Usage:
 #   OPENCLAW_CHANNEL_ID=... OPENCLAW_CHANNEL_PORT=18789 \
