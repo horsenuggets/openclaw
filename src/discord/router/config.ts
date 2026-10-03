@@ -23,6 +23,51 @@ export type InstanceConfig = {
  */
 export const PORT_FILENAME = ".port";
 
+/**
+ * Validate the interface the router binds its credential-bearing proxies to
+ * (`OPENCLAW_PROXY_BIND`). Empty/unset keeps the loopback default. Only loopback
+ * (127.0.0.0/8, ::1) or an RFC1918 private IPv4 address (the agent bridge gateway
+ * lives in one, e.g. 172.30.0.1) is allowed; a wildcard (0.0.0.0, ::) or any public
+ * address is rejected. The model and container proxies act with the router's
+ * Anthropic OAuth bearer and Discord bot token, so exposing them beyond the host or
+ * the agent bridge would hand those credentials to anything that can reach the
+ * interface. Throws on a disallowed value so a misconfigured deploy fails closed
+ * rather than silently binding publicly.
+ */
+export function resolveProxyBindHost(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) {
+    return "127.0.0.1";
+  }
+  if (isLoopbackOrPrivateBindHost(value)) {
+    return value;
+  }
+  throw new Error(
+    `OPENCLAW_PROXY_BIND="${value}" is not allowed: bind only loopback or an RFC1918 ` +
+      `private address (such as the agent bridge gateway IP). A wildcard (0.0.0.0 or ::) ` +
+      `or public address would expose the router's credential-bearing proxies.`,
+  );
+}
+
+/** True for an IPv4/IPv6 loopback or RFC1918 private IPv4 literal; false otherwise. */
+function isLoopbackOrPrivateBindHost(host: string): boolean {
+  if (host === "::1") {
+    return true;
+  }
+  const octets = host.split(".");
+  if (octets.length !== 4) {
+    return false;
+  }
+  const nums = octets.map((o) => (/^\d{1,3}$/.test(o) ? Number(o) : -1));
+  if (nums.some((n) => n < 0 || n > 255)) {
+    return false;
+  }
+  const [a, b] = nums;
+  // 127.0.0.0/8 loopback, 10/8, 192.168/16, 172.16/12 private. Everything else
+  // (incl. 0.0.0.0 and any public address) is rejected by the caller.
+  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+}
+
 export type RouterConfig = {
   discordToken: string;
   instances: Map<string, InstanceConfig>; // keyed by channelId

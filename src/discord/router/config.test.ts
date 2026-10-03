@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadRouterConfig, readInstancePort } from "./config.js";
+import { loadRouterConfig, readInstancePort, resolveProxyBindHost } from "./config.js";
 
 let dir: string;
 
@@ -95,5 +95,35 @@ describe("loadRouterConfig", () => {
     const config = loadRouterConfig({ instancesDir: dir, discordToken: "bot-token" });
 
     expect([...config.instances.keys()]).toEqual(["1468768406504476936"]);
+  });
+});
+
+describe("resolveProxyBindHost", () => {
+  it("defaults to loopback when unset, empty, or whitespace", () => {
+    expect(resolveProxyBindHost(undefined)).toBe("127.0.0.1");
+    expect(resolveProxyBindHost("")).toBe("127.0.0.1");
+    expect(resolveProxyBindHost("   ")).toBe("127.0.0.1");
+  });
+
+  it("accepts loopback and RFC1918 private addresses, trimming whitespace", () => {
+    expect(resolveProxyBindHost("127.0.0.1")).toBe("127.0.0.1");
+    expect(resolveProxyBindHost("::1")).toBe("::1");
+    // The agent bridge gateway lives in 172.16/12.
+    expect(resolveProxyBindHost(" 172.30.0.1 ")).toBe("172.30.0.1");
+    expect(resolveProxyBindHost("10.1.2.3")).toBe("10.1.2.3");
+    expect(resolveProxyBindHost("192.168.4.5")).toBe("192.168.4.5");
+  });
+
+  it("rejects wildcard binds so the credential-bearing proxies stay private", () => {
+    expect(() => resolveProxyBindHost("0.0.0.0")).toThrow(/not allowed/);
+    expect(() => resolveProxyBindHost("::")).toThrow(/not allowed/);
+  });
+
+  it("rejects public addresses and malformed input", () => {
+    expect(() => resolveProxyBindHost("8.8.8.8")).toThrow(/not allowed/);
+    expect(() => resolveProxyBindHost("172.32.0.1")).toThrow(/not allowed/); // just outside 172.16/12
+    expect(() => resolveProxyBindHost("172.15.0.1")).toThrow(/not allowed/); // just below 172.16/12
+    expect(() => resolveProxyBindHost("300.1.2.3")).toThrow(/not allowed/);
+    expect(() => resolveProxyBindHost("not-an-ip")).toThrow(/not allowed/);
   });
 });

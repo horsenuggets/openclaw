@@ -236,18 +236,19 @@ describe("startModelProxyServer", () => {
     expect((server.address() as AddressInfo).address).toBe("127.0.0.1");
   });
 
-  it("binds the provided bindHost (so prod can target the agent bridge gateway)", async () => {
-    // 0.0.0.0 is bindable on every platform, so it is a portable stand-in for the
-    // bridge gateway IP prod passes; the assertion proves bindHost reaches listen().
+  it("honors an explicitly provided bindHost (prod passes the bridge gateway IP)", async () => {
+    // Use loopback as a portable stand-in for the private bridge gateway address:
+    // the point is that the provided bindHost reaches listen() rather than the
+    // default. Wildcard/public values are rejected upstream by resolveProxyBindHost.
     const { server } = startModelProxyServer({
       runtime,
       resolveAccessToken: async () => "REAL-TOKEN",
       port: 0,
-      bindHost: "0.0.0.0",
+      bindHost: "127.0.0.1",
     });
     await new Promise<void>((resolve) => server.once("listening", () => resolve()));
     close = () => new Promise<void>((done) => server.close(() => done()));
-    expect((server.address() as AddressInfo).address).toBe("0.0.0.0");
+    expect((server.address() as AddressInfo).address).toBe("127.0.0.1");
   });
 });
 
