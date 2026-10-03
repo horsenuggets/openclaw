@@ -142,8 +142,10 @@ export function e2eSetupTimeout(channelCount = 1): number {
  * `send()` response, so a fast onboarding message can otherwise arrive before
  * the listener exists and be missed. Resolves `true` on the first bot text
  * message, or `false` after `timeoutMs`.
+ *
+ * Exported for unit testing.
  */
-function waitForAgentReady(
+export function waitForAgentReady(
   guild: Guild,
   channelId: string,
   botId: string,
@@ -186,8 +188,20 @@ function waitForAgentReady(
  * the allowlisted tester bot is): the router routes guild messages only for the
  * recorded owner, so a test that expects a human (not the driver bot) to
  * converse must register under that human's user id. Defaults to the driver bot.
+ *
+ * `botId` is the id whose first message signals readiness; it defaults to the
+ * configured bot-under-test and is injectable for unit tests.
  */
-export async function createE2eChannel(guild: Guild, topic: string, ownerId?: string) {
+export function buildRegisterCommand(ownerId?: string): string {
+  return ownerId ? `/channel register <@${ownerId}>` : "/channel register";
+}
+
+export async function createE2eChannel(
+  guild: Guild,
+  topic: string,
+  ownerId?: string,
+  botId: string = resolveE2eConfig().botId,
+) {
   const channels = await guild.channels.fetch();
   const existingNames = new Set<string>();
   for (const [, ch] of channels) {
@@ -206,9 +220,8 @@ export async function createE2eChannel(guild: Guild, topic: string, ownerId?: st
   // Start listening BEFORE registering so a fast onboarding turn delivered over
   // the gateway cannot land before the listener is attached (see
   // waitForAgentReady). Await the result afterwards and fail loudly on timeout.
-  const { botId } = resolveE2eConfig();
   const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS);
-  await channel.send(ownerId ? `/channel register <@${ownerId}>` : "/channel register");
+  await channel.send(buildRegisterCommand(ownerId));
   if (!(await ready)) {
     throw new Error(
       `E2E channel #${name} (${channel.id}) agent did not post a ready message ` +

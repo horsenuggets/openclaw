@@ -1,7 +1,17 @@
+import type { Guild } from "discord.js";
+import { Events } from "discord.js";
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  AGENT_READY_TIMEOUT_MS,
+  buildRegisterCommand,
+  createE2eChannel,
+  e2eSetupTimeout,
+  waitForAgentReady,
+} from "./helpers.js";
 
 const SHARED_NAMES_FILE = path.join(os.tmpdir(), "openclaw-e2e-channel-names.txt");
 const SHARED_NAMES_LOCK = SHARED_NAMES_FILE + ".lock";
@@ -199,5 +209,155 @@ describe("e2eChannelName", () => {
     const e2eChannelName = await freshImport();
 
     expect(e2eChannelName()).toBe("e2e-2026-02-22-t-10-30-01");
+  });
+});
+
+type FakeMessage = { channelId: string; author?: { id: string }; content?: string };
+
+/**
+ * Minimal `Guild` stand-in: an `EventEmitter` client (which is all
+ * `waitForAgentReady` touches) plus a `channels` facade whose `create` returns
+ * a channel that records what was sent and can run an `onSend` hook (used to
+ * emit the onboarding message as if it raced in right after `send`).
+ */
+function makeFakeGuild(opts?: {
+  onSend?: (ctx: { client: EventEmitter; channelId: string }) => void;
+}) {
+  const client = new EventEmitter();
+  const sent: string[] = [];
+  const channel = {
+    id: "chan-1",
+    name: "e2e-chan",
+    send: async (content: string) => {
+      sent.push(content);
+      opts?.onSend?.({ client, channelId: "chan-1" });
+    },
+  };
+  const guild = {
+    client,
+    channels: {
+      fetch: async () => new Map(),
+      create: async () => channel,
+    },
+  } as unknown as Guild;
+  return { guild, client, sent, channel };
+}
+
+function emitMsg(client: EventEmitter, msg: FakeMessage) {
+  client.emit(Events.MessageCreate, msg);
+}
+
+describe("buildRegisterCommand", () => {
+  it("registers as the sender when no owner is given", () => {
+    expect(buildRegisterCommand()).toBe("/channel register");
+  });
+
+  it("registers on behalf of an owner via a user mention", () => {
+    expect(buildRegisterCommand("123456789012345678")).toBe(
+      "/channel register <@123456789012345678>",
+    );
+  });
+});
+
+describe("e2eSetupTimeout", () => {
+  it("budgets one channel plus overhead by default", () => {
+    expect(e2eSetupTimeout()).toBe(AGENT_READY_TIMEOUT_MS + 60_000);
+  });
+
+  it("scales with the channel count", () => {
+    expect(e2eSetupTimeout(10)).toBe(10 * AGENT_READY_TIMEOUT_MS + 60_000);
+  });
+});
+
+describe("waitForAgentReady", () => {
+  it("resolves true on the first non-empty bot message and detaches", async () => {
+    const { guild, client } = makeFakeGuild();
+    const ready = waitForAgentReady(guild, "chan-1", "bot-1", 1000);
+    emitMsg(client, { channelId: "chan-1", author: { id: "bot-1" }, content: "hi" });
+    expect(await ready).toBe(true);
+    expect(client.listenerCount(Events.MessageCreate)).toBe(0);
+  });
+
+  it("ignores wrong channel, wrong author, and empty content", async () => {
+    const { guild, client } = makeFakeGuild();
+    const ready = waitForAgentReady(guild, "chan-1", "bot-1", 1000);
+    emitMsg(client, { channelId: "other", author: { id: "bot-1" }, content: "hi" });
+    emitMsg(client, { channelId: "chan-1", author: { id: "someone-else" }, content: "hi" });
+    emitMsg(client, { channelId: "chan-1", author: { id: "bot-1" }, content: "   " });
+    emitMsg(client, { channelId: "chan-1", author: { id: "bot-1" }, content: "ready" });
+    expect(await ready).toBe(true);
+  });
+
+  it("attaches its listener synchronously and detaches on timeout", async () => {
+    const { guild, client } = makeFakeGuild();
+    const ready = waitForAgentReady(guild, "chan-1", "bot-1", 20);
+    expect(client.listenerCount(Events.MessageCreate)).toBe(1);
+    expect(await ready).toBe(false);
+    expect(client.listenerCount(Events.MessageCreate)).toBe(0);
+  });
+});
+
+describe("createE2eChannel", () => {
+  beforeEach(cleanSharedState);
+  afterEach(cleanSharedState);
+
+  it("attaches the readiness listener before posting the register command", async () => {
+    let listenersAtSend = -1;
+    const { guild, sent } = makeFakeGuild({
+      onSend: ({ client }) => {
+        listenersAtSend = client.listenerCount(Events.MessageCreate);
+        // Onboarding turn racing in right after send must still be caught.
+        emitMsg(client, { channelId: "chan-1", author: { id: "bot-1" }, content: "welcome" });
+      },
+    });
+    const channel = await createE2eChannel(guild, "topic", undefined, "bot-1");
+    expect(listenersAtSend).toBe(1);
+    expect(sent).toEqual(["/channel register"]);
+    expect(channel.id).toBe("chan-1");
+  });
+
+  it("registers on behalf of an owner when ownerId is given", async () => {
+    const { guild, sent } = makeFakeGuild({
+      onSend: ({ client }) =>
+        emitMsg(client, { channelId: "chan-1", author: { id: "bot-1" }, content: "hi" }),
+    });
+    await createE2eChannel(guild, "topic", "999", "bot-1");
+    expect(sent).toEqual(["/channel register <@999>"]);
+  });
+
+  it("throws when the agent never posts a ready message", async () => {
+    vi.useFakeTimers();
+    try {
+      const { guild } = makeFakeGuild(); // no onboarding message is emitted
+      const p = createE2eChannel(guild, "topic", undefined, "bot-1");
+      const assertion = expect(p).rejects.toThrow(/did not post a ready message/);
+      await vi.advanceTimersByTimeAsync(AGENT_READY_TIMEOUT_MS + 100);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("propagates a registration-send failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = new EventEmitter();
+      const channel = {
+        id: "chan-1",
+        name: "e2e-chan",
+        send: async () => {
+          throw new Error("send failed");
+        },
+      };
+      const guild = {
+        client,
+        channels: { fetch: async () => new Map(), create: async () => channel },
+      } as unknown as Guild;
+      await expect(createE2eChannel(guild, "topic", undefined, "bot-1")).rejects.toThrow(
+        "send failed",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
