@@ -49,6 +49,13 @@ export function startModelProxyServer(opts: {
   maxBodyBytes?: number;
   /** Listen port; defaults to the fixed proxy port. Tests pass 0 for ephemeral. */
   port?: number;
+  /**
+   * Interface to bind. Defaults to loopback (the secure baseline used by dev runs
+   * and tests). Under bridge networking the router is given the agent bridge's
+   * gateway IP so boxes on that bridge can reach it while it stays off the public
+   * NIC; see OPENCLAW_PROXY_BIND in the router wiring.
+   */
+  bindHost?: string;
 }): { server: http.Server } {
   const { runtime } = opts;
   const upstreamBase = opts.upstreamBase ?? ANTHROPIC_BASE;
@@ -183,10 +190,11 @@ export function startModelProxyServer(opts: {
     });
   });
 
-  // Loopback-only by design: the proxy acts through the router-owned OAuth token
-  // and is reachable by host-networked agent containers over 127.0.0.1. It must
-  // never bind a public interface.
-  const proxyHost = "127.0.0.1";
+  // Binds loopback by default (dev/tests). In prod the router passes the agent
+  // bridge's gateway IP so boxes on that bridge can reach it over the bridge while
+  // it stays off the public NIC. The proxy acts through the router-owned OAuth
+  // token, so it must never bind a routable/public interface.
+  const proxyHost = opts.bindHost ?? "127.0.0.1";
   server.on("error", (err) => {
     runtime.error(`[model-proxy] server error: ${String(err)}`);
   });

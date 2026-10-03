@@ -216,4 +216,20 @@ describe("container proxy server", () => {
     });
     expect(resp.status).toBe(503);
   });
+
+  it("binds loopback by default", async () => {
+    const { server } = startContainerProxyServer({ runtime, port: 0 });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    close = () => new Promise((resolve) => server.close(() => resolve()));
+    expect((server.address() as AddressInfo).address).toBe("127.0.0.1");
+  });
+
+  it("binds the provided bindHost (so prod can target the agent bridge gateway)", async () => {
+    // 0.0.0.0 is bindable on every platform, so it is a portable stand-in for the
+    // bridge gateway IP prod passes; the assertion proves bindHost reaches listen().
+    const { server } = startContainerProxyServer({ runtime, port: 0, bindHost: "0.0.0.0" });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    close = () => new Promise((resolve) => server.close(() => resolve()));
+    expect((server.address() as AddressInfo).address).toBe("0.0.0.0");
+  });
 });

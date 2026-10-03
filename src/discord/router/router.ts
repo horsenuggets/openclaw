@@ -98,10 +98,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }).then((r) => r.json())) as { url?: string };
   const gatewayUrl = gatewayInfo?.url ?? "wss://gateway.discord.gg";
 
+  // Interface the loopback proxies bind. Unset (dev/tests) keeps the loopback
+  // default inside each proxy. In prod the agent boxes run on the `oc-agents`
+  // bridge instead of the host network, so boot.sh passes that bridge's gateway
+  // IP here: boxes reach the proxies over the bridge while they stay off the
+  // public NIC. Trimmed so an empty env value falls through to the loopback
+  // default rather than binding "".
+  const proxyBindHost = process.env.OPENCLAW_PROXY_BIND?.trim() || undefined;
+
   // Start the container proxy server: agent containers POST here to send/read
-  // Discord messages via the router (network_mode host, loopback only).
+  // Discord messages via the router.
   const proxy = startContainerProxyServer({
     runtime,
+    bindHost: proxyBindHost,
     discordToken,
     discordSend: async (channelId, content) => {
       await discordSend(discordToken, channelId, content);
@@ -133,6 +142,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // credential ever lives inside an agent box.
   const modelProxy = startModelProxyServer({
     runtime,
+    bindHost: proxyBindHost,
     resolveAccessToken: createSharedAuthTokenResolver(config.instancesDir),
   });
 
