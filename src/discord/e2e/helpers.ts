@@ -181,8 +181,13 @@ function waitForAgentReady(
  * so it can self-register. We then wait for the agent's first turn so callers do
  * not race the box spin-up, and throw if it never comes up so the failure is
  * attributed here rather than surfacing as a silent timeout in the first probe.
+ *
+ * `ownerId` registers the channel on another user's behalf (admin-only, which
+ * the allowlisted tester bot is): the router routes guild messages only for the
+ * recorded owner, so a test that expects a human (not the driver bot) to
+ * converse must register under that human's user id. Defaults to the driver bot.
  */
-export async function createE2eChannel(guild: Guild, topic: string) {
+export async function createE2eChannel(guild: Guild, topic: string, ownerId?: string) {
   const channels = await guild.channels.fetch();
   const existingNames = new Set<string>();
   for (const [, ch] of channels) {
@@ -203,7 +208,7 @@ export async function createE2eChannel(guild: Guild, topic: string) {
   // waitForAgentReady). Await the result afterwards and fail loudly on timeout.
   const { botId } = resolveE2eConfig();
   const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS);
-  await channel.send("/channel register");
+  await channel.send(ownerId ? `/channel register <@${ownerId}>` : "/channel register");
   if (!(await ready)) {
     throw new Error(
       `E2E channel #${name} (${channel.id}) agent did not post a ready message ` +

@@ -23,6 +23,14 @@ import {
 const { botId: BOT_ID, guildId: GUILD_ID } = resolveE2eConfig();
 const TEST_BOT_TOKEN = resolveTestBotToken();
 
+// Discord user id of the human who will send the voice message. The router
+// routes a guild message only for the channel's recorded owner, so the channel
+// must be registered on this human's behalf — registering as the driver bot
+// (the default) would make the router reject the human's voice message. Unset
+// means the human won't be routed, so the test cannot pass; it is surfaced
+// below rather than failing with a silent timeout.
+const VOICE_OWNER_ID = process.env.DISCORD_E2E_VOICE_OWNER_ID?.trim();
+
 // Long timeout — human needs time to send voice message from phone.
 const VOICE_MSG_WAIT_MS = 180_000;
 const BOT_RESPONSE_WAIT_MS = 120_000;
@@ -45,11 +53,20 @@ describe("voice transcription", () => {
 
     await client.login(TEST_BOT_TOKEN);
 
-    // Create a fresh, registered test channel.
+    // Create a fresh test channel registered on the human sender's behalf so
+    // the router routes their voice message (see VOICE_OWNER_ID).
+    if (!VOICE_OWNER_ID) {
+      console.warn(
+        "DISCORD_E2E_VOICE_OWNER_ID is unset — the channel will be owned by the driver " +
+          "bot and the router will reject the human's voice message. Set it to the sender's " +
+          "Discord user id for this test to pass.",
+      );
+    }
     const guild = await client.guilds.fetch(GUILD_ID);
     const channel = await createE2eChannel(
       guild,
       "Voice transcription E2E test (auto-created, safe to delete)",
+      VOICE_OWNER_ID,
     );
     channelId = channel.id;
     console.log(`\nTest channel created: #${channel.name} (${channelId})`);
