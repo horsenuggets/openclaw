@@ -88,7 +88,11 @@ services:
 
 # The shared agent bridge, created by openclawctl / boot.sh with a fixed subnet so
 # the router can bind the proxies on its gateway IP. External here: this per-channel
-# compose project joins it but never creates or destroys it.
+# compose project joins it but never creates or destroys it. The compose-local key
+# `oc-agents` maps to the real network named by OPENCLAW_AGENT_NETWORK, so a
+# configured name other than the default still attaches to the network the scripts
+# actually created.
 networks:
   oc-agents:
     external: true
+    name: ${OPENCLAW_AGENT_NETWORK}

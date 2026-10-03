@@ -33,11 +33,38 @@ INSTANCES_DIR="$HOME/.openclaw-instances"
 # substitutes this; export it here from the single source of truth above.
 export OPENCLAW_PROXY_BIND="$OPENCLAW_AGENT_GATEWAY"
 
-# Create the agent bridge if absent, with the fixed subnet/gateway. Idempotent:
-# an existing network (same name) is left as-is. Must exist before the router
-# starts (it binds the gateway IP) and before any agent box starts (it joins the
-# network), so this runs ahead of both.
-if ! docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
+# Create the agent bridge if absent, with the fixed subnet/gateway. Must exist
+# before the router starts (it binds the gateway IP) and before any agent box
+# starts (it joins the network), so this runs ahead of both. When it already
+# exists, validate its driver/subnet/gateway: docker does not update IPAM on an
+# existing network and setup.sh removes containers but not networks, so a stale
+# bridge from an earlier .env would leave the router binding a gateway IP the
+# bridge no longer owns and boxes on the wrong subnet. Fail with remediation
+# rather than silently proceeding.
+if docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
+  if ! docker network inspect "$OPENCLAW_AGENT_NETWORK" | python3 -c '
+import json, os, sys
+
+net = json.load(sys.stdin)[0]
+cfg = ((net.get("IPAM") or {}).get("Config") or [{}])[0]
+ok = (
+    net.get("Driver") == "bridge"
+    and cfg.get("Subnet") == os.environ["OPENCLAW_AGENT_SUBNET"]
+    and cfg.get("Gateway") == os.environ["OPENCLAW_AGENT_GATEWAY"]
+)
+if not ok:
+    sys.stderr.write(
+        f"  found driver={net.get('Driver')} subnet={cfg.get('Subnet')} gateway={cfg.get('Gateway')}\n"
+    )
+sys.exit(0 if ok else 1)
+'; then
+    echo "ERROR: existing docker network '$OPENCLAW_AGENT_NETWORK' does not match the" >&2
+    echo "  configured driver=bridge subnet=$OPENCLAW_AGENT_SUBNET gateway=$OPENCLAW_AGENT_GATEWAY." >&2
+    echo "  Stop the agent boxes and remove it so it can be recreated:" >&2
+    echo "    docker network rm $OPENCLAW_AGENT_NETWORK" >&2
+    exit 1
+  fi
+else
   echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY)..."
   docker network create --driver bridge \
     --subnet "$OPENCLAW_AGENT_SUBNET" \
