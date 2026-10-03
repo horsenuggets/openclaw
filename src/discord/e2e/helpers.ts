@@ -141,7 +141,9 @@ export function e2eSetupTimeout(channelCount = 1): number {
  * `/channel register`: Discord delivers gateway events independently of the REST
  * `send()` response, so a fast onboarding message can otherwise arrive before
  * the listener exists and be missed. Resolves `true` on the first bot text
- * message, or `false` after `timeoutMs`.
+ * message, or `false` after `timeoutMs` or when `signal` aborts. Aborting lets a
+ * caller tear down the listener and timer immediately if registration fails,
+ * rather than leaking them until the timeout elapses.
  *
  * Exported for unit testing.
  */
@@ -150,14 +152,21 @@ export function waitForAgentReady(
   channelId: string,
   botId: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(false);
+      return;
+    }
     const client = guild.client;
     const done = (ready: boolean) => {
       clearTimeout(timer);
       client.off(Events.MessageCreate, onMessage);
+      signal?.removeEventListener("abort", onAbort);
       resolve(ready);
     };
+    const onAbort = () => done(false);
     const onMessage = (m: Message) => {
       if (
         m.channelId === channelId &&
@@ -169,6 +178,7 @@ export function waitForAgentReady(
     };
     const timer = setTimeout(() => done(false), timeoutMs);
     client.on(Events.MessageCreate, onMessage);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -220,8 +230,17 @@ export async function createE2eChannel(
   // Start listening BEFORE registering so a fast onboarding turn delivered over
   // the gateway cannot land before the listener is attached (see
   // waitForAgentReady). Await the result afterwards and fail loudly on timeout.
-  const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS);
-  await channel.send(buildRegisterCommand(ownerId));
+  // If the register send itself fails, abort the waiter so its listener and
+  // timer are torn down immediately instead of lingering until the timeout.
+  const abort = new AbortController();
+  const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS, abort.signal);
+  try {
+    await channel.send(buildRegisterCommand(ownerId));
+  } catch (err) {
+    abort.abort();
+    await ready;
+    throw err;
+  }
   if (!(await ready)) {
     throw new Error(
       `E2E channel #${name} (${channel.id}) agent did not post a ready message ` +

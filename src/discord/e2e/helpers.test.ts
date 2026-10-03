@@ -338,26 +338,23 @@ describe("createE2eChannel", () => {
     }
   });
 
-  it("propagates a registration-send failure", async () => {
-    vi.useFakeTimers();
-    try {
-      const client = new EventEmitter();
-      const channel = {
-        id: "chan-1",
-        name: "e2e-chan",
-        send: async () => {
-          throw new Error("send failed");
-        },
-      };
-      const guild = {
-        client,
-        channels: { fetch: async () => new Map(), create: async () => channel },
-      } as unknown as Guild;
-      await expect(createE2eChannel(guild, "topic", undefined, "bot-1")).rejects.toThrow(
-        "send failed",
-      );
-    } finally {
-      vi.useRealTimers();
-    }
+  it("propagates a registration-send failure and tears down the waiter", async () => {
+    const client = new EventEmitter();
+    const channel = {
+      id: "chan-1",
+      name: "e2e-chan",
+      send: async () => {
+        throw new Error("send failed");
+      },
+    };
+    const guild = {
+      client,
+      channels: { fetch: async () => new Map(), create: async () => channel },
+    } as unknown as Guild;
+    await expect(createE2eChannel(guild, "topic", undefined, "bot-1")).rejects.toThrow(
+      "send failed",
+    );
+    // The abort must have detached the readiness listener (no 120s leak).
+    expect(client.listenerCount(Events.MessageCreate)).toBe(0);
   });
 });
