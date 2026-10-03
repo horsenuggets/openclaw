@@ -10,11 +10,11 @@
  *   LIVE=1 npx vitest run --config vitest.e2e.config.ts \
  *     src/discord/e2e/voice-transcription.e2e.test.ts
  */
-import { ChannelType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
+import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  e2eChannelName,
   type MessageEvent,
+  createE2eChannel,
   resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
@@ -45,13 +45,12 @@ describe("voice transcription", () => {
 
     await client.login(TEST_BOT_TOKEN);
 
-    // Create a fresh test channel.
+    // Create a fresh, registered test channel.
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: "Voice transcription E2E test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "Voice transcription E2E test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
     console.log(`\nTest channel created: #${channel.name} (${channelId})`);
     console.log(`Discord link: https://discord.com/channels/${GUILD_ID}/${channelId}`);
@@ -87,7 +86,9 @@ describe("voice transcription", () => {
         timestamp: Date.now(),
       });
     });
-  }, 30_000);
+    // Hook budget inherits vitest.e2e.config.ts hookTimeout (channel
+    // provisioning can take up to AGENT_READY_TIMEOUT_MS).
+  });
 
   afterAll(async () => {
     void client?.destroy();

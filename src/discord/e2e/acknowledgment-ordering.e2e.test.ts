@@ -71,7 +71,7 @@ describeLive("Discord acknowledgment ordering", () => {
         });
       }
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     // Prune E2E channels older than 7 days.

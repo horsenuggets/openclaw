@@ -86,7 +86,7 @@ describeLive("Discord memory identity", () => {
     } catch {
       /* best effort */
     }
-  }, 60_000);
+  });
 
   afterAll(async () => {
     if (client) {

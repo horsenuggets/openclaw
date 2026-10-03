@@ -80,7 +80,7 @@ describeLive("Discord tool feedback display", () => {
         });
       }
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     // Clean up probe file.

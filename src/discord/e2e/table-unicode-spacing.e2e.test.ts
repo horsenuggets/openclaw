@@ -1,9 +1,9 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
-  e2eChannelName,
+  createE2eChannel,
   resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
@@ -112,11 +112,10 @@ describeLive("Discord table rendering with Unicode spacing", () => {
     });
 
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: e2eChannelName(),
-      type: ChannelType.GuildText,
-      topic: "E2E table Unicode spacing test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E table Unicode spacing test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
@@ -140,7 +139,9 @@ describeLive("Discord table rendering with Unicode spacing", () => {
         });
       }
     });
-  }, 60_000);
+    // Hook budget inherits vitest.e2e.config.ts hookTimeout (channel
+    // provisioning can take up to AGENT_READY_TIMEOUT_MS).
+  });
 
   afterAll(async () => {
     // Prune old E2E channels (>7 days).

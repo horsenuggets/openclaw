@@ -215,7 +215,7 @@ describeLive("Discord rapid-fire stress test", () => {
         });
       }
     });
-  }, 30_000);
+  });
 
   afterAll(async () => {
     // Prune E2E channels older than 7 days.

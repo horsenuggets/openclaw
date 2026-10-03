@@ -56,7 +56,7 @@ describeLive("Discord typing indicator", () => {
     const guild = await client.guilds.fetch(GUILD_ID);
     const channel = await createE2eChannel(guild, "typing-indicator E2E test");
     channelId = channel.id;
-  }, 30000);
+  });
 
   afterAll(async () => {
     if (client) {
