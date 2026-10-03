@@ -1,5 +1,5 @@
-import type { Guild } from "discord.js";
-import { ChannelType } from "discord.js";
+import type { Guild, Message } from "discord.js";
+import { ChannelType, Events } from "discord.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -109,11 +109,109 @@ function formatChannelTimestamp(d: Date): string {
 }
 
 /**
- * Create an E2E text channel with a clash-free timestamp name.
- * Fetches existing guild channels, picks a unique name, and
- * creates the channel.
+ * Upper bound a freshly registered channel's agent may take to provision (spin
+ * up the box, reach the model) and post its first turn. The real wait is
+ * usually far shorter; this is the ceiling before {@link createE2eChannel}
+ * gives up and throws.
  */
-export async function createE2eChannel(guild: Guild, topic: string) {
+export const AGENT_READY_TIMEOUT_MS = 120_000;
+
+/**
+ * Suggested `beforeAll` budget for a suite that provisions `channelCount`
+ * channels through {@link createE2eChannel}. Each channel can take up to
+ * {@link AGENT_READY_TIMEOUT_MS} to come up (they are created serially), plus a
+ * flat allowance for client login and channel creation. Callers must size their
+ * hook timeout with this (or the global `hookTimeout` in vitest.e2e.config.ts),
+ * otherwise the hook aborts before provisioning can finish.
+ */
+export function e2eSetupTimeout(channelCount = 1): number {
+  return channelCount * AGENT_READY_TIMEOUT_MS + 60_000;
+}
+
+/**
+ * Resolve once the bot posts a non-empty text message in `channelId`,
+ * signalling the per-channel agent is provisioned and has completed its first
+ * turn. The router replies to `/channel register` with an embed first
+ * (registration accepted) and then an onboarding/welcome text turn once the
+ * agent box is up and the model is reachable; we wait for that text turn so a
+ * test's first probe is not sent before the agent can answer.
+ *
+ * The `MessageCreate` listener is attached synchronously when this is called,
+ * so callers must invoke it (capturing the promise) BEFORE posting
+ * `/channel register`: Discord delivers gateway events independently of the REST
+ * `send()` response, so a fast onboarding message can otherwise arrive before
+ * the listener exists and be missed. Resolves `true` on the first bot text
+ * message, or `false` after `timeoutMs` or when `signal` aborts. Aborting lets a
+ * caller tear down the listener and timer immediately if registration fails,
+ * rather than leaking them until the timeout elapses.
+ *
+ * Exported for unit testing.
+ */
+export function waitForAgentReady(
+  guild: Guild,
+  channelId: string,
+  botId: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(false);
+      return;
+    }
+    const client = guild.client;
+    const done = (ready: boolean) => {
+      clearTimeout(timer);
+      client.off(Events.MessageCreate, onMessage);
+      signal?.removeEventListener("abort", onAbort);
+      resolve(ready);
+    };
+    const onAbort = () => done(false);
+    const onMessage = (m: Message) => {
+      if (
+        m.channelId === channelId &&
+        m.author?.id === botId &&
+        (m.content?.trim()?.length ?? 0) > 0
+      ) {
+        done(true);
+      }
+    };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    client.on(Events.MessageCreate, onMessage);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * Create an E2E text channel with a clash-free timestamp name, register it with
+ * the router, and wait for its agent to come up.
+ *
+ * The router only converses in registered channels (provisioning is explicit:
+ * an unregistered guild channel is ignored), so every E2E channel must send
+ * `/channel register` before it can get a reply. The tester bot is allowlisted
+ * for provisioning (OPENCLAW_ADMIN_OVERRIDE_IDS / OPENCLAW_ROUTER_ALLOW_BOT_IDS),
+ * so it can self-register. We then wait for the agent's first turn so callers do
+ * not race the box spin-up, and throw if it never comes up so the failure is
+ * attributed here rather than surfacing as a silent timeout in the first probe.
+ *
+ * `ownerId` registers the channel on another user's behalf (admin-only, which
+ * the allowlisted tester bot is): the router routes guild messages only for the
+ * recorded owner, so a test that expects a human (not the driver bot) to
+ * converse must register under that human's user id. Defaults to the driver bot.
+ *
+ * `botId` is the id whose first message signals readiness; it defaults to the
+ * configured bot-under-test and is injectable for unit tests.
+ */
+export function buildRegisterCommand(ownerId?: string): string {
+  return ownerId ? `/channel register <@${ownerId}>` : "/channel register";
+}
+
+export async function createE2eChannel(
+  guild: Guild,
+  topic: string,
+  ownerId?: string,
+  botId: string = resolveE2eConfig().botId,
+) {
   const channels = await guild.channels.fetch();
   const existingNames = new Set<string>();
   for (const [, ch] of channels) {
@@ -123,11 +221,34 @@ export async function createE2eChannel(guild: Guild, topic: string) {
   }
 
   const name = e2eChannelName(existingNames);
-  return guild.channels.create({
+  const channel = await guild.channels.create({
     name,
     type: ChannelType.GuildText,
     topic,
   });
+
+  // Start listening BEFORE registering so a fast onboarding turn delivered over
+  // the gateway cannot land before the listener is attached (see
+  // waitForAgentReady). Await the result afterwards and fail loudly on timeout.
+  // If the register send itself fails, abort the waiter so its listener and
+  // timer are torn down immediately instead of lingering until the timeout.
+  const abort = new AbortController();
+  const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS, abort.signal);
+  try {
+    await channel.send(buildRegisterCommand(ownerId));
+  } catch (err) {
+    abort.abort();
+    await ready;
+    throw err;
+  }
+  if (!(await ready)) {
+    throw new Error(
+      `E2E channel #${name} (${channel.id}) agent did not post a ready message ` +
+        `within ${AGENT_READY_TIMEOUT_MS}ms of /channel register`,
+    );
+  }
+
+  return channel;
 }
 
 export function resolveTestBotToken(): string {

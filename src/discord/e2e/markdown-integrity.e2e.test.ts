@@ -112,7 +112,7 @@ describeLive("Discord markdown formatting integrity", () => {
         });
       }
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     // Clean up old test channels (>7 days).

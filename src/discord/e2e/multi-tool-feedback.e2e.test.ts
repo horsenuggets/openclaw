@@ -8,6 +8,7 @@ import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
   createE2eChannel,
+  e2eSetupTimeout,
   resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
@@ -202,7 +203,9 @@ describeLive("Discord multi-tool feedback display", () => {
     } catch {
       /* best effort */
     }
-  }, 60_000);
+    // Provisions one agent box per suite serially, so the budget scales with
+    // the channel count (see e2eSetupTimeout).
+  }, e2eSetupTimeout(TEST_SUITES.length));
 
   afterAll(async () => {
     // Clean up probe file.

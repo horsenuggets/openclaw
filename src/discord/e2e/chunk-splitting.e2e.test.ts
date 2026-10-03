@@ -70,7 +70,7 @@ describeLive("Discord chunk splitting observation", () => {
         });
       }
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     // Clean up old test channels (>7 days).

@@ -73,7 +73,7 @@ describeLive("Discord tool result edit-in-place", () => {
         });
       }
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     if (client) {

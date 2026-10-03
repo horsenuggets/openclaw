@@ -146,7 +146,7 @@ describeLive("Discord visual formatting verification", () => {
       context = undefined;
       browser = undefined;
     }
-  }, 60_000);
+  });
 
   afterAll(async () => {
     // Clean up old test channels (>7 days).

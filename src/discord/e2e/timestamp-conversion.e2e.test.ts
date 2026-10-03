@@ -1,9 +1,9 @@
-import { ChannelType, Client, Events, GatewayIntentBits } from "discord.js";
-import { randomBytes } from "node:crypto";
+import { Client, Events, GatewayIntentBits } from "discord.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import {
   type MessageEvent,
+  createE2eChannel,
   resolveE2eConfig,
   resolveTestBotToken,
   waitForBotResponse,
@@ -19,9 +19,6 @@ describeLive("Discord timestamp conversion", () => {
   let client: Client;
   let channelId: string;
   const events: MessageEvent[] = [];
-  const nonce = randomBytes(4).toString("hex");
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   beforeAll(async () => {
     const token = resolveTestBotToken();
@@ -44,11 +41,10 @@ describeLive("Discord timestamp conversion", () => {
     });
 
     const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.create({
-      name: `e2e-${today}-ts-${nonce}`,
-      type: ChannelType.GuildText,
-      topic: "E2E timestamp conversion test (auto-created, safe to delete)",
-    });
+    const channel = await createE2eChannel(
+      guild,
+      "E2E timestamp conversion test (auto-created, safe to delete)",
+    );
     channelId = channel.id;
 
     client.on(Events.MessageCreate, (msg) => {
@@ -72,7 +68,9 @@ describeLive("Discord timestamp conversion", () => {
         });
       }
     });
-  }, 30000);
+    // Hook budget inherits vitest.e2e.config.ts hookTimeout (channel
+    // provisioning can take up to AGENT_READY_TIMEOUT_MS).
+  });
 
   afterAll(async () => {
     try {

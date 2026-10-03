@@ -66,7 +66,7 @@ describeLive("Discord block streaming (multi-tool separate messages)", () => {
     const guild = await client.guilds.fetch(GUILD_ID);
     const channel = await createE2eChannel(guild, "block-streaming E2E test");
     channelId = channel.id;
-  }, 30_000);
+  });
 
   afterAll(async () => {
     if (client) {

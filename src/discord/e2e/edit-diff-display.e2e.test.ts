@@ -114,7 +114,7 @@ describeLive("Discord Edit diff display", () => {
     } catch {
       /* best effort */
     }
-  }, 60_000);
+  });
 
   afterAll(async () => {
     try {

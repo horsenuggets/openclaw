@@ -113,7 +113,7 @@ describeLive("Discord mid-turn messaging (steer mode)", () => {
     } catch {
       /* best effort */
     }
-  }, 60_000);
+  });
 
   afterAll(async () => {
     if (client) {
