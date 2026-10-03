@@ -1,5 +1,5 @@
-import type { Guild } from "discord.js";
-import { ChannelType } from "discord.js";
+import type { Guild, Message } from "discord.js";
+import { ChannelType, Events } from "discord.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -109,9 +109,51 @@ function formatChannelTimestamp(d: Date): string {
 }
 
 /**
- * Create an E2E text channel with a clash-free timestamp name.
- * Fetches existing guild channels, picks a unique name, and
- * creates the channel.
+ * Wait until the bot posts a text message in `channelId`, signalling the
+ * per-channel agent is provisioned and has completed its first turn. The
+ * router replies to `/channel register` with an embed first (registration
+ * accepted) and then an onboarding/welcome text turn once the agent box is up
+ * and the model is reachable; we wait for that text turn so a test's first
+ * probe is not sent before the agent can answer. Resolves on the first bot
+ * text message or after `timeoutMs`.
+ */
+function waitForAgentReady(
+  guild: Guild,
+  channelId: string,
+  botId: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const client = guild.client;
+    const done = (ready: boolean) => {
+      clearTimeout(timer);
+      client.off(Events.MessageCreate, onMessage);
+      resolve(ready);
+    };
+    const onMessage = (m: Message) => {
+      if (
+        m.channelId === channelId &&
+        m.author?.id === botId &&
+        (m.content?.trim()?.length ?? 0) > 0
+      ) {
+        done(true);
+      }
+    };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    client.on(Events.MessageCreate, onMessage);
+  });
+}
+
+/**
+ * Create an E2E text channel with a clash-free timestamp name, register it with
+ * the router, and wait for its agent to come up.
+ *
+ * The router only converses in registered channels (provisioning is explicit:
+ * an unregistered guild channel is ignored), so every E2E channel must send
+ * `/channel register` before it can get a reply. The tester bot is allowlisted
+ * for provisioning (OPENCLAW_ADMIN_OVERRIDE_IDS / OPENCLAW_ROUTER_ALLOW_BOT_IDS),
+ * so it can self-register. We then wait for the agent's first turn so callers do
+ * not race the box spin-up.
  */
 export async function createE2eChannel(guild: Guild, topic: string) {
   const channels = await guild.channels.fetch();
@@ -123,11 +165,17 @@ export async function createE2eChannel(guild: Guild, topic: string) {
   }
 
   const name = e2eChannelName(existingNames);
-  return guild.channels.create({
+  const channel = await guild.channels.create({
     name,
     type: ChannelType.GuildText,
     topic,
   });
+
+  const { botId } = resolveE2eConfig();
+  await channel.send("/channel register");
+  await waitForAgentReady(guild, channel.id, botId, 120_000);
+
+  return channel;
 }
 
 export function resolveTestBotToken(): string {
