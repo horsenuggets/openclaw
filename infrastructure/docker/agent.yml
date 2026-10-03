@@ -7,12 +7,14 @@
 # agent's reach; nothing lives under the home directory.
 #
 # Networking: the box runs on the shared `oc-agents` bridge (created by openclawctl /
-# boot.sh with a fixed gateway IP), NOT the host network. This gives it its own
-# netns, so it can reach only the two router proxies (at the bridge gateway IP) and
-# the public internet via NAT — not the host's loopback services (browser CDP,
-# whisper, the health monitor) or, via the host, sibling boxes' published ports. The
-# gateway port is published to host loopback only (127.0.0.1) so the host-networked
-# router can still reach this box's gateway; it is never exposed on the public NIC.
+# boot.sh with a fixed gateway IP and inter-container communication disabled), NOT
+# the host network. This gives it its own netns, so it can reach only the two router
+# proxies (at the bridge gateway IP) and the public internet via NAT — not the host's
+# loopback services (browser CDP, whisper, the health monitor). A sibling box is
+# unreachable both ways: via the host its gateway is published to 127.0.0.1 only, and
+# over the bridge the network's enable_icc=false drops box-to-box traffic. The gateway
+# port is published to host loopback only (127.0.0.1) so the host-networked router can
+# still reach this box's gateway; it is never exposed on the public NIC.
 #
 # Usage:
 #   OPENCLAW_CHANNEL_ID=... OPENCLAW_CHANNEL_PORT=18789 \
@@ -59,8 +61,8 @@ services:
       # the real token); gateway.auth.token is the only local-scope secret and
       # only authorizes talking to this agent's own gateway. The gateway binds all
       # interfaces inside the container (--bind lan) so the host loopback publish
-      # works, so that token is what gates a sibling box on oc-agents from driving
-      # this gateway directly.
+      # works; a sibling box cannot reach it anyway, since oc-agents runs with
+      # inter-container communication disabled (the token is defence in depth).
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/openclaw.json:/etc/openclaw/openclaw.json:ro
       # The agent's work. Writable; the only mount the file tools can see.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/workspace:/workspace
@@ -82,8 +84,9 @@ services:
         max-size: "50m"
         max-file: "5"
     # --bind lan => 0.0.0.0 inside the container's own netns (NOT the host LAN), so
-    # the 127.0.0.1 host publish above can forward to it. Sibling-box access is
-    # gated by gateway.auth.token.
+    # the 127.0.0.1 host publish above can forward to it. A sibling box cannot reach
+    # this port: oc-agents has inter-container communication disabled, and the host
+    # publish is 127.0.0.1-only; gateway.auth.token is defence in depth.
     command: ["/bin/openclaw", "gateway", "--bind", "lan", "--port", "${OPENCLAW_CHANNEL_PORT}"]
 
 # The shared agent bridge, created by openclawctl / boot.sh with a fixed subnet so
