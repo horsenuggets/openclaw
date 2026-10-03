@@ -109,13 +109,39 @@ function formatChannelTimestamp(d: Date): string {
 }
 
 /**
- * Wait until the bot posts a text message in `channelId`, signalling the
- * per-channel agent is provisioned and has completed its first turn. The
- * router replies to `/channel register` with an embed first (registration
- * accepted) and then an onboarding/welcome text turn once the agent box is up
- * and the model is reachable; we wait for that text turn so a test's first
- * probe is not sent before the agent can answer. Resolves on the first bot
- * text message or after `timeoutMs`.
+ * Upper bound a freshly registered channel's agent may take to provision (spin
+ * up the box, reach the model) and post its first turn. The real wait is
+ * usually far shorter; this is the ceiling before {@link createE2eChannel}
+ * gives up and throws.
+ */
+export const AGENT_READY_TIMEOUT_MS = 120_000;
+
+/**
+ * Suggested `beforeAll` budget for a suite that provisions `channelCount`
+ * channels through {@link createE2eChannel}. Each channel can take up to
+ * {@link AGENT_READY_TIMEOUT_MS} to come up (they are created serially), plus a
+ * flat allowance for client login and channel creation. Callers must size their
+ * hook timeout with this (or the global `hookTimeout` in vitest.e2e.config.ts),
+ * otherwise the hook aborts before provisioning can finish.
+ */
+export function e2eSetupTimeout(channelCount = 1): number {
+  return channelCount * AGENT_READY_TIMEOUT_MS + 60_000;
+}
+
+/**
+ * Resolve once the bot posts a non-empty text message in `channelId`,
+ * signalling the per-channel agent is provisioned and has completed its first
+ * turn. The router replies to `/channel register` with an embed first
+ * (registration accepted) and then an onboarding/welcome text turn once the
+ * agent box is up and the model is reachable; we wait for that text turn so a
+ * test's first probe is not sent before the agent can answer.
+ *
+ * The `MessageCreate` listener is attached synchronously when this is called,
+ * so callers must invoke it (capturing the promise) BEFORE posting
+ * `/channel register`: Discord delivers gateway events independently of the REST
+ * `send()` response, so a fast onboarding message can otherwise arrive before
+ * the listener exists and be missed. Resolves `true` on the first bot text
+ * message, or `false` after `timeoutMs`.
  */
 function waitForAgentReady(
   guild: Guild,
@@ -153,7 +179,8 @@ function waitForAgentReady(
  * `/channel register` before it can get a reply. The tester bot is allowlisted
  * for provisioning (OPENCLAW_ADMIN_OVERRIDE_IDS / OPENCLAW_ROUTER_ALLOW_BOT_IDS),
  * so it can self-register. We then wait for the agent's first turn so callers do
- * not race the box spin-up.
+ * not race the box spin-up, and throw if it never comes up so the failure is
+ * attributed here rather than surfacing as a silent timeout in the first probe.
  */
 export async function createE2eChannel(guild: Guild, topic: string) {
   const channels = await guild.channels.fetch();
@@ -171,9 +198,18 @@ export async function createE2eChannel(guild: Guild, topic: string) {
     topic,
   });
 
+  // Start listening BEFORE registering so a fast onboarding turn delivered over
+  // the gateway cannot land before the listener is attached (see
+  // waitForAgentReady). Await the result afterwards and fail loudly on timeout.
   const { botId } = resolveE2eConfig();
+  const ready = waitForAgentReady(guild, channel.id, botId, AGENT_READY_TIMEOUT_MS);
   await channel.send("/channel register");
-  await waitForAgentReady(guild, channel.id, botId, 120_000);
+  if (!(await ready)) {
+    throw new Error(
+      `E2E channel #${name} (${channel.id}) agent did not post a ready message ` +
+        `within ${AGENT_READY_TIMEOUT_MS}ms of /channel register`,
+    );
+  }
 
   return channel;
 }

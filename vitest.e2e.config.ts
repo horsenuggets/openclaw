@@ -9,6 +9,12 @@ export default defineConfig({
   test: {
     pool: "forks",
     maxWorkers: e2eWorkers,
+    // Default hook budget. Setup hooks register a channel and wait for its agent
+    // to provision (up to AGENT_READY_TIMEOUT_MS = 120s in
+    // src/discord/e2e/helpers.ts), which the stock 10s hook timeout cannot cover;
+    // this equals e2eSetupTimeout(1). Suites that provision several channels
+    // override this per-hook with e2eSetupTimeout(n).
+    hookTimeout: 180_000,
     include: ["test/**/*.e2e.test.ts", "src/**/*.e2e.test.ts"],
     setupFiles: ["test/setup.ts"],
     exclude: [
