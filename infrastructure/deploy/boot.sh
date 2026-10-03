@@ -17,6 +17,34 @@ fi
 
 INSTANCES_DIR="$HOME/.openclaw-instances"
 
+# Agent bridge network. Agent boxes run on this user-defined bridge (not the host
+# network) so each gets its own netns and can reach only the two router proxies
+# (bound to the bridge gateway IP) plus the public internet — not the host's
+# loopback services or sibling boxes. The subnet is fixed so the gateway IP is
+# stable and the host-networked router can bind its proxies there. All three come
+# from ~/.env (no defaults): a missing value is a deployment error, not something
+# to paper over with a guessed subnet that might collide on the host.
+: "${OPENCLAW_AGENT_NETWORK:?OPENCLAW_AGENT_NETWORK must be set in ~/.env (agent bridge name, e.g. oc-agents)}"
+: "${OPENCLAW_AGENT_SUBNET:?OPENCLAW_AGENT_SUBNET must be set in ~/.env (agent bridge subnet, e.g. 172.30.0.0/24)}"
+: "${OPENCLAW_AGENT_GATEWAY:?OPENCLAW_AGENT_GATEWAY must be set in ~/.env (agent bridge gateway IP, e.g. 172.30.0.1)}"
+
+# The router binds its loopback proxies to the bridge gateway IP so boxes on the
+# bridge can reach them while they stay off the public NIC. discord-router.yml
+# substitutes this; export it here from the single source of truth above.
+export OPENCLAW_PROXY_BIND="$OPENCLAW_AGENT_GATEWAY"
+
+# Create the agent bridge if absent, with the fixed subnet/gateway. Idempotent:
+# an existing network (same name) is left as-is. Must exist before the router
+# starts (it binds the gateway IP) and before any agent box starts (it joins the
+# network), so this runs ahead of both.
+if ! docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
+  echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY)..."
+  docker network create --driver bridge \
+    --subnet "$OPENCLAW_AGENT_SUBNET" \
+    --gateway "$OPENCLAW_AGENT_GATEWAY" \
+    "$OPENCLAW_AGENT_NETWORK"
+fi
+
 # Shared auth-profiles store mounted into every agent container (see
 # infrastructure/docker/agent.yml). Must exist as a regular file before any
 # container starts, or Docker bind-mounts it as an empty directory. Seed it once

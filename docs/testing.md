@@ -449,10 +449,10 @@ Boots a single privileged container that mirrors the WSL prod host (Ubuntu + Doc
 Engine, see `infrastructure/docker/prod-mirror.Dockerfile`) and runs the real deploy
 pipeline (`deploy.sh` to `setup.sh` to `boot.sh`) inside it, so the discord-router +
 provisioner + per-channel agent containers come up exactly like prod. Because the inner
-Docker daemon is a real Linux daemon, `network_mode: host` works and the
-router/agent/proxy loopback mesh behaves like prod (unlike a bare container on macOS
-Docker Desktop). Use it to test the full registration lifecycle and real Discord routing
-end to end.
+Docker daemon is a real Linux daemon, the router's `network_mode: host` and the agent
+`oc-agents` bridge both work, so the router/agent/proxy mesh behaves like prod (unlike a
+bare container on macOS Docker Desktop). Use it to test the full registration lifecycle
+and real Discord routing end to end.
 
 Driver: `scripts/prod-mirror.sh` (staging in the gitignored `.prod-mirror/`).
 

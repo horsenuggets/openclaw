@@ -4,8 +4,27 @@
 # and Docker containers for per-channel agents.
 set -euo pipefail
 
+# Load ~/.env so manual invocations see the same config the provisioner daemon
+# gets via its systemd EnvironmentFile (agent-bridge settings, proxy gateway IP,
+# etc.). Harmless when already inherited; required when run by hand.
+if [ -f "$HOME/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$HOME/.env"
+  set +a
+fi
+
 INSTANCES_DIR="$HOME/.openclaw-instances"
 AGENT_YML="$HOME/deploy/docker/agent.yml"
+
+# Agent bridge network (see agent.yml / boot.sh). Boxes join this user-defined
+# bridge instead of the host network, so each is isolated to the two router
+# proxies (at the gateway IP) plus outbound internet. Name + subnet come from
+# ~/.env (no defaults) so openclawctl can create the network if a channel is
+# registered before boot.sh has run. The gateway IP is validated lower down where
+# the proxy URLs are built.
+: "${OPENCLAW_AGENT_NETWORK:?OPENCLAW_AGENT_NETWORK must be set in ~/.env (agent bridge name, e.g. oc-agents)}"
+: "${OPENCLAW_AGENT_SUBNET:?OPENCLAW_AGENT_SUBNET must be set in ~/.env (agent bridge subnet, e.g. 172.30.0.0/24)}"
 # Single shared auth-profiles store mounted into every agent container (see
 # infrastructure/docker/agent.yml). OAuth refresh tokens rotate, so a
 # per-instance copy goes stale; sharing one file lets a refresh in any instance
@@ -280,6 +299,21 @@ ensure_shared_auth() {
   ) 9>"$PORT_LOCK_FILE"
 }
 
+# Create the agent bridge if absent, with the fixed subnet/gateway from ~/.env.
+# agent.yml references it as an external network, so it must exist before a box
+# starts. Idempotent: an existing network is left untouched. boot.sh creates it at
+# startup too; this covers a channel registered at runtime before a reboot.
+ensure_agent_network() {
+  if docker network inspect "$OPENCLAW_AGENT_NETWORK" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Creating agent bridge $OPENCLAW_AGENT_NETWORK ($OPENCLAW_AGENT_SUBNET, gw $OPENCLAW_AGENT_GATEWAY)..."
+  docker network create --driver bridge \
+    --subnet "$OPENCLAW_AGENT_SUBNET" \
+    --gateway "$OPENCLAW_AGENT_GATEWAY" \
+    "$OPENCLAW_AGENT_NETWORK"
+}
+
 start_container() {
   local channelId="$1"
   local port="$2"
@@ -287,6 +321,8 @@ start_container() {
   # prepare_instance_dirs migrates/overwrites the per-instance auth with the
   # placeholder, so the real credential is never lost nor left inside the box.
   ensure_shared_auth
+  # The box joins the external oc-agents bridge; make sure it exists first.
+  ensure_agent_network
   prepare_instance_dirs "$channelId"
   OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
     docker compose -f "$AGENT_YML" -p "agents-$channelId" up -d
@@ -329,20 +365,22 @@ seed_workspace() {
   return 1
 }
 
-# The router's container proxy (startContainerProxyServer, PROXY_PORT) listens on
-# loopback. Agent containers are host-networked, so they reach it at 127.0.0.1.
-# host.docker.internal only resolves under bridge networking and must NOT be used
-# here, or proactive/heartbeat sends silently fail at DNS resolution.
-CONTAINER_PROXY_URL="http://127.0.0.1:18800"
+# Agent boxes run on the oc-agents bridge (see agent.yml), so they reach the
+# router's two proxies at the bridge gateway IP, where the host-networked router
+# binds them (OPENCLAW_PROXY_BIND). OPENCLAW_AGENT_GATEWAY is the single source of
+# truth for that IP, shared with boot.sh via ~/.env. No default: a missing value
+# is a deploy error, not a guessed address.
+: "${OPENCLAW_AGENT_GATEWAY:?OPENCLAW_AGENT_GATEWAY must be set in ~/.env (agent bridge gateway IP, e.g. 172.30.0.1)}"
 
-# The router's model proxy (startModelProxyServer) also listens on loopback. Agent
-# containers are host-networked, so they reach it at 127.0.0.1. Boxes point their
-# provider baseUrl here and send only a placeholder token; the proxy injects the
-# real (refreshed) OAuth bearer, so no provider credential ever lives in a box.
-# Port must match MODEL_PROXY_PORT in src/discord/router/model-proxy.ts. It sits
-# below the 18789 agent-gateway base and clear of the container proxy (18800) and
-# health monitor (18801), which share the router container's host network.
-MODEL_PROXY_URL="http://127.0.0.1:18702"
+# The router's container proxy (startContainerProxyServer, PROXY_PORT). Boxes POST
+# proactive/heartbeat Discord sends here.
+CONTAINER_PROXY_URL="http://$OPENCLAW_AGENT_GATEWAY:18800"
+
+# The router's model proxy (startModelProxyServer). Boxes point their provider
+# baseUrl here and send only a placeholder token; the proxy injects the real
+# (refreshed) OAuth bearer, so no provider credential ever lives in a box. Port
+# must match MODEL_PROXY_PORT in src/discord/router/model-proxy.ts.
+MODEL_PROXY_URL="http://$OPENCLAW_AGENT_GATEWAY:18702"
 
 # The agent container runs as this non-root uid:gid (see agent.yml). Its writable
 # mounts (workspace, state) must be owned by it or writes fail on the read-only

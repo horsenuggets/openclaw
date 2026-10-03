@@ -22,8 +22,18 @@ Docs: https://docs.openclaw.ai
   a box now finds no token to steal. Applies to newly registered channels; a pre-existing
   instance is left on its old layout (`boot.sh`/`restart` skip any instance without the
   `.token-free` marker and print a re-register hint) rather than being mounted into the
-  new layout and broken, until in-place migration lands as a tracked follow-up. (Also
-  tracked separately: move boxes off `network_mode: host` to bridge networking.)
+  new layout and broken, until in-place migration lands as a tracked follow-up.
+- Discord router: move the per-channel agent boxes off `network_mode: host` onto a shared
+  `oc-agents` bridge network (fixed subnet, created by `boot.sh`/`openclawctl` from
+  `OPENCLAW_AGENT_NETWORK`/`OPENCLAW_AGENT_SUBNET`/`OPENCLAW_AGENT_GATEWAY` in the deploy
+  env). Each box now gets its own network namespace and can reach only the two router
+  proxies (bound to the bridge gateway IP via `OPENCLAW_PROXY_BIND`) plus the public
+  internet, no longer the host's loopback services (browser CDP, whisper, the health
+  monitor) or, via the host, sibling boxes' published ports. The box gateway binds all
+  interfaces inside its own netns and publishes only to host loopback (`127.0.0.1`) so the
+  host-networked router still reaches it; a sibling box reaching another box's gateway
+  over the shared bridge stays gated by that box's `gateway.auth.token`. Full box-to-box
+  isolation (per-box networks) is a tracked follow-up.
 - Discord router: restrict ordinary conversation in shared guild channels to the channel
   owner; whitelisted admins keep `/channel` management but can no longer converse in
   channels they do not own.
