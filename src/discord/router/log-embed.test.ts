@@ -34,6 +34,11 @@ describe("autoLinkUrls", () => {
   it("returns text without URLs unchanged", () => {
     expect(autoLinkUrls("just a plain log line")).toBe("just a plain log line");
   });
+
+  it("leaves Discord angle-bracket URLs (<https://x>) untouched", () => {
+    expect(autoLinkUrls("see <https://example.com> now")).toBe("see <https://example.com> now");
+    expect(autoLinkUrls("<https://example.com/path>")).toBe("<https://example.com/path>");
+  });
 });
 
 describe("buildLogEmbed", () => {

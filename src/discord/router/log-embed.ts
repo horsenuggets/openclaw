@@ -16,9 +16,12 @@ import { type BuiltEmbed, buildEmbed } from "./embed-categories.js";
  * kept outside the link.
  */
 export function autoLinkUrls(text: string): string {
-  return text.replace(/(\]\()?(https?:\/\/[^\s<>)]+)/g, (match, linkOpen: string, url: string) => {
-    if (linkOpen) {
-      return match; // already the target of a [label](url) link
+  // The optional prefix captures a URL that should be left as-is: `](` means it
+  // is already a [label](url) target, and `<` means Discord's angle-bracket form
+  // (<https://x>), which is already a valid link and must not be rewritten.
+  return text.replace(/(\]\(|<)?(https?:\/\/[^\s<>)]+)/g, (match, prefix: string, url: string) => {
+    if (prefix) {
+      return match;
     }
     const trail = url.match(/[.,!?;:]+$/)?.[0] ?? "";
     const clean = trail ? url.slice(0, -trail.length) : url;

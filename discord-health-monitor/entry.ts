@@ -116,9 +116,17 @@ async function sendLifecycleMessage(token: string, phrase: string): Promise<void
     sendEmbedMessage(token, ch.channelId, {
       embeds: [log.embed],
       attachments: log.attachments,
-    }).catch((err) => {
-      console.error(`[health] failed to send to ${ch.channelId}: ${String(err)}`);
-    }),
+    })
+      .then((res) => {
+        // sendEmbedMessage resolves with ok:false on a 4xx/5xx; surface it so a
+        // rejected banner is not silent (the old plain sender logged these).
+        if (!res.ok) {
+          console.error(`[health] Discord API error ${res.status} for ${ch.channelId}`);
+        }
+      })
+      .catch((err) => {
+        console.error(`[health] failed to send to ${ch.channelId}: ${String(err)}`);
+      }),
   );
   await Promise.race([
     Promise.allSettled(sends),

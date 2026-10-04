@@ -380,11 +380,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         return "error: log requires a message";
       }
       const log = buildLogEmbed(text);
-      await sendEmbedMessage(discordToken, channelId, {
+      const res = await sendEmbedMessage(discordToken, channelId, {
         embeds: [log.embed],
         attachments: log.attachments,
       });
-      return "log sent";
+      // Report a rejection back to the agent so it is not told the log sent.
+      return res.ok ? "log sent" : `error: log embed rejected (${res.status})`;
     }
     return `error: unknown command "${cmd.command}"`;
   };
