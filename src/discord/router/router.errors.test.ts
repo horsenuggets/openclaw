@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildLogEmbed } from "./log-embed.js";
 import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 
 describe("isConversationalBot", () => {
@@ -91,5 +92,32 @@ describe("isLifecycleBanner", () => {
     expect(isLifecycleBanner("hi")).toBe(false);
     expect(isLifecycleBanner(undefined)).toBe(false);
     expect(isLifecycleBanner("")).toBe(false);
+  });
+
+  it("detects a lifecycle banner carried in an embed description", () => {
+    expect(isLifecycleBanner({ content: "", embeds: [{ description: "*Back online.*" }] })).toBe(
+      true,
+    );
+    expect(
+      isLifecycleBanner({ content: "", embeds: [{ description: "  *Shutting down...*  " }] }),
+    ).toBe(true);
+  });
+
+  it("does NOT treat an error log embed as a lifecycle banner", () => {
+    // Error log embeds share the Log category but carry different text, so the
+    // exact-phrase match keeps them from being skipped by recovery.
+    expect(
+      isLifecycleBanner({
+        content: "",
+        embeds: [{ description: "*Something went wrong processing your message.*" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("matches the exact embed the sidecar sends (sender/matcher consistency)", () => {
+    // buildLogEmbed is what the health-monitor sidecar now uses for banners, so
+    // its output description must be what the recovery scan recognizes.
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed("Back online.").embed] })).toBe(true);
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed("Shutting down...").embed] })).toBe(true);
   });
 });
