@@ -1,44 +1,72 @@
 # TODO
 
-**This file is no longer the source of truth for OpenClaw tasks.**
+> ⚠️ **This file is no longer the source of truth for OpenClaw tasks.** All OpenClaw work
+> tracking lives in **Todoist** now, in the `openclaw` project.
 
-All OpenClaw work tracking lives in **Todoist** now, in the `openclaw` project.
+## Todoist Project
 
-## Todoist project
-
-- **Project name:** `openclaw`
-- **Project ID:** `6g442XQJVrvqJhCp`
-- **Web URL:** <https://app.todoist.com/app/project/openclaw-6g442XQJVrvqJhCp>
+- **Project Name** → `openclaw`
+- **Project ID** → `6g442XQJVrvqJhCp`
+- **Web URL** → <https://app.todoist.com/app/project/openclaw-6g442XQJVrvqJhCp>
 
 ### Sections
 
-| Section       | ID                 | Purpose                                                                 |
-| ------------- | ------------------ | ----------------------------------------------------------------------- |
-| `Not started` | `6g4FW6x4wF2gh84G` | Backlog — new work lands here by default                                |
-| `In progress` | `6g4FW75cgqm39CMG` | Actively being worked on                                                |
-| `Done`        | `6g4FW77rX473VXvp` | Completed (tasks can stay open here as a reference, or be fully closed) |
+| Section       | ID                 | Purpose                                                                  |
+| ------------- | ------------------ | ------------------------------------------------------------------------ |
+| `Not started` | `6g4FW6x4wF2gh84G` | Backlog; new work lands here by default.                                 |
+| `In progress` | `6g4FW75cgqm39CMG` | Actively being worked on.                                                |
+| `Done`        | `6g4FW77rX473VXvp` | Completed (tasks can stay open here as a reference, or be fully closed). |
 
-## Accessing Todoist from Claude Code
+### Watch for the `(No Section)` Trap
 
-The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is configured at user scope. Once
-a Claude Code session starts, it auto-connects and exposes tools under the
-`mcp__todoist__*` namespace. Common ones:
+Todoist lets a task live in a project *without* belonging to any section; it shows up
+under a `(No Section)` heading at the top of the project. This happens more easily than
+you'd think...
 
-| Tool                                             | Use                                                        |
-| ------------------------------------------------ | ---------------------------------------------------------- |
-| `mcp__todoist__get_projects_list`                | List all projects (including `openclaw`)                   |
-| `mcp__todoist__get_sections_list`                | List sections for a project                                |
-| `mcp__todoist__get_tasks_list`                   | List tasks in a project / section                          |
-| `mcp__todoist__get_tasks_by_filter`              | Advanced filter queries (priority, labels, due date)       |
-| `mcp__todoist__create_tasks`                     | Create one or more tasks (batch)                           |
-| `mcp__todoist__update_tasks`                     | Edit existing tasks (content, priority, labels, due, etc.) |
-| `mcp__todoist__close_tasks`                      | Mark tasks as completed                                    |
-| `mcp__todoist__delete_tasks`                     | Permanently delete tasks                                   |
-| `mcp__todoist__move_tasks`                       | Move tasks between projects / sections                     |
-| `mcp__todoist__create_sections`                  | Create new sections                                        |
-| `mcp__todoist__get_comments` / `create_comments` | Read/write task comments                                   |
+- **Quick Add** → typing a task with `#openclaw` but no `/section` drops it straight into
+  `(No Section)`.
+- **API / MCP `create_tasks`** → omitting `section_id` creates a sectionless task (the
+  field is optional, so it's easy to forget).
+- **Mobile share sheet / natural-language add** → rarely picks a section for you.
+- **Deleting a section** → Todoist keeps the tasks but strips their section, so they fall
+  back into `(No Section)`.
 
-### Quick example: list open OpenClaw tasks
+Sectionless tasks are invisible to anything that filters by section and quietly rot. When
+you open the project, *sweep `(No Section)` first* and move each task into the right home
+(usually `Not started`). To find them with an agent, list the project and filter for a
+null `section_id`...
+
+```js
+const tasks = mcp__todoist__get_tasks_list({
+  project_id: "6g442XQJVrvqJhCp",
+  limit: 100,
+});
+const orphans = tasks.filter((t) => !t.section_id); // these live in (No Section)
+```
+
+Then batch them back into place with `mcp__todoist__move_tasks`, passing each `task_id`
+with the target `section_id` (`6g4FW6x4wF2gh84G` for `Not started`).
+
+## Accessing Todoist With Agents
+
+The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is a prerequisite, exposing tools
+under the `mcp__todoist__*` namespace. Common ones include...
+
+| Tool                                             | Use                                                         |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `mcp__todoist__get_projects_list`                | List all projects.                                          |
+| `mcp__todoist__get_sections_list`                | List sections for a project.                                |
+| `mcp__todoist__get_tasks_list`                   | List tasks in a project / section.                          |
+| `mcp__todoist__get_tasks_by_filter`              | Advanced filter queries (priority, labels, due date).       |
+| `mcp__todoist__create_tasks`                     | Create one or more tasks (batch).                           |
+| `mcp__todoist__update_tasks`                     | Edit existing tasks (content, priority, labels, due, etc.). |
+| `mcp__todoist__close_tasks`                      | Mark tasks as completed.                                    |
+| `mcp__todoist__delete_tasks`                     | Permanently delete tasks.                                   |
+| `mcp__todoist__move_tasks`                       | Move tasks between projects / sections.                     |
+| `mcp__todoist__create_sections`                  | Create new sections.                                        |
+| `mcp__todoist__get_comments` / `create_comments` | Read/write task comments.                                   |
+
+### Quick Example » List Open OpenClaw Tasks
 
 ```js
 mcp__todoist__get_tasks_list({
@@ -47,7 +75,7 @@ mcp__todoist__get_tasks_list({
 });
 ```
 
-### Quick example: add a new task to the backlog
+### Quick Example » Add a New Task to the Backlog
 
 ```js
 mcp__todoist__create_tasks({
@@ -63,7 +91,9 @@ mcp__todoist__create_tasks({
 });
 ```
 
-## Priority mapping (important — the API is inverted from the UI)
+## Priority Mapping
+
+**Important » The API Is Inverted From the UI.**
 
 | User-facing          | API `priority` value |
 | -------------------- | -------------------- |
@@ -72,25 +102,15 @@ mcp__todoist__create_tasks({
 | P3 (medium)          | `2`                  |
 | P4 (normal, default) | `1`                  |
 
-## Labels
+## Other Ways to Add Tasks
 
-Useful labels already defined in Todoist for time estimates: `<15m`, `<30m`, `<45m`,
-`<1h`, `<1h30m`, `<2h`, `<3h`, `<4h`, `<6h` — plus matching `>...` variants. Tag tasks
-with these to help with planning sessions.
-
-Other relevant labels: `Routine`, `Stretch`, `Discarded`.
-
-## Adding tasks outside Claude Code
-
-- **Todoist mobile / desktop app** — just add to the `openclaw` project
-- **`openclaw` CLI skill** — if there's a `/todo` or equivalent slash command configured,
-  use that
-- **Todoist REST API** — `curl` with `Authorization: Bearer <API_TOKEN>` against
+- **Todoist web / mobile / desktop app** → just add to the `openclaw` project.
+- **Todoist REST API** → `curl` with `Authorization: Bearer <API_TOKEN>` against
   `api.todoist.com/rest/v2/tasks` works anywhere (API token lives in keychain / the
-  gateway config)
+  gateway config).
 
-## Why this file still exists
+## Why This File Still Exists
 
-It's a pointer for future Claude Code sessions (and you) that open the repo and look for
-`TODO.md`. Without this note, it's not obvious the tasks have moved. Do NOT add real tasks
-to this file — they'll get lost. Add them to Todoist.
+It's a pointer for contributors and future agent sessions that open the repo and look for
+`TODO.md`. Without this note, it's not obvious the tasks have moved. Do *not* add real
+tasks to this file; they'll get lost. Add them to Todoist.
