@@ -9,9 +9,10 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { sendEmbedMessage } from "../src/discord/router/discord-api.js";
+import { buildLogEmbed } from "../src/discord/router/log-embed.js";
 import { readInstancePort } from "./ports.js";
 
-const DISCORD_API = "https://discord.com/api/v10";
 const HEALTH_PORT = 18801;
 const INSTANCES_DIR =
   process.env.OPENCLAW_INSTANCES_DIR ??
@@ -98,35 +99,35 @@ function loadChannels(): ChannelConfig[] {
 
 // --- Discord REST API ---
 
-async function discordSend(token: string, channelId: string, content: string): Promise<void> {
-  try {
-    const resp = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bot ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ content }),
-    });
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => "");
-      console.error(
-        `[health] Discord API error ${resp.status} for ${channelId}: ${body.slice(0, 200)}`,
-      );
-    }
-  } catch (err) {
-    console.error(`[health] failed to send to ${channelId}: ${String(err)}`);
-  }
-}
-
-/** Send lifecycle message to all opted-in channels with a timeout to prevent hangs. */
-async function sendLifecycleMessage(token: string, message: string): Promise<void> {
+/**
+ * Post a lifecycle banner ("Back online.", "Shutting down...") as a Log-category
+ * embed to every opted-in channel, with a global timeout to prevent hangs. The
+ * raw phrase is passed to `buildLogEmbed`, which italicizes it to the exact text
+ * the router's recovery scan recognizes as a banner. The footer icon is uploaded
+ * with the message (reused from the CDN cache after the first channel).
+ */
+async function sendLifecycleMessage(token: string, phrase: string): Promise<void> {
   const channels = loadChannels();
   if (channels.length === 0) {
     return;
   }
-  // Send in parallel with a global timeout
-  const sends = channels.map((ch) => discordSend(token, ch.channelId, message));
+  const log = buildLogEmbed(phrase);
+  const sends = channels.map((ch) =>
+    sendEmbedMessage(token, ch.channelId, {
+      embeds: [log.embed],
+      attachments: log.attachments,
+    })
+      .then((res) => {
+        // sendEmbedMessage resolves with ok:false on a 4xx/5xx; surface it so a
+        // rejected banner is not silent (the old plain sender logged these).
+        if (!res.ok) {
+          console.error(`[health] Discord API error ${res.status} for ${ch.channelId}`);
+        }
+      })
+      .catch((err) => {
+        console.error(`[health] failed to send to ${ch.channelId}: ${String(err)}`);
+      }),
+  );
   await Promise.race([
     Promise.allSettled(sends),
     new Promise((resolve) => setTimeout(resolve, LIFECYCLE_TIMEOUT_MS)),
@@ -182,7 +183,7 @@ function spawnRouter(): ChildProcess {
     } catch {}
 
     // Send "Back online" now that router is confirmed running
-    void sendLifecycleMessage(discordToken, "*Back online.*");
+    void sendLifecycleMessage(discordToken, "Back online.");
 
     // Reset backoff after 30s stable
     setTimeout(() => {
@@ -277,7 +278,7 @@ async function main() {
     console.log(`[health] received ${signal}, shutting down`);
 
     // Best-effort "Shutting down" with timeout (don't block shutdown)
-    await sendLifecycleMessage(discordToken, "*Shutting down...*");
+    await sendLifecycleMessage(discordToken, "Shutting down...");
 
     // Stop router
     if (routerProcess) {

@@ -13,6 +13,13 @@ describe("parseAgentCommand", () => {
     expect(parseAgentCommand("⁘ return")).toEqual({ command: "return", args: [] });
   });
 
+  it("parses a log command with a quoted message", () => {
+    expect(parseAgentCommand('⁘ log "Back online after a restart"')).toEqual({
+      command: "log",
+      args: ["Back online after a restart"],
+    });
+  });
+
   it("trims surrounding whitespace before detecting", () => {
     expect(parseAgentCommand("  ⁘ return  ")).toEqual({ command: "return", args: [] });
   });

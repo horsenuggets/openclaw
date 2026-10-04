@@ -14,9 +14,11 @@ import {
   chunkText,
   discordSend,
   discordTyping,
+  sendEmbedMessage,
   stripDashes,
 } from "./discord-api.js";
 import { callGatewaySimple } from "./gateway-call.js";
+import { buildLogEmbed } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
 import { resolveWhisperUrl } from "./whisper-url.js";
@@ -368,13 +370,19 @@ export async function routeMessage(params: {
     const errMsg = String(err);
     runtime.error(`[router] error for channel ${channelId}: ${errMsg}`);
 
+    const sendLog = (text: string): Promise<void> => {
+      const log = buildLogEmbed(text);
+      return sendEmbedMessage(discordToken, channelId, {
+        embeds: [log.embed],
+        attachments: log.attachments,
+      })
+        .then(() => {})
+        .catch(() => {});
+    };
+
     const kind = classifyRouterError(errMsg);
     if (kind === "connection-refused") {
-      await discordSend(
-        discordToken,
-        channelId,
-        "*Your agent is not running. Please contact the admin to start your instance.*",
-      ).catch(() => {});
+      await sendLog("Your agent is not running. Please contact the admin to start your instance.");
     } else if (kind === "auth") {
       // Auth/config failure is an admin problem the user cannot fix by retrying,
       // so don't echo a misleading "try again" — just log for the admin.
@@ -382,17 +390,9 @@ export async function routeMessage(params: {
         `[router] auth/config error for channel ${channelId}, needs admin attention (re-auth or restart)`,
       );
     } else if (kind === "timeout") {
-      await discordSend(
-        discordToken,
-        channelId,
-        "*Your agent is taking too long to respond. Please try again later.*",
-      ).catch(() => {});
+      await sendLog("Your agent is taking too long to respond. Please try again later.");
     } else {
-      await discordSend(
-        discordToken,
-        channelId,
-        "*Something went wrong processing your message. Please try again.*",
-      ).catch(() => {});
+      await sendLog("Something went wrong processing your message. Please try again.");
     }
     return false;
   } finally {
