@@ -3,6 +3,7 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import type { RouterRuntime, RunAgentCommand } from "./types.js";
+import { runAgentCommandDispatch } from "./agent-command-dispatch.js";
 import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
@@ -27,9 +28,8 @@ import {
   handleMessageCreate,
   handleSlashInteraction,
 } from "./gateway-events.js";
-import { buildLogEmbed } from "./log-embed.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
-import { bootstrapExists, buildWelcomeEmbed, runOnboardingKick } from "./onboarding.js";
+import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
@@ -354,41 +354,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   };
 
   // Dispatches the agent's `⁘` control commands to host-side actions the agent
-  // cannot do itself (posting the official Discord welcome embed).
-  const runAgentCommand: RunAgentCommand = async (cmd, ctx) => {
-    const { channelId } = ctx;
-    if (cmd.command === "return") {
-      return null; // deliberate no-op, nothing to relay
-    }
-    if (cmd.command === "send_hook_embed") {
-      const name = cmd.args[0];
-      if (name === "welcome") {
-        const welcome = buildWelcomeEmbed();
-        await sendEmbedMessage(discordToken, channelId, {
-          embeds: [welcome.embed],
-          attachments: welcome.attachments,
-        });
-        return "welcome card sent";
-      }
-      return `error: unknown embed "${name ?? ""}"`;
-    }
-    if (cmd.command === "log") {
-      // The agent emits `⁘ log "<text>"` for a log-category notice (e.g. a
-      // status or error line). Rendered as a Log embed and dropped from chat.
-      const text = cmd.args.join(" ").trim();
-      if (!text) {
-        return "error: log requires a message";
-      }
-      const log = buildLogEmbed(text);
-      const res = await sendEmbedMessage(discordToken, channelId, {
-        embeds: [log.embed],
-        attachments: log.attachments,
-      });
-      // Report a rejection back to the agent so it is not told the log sent.
-      return res.ok ? "log sent" : `error: log embed rejected (${res.status})`;
-    }
-    return `error: unknown command "${cmd.command}"`;
-  };
+  // cannot do itself (posting welcome/log embeds). The branch logic lives in
+  // runAgentCommandDispatch so it is unit-testable with an injected sender.
+  const runAgentCommand: RunAgentCommand = (cmd, ctx) =>
+    runAgentCommandDispatch(cmd, ctx.channelId, {
+      sendEmbed: (channelId, message) => sendEmbedMessage(discordToken, channelId, message),
+    });
 
   // Bundle the closed-over state the DISPATCH handlers need, assembled once.
   // The socket lifecycle (connect/reconnect/heartbeat/close) stays below; only
