@@ -33,15 +33,25 @@ you'd think...
 
 Sectionless tasks are invisible to anything that filters by section and quietly rot. When
 you open the project, *sweep `(No Section)` first* and move each task into the right home
-(usually `Not started`). To find them with an agent, list the project and filter for a
-null `section_id`...
+(usually `Not started`). To find them with an agent, walk every page of the project and
+keep the tasks with a null `section_id`...
 
 ```js
-const tasks = mcp__todoist__get_tasks_list({
-  project_id: "6g442XQJVrvqJhCp",
-  limit: 100,
-});
-const orphans = tasks.filter((t) => !t.section_id); // these live in (No Section)
+// get_tasks_list paginates (100 per page max), so iterate until the cursor runs out.
+// Depending on the client, a page is either a bare array or a { results, next_cursor }
+// object; normalize both before filtering.
+const orphans = [];
+let cursor;
+do {
+  const page = mcp__todoist__get_tasks_list({
+    project_id: "6g442XQJVrvqJhCp",
+    limit: 100,
+    cursor,
+  });
+  const tasks = Array.isArray(page) ? page : page.results;
+  orphans.push(...tasks.filter((t) => !t.section_id)); // these live in (No Section)
+  cursor = Array.isArray(page) ? undefined : page.next_cursor;
+} while (cursor);
 ```
 
 Then batch them back into place with `mcp__todoist__move_tasks`, passing each `task_id`
@@ -49,8 +59,10 @@ with the target `section_id` (`6g4FW6x4wF2gh84G` for `Not started`).
 
 ## Accessing Todoist With Agents
 
-The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is a prerequisite, exposing tools
-under the `mcp__todoist__*` namespace. Common ones include...
+The [todoist-mcp](https://npm.im/todoist-mcp) MCP server is a prerequisite, exposing the
+tools below. The `mcp__todoist__*` qualification is how Claude Code names them; other MCP
+clients may surface the same tools bare (`get_tasks_list`) or under a different prefix.
+Common ones include...
 
 | Tool                                             | Use                                                         |
 | ------------------------------------------------ | ----------------------------------------------------------- |
@@ -106,8 +118,8 @@ mcp__todoist__create_tasks({
 
 - **Todoist web / mobile / desktop app** → just add to the `openclaw` project.
 - **Todoist REST API** → `curl` with `Authorization: Bearer <API_TOKEN>` against
-  `api.todoist.com/rest/v2/tasks` works anywhere (API token lives in keychain / the
-  gateway config).
+  `api.todoist.com/api/v1/tasks` works anywhere (API token lives in keychain / the gateway
+  config).
 
 ## Why This File Still Exists
 
