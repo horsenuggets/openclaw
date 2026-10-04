@@ -6,11 +6,32 @@
  * including error replies like "*Something went wrong...*" — means the user's
  * message was already handled and must NOT be skipped; otherwise recovery
  * re-runs the same failing message on every reconnect (an endless error loop).
+ *
+ * Banners are posted as Log-category embeds, so the italicized phrase lives in
+ * the embed description. The exact-phrase match is what keeps error log embeds
+ * (which share the Log category but carry different text) from being skipped.
  */
 export const LIFECYCLE_BANNERS = ["*Back online.*", "*Shutting down...*"];
 
-export function isLifecycleBanner(content: string | undefined): boolean {
-  return LIFECYCLE_BANNERS.includes((content ?? "").trim());
+/** A fetched message, narrowed to the fields that can carry a lifecycle banner. */
+export type LifecycleBannerMessage = {
+  content?: string;
+  embeds?: Array<{ description?: string }>;
+};
+
+export function isLifecycleBanner(message: string | LifecycleBannerMessage | undefined): boolean {
+  if (message == null) {
+    return false;
+  }
+  if (typeof message === "string") {
+    return LIFECYCLE_BANNERS.includes(message.trim());
+  }
+  if (message.content && LIFECYCLE_BANNERS.includes(message.content.trim())) {
+    return true;
+  }
+  return (message.embeds ?? []).some((embed) =>
+    LIFECYCLE_BANNERS.includes((embed.description ?? "").trim()),
+  );
 }
 
 /**
