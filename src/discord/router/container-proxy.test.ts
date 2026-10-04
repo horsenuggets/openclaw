@@ -179,12 +179,12 @@ describe("container proxy server", () => {
 
   it("posts an embed and routes the message for /discord/system", async () => {
     const openDMChannel = vi.fn(async () => "chan-3");
-    const discordSendEmbed = vi.fn(async () => {});
+    const sendSystemEmbed = vi.fn(async () => {});
     const routeMessage = vi.fn(async () => {});
     const base = await start({
       runtime,
       openDMChannel,
-      discordSendEmbed,
+      sendSystemEmbed,
       routeMessage,
     });
 
@@ -196,12 +196,8 @@ describe("container proxy server", () => {
 
     expect(resp.status).toBe(200);
     expect(await resp.json()).toMatchObject({ ok: true, channelId: "chan-3" });
-    // 1. Embed titled "System" is posted to the resolved DM channel.
-    expect(discordSendEmbed).toHaveBeenCalledWith("chan-3", {
-      title: "System",
-      description: "reboot",
-      color: 0x808080,
-    });
+    // 1. The injected-system-prompt embed is posted to the resolved DM channel.
+    expect(sendSystemEmbed).toHaveBeenCalledWith("chan-3", "reboot");
     // 2. The message is routed through the standard pipeline, wrapped as a System note.
     expect(routeMessage).toHaveBeenCalledWith("u-3", "chan-3", "[System: reboot]");
   });
