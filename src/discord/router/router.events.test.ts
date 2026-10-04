@@ -574,8 +574,15 @@ describe("discord router channel-delete cleanup", () => {
           return { ok: true, status: 200, json: async () => ({}) };
         }
         if (typeof url === "string" && url.includes("/messages/@original")) {
-          patches.push(JSON.parse((init?.body as string) ?? "{}"));
-          return { ok: true, status: 200, json: async () => ({}) };
+          // The edit uploads the footer icon as multipart on a cold cache, so
+          // read the embed JSON from `payload_json` when the body is form-data.
+          const body = init?.body;
+          const json =
+            body instanceof FormData
+              ? JSON.parse(body.get("payload_json") as string)
+              : JSON.parse((body as string) ?? "{}");
+          patches.push(json);
+          return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
         }
         return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
       }) as unknown as typeof fetch,
