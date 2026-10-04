@@ -7,6 +7,10 @@ services:
     volumes:
       - ~/deploy/bin/discord-router:/usr/local/bin/discord-router:ro
       - ~/deploy/bin/health-monitor:/usr/local/bin/health-monitor:ro
+      # Category embed icons the router uploads with each message. The compiled
+      # binary runs in a bare image with no repo tree, so the icons are mounted
+      # here and located via OPENCLAW_EMBED_ASSETS_DIR below.
+      - ~/deploy/embeds:/usr/local/share/openclaw/embeds:ro
       - ~/.openclaw-instances:/root/.openclaw-instances:ro
       # The model proxy owns OAuth refresh for the token-free agent boxes: when the
       # shared token expires it creates a proper-lockfile lock directory and
@@ -44,6 +48,9 @@ services:
       - OPENCLAW_WHISPER_PORT=${WHISPER_PORT}
       - OPENCLAW_INSTANCES_DIR=/root/.openclaw-instances
       - ROUTER_BIN=/usr/local/bin/discord-router
+      # Where the category embed icons are mounted (see the volume above). The
+      # router uploads these with each embed; fixed container path, not from .env.
+      - OPENCLAW_EMBED_ASSETS_DIR=/usr/local/share/openclaw/embeds
       # Interface the model + container proxies bind. boot.sh sets this to the
       # agent bridge's gateway IP so the token-free boxes (now on that bridge, not
       # the host network) can reach the proxies while they stay off the public NIC.
