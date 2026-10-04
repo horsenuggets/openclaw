@@ -211,47 +211,31 @@ function dropAttachmentUrls(embeds: DiscordEmbed[], files: Set<string>): Discord
   });
 }
 
-/**
- * Resolve `attachment://<file>` icon references to cached CDN URLs for edit /
- * PATCH contexts that cannot upload (e.g. the unregister button follow-up).
- * Icons not in the cache have their reference dropped so the embed still renders.
- */
-export function resolveCachedEmbedIcons(
-  embeds: DiscordEmbed[],
-  attachments: string[],
-): DiscordEmbed[] {
-  const now = Date.now();
-  const subs = new Map<string, string>();
-  const missing = new Set<string>();
-  for (const file of new Set(attachments)) {
-    const url = cachedCdnUrl(file, now);
-    if (url) {
-      subs.set(file, url);
-    } else {
-      missing.add(file);
-    }
-  }
-  let out = subs.size > 0 ? rewriteAttachmentUrls(embeds, subs) : embeds;
-  if (missing.size > 0) {
-    out = dropAttachmentUrls(out, missing);
-  }
-  return out;
-}
+/** One embed request to dispatch (a channel POST or an interaction-reply PATCH). */
+type EmbedDispatch = {
+  url: string;
+  method: "POST" | "PATCH";
+  /** Bot token for channel sends; omitted for webhook/interaction edits. */
+  authToken?: string;
+  embeds: DiscordEmbed[];
+  /** Icon filenames (in assets/embeds) the embeds reference via attachment://. */
+  attachments?: string[];
+  components?: DiscordActionRow[];
+  /** Always include a components field (interaction edits clear action rows with []). */
+  forceComponents?: boolean;
+  messageReference?: { message_id: string; channel_id: string; fail_if_not_exists?: boolean };
+};
 
 /**
- * Post one or more embeds, uploading any referenced category icons as message
- * attachments (`attachment://<file>`). Icons uploaded recently are reused from
- * the in-memory CDN cache instead of being re-uploaded; freshly uploaded icons
- * are cached from the response. Missing icon files are dropped so the embed
- * still sends without them.
+ * Core embed sender shared by channel posts and interaction-reply edits. Any
+ * referenced category icon is either substituted from the in-memory CDN cache
+ * (fresh prior upload), uploaded as a multipart attachment (and then cached from
+ * the response), or dropped when its file cannot be read. Works for both the
+ * initial reply (cold cache uploads) and follow-up edits (warm cache reuses).
  */
-export async function sendEmbedMessage(
-  token: string,
-  channelId: string,
-  message: EmbedMessage,
-): Promise<void> {
+async function dispatchEmbed(request: EmbedDispatch): Promise<void> {
   const now = Date.now();
-  const needed = [...new Set(message.attachments ?? [])];
+  const needed = [...new Set(request.attachments ?? [])];
 
   // Split needed icons into cache hits (substitute URL) and uploads (send bytes).
   const subs = new Map<string, string>();
@@ -271,7 +255,7 @@ export async function sendEmbedMessage(
     }
   }
 
-  let embeds = message.embeds;
+  let embeds = request.embeds;
   if (subs.size > 0) {
     embeds = rewriteAttachmentUrls(embeds, subs);
   }
@@ -280,18 +264,20 @@ export async function sendEmbedMessage(
   }
 
   const payload: Record<string, unknown> = { embeds };
-  if (message.components) {
-    payload.components = message.components;
+  if (request.components || request.forceComponents) {
+    payload.components = request.components ?? [];
   }
-  if (message.messageReference) {
-    payload.message_reference = message.messageReference;
+  if (request.messageReference) {
+    payload.message_reference = request.messageReference;
   }
+  const authHeader: Record<string, string> = request.authToken
+    ? { Authorization: `Bot ${request.authToken}` }
+    : {};
 
-  const url = `${DISCORD_API}${Routes.channelMessages(channelId)}`;
   if (toUpload.length === 0) {
-    await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+    await fetch(request.url, {
+      method: request.method,
+      headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     return;
@@ -305,14 +291,55 @@ export async function sendEmbedMessage(
     const bytes = Uint8Array.from(file.data);
     form.append(`files[${index}]`, new Blob([bytes], { type: "image/png" }), file.filename);
   });
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bot ${token}` },
+  const resp = await fetch(request.url, {
+    method: request.method,
+    headers: authHeader,
     body: form,
   });
   if (resp.ok) {
     await cacheUploadedIcons(resp, toUpload, now);
   }
+}
+
+/**
+ * Post one or more category embeds to a channel, uploading referenced icons as
+ * attachments (reusing cached CDN URLs where possible).
+ */
+export async function sendEmbedMessage(
+  token: string,
+  channelId: string,
+  message: EmbedMessage,
+): Promise<void> {
+  await dispatchEmbed({
+    url: `${DISCORD_API}${Routes.channelMessages(channelId)}`,
+    method: "POST",
+    authToken: token,
+    embeds: message.embeds,
+    attachments: message.attachments,
+    components: message.components,
+    messageReference: message.messageReference,
+  });
+}
+
+/**
+ * Edit an interaction's original (deferred) reply with category embeds, uploading
+ * referenced icons the same way a channel post does. Used by the `/channel`
+ * slash-command reply and the unregister confirmation button follow-up, both of
+ * which deferred first and now deliver the result by editing `@original`.
+ */
+export async function editInteractionEmbedReply(
+  applicationId: string,
+  interactionToken: string,
+  message: { embeds: DiscordEmbed[]; attachments?: string[]; components?: DiscordActionRow[] },
+): Promise<void> {
+  await dispatchEmbed({
+    url: `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+    method: "PATCH",
+    embeds: message.embeds,
+    attachments: message.attachments,
+    components: message.components,
+    forceComponents: true,
+  });
 }
 
 /** Cache CDN URLs from the send response for the icons we just uploaded. */
