@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: unify the bot's welcome, channel-registration, and
+  injected-system-prompt messages into a consistent category embed system. Each category
+  (General, Channel Registration, System) fixes an accent color plus a footer label and
+  icon; the welcome card gains the OpenClaw avatar as a thumbnail and every embed carries
+  a timestamp. Icons ship in `assets/embeds` and are uploaded with each message
+  (`attachment://`) instead of being hotlinked, with a 12h in-memory CDN-URL cache so
+  repeat sends reuse the uploaded image; a router restart busts the cache so updated icons
+  take effect.
 - Discord router: make per-channel agent containers token-free. Each box now holds no
   provider credential at all: a new loopback model proxy in the router
   (`src/discord/router/model-proxy.ts`, port 18702) injects the real (refreshed) Anthropic
