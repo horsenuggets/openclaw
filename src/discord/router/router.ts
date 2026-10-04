@@ -27,6 +27,7 @@ import {
   handleMessageCreate,
   handleSlashInteraction,
 } from "./gateway-events.js";
+import { buildLogEmbed } from "./log-embed.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, buildWelcomeEmbed, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
@@ -370,6 +371,20 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         return "welcome card sent";
       }
       return `error: unknown embed "${name ?? ""}"`;
+    }
+    if (cmd.command === "log") {
+      // The agent emits `⁘ log "<text>"` for a log-category notice (e.g. a
+      // status or error line). Rendered as a Log embed and dropped from chat.
+      const text = cmd.args.join(" ").trim();
+      if (!text) {
+        return "error: log requires a message";
+      }
+      const log = buildLogEmbed(text);
+      await sendEmbedMessage(discordToken, channelId, {
+        embeds: [log.embed],
+        attachments: log.attachments,
+      });
+      return "log sent";
     }
     return `error: unknown command "${cmd.command}"`;
   };
@@ -810,6 +825,7 @@ async function recoverUnansweredMessages(
         id: string;
         author: { id: string; bot?: boolean };
         content: string;
+        embeds?: Array<{ description?: string }>;
         attachments?: Array<{
           id: string;
           filename: string;
@@ -840,7 +856,7 @@ async function recoverUnansweredMessages(
         );
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
-          if (isLifecycleBanner(msg.content)) {
+          if (isLifecycleBanner(msg)) {
             continue;
           }
           break;
