@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: add a "Log Message" embed category for system notices. A new `log`
+  four-dot control command (`⁘ log "..."`) lets the agent emit a log-styled embed; bare
+  URLs in log text become clickable links and the description is italicized. The router's
+  own error replies (agent not running, timeout, generic failure) and the health-monitor's
+  lifecycle banners ("Back online.", "Shutting down...") are now rendered as these log
+  embeds, with the reconnect-recovery scan updated to recognize banner embeds (by their
+  exact phrase) so error replies are still never mistaken for lifecycle noise.
 - Discord router: unify the bot's welcome, channel-registration, and
   injected-system-prompt messages into a consistent category embed system. Each category
   (General, Channel Registration, System) fixes an accent color plus a footer label and
