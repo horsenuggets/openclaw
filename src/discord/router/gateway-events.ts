@@ -403,7 +403,13 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
             // Always send components so an updated reply can also clear a
             // previous action row (e.g. the confirm button).
             components: payload.components ?? [],
-          }).catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
+          })
+            .then((res) => {
+              if (!res.ok) {
+                runtime.error(`[router] channel followup failed (${res.status})`);
+              }
+            })
+            .catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
           return;
         }
         void fetch(
@@ -484,7 +490,13 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
             embeds: result.update.embeds,
             attachments: result.update.attachments,
             components: result.update.components,
-          }).catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
+          })
+            .then((res) => {
+              if (!res.ok) {
+                runtime.error(`[router] button followup failed (${res.status})`);
+              }
+            })
+            .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
         },
       );
     }

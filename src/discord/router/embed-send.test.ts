@@ -238,4 +238,19 @@ describe("editInteractionEmbedReply", () => {
     const body = JSON.parse(editCall.init.body as string);
     expect(body.embeds[0].footer.icon_url).toBe(CDN_URL);
   });
+
+  it("returns the HTTP status on failure so callers can log it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return new Response("bad request", { status: 400 });
+      }),
+    );
+    const res = await editInteractionEmbedReply("app-1", "tok-1", {
+      embeds: [{ description: "x" }],
+      components: [],
+    });
+    expect(res).toEqual({ ok: false, status: 400 });
+  });
 });

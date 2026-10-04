@@ -233,7 +233,7 @@ type EmbedDispatch = {
  * the response), or dropped when its file cannot be read. Works for both the
  * initial reply (cold cache uploads) and follow-up edits (warm cache reuses).
  */
-async function dispatchEmbed(request: EmbedDispatch): Promise<void> {
+async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; status: number }> {
   const now = Date.now();
   const needed = [...new Set(request.attachments ?? [])];
 
@@ -275,12 +275,12 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<void> {
     : {};
 
   if (toUpload.length === 0) {
-    await fetch(request.url, {
+    const resp = await fetch(request.url, {
       method: request.method,
       headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return;
+    return { ok: resp.ok, status: resp.status };
   }
 
   payload.attachments = toUpload.map((file, index) => ({ id: index, filename: file.filename }));
@@ -299,6 +299,7 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<void> {
   if (resp.ok) {
     await cacheUploadedIcons(resp, toUpload, now);
   }
+  return { ok: resp.ok, status: resp.status };
 }
 
 /**
@@ -309,8 +310,8 @@ export async function sendEmbedMessage(
   token: string,
   channelId: string,
   message: EmbedMessage,
-): Promise<void> {
-  await dispatchEmbed({
+): Promise<{ ok: boolean; status: number }> {
+  return dispatchEmbed({
     url: `${DISCORD_API}${Routes.channelMessages(channelId)}`,
     method: "POST",
     authToken: token,
@@ -331,8 +332,8 @@ export async function editInteractionEmbedReply(
   applicationId: string,
   interactionToken: string,
   message: { embeds: DiscordEmbed[]; attachments?: string[]; components?: DiscordActionRow[] },
-): Promise<void> {
-  await dispatchEmbed({
+): Promise<{ ok: boolean; status: number }> {
+  return dispatchEmbed({
     url: `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
     method: "PATCH",
     embeds: message.embeds,

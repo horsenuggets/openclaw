@@ -118,13 +118,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       return {};
     },
     openDMChannel: (userId) => openDMChannel(discordToken, userId),
-    sendSystemEmbed: (channelId, message) => {
+    sendSystemEmbed: async (channelId, message) => {
       const built = buildEmbed({
         category: "system",
         title: "Injected System Prompt",
         description: message,
       });
-      return sendEmbedMessage(discordToken, channelId, {
+      await sendEmbedMessage(discordToken, channelId, {
         embeds: [built.embed],
         attachments: built.attachments,
       });
