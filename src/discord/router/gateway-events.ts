@@ -11,7 +11,12 @@ import {
   parseUnregisterCustomId,
 } from "./channel-commands.js";
 import { setUserPreference } from "./config.js";
-import { DISCORD_API, discordSendEphemeral, discordSendReply } from "./discord-api.js";
+import {
+  DISCORD_API,
+  discordSendEphemeral,
+  discordSendReply,
+  resolveCachedEmbedIcons,
+} from "./discord-api.js";
 import { handleTextCommand, routeMessage } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -477,7 +482,9 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                embeds: result.update.embeds,
+                // The edit cannot upload, so resolve the footer icon from the CDN
+                // cache (the confirmation message already uploaded it).
+                embeds: resolveCachedEmbedIcons(result.update.embeds, result.update.attachments),
                 components: result.update.components satisfies DiscordActionRow[],
               }),
             },
