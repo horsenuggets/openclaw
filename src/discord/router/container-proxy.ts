@@ -12,10 +12,8 @@ const PROXY_PORT = 18800;
 
 export type DiscordSendFn = (channelId: string, content: string) => Promise<{ messageId?: string }>;
 export type OpenDMChannelFn = (userId: string) => Promise<string | null>;
-export type DiscordSendEmbedFn = (
-  channelId: string,
-  embed: { title: string; description: string; color?: number },
-) => Promise<void>;
+/** Post the "Injected System Prompt" embed for a system message. */
+export type SendSystemEmbedFn = (channelId: string, message: string) => Promise<void>;
 /** Route a message through the same pipeline as user DMs. */
 export type RouteMessageFn = (userId: string, channelId: string, message: string) => Promise<void>;
 
@@ -32,8 +30,8 @@ export function startContainerProxyServer(opts: {
   discordSend?: DiscordSendFn;
   /** Open a DM channel with a user. Injected by the router. */
   openDMChannel?: OpenDMChannelFn;
-  /** Send an embed to a Discord channel. Injected by the router. */
-  discordSendEmbed?: DiscordSendEmbedFn;
+  /** Post the injected-system-prompt embed. Injected by the router. */
+  sendSystemEmbed?: SendSystemEmbedFn;
   /** Route a message through the standard DM pipeline. Injected by the router. */
   routeMessage?: RouteMessageFn;
   /** Listen port; defaults to the fixed proxy port. Tests pass 0 for ephemeral. */
@@ -150,7 +148,7 @@ export function startContainerProxyServer(opts: {
             res.end(JSON.stringify({ error: "userId and message required" }));
             return;
           }
-          if (!opts.openDMChannel || !opts.discordSendEmbed || !opts.routeMessage) {
+          if (!opts.openDMChannel || !opts.sendSystemEmbed || !opts.routeMessage) {
             res.writeHead(503, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "not available" }));
             return;
@@ -163,12 +161,8 @@ export function startContainerProxyServer(opts: {
             return;
           }
 
-          // 1. Send embed showing the system message
-          await opts.discordSendEmbed(channelId, {
-            title: "System",
-            description: data.message,
-            color: 0x808080,
-          });
+          // 1. Send the injected-system-prompt embed showing the system message
+          await opts.sendSystemEmbed(channelId, data.message);
 
           // 2. Route through the same pipeline as user messages
           void opts.routeMessage(data.userId, channelId, `[System: ${data.message}]`);

@@ -3,7 +3,6 @@ import type { RouterRuntime, RunAgentCommand } from "./types.js";
 import {
   type ChannelCommandDeps,
   type ChannelReplyPayload,
-  type DiscordActionRow,
   type InstanceStatus,
   handleChannelCommand,
   handleUnregisterButtonClick,
@@ -11,7 +10,12 @@ import {
   parseUnregisterCustomId,
 } from "./channel-commands.js";
 import { setUserPreference } from "./config.js";
-import { DISCORD_API, discordSendEphemeral, discordSendReply } from "./discord-api.js";
+import {
+  DISCORD_API,
+  discordSendEphemeral,
+  discordSendReply,
+  editInteractionEmbedReply,
+} from "./discord-api.js";
 import { handleTextCommand, routeMessage } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -390,21 +394,30 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         body: JSON.stringify({ type: 5, data: { flags: 64 } }),
       }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
       const editReply = (payload: ChannelReplyPayload) => {
-        const body =
-          typeof payload === "string"
-            ? { content: payload }
-            : {
-                embeds: payload.embeds,
-                // Always send components so an updated reply can also
-                // clear a previous action row (e.g. the confirm button).
-                components: payload.components ?? [],
-              };
+        // Embed replies upload their category icons (attachment://), so route
+        // them through the attachment-aware editor; strings stay plain content.
+        if (typeof payload !== "string") {
+          void editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: payload.embeds,
+            attachments: payload.attachments,
+            // Always send components so an updated reply can also clear a
+            // previous action row (e.g. the confirm button).
+            components: payload.components ?? [],
+          })
+            .then((res) => {
+              if (!res.ok) {
+                runtime.error(`[router] channel followup failed (${res.status})`);
+              }
+            })
+            .catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
+          return;
+        }
         void fetch(
           `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ content: payload }),
           },
         )
           .then((resp) => {
@@ -471,20 +484,16 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
           if (!result.update) {
             return;
           }
-          void fetch(
-            `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                embeds: result.update.embeds,
-                components: result.update.components satisfies DiscordActionRow[],
-              }),
-            },
-          )
-            .then((resp) => {
-              if (!resp.ok) {
-                runtime.error(`[router] button followup failed (${resp.status})`);
+          // Upload the footer icon (reusing the CDN cache the confirmation send
+          // warmed) and drop the buttons.
+          void editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: result.update.embeds,
+            attachments: result.update.attachments,
+            components: result.update.components,
+          })
+            .then((res) => {
+              if (!res.ok) {
+                runtime.error(`[router] button followup failed (${res.status})`);
               }
             })
             .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));

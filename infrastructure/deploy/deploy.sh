@@ -78,6 +78,11 @@ if [ -d "$PROJECT_ROOT/dist/docs" ]; then
   cp -r "$PROJECT_ROOT/dist/docs" "$STAGING/deploy/"
 fi
 
+# Discord embed icons. The router uploads these with each category embed; the
+# compiled binary runs in a bare image with no repo tree, so ship them next to
+# the binaries and point OPENCLAW_EMBED_ASSETS_DIR at the mount (discord-router.yml).
+cp -r "$PROJECT_ROOT/assets/embeds" "$STAGING/deploy/embeds"
+
 # Docker compose files
 cp "$INFRA_DIR/docker/discord-router.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/agent.yml" "$STAGING/deploy/docker/"

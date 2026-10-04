@@ -2,13 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import type { InstanceConfig } from "./config.js";
 import type { RouterRuntime } from "./types.js";
+import { type BuiltEmbed, buildEmbed } from "./embed-categories.js";
 
-export const WELCOME_EMBED = {
-  title: "Welcome to OpenClaw!",
-  description:
-    "I'm your personal everything-assistant. Let's get you set up!\nI'll ask you a few quick questions to personalize your experience.",
-  color: 0xffff80,
-};
+/** Build the first-run welcome card (General category, OpenClaw avatar thumbnail). */
+export function buildWelcomeEmbed(): BuiltEmbed {
+  return buildEmbed({
+    category: "general",
+    title: "Welcome to OpenClaw!",
+    description:
+      "I'm your personal everything-assistant. Let's get you set up! I'll ask you a few quick questions to personalize your experience.",
+    thumbnail: "openclaw.png",
+  });
+}
 
 /** Workspace-relative path of the first-run checklist. */
 const BOOTSTRAP_RELATIVE_PATH = "workspace/BOOTSTRAP.md";

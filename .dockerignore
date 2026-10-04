@@ -41,6 +41,8 @@ apps/ios/build
 # large app trees not needed for CLI build
 apps/
 assets/
+# but keep the embed icons: the Discord router uploads them at runtime
+!assets/embeds/
 Peekaboo/
 Swabble/
 Core/

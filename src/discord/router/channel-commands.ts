@@ -20,6 +20,8 @@
  * > status       - open to everyone.
  */
 
+import { buildEmbed } from "./embed-categories.js";
+
 export type ChannelSubcommand = "register" | "status" | "unregister";
 
 /** Slash-command registration body for Discord (subcommand group). */
@@ -93,7 +95,11 @@ export type DiscordEmbed = {
   description?: string;
   color?: number;
   fields?: DiscordEmbedField[];
-  footer?: { text: string };
+  footer?: { text: string; icon_url?: string };
+  thumbnail?: { url: string };
+  image?: { url: string };
+  /** ISO-8601 timestamp shown in the footer. */
+  timestamp?: string;
 };
 export type DiscordButton = {
   type: 2;
@@ -106,14 +112,16 @@ export type DiscordButton = {
 export type DiscordActionRow = { type: 1; components: DiscordButton[] };
 export type ChannelReplyPayload =
   | string
-  | { embeds: DiscordEmbed[]; components?: DiscordActionRow[] };
+  | {
+      embeds: DiscordEmbed[];
+      /** Icon filenames (in assets/embeds) the embeds reference via attachment://. */
+      attachments?: string[];
+      components?: DiscordActionRow[];
+    };
 export type ChannelReply = (
   payload: ChannelReplyPayload,
   opts?: { ephemeral?: boolean },
 ) => Promise<void> | void;
-
-/** Brand yellow shared by every channel-registration embed. */
-const BRAND_YELLOW = 0xffff80;
 
 /** custom_id prefixes for the unregister confirmation buttons. */
 export const UNREGISTER_CONFIRM_PREFIX = "chan-unreg";
@@ -148,14 +156,24 @@ export type ChannelCommandDeps = {
   log: (message: string) => void;
 };
 
-/** Title for a channel-registration embed, e.g. "Channel Registration » Register". */
-function title(action: string): string {
-  return `Channel Registration » ${action}`;
-}
-
-/** Build a standard yellow channel-registration embed. */
-function embed(action: string, description: string, fields?: DiscordEmbedField[]): DiscordEmbed {
-  return { title: title(action), description, color: BRAND_YELLOW, ...(fields ? { fields } : {}) };
+/**
+ * Build a Channel Registration reply: a category-styled embed (color, footer
+ * label and icon come from the "registration" category) plus the icon filenames
+ * the sender must upload. The title is the specific action; the footer carries
+ * the "Channel Registration" label.
+ */
+function registrationReply(
+  title: string,
+  description: string,
+  fields?: DiscordEmbedField[],
+): { embeds: DiscordEmbed[]; attachments: string[] } {
+  const built = buildEmbed({
+    category: "registration",
+    title,
+    description,
+    ...(fields ? { fields } : {}),
+  });
+  return { embeds: [built.embed], attachments: built.attachments };
 }
 
 /**
@@ -243,8 +261,11 @@ function unregisterButtons(channelId: string, initiatorId: string): DiscordActio
   };
 }
 
-/** Build the `/channel status` embed as a Property/Value table. */
-function formatStatus(status: InstanceStatus | null): DiscordEmbed {
+/** Build the `/channel status` reply as a Property/Value table. */
+function formatStatus(status: InstanceStatus | null): {
+  embeds: DiscordEmbed[];
+  attachments: string[];
+} {
   const registered = status !== null;
   const runningValue = !registered
     ? "❌"
@@ -261,7 +282,7 @@ function formatStatus(status: InstanceStatus | null): DiscordEmbed {
     status?.onboarded ? "✅" : "❌",
     runningValue,
   ].join("\n");
-  return embed(
+  return registrationReply(
     "Status",
     "Below are some details about the current registration status of this channel.",
     [
@@ -285,16 +306,14 @@ export async function handleChannelCommand(
     if (status && deps.probeRunning) {
       status.running = await deps.probeRunning(status.port);
     }
-    await ctx.reply({ embeds: [formatStatus(status)] }, { ephemeral: true });
+    await ctx.reply(formatStatus(status), { ephemeral: true });
     return;
   }
 
   if (sub === "register") {
     if (!deps.whitelistConfigured()) {
       await ctx.reply(
-        {
-          embeds: [embed("Register", "Instance management is not configured on this deployment.")],
-        },
+        registrationReply("Register", "Instance management is not configured on this deployment."),
         { ephemeral: true },
       );
       deps.log(`[channel] register blocked: whitelist not configured`);
@@ -303,14 +322,10 @@ export async function handleChannelCommand(
     const admin = await deps.isAdmin(ctx.userId);
     if (!admin && !(await deps.isWhitelisted(ctx.userId))) {
       await ctx.reply(
-        {
-          embeds: [
-            embed(
-              "Register",
-              "You are not authorized to manage OpenClaw instances. Ask an admin for access.",
-            ),
-          ],
-        },
+        registrationReply(
+          "Register",
+          "You are not authorized to manage OpenClaw instances. Ask an admin for access.",
+        ),
         { ephemeral: true },
       );
       deps.log(`[channel] register denied for non-whitelisted user ${ctx.userId}`);
@@ -324,11 +339,10 @@ export async function handleChannelCommand(
     if (requestedOwner && requestedOwner !== ctx.userId) {
       if (!admin) {
         await ctx.reply(
-          {
-            embeds: [
-              embed("Register", "Only admins can register a channel on behalf of another user."),
-            ],
-          },
+          registrationReply(
+            "Register",
+            "Only admins can register a channel on behalf of another user.",
+          ),
           { ephemeral: true },
         );
         deps.log(`[channel] register on-behalf denied for non-admin ${ctx.userId}`);
@@ -340,14 +354,10 @@ export async function handleChannelCommand(
     // Whitelisted-but-not-admin users may only register their own DM.
     if (!admin && !ctx.isDM) {
       await ctx.reply(
-        {
-          embeds: [
-            embed(
-              "Register",
-              "Whitelisted users can only register their own DM. Ask an admin to register this channel.",
-            ),
-          ],
-        },
+        registrationReply(
+          "Register",
+          "Whitelisted users can only register their own DM. Ask an admin to register this channel.",
+        ),
         { ephemeral: true },
       );
       deps.log(`[channel] register denied: non-admin ${ctx.userId} in guild channel`);
@@ -358,14 +368,10 @@ export async function handleChannelCommand(
     if (existing) {
       const owner = existing.ownerId ? `<@${existing.ownerId}>` : OWNER_MENTION_FALLBACK;
       await ctx.reply(
-        {
-          embeds: [
-            embed(
-              "Register",
-              `Channel <#${ctx.channelId}> is already registered under user ${owner}. Use \`/channel status\` to check it.`,
-            ),
-          ],
-        },
+        registrationReply(
+          "Register",
+          `Channel <#${ctx.channelId}> is already registered under user ${owner}. Use \`/channel status\` to check it.`,
+        ),
         { ephemeral: true },
       );
       return;
@@ -379,7 +385,9 @@ export async function handleChannelCommand(
     const message = result.ok
       ? `Channel <#${ctx.channelId}> successfully registered under user <@${ownerId}>. The agent is now ready!`
       : `Could not register channel <#${ctx.channelId}>. ${result.message}`;
-    await ctx.reply({ embeds: [embed("Register", message)] }, { ephemeral: true });
+    await ctx.reply(registrationReply(result.ok ? "Registration Success!" : "Register", message), {
+      ephemeral: true,
+    });
     deps.log(
       `[channel] register ${ctx.channelId} by ${ctx.userId} owner=${ownerId}: ok=${result.ok}`,
     );
@@ -395,14 +403,10 @@ export async function handleChannelCommand(
     const status = deps.describeInstance(ctx.channelId);
     if (!status) {
       await ctx.reply(
-        {
-          embeds: [
-            embed(
-              "Unregister",
-              `Channel <#${ctx.channelId}> is not registered, so there is nothing to remove.`,
-            ),
-          ],
-        },
+        registrationReply(
+          "Unregister",
+          `Channel <#${ctx.channelId}> is not registered, so there is nothing to remove.`,
+        ),
         { ephemeral: true },
       );
       return;
@@ -412,14 +416,10 @@ export async function handleChannelCommand(
     const isOwner = status.ownerId === ctx.userId;
     if (!isOwner && !(await deps.isAdmin(ctx.userId))) {
       await ctx.reply(
-        {
-          embeds: [
-            embed(
-              "Unregister",
-              "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
-            ),
-          ],
-        },
+        registrationReply(
+          "Unregister",
+          "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
+        ),
         { ephemeral: true },
       );
       deps.log(`[channel] unregister denied for ${ctx.userId} (not owner or admin)`);
@@ -433,12 +433,10 @@ export async function handleChannelCommand(
     if (confirm !== "yes") {
       await ctx.reply(
         {
-          embeds: [
-            embed(
-              "Unregister",
-              `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent (instance data is kept).`,
-            ),
-          ],
+          ...registrationReply(
+            "Unregister",
+            `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent (instance data is kept).`,
+          ),
           components: [unregisterButtons(ctx.channelId, ctx.userId)],
         },
         { ephemeral: true },
@@ -447,31 +445,29 @@ export async function handleChannelCommand(
     }
 
     const result = await deps.provisioning.unregister({ channelId: ctx.channelId });
-    await ctx.reply(
-      { embeds: [unregisterResultEmbed(ctx.channelId, status.ownerId ?? ctx.userId, result)] },
-      { ephemeral: true },
-    );
+    await ctx.reply(unregisterResultReply(ctx.channelId, status.ownerId ?? ctx.userId, result), {
+      ephemeral: true,
+    });
     deps.log(`[channel] unregister ${ctx.channelId} by ${ctx.userId}: ok=${result.ok}`);
     return;
   }
 
   await ctx.reply(
-    {
-      embeds: [
-        embed("Help", "Usage: `/channel register`, `/channel status`, or `/channel unregister`."),
-      ],
-    },
+    registrationReply(
+      "Help",
+      "Usage: `/channel register`, `/channel status`, or `/channel unregister`.",
+    ),
     { ephemeral: true },
   );
 }
 
-/** Embed shown after an unregister completes (or fails). */
-function unregisterResultEmbed(
+/** Reply shown after an unregister completes (or fails). */
+function unregisterResultReply(
   channelId: string,
   ownerId: string,
   result: ProvisioningResult,
-): DiscordEmbed {
-  return embed(
+): { embeds: DiscordEmbed[]; attachments: string[] } {
+  return registrationReply(
     "Unregister",
     result.ok
       ? `Channel <#${channelId}> has been successfully unregistered from user <@${ownerId}>.`
@@ -480,8 +476,12 @@ function unregisterResultEmbed(
 }
 
 export type UnregisterButtonResult = {
-  /** Replace the original message (Discord UPDATE_MESSAGE / type 7). */
-  update?: { embeds: DiscordEmbed[]; components: DiscordActionRow[] };
+  /**
+   * Replace the original message (Discord UPDATE_MESSAGE / type 7). `attachments`
+   * lists the icon files the embeds reference; the follow-up edit resolves them
+   * from the CDN cache (the confirmation message already uploaded them).
+   */
+  update?: { embeds: DiscordEmbed[]; attachments: string[]; components: DiscordActionRow[] };
   /** Send an ephemeral notice instead of updating (e.g. wrong clicker). */
   ephemeral?: string;
 };
@@ -509,9 +509,10 @@ export async function handleUnregisterButtonClick(
   if (kind === "cancel") {
     return {
       update: {
-        embeds: [
-          embed("Unregister", `Unregister cancelled. Channel <#${channelId}> is still registered.`),
-        ],
+        ...registrationReply(
+          "Unregister",
+          `Unregister cancelled. Channel <#${channelId}> is still registered.`,
+        ),
         components: [],
       },
     };
@@ -521,12 +522,10 @@ export async function handleUnregisterButtonClick(
   if (!status) {
     return {
       update: {
-        embeds: [
-          embed(
-            "Unregister",
-            `Channel <#${channelId}> is not registered, so there is nothing to remove.`,
-          ),
-        ],
+        ...registrationReply(
+          "Unregister",
+          `Channel <#${channelId}> is not registered, so there is nothing to remove.`,
+        ),
         components: [],
       },
     };
@@ -536,12 +535,10 @@ export async function handleUnregisterButtonClick(
   if (!isOwner && !(await deps.isAdmin(params.clickerId))) {
     return {
       update: {
-        embeds: [
-          embed(
-            "Unregister",
-            "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
-          ),
-        ],
+        ...registrationReply(
+          "Unregister",
+          "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
+        ),
         components: [],
       },
     };
@@ -551,7 +548,7 @@ export async function handleUnregisterButtonClick(
   deps.log(`[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`);
   return {
     update: {
-      embeds: [unregisterResultEmbed(channelId, status.ownerId ?? params.clickerId, result)],
+      ...unregisterResultReply(channelId, status.ownerId ?? params.clickerId, result),
       components: [],
     },
   };

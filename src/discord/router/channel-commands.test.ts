@@ -136,7 +136,7 @@ describe("handleChannelCommand status", () => {
     const { ctx, replies } = makeCtx("status");
     await handleChannelCommand(ctx, makeDeps());
     const { embed } = embedOf(replies[0].payload);
-    expect(embed.title).toBe("Channel Registration » Status");
+    expect(embed.title).toBe("Status");
     expect(embed.color).toBe(0xffff80);
     const values = embed.fields?.find((f) => f.name === "Value")?.value ?? "";
     // Registered ❌ / User null / Port null / Onboarded ❌ / Running ❌
@@ -165,7 +165,7 @@ describe("handleChannelCommand status", () => {
     );
     expect(isWhitelisted).not.toHaveBeenCalled();
     expect(isAdmin).not.toHaveBeenCalled();
-    expect(embedOf(replies[0].payload).embed.title).toBe("Channel Registration » Status");
+    expect(embedOf(replies[0].payload).embed.title).toBe("Status");
   });
 });
 
@@ -196,6 +196,30 @@ describe("handleChannelCommand register", () => {
     });
     const { embed } = embedOf(replies[0].payload);
     expect(embed.description).toContain("successfully registered under user <@U1>");
+  });
+
+  it("styles the success reply as a Channel Registration embed with the footer icon", async () => {
+    const register = vi.fn(async () => ({ ok: true, message: "ok" }));
+    const { ctx, replies } = makeCtx("register", [], { isDM: true, userId: "U1" });
+    await handleChannelCommand(ctx, makeDeps({ provisioning: { register, unregister: vi.fn() } }));
+    const payload = replies[0].payload as {
+      embeds: {
+        title?: string;
+        color?: number;
+        timestamp?: string;
+        footer?: { text: string; icon_url?: string };
+      }[];
+      attachments?: string[];
+    };
+    expect(payload.attachments).toEqual(["channel-registration.png"]);
+    const embed = payload.embeds[0];
+    expect(embed.title).toBe("Registration Success!");
+    expect(embed.color).toBe(0xffff80);
+    expect(embed.footer).toEqual({
+      text: "Channel Registration",
+      icon_url: "attachment://channel-registration.png",
+    });
+    expect(embed.timestamp).toBeDefined();
   });
 
   it("forbids a whitelisted user from registering a guild channel", async () => {

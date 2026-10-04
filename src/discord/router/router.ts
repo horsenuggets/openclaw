@@ -14,10 +14,11 @@ import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
   discordSend,
-  discordSendEmbed,
   openDMChannel,
   probePort,
+  sendEmbedMessage,
 } from "./discord-api.js";
+import { buildEmbed } from "./embed-categories.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -27,7 +28,7 @@ import {
   handleSlashInteraction,
 } from "./gateway-events.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
-import { WELCOME_EMBED, bootstrapExists, runOnboardingKick } from "./onboarding.js";
+import { bootstrapExists, buildWelcomeEmbed, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
@@ -117,7 +118,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       return {};
     },
     openDMChannel: (userId) => openDMChannel(discordToken, userId),
-    discordSendEmbed: (channelId, embed) => discordSendEmbed(discordToken, channelId, embed),
+    sendSystemEmbed: async (channelId, message) => {
+      const built = buildEmbed({
+        category: "system",
+        title: "Injected System Prompt",
+        description: message,
+      });
+      await sendEmbedMessage(discordToken, channelId, {
+        embeds: [built.embed],
+        attachments: built.attachments,
+      });
+    },
     routeMessage: (userId, channelId, message) => {
       const instance = instances.get(channelId);
       if (!instance) {
@@ -351,7 +362,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     if (cmd.command === "send_hook_embed") {
       const name = cmd.args[0];
       if (name === "welcome") {
-        await discordSendEmbed(discordToken, channelId, WELCOME_EMBED);
+        const welcome = buildWelcomeEmbed();
+        await sendEmbedMessage(discordToken, channelId, {
+          embeds: [welcome.embed],
+          attachments: welcome.attachments,
+        });
         return "welcome card sent";
       }
       return `error: unknown embed "${name ?? ""}"`;
