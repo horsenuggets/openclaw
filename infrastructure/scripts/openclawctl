@@ -536,10 +536,15 @@ PY
 # whose config this script wrote as plain JSON, so json.load is safe.
 force_box_config() {
   local target="$1"
-  [ -f "$target" ] || return 0
-  OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
+  # A missing config is a failure, not a silent no-op: callers that reconcile an
+  # instance before starting it must be able to tell the rewrite did not happen.
+  if [ ! -f "$target" ]; then
+    echo "Warning: box config $target not found; cannot re-assert proxy URLs" >&2
+    return 1
+  fi
+  if ! OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
     OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
-    python3 - "$target" <<'PY' 2>/dev/null ||
+    python3 - "$target" <<'PY' 2>/dev/null
 import json, os, sys
 
 target = sys.argv[1]
@@ -559,7 +564,10 @@ with os.fdopen(fd, "w") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 PY
+  then
     echo "Warning: could not re-assert box config in $target; left unchanged" >&2
+    return 1
+  fi
 }
 
 # Idempotent per-instance preparation for the token-free layout. Scoped to NEW
@@ -601,8 +609,11 @@ JSON
 
   # Re-assert the proxy URLs and /workspace path so a changed model-proxy port or
   # layout reaches the box on restart, not just on first add. Operates on the host
-  # config (not box-writable), so it is safe to re-run.
-  force_box_config "$base/openclaw.json"
+  # config (not box-writable), so it is safe to re-run. Tolerated here: this runs
+  # inside add/restart, which just wrote (add) or already validated (restart) the
+  # config, and the chown/marker steps below must still run; `force_box_config`
+  # logs its own warning. The strict check lives in `cmd_reconcile`.
+  force_box_config "$base/openclaw.json" || true
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
@@ -802,6 +813,24 @@ cmd_reconcile() {
     exit 1
   fi
   require_channel_id "$channelId"
+
+  if [ -z "$(get_port "$channelId")" ]; then
+    echo "Error: Channel $channelId is not registered." >&2
+    exit 1
+  fi
+
+  # Only touch token-free instances. A legacy instance keeps a different config
+  # shape; rewriting its workspace/proxy fields (force_box_config sets
+  # workspace=/workspace) without the matching mount layout would misconfigure it.
+  if ! is_prepared "$channelId"; then
+    echo "Channel $channelId is on the legacy layout; refusing to rewrite its config." >&2
+    echo "Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
+    echo "instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
+    exit 1
+  fi
+
+  # Propagate failure (force_box_config returns nonzero on a missing/unwritable
+  # config) so callers like boot.sh can skip starting a box with stale proxy URLs.
   force_box_config "$INSTANCES_DIR/$channelId/openclaw.json"
 }
 
