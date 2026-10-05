@@ -539,15 +539,20 @@ force_box_config() {
   # A missing config is a failure, not a silent no-op: callers that reconcile an
   # instance before starting it must be able to tell the rewrite did not happen.
   if [ ! -f "$target" ]; then
-    echo "Warning: box config $target not found; cannot re-assert proxy URLs" >&2
+    echo "Error: box config $target not found; cannot re-assert proxy URLs" >&2
     return 1
   fi
+  # No 2>/dev/null: callers treat a nonzero exit as fatal, so let Python's error
+  # (bad JSON, permission/ownership, disk full) reach stderr for diagnosis.
   if ! OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
     OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
-    python3 - "$target" <<'PY' 2>/dev/null
-import json, os, sys, tempfile
+    python3 - "$target" <<'PY'
+import json, os, stat, sys, tempfile
 
 target = sys.argv[1]
+st = os.stat(target)
+if not stat.S_ISREG(st.st_mode):
+    sys.exit(f"refusing to rewrite {target}: not a regular file")
 with open(target) as f:
     cfg = json.load(f)
 cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = os.environ[
@@ -564,7 +569,6 @@ cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspa
 # as the agent uid: a replacement owned by anyone else would be unreadable there.
 # If ownership cannot be preserved we abort and leave the original intact rather
 # than install an unreadable config.
-st = os.stat(target)
 fd, tmp = tempfile.mkstemp(
     dir=os.path.dirname(target) or ".", prefix=".openclaw.json.", suffix=".tmp"
 )
@@ -589,7 +593,7 @@ except BaseException:
     raise
 PY
   then
-    echo "Warning: could not re-assert box config in $target; left unchanged" >&2
+    echo "Error: could not re-assert box config in $target; left unchanged" >&2
     return 1
   fi
 }
