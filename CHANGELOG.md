@@ -42,6 +42,14 @@ Docs: https://docs.openclaw.ai
   renderer (aligned code-block tables where supported, bullet lists on whatsapp/signal).
   The reply normalizer no longer rewrites em-dashes to commas; em-dash avoidance is left
   to the prompt.
+- Workspace templates: turn the proactive heartbeat guidance back on by default. The
+  example rotation (emails, calendar, mentions, weather), the
+  `memory/heartbeat-state.json` check-tracking shape, and the
+  reach-out/stay-quiet/proactive-work guidance move out of the commented-out block in
+  `AGENTS.md` and become live content in the `HEARTBEAT.md` template, prefaced with a note
+  to proactively organize notes and check in with the user and to skip any check whose
+  connection (email, calendar, weather) is not configured. These seed newly bootstrapped
+  workspaces only; existing workspaces keep their current `HEARTBEAT.md`.
 - Discord router: add a "Log Message" embed category for system notices. A new `log`
   four-dot control command (`⁘ log "..."`) lets the agent emit a log-styled embed; bare
   URLs in log text become clickable links and the description is italicized. The router's
