@@ -558,25 +558,30 @@ cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
 )["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
 cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
 # Write atomically: stage the full JSON in a same-directory temp file, then
-# os.replace() it onto the target, so a partial write (e.g. a full disk) never
-# truncates the existing config and leave it unparseable. Preserve the mode
-# (0600 - the config holds gateway.auth.token) and ownership (the box mounts it
-# read-only as the agent uid, so a root-owned replacement would be unreadable).
+# os.replace() it onto the target, so a partial write (full disk, crash) never
+# truncates the existing config. The config is kept mode 0600 (it holds
+# gateway.auth.token) and its original owner, because the box mounts it read-only
+# as the agent uid: a replacement owned by anyone else would be unreadable there.
+# If ownership cannot be preserved we abort and leave the original intact rather
+# than install an unreadable config.
 st = os.stat(target)
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(target) or ".", prefix=".openclaw.json.", suffix=".tmp")
+fd, tmp = tempfile.mkstemp(
+    dir=os.path.dirname(target) or ".", prefix=".openclaw.json.", suffix=".tmp"
+)
 try:
     os.fchmod(fd, 0o600)
-    try:
-        os.fchown(fd, st.st_uid, st.st_gid)
-    except PermissionError:
-        pass
+    if (st.st_uid, st.st_gid) != (os.geteuid(), os.getegid()):
+        os.fchown(fd, st.st_uid, st.st_gid)  # raises if not permitted -> abort below
     with os.fdopen(fd, "w") as f:
+        fd = -1  # the file object now owns the descriptor; avoid a double close
         json.dump(cfg, f, indent=2)
         f.write("\n")
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, target)
 except BaseException:
+    if fd != -1:
+        os.close(fd)
     try:
         os.unlink(tmp)
     except OSError:
@@ -627,12 +632,15 @@ JSON
   fi
 
   # Re-assert the proxy URLs and /workspace path so a changed model-proxy port or
-  # layout reaches the box on restart, not just on first add. Operates on the host
-  # config (not box-writable), so it is safe to re-run. Tolerated here: this runs
-  # inside add/restart, which just wrote (add) or already validated (restart) the
-  # config, and the chown/marker steps below must still run; `force_box_config`
-  # logs its own warning. The strict check lives in `cmd_reconcile`.
-  force_box_config "$base/openclaw.json" || true
+  # layout reaches the box on restart, not just on first add. The config already
+  # exists here (add seeds it before this runs; restart requires it), so a failure
+  # means a real write problem (disk full, permissions, bad ownership) and we must
+  # NOT go on to start the box with a stale/unreachable config: fail loudly so the
+  # add/restart aborts, leaving the original config intact.
+  if ! force_box_config "$base/openclaw.json"; then
+    echo "Error: could not reconcile proxy URLs in $base/openclaw.json; not starting $channelId" >&2
+    return 1
+  fi
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
