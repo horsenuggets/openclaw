@@ -9,18 +9,26 @@ import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
  * `assets/embeds` by the sender (see embed-send.ts).
  */
 
-export type EmbedCategoryKey = "general" | "log" | "registration" | "system";
+export type EmbedCategoryKey = "commandResult" | "general" | "log" | "registration" | "system";
 
 export type EmbedCategory = {
   /** Footer label shown on every embed in this category. */
   footerText: string;
-  /** Icon filename in assets/embeds, shown as the footer icon. */
+  /**
+   * Default footer icon filename in assets/embeds. Some categories (e.g. command
+   * results) pick a state-specific icon per message via BuildEmbedInput.icon.
+   */
   icon: string;
   /** Embed accent color (left bar). */
   color: number;
 };
 
 export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
+  commandResult: {
+    footerText: "Command Result",
+    icon: "command-result-default.png",
+    color: 0x6c95b8,
+  },
   general: { footerText: "General", icon: "general.png", color: 0xf26363 },
   log: { footerText: "Log Message", icon: "log-message.png", color: 0xa0a0a0 },
   registration: {
@@ -30,6 +38,26 @@ export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
   },
   system: { footerText: "System", icon: "injected-system-prompt.png", color: 0x80ff80 },
 };
+
+/**
+ * Command-result state -> footer icon. `default` is neutral (any outcome);
+ * `enabled`/`disabled` indicate a toggle turning on/off.
+ */
+export type CommandResultState = "default" | "disabled" | "enabled";
+
+const COMMAND_RESULT_ICONS: Record<CommandResultState, string> = {
+  default: "command-result-default.png",
+  disabled: "command-result-false.png",
+  enabled: "command-result-true.png",
+};
+
+/** Build a Command Result embed with the state-specific footer icon. */
+export function buildCommandResultEmbed(
+  description: string,
+  state: CommandResultState = "default",
+): BuiltEmbed {
+  return buildEmbed({ category: "commandResult", description, icon: COMMAND_RESULT_ICONS[state] });
+}
 
 /** Build the `attachment://` reference used to point an embed at an uploaded icon. */
 export function attachmentRef(filename: string): string {
@@ -42,6 +70,8 @@ export type BuildEmbedInput = {
   description: string;
   /** Optional name/value fields (e.g. the status table). */
   fields?: DiscordEmbedField[];
+  /** Override the category's default footer icon (e.g. command-result state icons). */
+  icon?: string;
   /** Icon filename in assets/embeds to show as the embed thumbnail. */
   thumbnail?: string;
   /**
@@ -64,13 +94,14 @@ export type BuiltEmbed = {
  */
 export function buildEmbed(input: BuildEmbedInput): BuiltEmbed {
   const category = EMBED_CATEGORIES[input.category];
-  const attachments = [category.icon];
+  const footerIcon = input.icon ?? category.icon;
+  const attachments = [footerIcon];
   const embed: DiscordEmbed = {
     ...(input.title ? { title: input.title } : {}),
     description: input.description,
     color: category.color,
     ...(input.fields ? { fields: input.fields } : {}),
-    footer: { text: category.footerText, icon_url: attachmentRef(category.icon) },
+    footer: { text: category.footerText, icon_url: attachmentRef(footerIcon) },
   };
   if (input.thumbnail) {
     embed.thumbnail = { url: attachmentRef(input.thumbnail) };

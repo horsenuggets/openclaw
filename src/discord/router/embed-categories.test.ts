@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
+import {
+  EMBED_CATEGORIES,
+  attachmentRef,
+  buildCommandResultEmbed,
+  buildEmbed,
+} from "./embed-categories.js";
 
 describe("EMBED_CATEGORIES", () => {
-  it("defines the four categories with distinct colors and icons", () => {
+  it("defines each category with distinct colors and icons", () => {
+    expect(EMBED_CATEGORIES.commandResult).toEqual({
+      footerText: "Command Result",
+      icon: "command-result-default.png",
+      color: 0x6c95b8,
+    });
     expect(EMBED_CATEGORIES.general).toEqual({
       footerText: "General",
       icon: "general.png",
@@ -90,5 +100,40 @@ describe("buildEmbed", () => {
       fields: [{ name: "Property", value: "Port", inline: true }],
     });
     expect(embed.fields).toEqual([{ name: "Property", value: "Port", inline: true }]);
+  });
+
+  it("overrides the footer icon when an icon is given", () => {
+    const { embed, attachments } = buildEmbed({
+      category: "commandResult",
+      description: "d",
+      icon: "command-result-true.png",
+    });
+    expect(embed.footer).toEqual({
+      text: "Command Result",
+      icon_url: "attachment://command-result-true.png",
+    });
+    expect(attachments).toEqual(["command-result-true.png"]);
+  });
+});
+
+describe("buildCommandResultEmbed", () => {
+  it("uses the Command Result category color and footer", () => {
+    const { embed } = buildCommandResultEmbed("done");
+    expect(embed.title).toBeUndefined();
+    expect(embed.color).toBe(0x6c95b8);
+    expect(embed.footer?.text).toBe("Command Result");
+    expect(embed.timestamp).toBeDefined();
+  });
+
+  it("selects the state icon (default / enabled / disabled)", () => {
+    expect(buildCommandResultEmbed("d").embed.footer?.icon_url).toBe(
+      "attachment://command-result-default.png",
+    );
+    expect(buildCommandResultEmbed("d", "enabled").embed.footer?.icon_url).toBe(
+      "attachment://command-result-true.png",
+    );
+    expect(buildCommandResultEmbed("d", "disabled").embed.footer?.icon_url).toBe(
+      "attachment://command-result-false.png",
+    );
   });
 });
