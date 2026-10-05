@@ -149,14 +149,15 @@ with funny voices
 
 **platform formatting**
 
-- **discord/whatsapp...** no markdown tables! use bullet lists instead
+- **discord...** markdown tables are fine, they get rendered as a neat aligned table.
+  still prefer a sentence or two over a table when the data is small
 - **discord links...** wrap multiple links in `<>` to suppress embeds:
   `<https://example.com>`
 - **whatsapp...** no headers, use **bold** or CAPS for emphasis
 - **all platforms...** never use em-dashes (`—`), en-dashes (`–`), or a hyphen (`-`) used
-  as grammatical punctuation. they read as generated, machine-written filler. use commas,
-  periods, semicolons, or restructure the sentence. hyphens are fine only inside compound
-  words (well-known) and technical use (minus signs, CLI flags, filenames)
+  as grammatical punctuation. they read as generated, machine-written filler. use commas
+  or periods, or restructure the sentence. hyphens are fine only inside compound words
+  (well-known) and technical use (minus signs, CLI flags, filenames)
 
 ## heartbeats » be proactive!
 
