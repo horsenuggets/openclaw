@@ -6,14 +6,17 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 
 /**
- * Sentinel comment markers wrapping the injected Project Context block (the
- * workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...). They are emitted only
- * by this builder and never derived from file content, so downstream code can
- * identify the exact block boundaries even though workspace file bodies may
- * contain arbitrary text (including strings that mimic prompt headings). The
- * anthropic-subscription path uses them to strip workspace files out of the
- * OAuth system prompt (see stripProjectContext in subscription-prompt.ts). On
- * the API path they are inert HTML comments.
+ * Sentinel comment markers the builder can wrap around the injected Project
+ * Context block (the workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...) when
+ * `wrapProjectContext` is set. They are emitted only by this builder and never
+ * derived from file content, so a consumer could identify the exact block
+ * boundaries even though workspace file bodies may contain arbitrary text.
+ *
+ * Nothing in the runtime requests this anymore: the subscription (OAuth) path no
+ * longer strips workspace files from the system prompt (it keeps the system block
+ * a pure Claude Code base and delivers all OpenClaw content via the reminder, see
+ * subscription-prompt.ts), so these markers are an unused builder capability kept
+ * only for its direct unit test. Always inert HTML comments on the wire.
  */
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
@@ -26,14 +29,12 @@ export const REPLY_TAGS_HEADING = "## reply tags";
 export const MESSAGING_HEADING = "## messaging";
 
 /**
- * Neutralize any Project Context sentinel literals in assembled prompt text.
- * Many prompt fields are arbitrary and user/workspace-derived (skillsPrompt,
- * extraSystemPrompt, workspace file bodies, conversation history, ...), so a
- * copy of a marker inside any of them would otherwise let the subscription
- * filter (stripProjectContext) anchor on a spoofed boundary. The subscription
- * build runs this over all content surrounding and inside the injected block
- * before adding the real marker pair, guaranteeing the only real
- * PROJECT_CONTEXT_BEGIN/END literals in the output are the ones the builder adds.
+ * Neutralize any Project Context sentinel literals in assembled prompt text, so
+ * that when `wrapProjectContext` adds the real marker pair they are the only such
+ * literals in the output (a copy inside an arbitrary field, skillsPrompt,
+ * extraSystemPrompt, workspace file bodies, could otherwise mimic a boundary).
+ * Only runs on the `wrapProjectContext` build path, which the runtime no longer
+ * uses; see the PROJECT_CONTEXT_BEGIN note above.
  */
 function neutralizeContextSentinels(text: string): string {
   return text
@@ -259,16 +260,16 @@ export function buildAgentSystemPrompt(params: {
   conversationHistory?: string;
   /**
    * When true, wrap the injected Project Context block in sentinel markers and
-   * neutralize any sentinel literals in caller-provided text. Only the
-   * anthropic-subscription path sets this (it slices the block back out via
-   * stripProjectContext to keep workspace files off the OAuth request). Left
-   * false for every other provider so their system prompt is byte-for-byte
-   * unchanged.
+   * neutralize any sentinel literals in caller-provided text. No caller in the
+   * runtime sets this anymore (the subscription path no longer strips workspace
+   * files from the system prompt); it is retained as a builder capability with a
+   * direct unit test. Left false everywhere in production, so the assembled prompt
+   * is byte-for-byte unchanged.
    */
   wrapProjectContext?: boolean;
 }) {
-  // Sentinel wrapping + caller-text escaping only apply to the subscription
-  // path; for every other provider this is a no-op so the prompt is unchanged.
+  // Sentinel wrapping + caller-text escaping only apply when wrapProjectContext is
+  // set, which no runtime caller does; otherwise this is a no-op.
   const wrapProjectContext = params.wrapProjectContext === true;
   const coreToolSummaries: Record<string, string> = {
     read: "read file contents",

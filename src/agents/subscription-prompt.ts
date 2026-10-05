@@ -31,6 +31,32 @@ export function needsSubscriptionSystemPrompt(provider: string, config?: OpenCla
   );
 }
 
+/**
+ * Decide how the assembled OpenClaw system prompt is delivered for a request.
+ *
+ * On the subscription (OAuth) path the system block must stay a pure Claude Code
+ * base (`CC_BASE_PROMPT`) to bill on plan quota, so the whole OpenClaw prompt is
+ * handed back as `preambleSystemPrompt` to ride the leading user `<system-reminder>`
+ * instead (see persona-preamble.ts). On the API-key path there is no such
+ * constraint, so the OpenClaw prompt stays in the system block and nothing extra
+ * goes to the reminder.
+ */
+export function resolveSystemPromptDelivery(params: {
+  needsSubscription: boolean;
+  openClawSystemPrompt: string;
+}): {
+  systemPromptText: string;
+  preambleSystemPrompt: string | undefined;
+} {
+  if (params.needsSubscription) {
+    return {
+      systemPromptText: CC_BASE_PROMPT,
+      preambleSystemPrompt: params.openClawSystemPrompt,
+    };
+  }
+  return { systemPromptText: params.openClawSystemPrompt, preambleSystemPrompt: undefined };
+}
+
 // Minimal Claude Code base prompt — the CC-consistent system block used on the
 // subscription path. Kept lean and free of OpenClaw-specific content so the
 // request bills on plan quota; the real OpenClaw behavior rides the reminder.

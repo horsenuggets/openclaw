@@ -142,10 +142,12 @@ const reminder = (text: string): Message => ({
 const HELLO: Message = { role: "user", content: "Say hi in exactly three words." };
 
 // A representative built OpenClaw prompt, used for the real-code regression cases.
+// No wrapProjectContext: production (runEmbeddedAttempt) no longer sets it, so the
+// fixture must omit it too, otherwise the probe would validate sentinel wrappers
+// the deployed prompt never sends.
 const builtOpenClawPrompt = buildAgentSystemPrompt({
   workspaceDir: "/tmp/openclaw-probe",
   heartbeatPrompt: "Read HEARTBEAT.md if it exists.",
-  wrapProjectContext: true,
   contextFiles: [
     { path: "USER.md", content: "The user is Alex. Prefers concise, casual replies." },
     { path: "TOOLS.md", content: "gog = google CLI. Use it for calendar and mail." },
