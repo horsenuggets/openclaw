@@ -116,13 +116,16 @@ build_box_env() {
   local mode="$1" # "live" or "offline"
   mkdir -p "$RIG_DIR"
   [ -f "$ROOT_DIR/.env" ] || die "repo .env not found; the box needs the provisioner + guild/role vars."
-  # box.env holds Discord + provisioner credentials; create it 0600 before
-  # writing so other local users cannot read the rig's secrets.
-  ( umask 077 && : >"$BOX_ENV" )
+  # Assemble into a temp file and only move it into place after validation passes,
+  # so a failed live-mode check never leaves a box.env behind that a later
+  # `deploy` would reuse (which could ship the prod token to the mirror box).
+  # mktemp creates it 0600, so the rig's secrets are not world-readable.
+  local tmp
+  tmp=$(mktemp "$RIG_DIR/.box.env.XXXXXX")
   if [ "$mode" = "live" ]; then
     [ -f "$ROOT_DIR/.env.mirror" ] ||
-      die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."
-    merge_env_files "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$BOX_ENV"
+      { rm -f "$tmp"; die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."; }
+    merge_env_files "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$tmp"
     # The overlay must actually replace the prod token. If .env.mirror omits (or
     # blanks) DISCORD_BOT_TOKEN, the merged value falls back to .env's prod token
     # and the box would open a second gateway session on the prod bot, fighting
@@ -133,13 +136,14 @@ build_box_env() {
     # (e.g. base `TOKEN=x` vs mirror `TOKEN="x"` are identical once sourced).
     local base_token merged_token
     base_token=$(set -a; . "$ROOT_DIR/.env"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
-    merged_token=$(set -a; . "$BOX_ENV"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
+    merged_token=$(set -a; . "$tmp"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
     [ -n "$merged_token" ] && [ "$merged_token" != "$base_token" ] ||
-      die ".env.mirror must set a non-empty DISCORD_BOT_TOKEN (the OpenClawMirror bot) that differs from the prod token in .env."
+      { rm -f "$tmp"; die ".env.mirror must set a non-empty DISCORD_BOT_TOKEN (the OpenClawMirror bot) that differs from the prod token in .env."; }
   else
-    grep -vE '^[[:space:]]*(export[[:space:]]+)?DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$BOX_ENV"
-    printf 'DISCORD_BOT_TOKEN=\n' >>"$BOX_ENV"
+    grep -vE '^[[:space:]]*(export[[:space:]]+)?DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$tmp"
+    printf 'DISCORD_BOT_TOKEN=\n' >>"$tmp"
   fi
+  mv "$tmp" "$BOX_ENV"
 }
 
 # $1: "build" to force a recompile, anything else to reuse existing binaries.
