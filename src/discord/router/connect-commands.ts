@@ -27,8 +27,8 @@ export type ConnectSubcommand = "list" | "add" | "remove";
 const SERVICE_CHOICES = CONNECTORS.map((c) => ({ name: c.label, value: c.id }));
 
 /** Slash-command registration body for Discord (subcommand group). */
-export const CONNECT_COMMAND_SPEC = {
-  name: "connect",
+export const CONNECTIONS_COMMAND_SPEC = {
+  name: "connections",
   description: "Link your accounts (Google, Todoist, Notion, GitHub) to this agent",
   type: 1, // CHAT_INPUT
   contexts: [0, 1, 2], // guild, bot DM, group DM
@@ -70,6 +70,19 @@ export const CONNECT_COMMAND_SPEC = {
     },
   ],
 };
+
+/** `/conn` is a short alias for `/connections` (same options and handler). */
+export const CONN_COMMAND_SPEC = {
+  ...CONNECTIONS_COMMAND_SPEC,
+  name: "conn",
+  description: "Alias for /connections",
+};
+
+/** All slash specs to register for this command (primary plus alias). */
+export const CONNECTIONS_COMMAND_SPECS = [CONNECTIONS_COMMAND_SPEC, CONN_COMMAND_SPEC];
+
+/** Slash-command names that route to the connections handler. */
+export const CONNECTIONS_COMMAND_NAMES: readonly string[] = ["connections", "conn"];
 
 /**
  * Storage abstraction over channelId. The router implements this against the
@@ -131,13 +144,14 @@ function connectionsReply(
 }
 
 /**
- * Parse a `/connect ...` text command (also tolerates a leading `//`). Returns
- * null when the message is not a connect command.
+ * Parse a `/connections ...` (or `/conn ...`) text command, also tolerating a
+ * leading `//`. Returns null when the message is not a connections command. The
+ * longer name is listed first so `/connections` is not mis-matched as `/conn`.
  */
 export function parseConnectTextCommand(
   content: string,
 ): { subcommand: string | null; args: string[] } | null {
-  const match = content.trim().match(/^\/\/?connect\b\s*(.*)$/is);
+  const match = content.trim().match(/^\/\/?(?:connections|conn)\b\s*(.*)$/is);
   if (!match) {
     return null;
   }
@@ -180,7 +194,7 @@ function statusLine(connector: ConnectorDef, connection: StoredConnection | null
   return `${glyph} **${connector.label}**${account}${note}`;
 }
 
-/** Build the `/connect list` status embed from the catalog plus stored connections. */
+/** Build the `/connections list` status embed from the catalog plus stored connections. */
 function listReply(connections: StoredConnection[]): {
   embeds: DiscordEmbed[];
   attachments: string[];
@@ -191,14 +205,14 @@ function listReply(connections: StoredConnection[]): {
   ).join("\n");
   return connectionsReply(
     "Your connections",
-    `${lines}\n\nUse \`/connect add <service>\` to link one, or \`/connect remove <service>\` to unlink.`,
+    `${lines}\n\nUse \`/connections add <service>\` to link one, or \`/connections remove <service>\` to unlink.`,
   );
 }
 
 const NOT_REGISTERED =
   "This channel is not registered yet. Run `/channel register` first, then link your accounts.";
 
-/** Dispatch a parsed `/connect` command. Transport-agnostic. */
+/** Dispatch a parsed `/connections` command. Transport-agnostic. */
 export async function handleConnectCommand(
   ctx: ConnectCommandContext,
   deps: ConnectCommandDeps,
@@ -245,13 +259,13 @@ export async function handleConnectCommand(
     const token = ctx.args[1];
     if (!token) {
       // No token yet: show setup instructions. The user comes back with
-      // `/connect add <service> <token>` (or the slash command's token option).
+      // `/connections add <service> <token>` (or the slash command's token option).
       const howto = connector.tokenHowto ? `\n\n${connector.tokenHowto}` : "";
       const link = connector.tokenUrl ? `\n${connector.tokenUrl}` : "";
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
-          `${connector.summary}${howto}${link}\n\nThen run \`/connect add ${connector.id} <token>\` to finish. ` +
+          `${connector.summary}${howto}${link}\n\nThen run \`/connections add ${connector.id} <token>\` to finish. ` +
             `Your message with the token is deleted right after so it does not stay in chat.`,
         ),
         { ephemeral: true },
@@ -270,7 +284,7 @@ export async function handleConnectCommand(
           connectionsReply(
             `Link ${connector.label}`,
             `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
-              `Double-check it and try \`/connect add ${connector.id} <token>\` again.`,
+              `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
           ),
           { ephemeral: true },
         );
@@ -337,7 +351,7 @@ export async function handleConnectCommand(
   await ctx.reply(
     connectionsReply(
       "Connections",
-      "Usage: `/connect list`, `/connect add <service> <token>`, or `/connect remove <service>`.",
+      "Usage: `/connections list`, `/connections add <service> <token>`, or `/connections remove <service>`.",
     ),
     { ephemeral: true },
   );

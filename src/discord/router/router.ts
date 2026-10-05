@@ -14,7 +14,7 @@ import {
 import { ChannelQueue } from "./channel-queue.js";
 import { loadRouterConfig, refreshToken, resolveProxyBindHost } from "./config.js";
 import {
-  CONNECT_COMMAND_SPEC,
+  CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandDeps,
   type ConnectionStore,
 } from "./connect-commands.js";
@@ -132,15 +132,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     body: JSON.stringify(SECRET_COMMAND_SPEC),
   }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
 
-  // Register the /connect command (list/add/remove connections).
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(CONNECT_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /connect command: ${String(err)}`));
+  // Register the /connections command plus its /conn alias (list/add/remove).
+  for (const spec of CONNECTIONS_COMMAND_SPECS) {
+    await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(spec),
+    }).catch((err) =>
+      runtime.error(`[router] failed to register /${spec.name} command: ${String(err)}`),
+    );
+  }
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {

@@ -12,6 +12,7 @@ import {
 } from "./channel-commands.js";
 import { setUserPreference } from "./config.js";
 import {
+  CONNECTIONS_COMMAND_NAMES,
   type ConnectCommandDeps,
   connectTextCommandHasToken,
   handleConnectCommand,
@@ -646,7 +647,11 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
   }
 
-  if (interactionData?.name === "connect" && interactionChannelId) {
+  if (
+    interactionData?.name &&
+    CONNECTIONS_COMMAND_NAMES.includes(interactionData.name) &&
+    interactionChannelId
+  ) {
     const subOpt = (
       interactionData.options as
         | Array<{

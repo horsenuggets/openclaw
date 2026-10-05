@@ -12,22 +12,41 @@ import {
 
 describe("parseConnectTextCommand", () => {
   it("parses the bare command, subcommands, and args", () => {
-    expect(parseConnectTextCommand("/connect")).toEqual({ subcommand: null, args: [] });
-    expect(parseConnectTextCommand("/connect list")).toEqual({ subcommand: "list", args: [] });
-    expect(parseConnectTextCommand("/connect add todoist tok_123")).toEqual({
+    expect(parseConnectTextCommand("/connections")).toEqual({ subcommand: null, args: [] });
+    expect(parseConnectTextCommand("/connections list")).toEqual({ subcommand: "list", args: [] });
+    expect(parseConnectTextCommand("/connections add todoist tok_123")).toEqual({
       subcommand: "add",
       args: ["todoist", "tok_123"],
     });
-    expect(parseConnectTextCommand("  //connect remove github ")).toEqual({
+    expect(parseConnectTextCommand("  //connections remove github ")).toEqual({
       subcommand: "remove",
       args: ["github"],
     });
   });
 
-  it("returns null for non-connect messages", () => {
+  it("accepts the /conn alias", () => {
+    expect(parseConnectTextCommand("/conn")).toEqual({ subcommand: null, args: [] });
+    expect(parseConnectTextCommand("/conn add notion secret")).toEqual({
+      subcommand: "add",
+      args: ["notion", "secret"],
+    });
+    expect(parseConnectTextCommand("//conn list")).toEqual({ subcommand: "list", args: [] });
+  });
+
+  it("does not mistake /connections for the /conn alias", () => {
+    // The longer name must win so the subcommand is not swallowed into the name.
+    expect(parseConnectTextCommand("/connections add todoist t")).toEqual({
+      subcommand: "add",
+      args: ["todoist", "t"],
+    });
+  });
+
+  it("returns null for non-connections messages", () => {
     expect(parseConnectTextCommand("hello")).toBeNull();
     expect(parseConnectTextCommand("/channel register")).toBeNull();
-    expect(parseConnectTextCommand("connect todoist")).toBeNull();
+    expect(parseConnectTextCommand("connections todoist")).toBeNull();
+    expect(parseConnectTextCommand("/connect list")).toBeNull();
+    expect(parseConnectTextCommand("/connected")).toBeNull();
   });
 });
 
@@ -148,7 +167,7 @@ describe("handleConnectCommand add", () => {
     const embed = embedOf(replies[0].payload);
     expect(embed.title).toBe("Link Todoist");
     expect(embed.description).toContain("https://app.todoist.com");
-    expect(embed.description).toContain("/connect add todoist <token>");
+    expect(embed.description).toContain("/connections add todoist <token>");
   });
 
   it("validates, stores, scrubs, and confirms when a token works", async () => {
