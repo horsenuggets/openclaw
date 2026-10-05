@@ -17,12 +17,12 @@ Docs: https://docs.openclaw.ai
   exclamation point for warmth, and uses small text emoticons (`:)`, `:D`, `:(`, `:/`,
   `._.`) instead of emojis in message text (emoji reactions are unaffected). It leans on
   light texting shorthand without overdoing it, prefers ALL CAPS over bold/italics for
-  emphasis, and avoids semicolons. Markdown tables are no longer discouraged on surfaces
-  whose effective table mode is `code` (the default everywhere except whatsapp and signal,
-  and overridable per channel/account), where they render as aligned code-block tables;
-  the group-chat style hint now derives this from the resolved table mode instead of a
-  blanket prohibition. The reply normalizer no longer rewrites em-dashes to commas;
-  em-dash avoidance is left to the prompt.
+  emphasis, and avoids semicolons. Markdown tables are no longer discouraged: the template
+  guidance allows them and the group-chat style hint drops its blanket "avoid tables"
+  rule, matching the 1:1 DM path and leaving rendering to each channel's existing table
+  renderer (aligned code-block tables where supported, bullet lists on whatsapp/signal).
+  The reply normalizer no longer rewrites em-dashes to commas; em-dash avoidance is left
+  to the prompt.
 - Discord router: add a "Log Message" embed category for system notices. A new `log`
   four-dot control command (`⁘ log "..."`) lets the agent emit a log-styled embed; bare
   URLs in log text become clickable links and the description is italicized. The router's
