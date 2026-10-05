@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Deploy: reconcile each registered agent instance's proxy URLs on boot. `boot.sh` now
+  runs `openclawctl reconcile <channelId>` (a new subcommand that re-asserts the model-
+  and container-proxy URLs from the current agent-bridge env) before starting each box, so
+  a deploy that changes the bridge gateway IP (e.g. the host-networking to bridge
+  migration) reaches existing on-disk configs. Previously a deploy started boxes with a
+  stale baseUrl (an old `127.0.0.1` that is now the box's own loopback), silently breaking
+  the model path until each channel was restarted by hand.
 - Subscription (OAuth) prompt: stop scrubbing the OpenClaw system prompt into the system
   block and instead keep the system block a pure Claude Code base (`CC_BASE_PROMPT`),
   delivering the entire OpenClaw prompt (identity + operational instructions) in the

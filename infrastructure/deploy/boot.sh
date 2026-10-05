@@ -174,6 +174,18 @@ else
       echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
       continue
     fi
+    # Re-assert the instance's proxy URLs from the current agent-bridge env before
+    # starting it. A deploy that changed the bridge gateway IP (e.g. the
+    # host-networking -> bridge migration) otherwise leaves the on-disk config
+    # pointing at a stale address (an old 127.0.0.1 is now the box's own loopback),
+    # so the model/container proxies are unreachable and the agent silently fails.
+    # If the reconcile fails, skip this box rather than start it with unreachable
+    # proxies; other instances still boot.
+    if ! ~/deploy/bin/openclawctl reconcile "$channelId"; then
+      echo "Skipping channel $channelId: could not reconcile its proxy URLs" >&2
+      echo "  (would start with unreachable model/container proxies)." >&2
+      continue
+    fi
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"

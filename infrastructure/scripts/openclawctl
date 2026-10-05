@@ -536,13 +536,23 @@ PY
 # whose config this script wrote as plain JSON, so json.load is safe.
 force_box_config() {
   local target="$1"
-  [ -f "$target" ] || return 0
-  OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
+  # A missing config is a failure, not a silent no-op: callers that reconcile an
+  # instance before starting it must be able to tell the rewrite did not happen.
+  if [ ! -f "$target" ]; then
+    echo "Error: box config $target not found; cannot re-assert proxy URLs" >&2
+    return 1
+  fi
+  # No 2>/dev/null: callers treat a nonzero exit as fatal, so let Python's error
+  # (bad JSON, permission/ownership, disk full) reach stderr for diagnosis.
+  if ! OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
     OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
-    python3 - "$target" <<'PY' 2>/dev/null ||
-import json, os, sys
+    python3 - "$target" <<'PY'
+import json, os, stat, sys, tempfile
 
 target = sys.argv[1]
+st = os.stat(target)
+if not stat.S_ISREG(st.st_mode):
+    sys.exit(f"refusing to rewrite {target}: not a regular file")
 with open(target) as f:
     cfg = json.load(f)
 cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = os.environ[
@@ -552,14 +562,40 @@ cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
     "anthropic-subscription", {}
 )["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
 cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
-# Preserve owner-only permissions (the config holds gateway.auth.token).
-fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-os.chmod(target, 0o600)
-with os.fdopen(fd, "w") as f:
-    json.dump(cfg, f, indent=2)
-    f.write("\n")
+# Write atomically: stage the full JSON in a same-directory temp file, then
+# os.replace() it onto the target, so a partial write (full disk, crash) never
+# truncates the existing config. The config is kept mode 0600 (it holds
+# gateway.auth.token) and its original owner, because the box mounts it read-only
+# as the agent uid: a replacement owned by anyone else would be unreadable there.
+# If ownership cannot be preserved we abort and leave the original intact rather
+# than install an unreadable config.
+fd, tmp = tempfile.mkstemp(
+    dir=os.path.dirname(target) or ".", prefix=".openclaw.json.", suffix=".tmp"
+)
+try:
+    os.fchmod(fd, 0o600)
+    if (st.st_uid, st.st_gid) != (os.geteuid(), os.getegid()):
+        os.fchown(fd, st.st_uid, st.st_gid)  # raises if not permitted -> abort below
+    with os.fdopen(fd, "w") as f:
+        fd = -1  # the file object now owns the descriptor; avoid a double close
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, target)
+except BaseException:
+    if fd != -1:
+        os.close(fd)
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 PY
-    echo "Warning: could not re-assert box config in $target; left unchanged" >&2
+  then
+    echo "Error: could not re-assert box config in $target; left unchanged" >&2
+    return 1
+  fi
 }
 
 # Idempotent per-instance preparation for the token-free layout. Scoped to NEW
@@ -600,9 +636,15 @@ JSON
   fi
 
   # Re-assert the proxy URLs and /workspace path so a changed model-proxy port or
-  # layout reaches the box on restart, not just on first add. Operates on the host
-  # config (not box-writable), so it is safe to re-run.
-  force_box_config "$base/openclaw.json"
+  # layout reaches the box on restart, not just on first add. The config already
+  # exists here (add seeds it before this runs; restart requires it), so a failure
+  # means a real write problem (disk full, permissions, bad ownership) and we must
+  # NOT go on to start the box with a stale/unreachable config: fail loudly so the
+  # add/restart aborts, leaving the original config intact.
+  if ! force_box_config "$base/openclaw.json"; then
+    echo "Error: could not reconcile proxy URLs in $base/openclaw.json; not starting $channelId" >&2
+    return 1
+  fi
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
@@ -789,6 +831,40 @@ cmd_restart() {
   echo "Done."
 }
 
+# Re-assert a registered instance's proxy URLs (model proxy + container proxy) and
+# /workspace path from the current agent-bridge env, WITHOUT recreating the
+# container. boot.sh calls this before starting each box so a deploy that changed
+# the bridge gateway IP (e.g. a host-networking -> bridge migration) reaches the
+# existing instance configs; otherwise a box keeps a stale baseUrl (e.g. an old
+# 127.0.0.1 that is now its own loopback) and the model path silently breaks.
+cmd_reconcile() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl reconcile <channelId>" >&2
+    exit 1
+  fi
+  require_channel_id "$channelId"
+
+  if [ -z "$(get_port "$channelId")" ]; then
+    echo "Error: Channel $channelId is not registered." >&2
+    exit 1
+  fi
+
+  # Only touch token-free instances. A legacy instance keeps a different config
+  # shape; rewriting its workspace/proxy fields (force_box_config sets
+  # workspace=/workspace) without the matching mount layout would misconfigure it.
+  if ! is_prepared "$channelId"; then
+    echo "Channel $channelId is on the legacy layout; refusing to rewrite its config." >&2
+    echo "Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
+    echo "instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
+    exit 1
+  fi
+
+  # Propagate failure (force_box_config returns nonzero on a missing/unwritable
+  # config) so callers like boot.sh can skip starting a box with stale proxy URLs.
+  force_box_config "$INSTANCES_DIR/$channelId/openclaw.json"
+}
+
 cmd_list() {
   BASE_PORT="$BASE_PORT" PORT_FILENAME="$PORT_FILENAME" python3 -c "
 import os, re, subprocess
@@ -844,6 +920,7 @@ case "${1:-}" in
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
+  reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
@@ -853,6 +930,7 @@ case "${1:-}" in
     echo "  add-channel <channelId> Register a text channel"
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
+    echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"
     ;;
 esac
