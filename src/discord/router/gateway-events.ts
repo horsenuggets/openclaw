@@ -282,7 +282,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
           const ownerId = status?.ownerId;
           const notice = ownerId
             ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
-            : `Sorry, but this channel (<#${channelId}>) is registered under another user. Unfortunately, you are not authorized to use this channel's agent.`;
+            : `Sorry, but you are not authorized to use this channel's agent (<#${channelId}>).`;
           const embed = buildLogEmbed(notice);
           // A plain user message carries no interaction token, so a true
           // ephemeral reply is impossible. Post a persistent Log embed threaded
