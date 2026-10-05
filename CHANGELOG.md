@@ -13,6 +13,12 @@ Docs: https://docs.openclaw.ai
   migration) reaches existing on-disk configs. Previously a deploy started boxes with a
   stale baseUrl (an old `127.0.0.1` that is now the box's own loopback), silently breaking
   the model path until each channel was restarted by hand.
+- Discord router: when a non-owner messages a registered channel, reply with a Log embed
+  naming the channel and, when available, its owner instead of the old italic,
+  auto-deleting "not authorized" notice. The reply is threaded under the offending message
+  and persists (a plain message has no interaction token, so a true ephemeral reply is
+  impossible). A new env toggle `OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE` (default enabled)
+  controls this; set it falsy to deny silently (#89).
 - Subscription (OAuth) prompt: stop scrubbing the OpenClaw system prompt into the system
   block and instead keep the system block a pure Claude Code base (`CC_BASE_PROMPT`),
   delivering the entire OpenClaw prompt (identity + operational instructions) in the

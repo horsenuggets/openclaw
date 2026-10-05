@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstanceConfig, RouterConfig } from "./config.js";
 
@@ -73,24 +76,36 @@ const CHANNEL = "123456789012345678";
 const GUILD = "999999999999999999";
 const OWNER = "111111111111111111";
 
-function makeInstance(): InstanceConfig {
+function makeInstance(instanceDir = "/tmp/nope"): InstanceConfig {
   return {
     channelId: CHANNEL,
     port: 18795,
     token: "tok",
     preferences: {},
-    configPath: "/tmp/nope/openclaw.json",
-    instanceDir: "/tmp/nope",
+    configPath: path.join(instanceDir, "openclaw.json"),
+    instanceDir,
   };
 }
 
-function makeConfig(): RouterConfig {
+function makeConfig(instanceDir?: string): RouterConfig {
   return {
     discordToken: "test-token",
-    instances: new Map([[CHANNEL, makeInstance()]]),
+    instances: new Map([[CHANNEL, makeInstance(instanceDir)]]),
     instancesDir: "/tmp/does-not-matter",
     agentTimeoutMs: 1000,
   };
+}
+
+/** Extract the posted message payload from a captured fetch init (JSON or multipart). */
+function payloadOf(init: RequestInit): {
+  embeds?: { description?: string }[];
+  message_reference?: { message_id?: string };
+  allowed_mentions?: { parse?: string[]; replied_user?: boolean };
+} {
+  if (init.body instanceof FormData) {
+    return JSON.parse(init.body.get("payload_json") as string);
+  }
+  return JSON.parse(init.body as string);
 }
 
 describe("discord router channel-delete cleanup", () => {
@@ -162,8 +177,8 @@ describe("discord router channel-delete cleanup", () => {
     vi.restoreAllMocks();
   });
 
-  const start = () => {
-    const p = startRouter(makeConfig(), runtime);
+  const start = (instanceDir?: string) => {
+    const p = startRouter(makeConfig(instanceDir), runtime);
     startedRouters.push(p);
     return p;
   };
@@ -266,6 +281,155 @@ describe("discord router channel-delete cleanup", () => {
 
     expect(logs.some((l) => l.includes("routing message from trusted-bot"))).toBe(true);
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
+  });
+
+  it("replies to an unauthorized user with a persistent notice embed and no delete", async () => {
+    const posts: RequestInit[] = [];
+    let deletes = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          if (init?.method === "POST") {
+            posts.push(init);
+            return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+          }
+          if (init?.method === "DELETE") {
+            deletes += 1;
+            return new Response(null, { status: 204 });
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // A non-owner human in a registered guild channel: owner is unknown (no
+    // .onboarding.json on disk), so the gate fails closed and denies.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "msg-unauth",
+      author: { id: "444444444444444444", bot: false },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "let me in",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    // Let any (unwanted) auto-delete timer fire — there should be none.
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(logs.some((l) => l.includes("denied message from 444444444444444444"))).toBe(true);
+    expect(posts).toHaveLength(1);
+    const payload = payloadOf(posts[0]);
+    // The notice is a Log embed (not a plain message) threaded under the
+    // offending message, with pings suppressed, and is never deleted.
+    expect(payload.embeds?.[0].description).toContain("not authorized");
+    expect(payload.embeds?.[0].description).toContain(`<#${CHANNEL}>`);
+    expect(payload.message_reference?.message_id).toBe("msg-unauth");
+    expect(payload.allowed_mentions).toEqual({ parse: [], replied_user: false });
+    expect(deletes).toBe(0);
+  });
+
+  it("names the channel owner in the notice when ownership is known", async () => {
+    // Write an .onboarding.json so describeInstance resolves a real owner.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-notice-"));
+    fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: OWNER }));
+    const posts: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.includes(`/channels/${CHANNEL}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(init);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    try {
+      void start(dir);
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "msg-unauth",
+        author: { id: "444444444444444444", bot: false },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: "let me in",
+        attachments: [],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(posts).toHaveLength(1);
+      expect(payloadOf(posts[0]).embeds?.[0].description).toContain(`<@${OWNER}>`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("denies silently when OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE is disabled", async () => {
+    vi.stubEnv("OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE", "0");
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.endsWith(`/channels/${CHANNEL}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(url);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "msg-unauth",
+      author: { id: "444444444444444444", bot: false },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "let me in",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("denied message from 444444444444444444"))).toBe(true);
+    expect(posts).toHaveLength(0);
   });
 
   it("learns a channel's guild from interactions so GUILD_DELETE still cleans up", async () => {

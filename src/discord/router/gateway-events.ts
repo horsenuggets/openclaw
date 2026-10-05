@@ -18,6 +18,7 @@ import {
 } from "./discord-api.js";
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
+import { buildLogEmbed } from "./log-embed.js";
 import { handleTextCommand, routeMessage } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -41,6 +42,12 @@ export type GatewayContext = {
   channelGuild: Map<string, string>;
   /** Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may converse. */
   allowedBotIds: Set<string>;
+  /**
+   * Whether to tell a non-owner why their message in a registered channel was
+   * ignored (OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE, default true). False => deny
+   * silently.
+   */
+  unauthorizedNoticeEnabled: boolean;
   describeInstance: (channelId: string) => InstanceStatus | null;
   channelCommandDeps: ChannelCommandDeps;
   runAgentCommand: RunAgentCommand;
@@ -109,6 +116,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     inflight,
     channelGuild,
     allowedBotIds,
+    unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
     runAgentCommand,
@@ -259,18 +267,35 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // In a shared guild channel, restrict human conversation to the channel
   // owner. Explicitly trusted automation bots remain allowed for E2E use.
   if (guildId && !botAllowed) {
+    // Read the instance once and reuse it for both the ownership decision and
+    // the owner mention in the denial notice, so an unauthorized message does
+    // not trigger a second `.onboarding.json` read on the hot path.
+    const status = describeInstance(channelId);
     void isAuthorizedForChannel(channelId, authorId, {
-      describeInstance,
+      describeInstance: () => status,
     }).then((allowed) => {
       if (!allowed) {
         runtime.log(
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
-        void discordSendEphemeral(
-          discordToken,
-          channelId,
-          "*You are not authorized to use this channel's agent.*",
-        );
+        if (unauthorizedNoticeEnabled) {
+          const ownerId = status?.ownerId;
+          const notice = ownerId
+            ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
+            : `Sorry, but you are not authorized to use this channel's agent (<#${channelId}>).`;
+          const embed = buildLogEmbed(notice);
+          // A plain user message carries no interaction token, so a true
+          // ephemeral reply is impossible. Post a persistent Log embed threaded
+          // under the offending message instead. Suppress all mentions so the
+          // owner/author are never pinged, even under repeated denials.
+          void discordSendReply(
+            discordToken,
+            channelId,
+            d.id,
+            { embeds: [embed.embed], attachments: embed.attachments },
+            { parse: [], replied_user: false },
+          );
+        }
         return;
       }
       routeInstanceMessage();
