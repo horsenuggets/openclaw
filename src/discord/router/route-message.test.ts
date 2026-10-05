@@ -76,4 +76,20 @@ describe("routeMessage payload delivery", () => {
     expect(runCommand).not.toHaveBeenCalled();
     expect(sendEmbedMessage).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to plain text when the error embed send rejects", async () => {
+    (sendEmbedMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("network down"));
+    await route([{ text: "*boom*", isError: true }]);
+    expect(sendEmbedMessage).toHaveBeenCalledTimes(1);
+    expect(discordSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to plain text when the error embed send returns non-2xx", async () => {
+    (sendEmbedMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    });
+    await route([{ text: "*boom*", isError: true }]);
+    expect(discordSend).toHaveBeenCalledTimes(1);
+  });
 });

@@ -314,11 +314,22 @@ export async function routeMessage(params: {
           // rather than the plain italic text the formatter produced.
           if (text && payload.isError) {
             const log = buildLogEmbed(stripSurroundingItalics(text));
-            const sent = await sendEmbedMessage(discordToken, channelId, {
-              embeds: [log.embed],
-              attachments: log.attachments,
-            });
-            if (sent.ok) {
+            let embedSent = false;
+            try {
+              const sent = await sendEmbedMessage(discordToken, channelId, {
+                embeds: [log.embed],
+                attachments: log.attachments,
+              });
+              embedSent = sent.ok;
+              if (!sent.ok) {
+                runtime.error(`[router] error log embed failed (${sent.status}); sending as text`);
+              }
+            } catch (err) {
+              // A rejected send (e.g. fetch failure) must still reach the
+              // plain-text fallback below rather than the outer error handler.
+              runtime.error(`[router] error log embed threw (${String(err)}); sending as text`);
+            }
+            if (embedSent) {
               deliveredAnything = true;
               deliveredThisTurn = true;
               handled = true;
@@ -326,7 +337,6 @@ export async function routeMessage(params: {
             }
             // Embed send failed: fall through to the plain-text path below so the
             // user still gets the error rather than nothing.
-            runtime.error(`[router] error log embed failed (${sent.status}); sending as text`);
           }
           if (text) {
             text = convertMarkdownTables(text, "code");
