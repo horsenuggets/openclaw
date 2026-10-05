@@ -3,6 +3,7 @@ import type { GroupKeyResolution, SessionEntry } from "../../config/sessions.js"
 import type { TemplateContext } from "../templating.js";
 import { getChannelDock } from "../../channels/dock.js";
 import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
 import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import { normalizeGroupActivation } from "../group-activation.js";
 
@@ -115,10 +116,16 @@ export function buildGroupIntro(params: {
       : undefined;
   const lurkLine =
     "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available.";
-  // Channels that convert Markdown tables into aligned code-block tables render them
-  // cleanly, so only discourage tables on the channels that would show raw pipes.
+  // Only discourage Markdown tables on surfaces that would not render them. The effective
+  // table mode (account -> channel -> default) decides: "code" renders an aligned
+  // code-block table, while "bullets" and "off" would show bullets or raw pipes. This
+  // honors per-channel/account `markdown.tables` overrides instead of hard-coding channels.
   const rendersMarkdownTables =
-    providerId === "discord" || providerId === "imessage" || isInternalMessageChannel(providerKey);
+    resolveMarkdownTableMode({
+      cfg: params.cfg,
+      channel: rawProvider,
+      accountId: params.sessionCtx.AccountId,
+    }) === "code";
   const styleLine = rendersMarkdownTables
     ? "Write like a human. Don't type literal \\n sequences; use real line breaks sparingly."
     : "Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
