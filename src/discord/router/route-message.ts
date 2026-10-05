@@ -336,8 +336,10 @@ export async function routeMessage(params: {
             // user still gets the error rather than nothing.
           }
           // Suppress raw leaked errors (unflagged tool/JS errors that escaped
-          // into agent output); flagged errors were already handled above.
-          if (isLeakedError(text)) {
+          // into agent output). Flagged errors are excluded: one that fell
+          // through here after a failed embed send must still reach the
+          // plain-text fallback below rather than be silently dropped.
+          if (!payload.isError && isLeakedError(text)) {
             runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
             continue;
           }

@@ -104,4 +104,14 @@ describe("routeMessage payload delivery", () => {
     expect(sendEmbedMessage).not.toHaveBeenCalled();
     expect(discordSend).not.toHaveBeenCalled();
   });
+
+  it("falls back to text for a flagged leaked-shaped error when the embed send fails", async () => {
+    (sendEmbedMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    });
+    await route([{ text: "TypeError: Cannot read properties of undefined", isError: true }]);
+    // Must not be swallowed by the leaked-error filter: the text fallback sends.
+    expect(discordSend).toHaveBeenCalledTimes(1);
+  });
 });
