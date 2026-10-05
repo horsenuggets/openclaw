@@ -115,8 +115,12 @@ export function buildGroupIntro(params: {
       : undefined;
   const lurkLine =
     "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available.";
+  // No blanket "avoid Markdown tables" rule: the per-channel table renderer already turns
+  // tables into whatever each surface supports (aligned code-block tables where the mode is
+  // "code", bullet lists on whatsapp/signal). This matches the 1:1 DM path, which never
+  // discouraged tables, so group and direct chats stay consistent.
   const styleLine =
-    "Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
+    "Write like a human. Don't type literal \\n sequences; use real line breaks sparingly.";
   return [
     subjectLine,
     membersLine,

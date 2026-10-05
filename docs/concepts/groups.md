@@ -397,8 +397,7 @@ Group inbound payloads set:
 - Telegram forum topics also include `MessageThreadId` and `IsForum`.
 
 The agent system prompt includes a group intro on the first turn of a new group session.
-It reminds the model to respond like a human, avoid Markdown tables, and avoid typing
-literal `\n` sequences.
+It reminds the model to respond like a human and avoid typing literal `\n` sequences.
 
 ## iMessage specifics
 

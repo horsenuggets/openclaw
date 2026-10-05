@@ -95,8 +95,10 @@ afterEach(() => {
 });
 
 describe("group intro prompts", () => {
+  // The group style hint no longer blanket-discourages Markdown tables on any channel; the
+  // per-channel renderer handles them, matching the 1:1 DM path.
   const groupParticipationNote =
-    "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
+    "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human. Don't type literal \\n sequences; use real line breaks sparingly.";
 
   it("labels Discord groups using the surface metadata", async () => {
     await withTempHome(async (home) => {
