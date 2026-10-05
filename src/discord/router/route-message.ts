@@ -283,8 +283,10 @@ export async function routeMessage(params: {
           const raw = payload.text ?? "";
 
           // Control command? Never rendered to Discord; run it and capture a
-          // result to relay back to the agent.
-          const cmd = params.runCommand ? parseAgentCommand(raw) : null;
+          // result to relay back to the agent. Error payloads are data, not
+          // commands: a provider error returned verbatim could look like a `⁘`
+          // command, so never run it — fall through to the error-embed branch.
+          const cmd = params.runCommand && !payload.isError ? parseAgentCommand(raw) : null;
           if (cmd) {
             ranCommand = true;
             handled = true;
@@ -316,13 +318,15 @@ export async function routeMessage(params: {
               embeds: [log.embed],
               attachments: log.attachments,
             });
-            if (!sent.ok) {
-              runtime.error(`[router] error log embed failed (${sent.status})`);
+            if (sent.ok) {
+              deliveredAnything = true;
+              deliveredThisTurn = true;
+              handled = true;
+              continue;
             }
-            deliveredAnything = true;
-            deliveredThisTurn = true;
-            handled = true;
-            continue;
+            // Embed send failed: fall through to the plain-text path below so the
+            // user still gets the error rather than nothing.
+            runtime.error(`[router] error log embed failed (${sent.status}); sending as text`);
           }
           if (text) {
             text = convertMarkdownTables(text, "code");
