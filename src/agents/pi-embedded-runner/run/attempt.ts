@@ -759,6 +759,14 @@ export async function runEmbeddedAttempt(
         onPartialReply: params.onPartialReply,
         onAssistantMessageStart: params.onAssistantMessageStart,
         onAgentEvent: params.onAgentEvent,
+        // Pi's automatic (overflow) compaction rebuilds the session from the
+        // persisted transcript, which never contains the persona preamble. Re-inject
+        // it before the retry so a subscription request keeps the full OpenClaw
+        // prompt (identity + operational instructions) instead of continuing with
+        // only the Claude Code base and reverting to Claude Code behavior.
+        onBeforeCompactionRetry: () => {
+          activeSession.agent.replaceMessages(applyPersonaAndValidate(activeSession.messages));
+        },
         enforceFinalTag: params.enforceFinalTag,
       });
 
