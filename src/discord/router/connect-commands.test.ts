@@ -9,6 +9,8 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
+import { type AuthResult, CliAuth, PasteTokenAuth } from "./connector-auth.js";
+import { type Connector, ConnectorRegistry } from "./connectors.js";
 
 describe("parseConnectTextCommand", () => {
   it("parses the bare command, subcommands, and args", () => {
@@ -98,9 +100,46 @@ function makeCtx(
   return { ctx, replies };
 }
 
+/**
+ * A network-free connector registry built from the real auth classes. The
+ * optional `validate` closure drives every paste-token connector's outcome, so
+ * handler tests control linking without hitting the network. Mirrors the real
+ * catalog's shape (Google unavailable; Todoist/Notion/GitHub paste-token).
+ */
+function makeRegistry(
+  validate?: (id: string, token: string) => Promise<AuthResult>,
+): ConnectorRegistry {
+  const paste = (id: string, label: string, services: string[]): Connector => ({
+    id,
+    label,
+    summary: `${label} summary`,
+    services,
+    available: true,
+    auth: new PasteTokenAuth({
+      url: `https://example.com/${id}`,
+      howto: `Get your ${label} token.`,
+      validate: (token) => (validate ? validate(id, token) : Promise.resolve({ ok: true })),
+    }),
+  });
+  return new ConnectorRegistry([
+    {
+      id: "google",
+      label: "Google",
+      summary: "Google summary",
+      services: ["Gmail"],
+      available: false,
+      auth: new CliAuth({ tool: "gog" }),
+    },
+    paste("todoist", "Todoist", ["Tasks", "Projects", "Labels"]),
+    paste("notion", "Notion", ["Pages"]),
+    paste("github", "GitHub", ["Repos"]),
+  ]);
+}
+
 function makeDeps(over: Partial<ConnectCommandDeps> = {}): ConnectCommandDeps {
   return {
     store: over.store ?? makeStore().store,
+    registry: over.registry ?? makeRegistry(),
     now: () => new Date("2026-01-01T00:00:00.000Z"),
     log: () => {},
     ...over,
@@ -166,18 +205,20 @@ describe("handleConnectCommand add", () => {
     await handleConnectCommand(ctx, makeDeps());
     const embed = embedOf(replies[0].payload);
     expect(embed.title).toBe("Link Todoist");
-    expect(embed.description).toContain("https://app.todoist.com");
+    expect(embed.description).toContain("https://example.com/todoist");
     expect(embed.description).toContain("/connections add todoist <token>");
   });
 
   it("validates, stores, scrubs, and confirms when a token works", async () => {
     const { store, map } = makeStore();
     const scrubCommandMessage = vi.fn();
-    const validateToken = vi.fn(async () => ({ ok: true, accountLabel: "octocat" }));
+    const validate = vi.fn(
+      async (): Promise<AuthResult> => ({ ok: true, accountLabel: "octocat" }),
+    );
     const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], { scrubCommandMessage });
-    await handleConnectCommand(ctx, makeDeps({ store, validateToken }));
+    await handleConnectCommand(ctx, makeDeps({ store, registry: makeRegistry(validate) }));
 
-    expect(validateToken).toHaveBeenCalledWith("github", "ghp_secret");
+    expect(validate).toHaveBeenCalledWith("github", "ghp_secret");
     expect(scrubCommandMessage).toHaveBeenCalledOnce();
     const stored = map.get("github");
     expect(stored).toMatchObject({
@@ -195,13 +236,13 @@ describe("handleConnectCommand add", () => {
     const scrubCommandMessage = vi.fn(() => {
       order.push("scrub");
     });
-    const validateToken = vi.fn(async () => {
+    const validate = vi.fn(async (): Promise<AuthResult> => {
       order.push("validate");
       return { ok: false, message: "GitHub returned 401" };
     });
     const { store, map } = makeStore();
     const { ctx, replies } = makeCtx("add", ["github", "bad"], { scrubCommandMessage });
-    await handleConnectCommand(ctx, makeDeps({ store, validateToken }));
+    await handleConnectCommand(ctx, makeDeps({ store, registry: makeRegistry(validate) }));
 
     expect(order).toEqual(["scrub", "validate"]);
     expect(map.get("github")).toBeUndefined(); // not stored
@@ -209,7 +250,7 @@ describe("handleConnectCommand add", () => {
     expect(embedOf(replies[0].payload).description).toContain("401");
   });
 
-  it("stores without a live check when no validator is wired", async () => {
+  it("stores the token when the connector's auth confirms it", async () => {
     const { store, map } = makeStore();
     const { ctx, replies } = makeCtx("add", ["todoist", "tok"]);
     await handleConnectCommand(ctx, makeDeps({ store }));

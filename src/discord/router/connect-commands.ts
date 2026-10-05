@@ -13,18 +13,13 @@
 
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import type { ConnectionStatus, StoredConnection } from "./connections-store.js";
-import {
-  CONNECTORS,
-  type ConnectorDef,
-  availableConnectorIds,
-  getConnector,
-} from "./connectors.js";
+import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
 
 /** Service choices for the slash command, built from the catalog. */
-const SERVICE_CHOICES = CONNECTORS.map((c) => ({ name: c.label, value: c.id }));
+const SERVICE_CHOICES = connectorRegistry.all().map((c) => ({ name: c.label, value: c.id }));
 
 /** Slash-command registration body for Discord (subcommand group). */
 export const CONNECTIONS_COMMAND_SPEC = {
@@ -97,17 +92,13 @@ export type ConnectionStore = {
   remove: (channelId: string, connectorId: string) => boolean;
 };
 
-/** Result of validating a pasted token against the service's API. */
-export type TokenValidation = { ok: boolean; accountLabel?: string; message?: string };
-
 export type ConnectCommandDeps = {
   store: ConnectionStore;
   /**
-   * Validate a pasted token against the service (e.g. GET /user). Optional: when
-   * omitted, tokens are stored without a live check. Keeps the handler testable
-   * and lets the router wire real fetch calls.
+   * The connector catalog. Injected so tests can supply network-free connectors
+   * while the router wires the real registry (with live token validation).
    */
-  validateToken?: (connectorId: string, token: string) => Promise<TokenValidation>;
+  registry: ConnectorRegistry;
   /** Current time, injectable for deterministic tests. */
   now?: () => Date;
   log: (message: string) => void;
@@ -172,7 +163,7 @@ export function connectTextCommandHasToken(parsed: {
 }
 
 /** Status glyph for a connector given its stored connection (if any). */
-function statusGlyph(connector: ConnectorDef, connection: StoredConnection | null): string {
+function statusGlyph(connector: Connector, connection: StoredConnection | null): string {
   if (!connector.available) {
     return "🚧";
   }
@@ -187,7 +178,7 @@ function statusGlyph(connector: ConnectorDef, connection: StoredConnection | nul
 }
 
 /** One line in the status embed for a connector. */
-function statusLine(connector: ConnectorDef, connection: StoredConnection | null): string {
+function statusLine(connector: Connector, connection: StoredConnection | null): string {
   const glyph = statusGlyph(connector, connection);
   const account = connection?.accountLabel ? ` (${connection.accountLabel})` : "";
   const note = !connector.available ? " — coming soon" : "";
@@ -195,14 +186,18 @@ function statusLine(connector: ConnectorDef, connection: StoredConnection | null
 }
 
 /** Build the `/connections list` status embed from the catalog plus stored connections. */
-function listReply(connections: StoredConnection[]): {
+function listReply(
+  registry: ConnectorRegistry,
+  connections: StoredConnection[],
+): {
   embeds: DiscordEmbed[];
   attachments: string[];
 } {
   const byId = new Map(connections.map((c) => [c.connectorId, c]));
-  const lines = CONNECTORS.map((connector) =>
-    statusLine(connector, byId.get(connector.id) ?? null),
-  ).join("\n");
+  const lines = registry
+    .all()
+    .map((connector) => statusLine(connector, byId.get(connector.id) ?? null))
+    .join("\n");
   return connectionsReply(
     "Your connections",
     `${lines}\n\nUse \`/connections add <service>\` to link one, or \`/connections remove <service>\` to unlink.`,
@@ -225,17 +220,17 @@ export async function handleConnectCommand(
       await ctx.reply(connectionsReply("Connections", NOT_REGISTERED), { ephemeral: true });
       return;
     }
-    await ctx.reply(listReply(connections), { ephemeral: true });
+    await ctx.reply(listReply(deps.registry, connections), { ephemeral: true });
     return;
   }
 
   if (sub === "add") {
-    const connector = getConnector(ctx.args[0]);
+    const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
       await ctx.reply(
         connectionsReply(
           "Connect",
-          `Unknown service "${ctx.args[0] ?? ""}". Available: ${availableConnectorIds()}.`,
+          `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
         ),
         { ephemeral: true },
       );
@@ -245,7 +240,7 @@ export async function handleConnectCommand(
       await ctx.reply(
         connectionsReply(
           "Connect",
-          `${connector.label} linking is coming soon. For now you can link: ${availableConnectorIds()}.`,
+          `${connector.label} linking is coming soon. For now you can link: ${deps.registry.availableIds()}.`,
         ),
         { ephemeral: true },
       );
@@ -258,10 +253,12 @@ export async function handleConnectCommand(
 
     const token = ctx.args[1];
     if (!token) {
-      // No token yet: show setup instructions. The user comes back with
-      // `/connections add <service> <token>` (or the slash command's token option).
-      const howto = connector.tokenHowto ? `\n\n${connector.tokenHowto}` : "";
-      const link = connector.tokenUrl ? `\n${connector.tokenUrl}` : "";
+      // No token yet: show setup instructions from the connector's auth flow. The
+      // user comes back with `/connections add <service> <token>` (or the slash
+      // command's token option).
+      const prompt = connector.auth.begin();
+      const howto = prompt.howto ? `\n\n${prompt.howto}` : "";
+      const link = prompt.url ? `\n${prompt.url}` : "";
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
@@ -274,55 +271,42 @@ export async function handleConnectCommand(
     }
 
     // A token was provided. Scrub the visible message first (best-effort) so the
-    // secret does not linger, then validate and store.
+    // secret does not linger, then verify and store via the connector's auth flow.
     await ctx.scrubCommandMessage?.();
 
-    if (deps.validateToken) {
-      const result = await deps.validateToken(connector.id, token);
-      if (!result.ok) {
-        await ctx.reply(
-          connectionsReply(
-            `Link ${connector.label}`,
-            `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
-              `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
-          ),
-          { ephemeral: true },
-        );
-        deps.log(`[connect] ${connector.id} validation failed for ${ctx.userId}`);
-        return;
-      }
-      saveLinked(deps, ctx.channelId, connector.id, token, result.accountLabel);
+    const result = await connector.auth.complete(token);
+    if (!result.ok) {
       await ctx.reply(
         connectionsReply(
-          "Connected!",
-          `${connector.label}${result.accountLabel ? ` (${result.accountLabel})` : ""} is now linked. ` +
-            `Unlocks: ${connector.services.join(", ")}.`,
+          `Link ${connector.label}`,
+          `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
+            `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
         ),
         { ephemeral: true },
       );
-      deps.log(`[connect] ${connector.id} linked for ${ctx.userId}`);
+      deps.log(`[connect] ${connector.id} validation failed for ${ctx.userId}`);
       return;
     }
-
-    saveLinked(deps, ctx.channelId, connector.id, token);
+    saveLinked(deps, ctx.channelId, connector.id, result.token ?? token, result.accountLabel);
     await ctx.reply(
       connectionsReply(
         "Connected!",
-        `${connector.label} is now linked. Unlocks: ${connector.services.join(", ")}.`,
+        `${connector.label}${result.accountLabel ? ` (${result.accountLabel})` : ""} is now linked. ` +
+          `Unlocks: ${connector.services.join(", ")}.`,
       ),
       { ephemeral: true },
     );
-    deps.log(`[connect] ${connector.id} linked for ${ctx.userId} (no validation)`);
+    deps.log(`[connect] ${connector.id} linked for ${ctx.userId}`);
     return;
   }
 
   if (sub === "remove") {
-    const connector = getConnector(ctx.args[0]);
+    const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
       await ctx.reply(
         connectionsReply(
           "Disconnect",
-          `Unknown service "${ctx.args[0] ?? ""}". Available: ${availableConnectorIds()}.`,
+          `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
         ),
         { ephemeral: true },
       );

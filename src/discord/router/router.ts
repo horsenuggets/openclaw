@@ -18,13 +18,13 @@ import {
   type ConnectCommandDeps,
   type ConnectionStore,
 } from "./connect-commands.js";
-import { validateConnectorToken } from "./connect-validators.js";
 import {
   getConnection,
   listConnections,
   removeConnection,
   saveConnection,
 } from "./connections-store.js";
+import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
@@ -502,7 +502,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   };
   const connectCommandDeps: ConnectCommandDeps = {
     store: connectionStore,
-    validateToken: validateConnectorToken,
+    registry: connectorRegistry,
     log: (message) => runtime.log(message),
   };
 

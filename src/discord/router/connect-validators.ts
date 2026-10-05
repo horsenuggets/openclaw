@@ -1,10 +1,12 @@
-import type { TokenValidation } from "./connect-commands.js";
+import type { AuthResult } from "./connector-auth.js";
 
 /**
- * Live token validation for paste-token connectors. Each hits a cheap "who am I"
- * endpoint to confirm the token works and to grab a friendly account label. Kept
- * separate from the command handler so the handler stays pure and testable; the
- * router injects this as `validateToken`.
+ * Live token validation for the paste-token connectors. Each hits a cheap
+ * "who am I" endpoint to confirm the token works and to grab a friendly account
+ * label. These are the `validate` closures composed into each connector's
+ * `PasteTokenAuth` (see connectors.ts); that class owns the input guard and the
+ * network-error handling, so these stay focused on the single request. Kept out
+ * of the command handler so it never touches the network and stays testable.
  */
 
 const VALIDATION_TIMEOUT_MS = 10_000;
@@ -20,7 +22,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
   }
 }
 
-async function validateTodoist(token: string): Promise<TokenValidation> {
+export async function validateTodoist(token: string): Promise<AuthResult> {
   // Todoist has no cheap identity endpoint; a projects fetch confirms the token.
   const resp = await fetchWithTimeout("https://api.todoist.com/rest/v2/projects", {
     headers: { Authorization: `Bearer ${token}` },
@@ -31,21 +33,18 @@ async function validateTodoist(token: string): Promise<TokenValidation> {
   return { ok: true };
 }
 
-async function validateNotion(token: string): Promise<TokenValidation> {
+export async function validateNotion(token: string): Promise<AuthResult> {
   const resp = await fetchWithTimeout("https://api.notion.com/v1/users/me", {
     headers: { Authorization: `Bearer ${token}`, "Notion-Version": "2022-06-28" },
   });
   if (!resp.ok) {
     return { ok: false, message: `Notion returned ${resp.status}` };
   }
-  const body = (await resp.json().catch(() => null)) as {
-    bot?: { owner?: unknown };
-    name?: string;
-  } | null;
+  const body = (await resp.json().catch(() => null)) as { name?: string } | null;
   return { ok: true, ...(body?.name ? { accountLabel: body.name } : {}) };
 }
 
-async function validateGithub(token: string): Promise<TokenValidation> {
+export async function validateGithub(token: string): Promise<AuthResult> {
   const resp = await fetchWithTimeout("https://api.github.com/user", {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -58,25 +57,4 @@ async function validateGithub(token: string): Promise<TokenValidation> {
   }
   const body = (await resp.json().catch(() => null)) as { login?: string } | null;
   return { ok: true, ...(body?.login ? { accountLabel: body.login } : {}) };
-}
-
-/** Validate a pasted token for a connector. Unknown connectors pass through unchecked. */
-export async function validateConnectorToken(
-  connectorId: string,
-  token: string,
-): Promise<TokenValidation> {
-  try {
-    switch (connectorId) {
-      case "todoist":
-        return await validateTodoist(token);
-      case "notion":
-        return await validateNotion(token);
-      case "github":
-        return await validateGithub(token);
-      default:
-        return { ok: true };
-    }
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "network error" };
-  }
 }
