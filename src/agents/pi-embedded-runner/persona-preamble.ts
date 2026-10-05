@@ -1,21 +1,23 @@
 /**
- * Persona/context preamble: delivers selected workspace files (plus an optional
- * pointer to withheld files) as a leading `<system-reminder>` user message
- * instead of the system prompt.
+ * Persona/context preamble: delivers the chosen workspace files (plus an optional
+ * pointer to withheld files, and on the subscription path the whole OpenClaw
+ * system prompt) as a leading `<system-reminder>` user message.
  *
  * Why conversation content instead of the system prompt: on the subscription
- * (OAuth) path the system prompt is collapsed to a Claude Code-compatible base
- * and its injected workspace files are stripped, so anything left there that
- * diverges from the Claude Code identity spills the request into paid extra
- * usage. Conversation content does NOT affect that billing decision, so files
- * routed here reach the model on every path (subscription AND API) without
- * spilling, and (being byte-stable turn to turn) ride the cached prefix.
+ * (OAuth) path the system block must stay a pure Claude Code base to bill on plan
+ * quota, so any OpenClaw-divergent content there (identity, persona, operational
+ * instructions) spills the request into paid extra usage. Conversation content
+ * does NOT affect that billing decision, so the whole OpenClaw prompt plus the
+ * workspace files are delivered here instead (see the `systemPrompt` option and
+ * subscription-prompt.ts). On the API-key path the operational prompt stays in the
+ * system block and only the workspace files ride here. Being byte-stable turn to
+ * turn, the preamble rides the cached prefix.
  *
- * Which files land here is decided by workspace-context.ts (per-file delivery
- * mode); this module only renders the chosen files. The preamble is rebuilt from
- * the workspace files each run and injected into the in-memory message list, so
- * it is never persisted to the transcript, always reflects the latest files, and
- * survives compaction (the post-compact request still leads with it).
+ * Which workspace files land here is decided by workspace-context.ts (per-file
+ * delivery mode). The preamble is rebuilt each run and injected into the in-memory
+ * message list, so it is never persisted to the transcript, always reflects the
+ * latest files, and survives compaction (the post-compact request still leads with
+ * it).
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";

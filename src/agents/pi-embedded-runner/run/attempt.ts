@@ -219,10 +219,10 @@ export async function runEmbeddedAttempt(
     // Route each workspace context file to inline (system prompt), preamble
     // (leading <system-reminder> conversation message), or off (withheld, listed
     // in a pointer) per the agents.defaults.context config. Preamble delivery
-    // reaches the model on the subscription path too (where the inline Project
-    // Context block is stripped) without spilling to paid usage. The preamble
-    // message itself is built below, once the subscription/heartbeat inputs are
-    // resolved.
+    // reaches the model on every path (on the subscription path the whole prompt
+    // rides the reminder) without spilling to paid usage, while inline delivery
+    // does not reach the model on the subscription path. The preamble message
+    // itself is built below, once the subscription/heartbeat inputs are resolved.
     const contextDelivery = resolveWorkspaceContextDelivery(
       contextFiles,
       params.config?.agents?.defaults?.context,
@@ -414,7 +414,12 @@ export async function runEmbeddedAttempt(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles: inlineFiles,
+      // "inline" files are delivered in the system Project Context block, which the
+      // documented contract says is not delivered on the subscription path. Since
+      // the subscription path now routes this whole prompt into the reminder, drop
+      // inline files there so they stay undelivered on OAuth as before (preamble
+      // files are the OAuth-safe delivery mode and ride the reminder separately).
+      contextFiles: needsSubscriptionPrefix ? [] : inlineFiles,
       contextPointer: inlinePointer,
       memoryCitationsMode: params.config?.memory?.citations,
     });
@@ -436,10 +441,13 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
-      // Report files that actually reach the model: inline (system Project Context)
-      // and preamble (conversation <system-reminder>). "off" files are withheld
+      // Report files that actually reach the model. Preamble files ride the
+      // reminder on every path; inline files reach the model only on the API path
+      // (dropped on subscription, see contextFiles above). "off" files are withheld
       // (only their name is pointed at), so they are excluded from the byte count.
-      injectedFiles: [...inlineFiles, ...preambleFiles],
+      injectedFiles: needsSubscriptionPrefix
+        ? [...preambleFiles]
+        : [...inlineFiles, ...preambleFiles],
       skillsPrompt,
       tools,
     });
