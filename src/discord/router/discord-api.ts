@@ -160,6 +160,21 @@ export async function discordSendEphemeral(
   }
 }
 
+/**
+ * Delete a message. Used to scrub a pasted secret (e.g. `/connect add <svc>
+ * <token>`) from channel history. Best-effort: failures are swallowed.
+ */
+export async function discordDeleteMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+): Promise<void> {
+  await fetch(`${DISCORD_API}${Routes.channelMessage(channelId, messageId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bot ${token}` },
+  }).catch(() => {});
+}
+
 export async function discordTyping(token: string, channelId: string): Promise<void> {
   await fetch(`${DISCORD_API}${Routes.channelTyping(channelId)}`, {
     method: "POST",

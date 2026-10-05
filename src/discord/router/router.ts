@@ -13,6 +13,18 @@ import {
 } from "./channel-commands.js";
 import { ChannelQueue } from "./channel-queue.js";
 import { loadRouterConfig, refreshToken, resolveProxyBindHost } from "./config.js";
+import {
+  CONNECT_COMMAND_SPEC,
+  type ConnectCommandDeps,
+  type ConnectionStore,
+} from "./connect-commands.js";
+import { validateConnectorToken } from "./connect-validators.js";
+import {
+  getConnection,
+  listConnections,
+  removeConnection,
+  saveConnection,
+} from "./connections-store.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
@@ -119,6 +131,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     body: JSON.stringify(SECRET_COMMAND_SPEC),
   }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
+
+  // Register the /connect command (list/add/remove connections).
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(CONNECT_COMMAND_SPEC),
+  }).catch((err) => runtime.error(`[router] failed to register /connect command: ${String(err)}`));
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -450,6 +472,36 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   };
 
+  // `/connect` store, backed by each instance's `.connections.json`. Resolving
+  // the channel's instance dir here keeps the command handler free of fs access.
+  // `null` from `list` means the channel has no instance (not registered), which
+  // the handler turns into a "register first" reply.
+  const connectionStore: ConnectionStore = {
+    list: (channelId) => {
+      const inst = instances.get(channelId);
+      return inst ? listConnections(inst.instanceDir) : null;
+    },
+    get: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      return inst ? getConnection(inst.instanceDir, connectorId) : null;
+    },
+    save: (channelId, connection) => {
+      const inst = instances.get(channelId);
+      if (inst) {
+        saveConnection(inst.instanceDir, connection);
+      }
+    },
+    remove: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      return inst ? removeConnection(inst.instanceDir, connectorId) : false;
+    },
+  };
+  const connectCommandDeps: ConnectCommandDeps = {
+    store: connectionStore,
+    validateToken: validateConnectorToken,
+    log: (message) => runtime.log(message),
+  };
+
   // When a Discord channel with a registered instance is deleted (or the bot is
   // removed from a guild), tear the instance down through the same provisioning
   // path `/channel unregister` uses.
@@ -485,6 +537,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
+    connectCommandDeps,
     cleanupDeletedChannel,
   };
 

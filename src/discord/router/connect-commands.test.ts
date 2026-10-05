@@ -1,0 +1,225 @@
+import { describe, expect, it, vi } from "vitest";
+import type { ChannelReplyPayload } from "./channel-commands.js";
+import type { StoredConnection } from "./connections-store.js";
+import {
+  type ConnectCommandContext,
+  type ConnectCommandDeps,
+  type ConnectionStore,
+  connectTextCommandHasToken,
+  handleConnectCommand,
+  parseConnectTextCommand,
+} from "./connect-commands.js";
+
+describe("parseConnectTextCommand", () => {
+  it("parses the bare command, subcommands, and args", () => {
+    expect(parseConnectTextCommand("/connect")).toEqual({ subcommand: null, args: [] });
+    expect(parseConnectTextCommand("/connect list")).toEqual({ subcommand: "list", args: [] });
+    expect(parseConnectTextCommand("/connect add todoist tok_123")).toEqual({
+      subcommand: "add",
+      args: ["todoist", "tok_123"],
+    });
+    expect(parseConnectTextCommand("  //connect remove github ")).toEqual({
+      subcommand: "remove",
+      args: ["github"],
+    });
+  });
+
+  it("returns null for non-connect messages", () => {
+    expect(parseConnectTextCommand("hello")).toBeNull();
+    expect(parseConnectTextCommand("/channel register")).toBeNull();
+    expect(parseConnectTextCommand("connect todoist")).toBeNull();
+  });
+});
+
+describe("connectTextCommandHasToken", () => {
+  it("is true only for add with a token arg", () => {
+    expect(connectTextCommandHasToken({ subcommand: "add", args: ["todoist", "tok"] })).toBe(true);
+    expect(connectTextCommandHasToken({ subcommand: "add", args: ["todoist"] })).toBe(false);
+    expect(connectTextCommandHasToken({ subcommand: "list", args: [] })).toBe(false);
+    expect(connectTextCommandHasToken({ subcommand: "remove", args: ["todoist", "x"] })).toBe(
+      false,
+    );
+  });
+});
+
+const CHANNEL = "123456789012345678";
+const USER = "111111111111111111";
+
+/** In-memory store. `registered: false` makes every method behave as "no instance". */
+function makeStore(registered = true, seed: StoredConnection[] = []) {
+  const map = new Map<string, StoredConnection>(seed.map((c) => [c.connectorId, c]));
+  const store: ConnectionStore = {
+    list: () => (registered ? [...map.values()] : null),
+    get: (_c, id) => (registered ? (map.get(id) ?? null) : null),
+    save: (_c, connection) => {
+      map.set(connection.connectorId, connection);
+    },
+    remove: (_c, id) => map.delete(id),
+  };
+  return { store, map };
+}
+
+function makeCtx(
+  subcommand: string | null,
+  args: string[] = [],
+  over: Partial<ConnectCommandContext> = {},
+) {
+  const replies: { payload: ChannelReplyPayload; ephemeral?: boolean }[] = [];
+  const ctx: ConnectCommandContext = {
+    subcommand,
+    args,
+    channelId: CHANNEL,
+    userId: USER,
+    isDM: true,
+    reply: (payload, opts) => {
+      replies.push({ payload, ephemeral: opts?.ephemeral });
+    },
+    ...over,
+  };
+  return { ctx, replies };
+}
+
+function makeDeps(over: Partial<ConnectCommandDeps> = {}): ConnectCommandDeps {
+  return {
+    store: over.store ?? makeStore().store,
+    now: () => new Date("2026-01-01T00:00:00.000Z"),
+    log: () => {},
+    ...over,
+  };
+}
+
+/** Pull the first embed out of a reply payload (fails if it is a string). */
+function embedOf(payload: ChannelReplyPayload) {
+  expect(typeof payload).toBe("object");
+  const obj = payload as { embeds: { title?: string; description?: string; color?: number }[] };
+  return obj.embeds[0];
+}
+
+describe("handleConnectCommand list", () => {
+  it("tells unregistered channels to register first", async () => {
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
+    expect(embedOf(replies[0].payload).description).toContain("not registered");
+    expect(replies[0].ephemeral).toBe(true);
+  });
+
+  it("shows every connector with a status glyph", async () => {
+    const seed: StoredConnection[] = [
+      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
+    const desc = embedOf(replies[0].payload).description ?? "";
+    expect(desc).toContain("✅ **Todoist**"); // linked
+    expect(desc).toContain("⚪ **Notion**"); // not linked
+    expect(desc).toContain("🚧 **Google**"); // coming soon
+    expect(desc).toContain("coming soon");
+  });
+
+  it("defaults a null subcommand to list", async () => {
+    const { ctx, replies } = makeCtx(null);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).title).toBe("Your connections");
+  });
+});
+
+describe("handleConnectCommand add", () => {
+  it("rejects an unknown service", async () => {
+    const { ctx, replies } = makeCtx("add", ["slack"]);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+  });
+
+  it("refuses a not-yet-available connector (Google)", async () => {
+    const { ctx, replies } = makeCtx("add", ["google"]);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).description).toContain("coming soon");
+  });
+
+  it("requires registration before linking", async () => {
+    const { ctx, replies } = makeCtx("add", ["todoist", "tok"]);
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
+    expect(embedOf(replies[0].payload).description).toContain("not registered");
+  });
+
+  it("shows instructions when no token is supplied", async () => {
+    const { ctx, replies } = makeCtx("add", ["todoist"]);
+    await handleConnectCommand(ctx, makeDeps());
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Link Todoist");
+    expect(embed.description).toContain("https://app.todoist.com");
+    expect(embed.description).toContain("/connect add todoist <token>");
+  });
+
+  it("validates, stores, scrubs, and confirms when a token works", async () => {
+    const { store, map } = makeStore();
+    const scrubCommandMessage = vi.fn();
+    const validateToken = vi.fn(async () => ({ ok: true, accountLabel: "octocat" }));
+    const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps({ store, validateToken }));
+
+    expect(validateToken).toHaveBeenCalledWith("github", "ghp_secret");
+    expect(scrubCommandMessage).toHaveBeenCalledOnce();
+    const stored = map.get("github");
+    expect(stored).toMatchObject({
+      status: "linked",
+      token: "ghp_secret",
+      accountLabel: "octocat",
+    });
+    expect(stored?.linkedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(embedOf(replies[0].payload).title).toBe("Connected!");
+    expect(embedOf(replies[0].payload).description).toContain("octocat");
+  });
+
+  it("scrubs the message before validating so a bad token still does not linger", async () => {
+    const order: string[] = [];
+    const scrubCommandMessage = vi.fn(() => {
+      order.push("scrub");
+    });
+    const validateToken = vi.fn(async () => {
+      order.push("validate");
+      return { ok: false, message: "GitHub returned 401" };
+    });
+    const { store, map } = makeStore();
+    const { ctx, replies } = makeCtx("add", ["github", "bad"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps({ store, validateToken }));
+
+    expect(order).toEqual(["scrub", "validate"]);
+    expect(map.get("github")).toBeUndefined(); // not stored
+    expect(embedOf(replies[0].payload).description).toContain("did not work");
+    expect(embedOf(replies[0].payload).description).toContain("401");
+  });
+
+  it("stores without a live check when no validator is wired", async () => {
+    const { store, map } = makeStore();
+    const { ctx, replies } = makeCtx("add", ["todoist", "tok"]);
+    await handleConnectCommand(ctx, makeDeps({ store }));
+    expect(map.get("todoist")?.token).toBe("tok");
+    expect(embedOf(replies[0].payload).title).toBe("Connected!");
+  });
+});
+
+describe("handleConnectCommand remove", () => {
+  it("unlinks an existing connection", async () => {
+    const seed: StoredConnection[] = [
+      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
+    const { store, map } = makeStore(true, seed);
+    const { ctx, replies } = makeCtx("remove", ["todoist"]);
+    await handleConnectCommand(ctx, makeDeps({ store }));
+    expect(map.has("todoist")).toBe(false);
+    expect(embedOf(replies[0].payload).description).toContain("unlinked");
+  });
+
+  it("reports when there was nothing to remove", async () => {
+    const { ctx, replies } = makeCtx("remove", ["todoist"]);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).description).toContain("nothing to remove");
+  });
+
+  it("rejects an unknown service on remove", async () => {
+    const { ctx, replies } = makeCtx("remove", ["slack"]);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+  });
+});

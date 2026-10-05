@@ -12,7 +12,14 @@ import {
 } from "./channel-commands.js";
 import { setUserPreference } from "./config.js";
 import {
+  type ConnectCommandDeps,
+  connectTextCommandHasToken,
+  handleConnectCommand,
+  parseConnectTextCommand,
+} from "./connect-commands.js";
+import {
   DISCORD_API,
+  discordDeleteMessage,
   discordSendEphemeral,
   discordSendReply,
   editInteractionEmbedReply,
@@ -65,6 +72,7 @@ export type GatewayContext = {
   unauthorizedNoticeEnabled: boolean;
   describeInstance: (channelId: string) => InstanceStatus | null;
   channelCommandDeps: ChannelCommandDeps;
+  connectCommandDeps: ConnectCommandDeps;
   /** Tear an instance down through the same provisioning path as unregister. */
   cleanupDeletedChannel: (channelId: string, reason: string) => void;
 };
@@ -157,6 +165,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
+    connectCommandDeps,
   } = ctx;
 
   const authorId = d.author?.id;
@@ -225,6 +234,40 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     );
     runtime.log(
       `[router] /channel ${channelCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId})`,
+    );
+    return;
+  }
+
+  // `/connect` management commands, handled before the bot filter (so a tester
+  // bot can drive them) but gated on registration inside the handler. When the
+  // command carried a pasted token, scrub the originating message so the secret
+  // does not linger in channel history.
+  const connectCmd = authorId ? parseConnectTextCommand(content) : null;
+  if (connectCmd && authorId) {
+    const commandMessageId = d.id;
+    const hasToken = connectTextCommandHasToken(connectCmd);
+    void handleConnectCommand(
+      {
+        subcommand: connectCmd.subcommand,
+        args: connectCmd.args,
+        channelId,
+        userId: authorId,
+        isDM: !guildId,
+        reply: (payload, opts) =>
+          opts?.ephemeral && typeof payload === "string"
+            ? discordSendEphemeral(discordToken, channelId, payload)
+            : discordSendReply(discordToken, channelId, commandMessageId, payload),
+        ...(hasToken
+          ? {
+              scrubCommandMessage: () =>
+                discordDeleteMessage(discordToken, channelId, commandMessageId),
+            }
+          : {}),
+      },
+      connectCommandDeps,
+    );
+    runtime.log(
+      `[router] /connect ${connectCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId}, token=${hasToken})`,
     );
     return;
   }
@@ -356,8 +399,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
  * ~3s window, then edits the deferred reply with the result.
  */
 export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionData): void {
-  const { applicationId, runtime, instances, channelGuild, channelCommandDeps, describeInstance } =
-    ctx;
+  const {
+    applicationId,
+    runtime,
+    instances,
+    channelGuild,
+    channelCommandDeps,
+    connectCommandDeps,
+    describeInstance,
+  } = ctx;
 
   const interactionData = d.data;
   const interactionChannelId = d.channel_id;
@@ -592,6 +642,75 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           reply: (payload) => editReply(payload),
         },
         channelCommandDeps,
+      );
+    }
+  }
+
+  if (interactionData?.name === "connect" && interactionChannelId) {
+    const subOpt = (
+      interactionData.options as
+        | Array<{
+            name: string;
+            options?: Array<{ name: string; value: string | number | boolean }>;
+          }>
+        | undefined
+    )?.[0];
+    // add/remove both carry `service`; add also carries an optional `token`.
+    // Order matters: service first, token second (interpreted downstream).
+    const args: string[] = [];
+    const service = subOpt?.options?.find((o) => o.name === "service")?.value;
+    if (service !== undefined) {
+      args.push(String(service));
+    }
+    const token = subOpt?.options?.find((o) => o.name === "token")?.value;
+    if (token !== undefined) {
+      args.push(String(token));
+    }
+    const userId = d.member?.user?.id ?? d.user?.id;
+    if (userId) {
+      // Defer (ephemeral): add validates a token over the network and can exceed
+      // Discord's ~3s window. Deliver the result by editing the deferred reply.
+      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+      }).catch((err) => runtime.error(`[router] connect defer failed: ${String(err)}`));
+      const editReply = (payload: ChannelReplyPayload) => {
+        if (typeof payload === "string") {
+          void fetch(
+            `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: payload }),
+            },
+          ).catch((err) => runtime.error(`[router] connect followup failed: ${String(err)}`));
+          return;
+        }
+        void editInteractionEmbedReply(applicationId, interactionToken, {
+          embeds: payload.embeds,
+          attachments: payload.attachments,
+          components: payload.components ?? [],
+        })
+          .then((res) => {
+            if (!res.ok) {
+              runtime.error(`[router] connect followup failed (${res.status})`);
+            }
+          })
+          .catch((err) => runtime.error(`[router] connect followup failed: ${String(err)}`));
+      };
+      // Slash option values are never posted as a visible message, so there is no
+      // token to scrub (scrubCommandMessage is omitted).
+      void handleConnectCommand(
+        {
+          subcommand: subOpt?.name ?? null,
+          args,
+          channelId: interactionChannelId,
+          userId,
+          isDM: !d.guild_id,
+          reply: (payload) => editReply(payload),
+        },
+        connectCommandDeps,
       );
     }
   }
