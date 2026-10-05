@@ -96,6 +96,11 @@ merge_env_files() {
       eq = index($0, "=")
       if (eq == 0) next
       key = substr($0, 1, eq - 1)
+      # Normalize the key so dedup is reliable: strip leading/trailing whitespace
+      # and an optional `export ` prefix (e.g. `export FOO` and `FOO` collide).
+      sub(/^[[:space:]]+/, "", key)
+      sub(/^export[[:space:]]+/, "", key)
+      sub(/[[:space:]]+$/, "", key)
       if (!(key in seen)) { order[++n] = key; seen[key] = 1 }
       val[key] = $0
     }
@@ -118,6 +123,15 @@ build_box_env() {
     [ -f "$ROOT_DIR/.env.mirror" ] ||
       die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."
     merge_env_files "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$BOX_ENV"
+    # The overlay must actually replace the prod token. If .env.mirror omits (or
+    # blanks) DISCORD_BOT_TOKEN, the merged value falls back to .env's prod token
+    # and the box would open a second gateway session on the prod bot, fighting
+    # prod — the exact conflict this rig exists to avoid.
+    local base_token merged_token
+    base_token=$(sed -n 's/^DISCORD_BOT_TOKEN=//p' "$ROOT_DIR/.env" | tail -n1)
+    merged_token=$(sed -n 's/^DISCORD_BOT_TOKEN=//p' "$BOX_ENV" | tail -n1)
+    [ -n "$merged_token" ] && [ "$merged_token" != "$base_token" ] ||
+      die ".env.mirror must set a non-empty DISCORD_BOT_TOKEN (the OpenClawMirror bot) that differs from the prod token in .env."
   else
     grep -v '^[[:space:]]*DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$BOX_ENV"
     printf 'DISCORD_BOT_TOKEN=\n' >>"$BOX_ENV"

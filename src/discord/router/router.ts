@@ -190,15 +190,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   });
 
   // Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may hold normal conversations
-  // with the agent, not just run /channel commands. This is the mock-user bot that
-  // drives end-to-end tests; every other bot stays filtered out below to prevent
-  // bot-to-bot reply loops. Comma-separated to allow more than one if ever needed.
-  const allowedBotIds = new Set(
-    (process.env.OPENCLAW_MOCK_USER_BOT_ID ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
-  );
+  // with the agent, not just run /channel commands. This is the single mock-user
+  // bot that drives end-to-end tests; every other bot stays filtered out below to
+  // prevent bot-to-bot reply loops.
+  const mockUserBotId = process.env.OPENCLAW_MOCK_USER_BOT_ID?.trim();
+  const allowedBotIds = new Set(mockUserBotId ? [mockUserBotId] : []);
 
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
@@ -749,7 +745,7 @@ async function recoverUnansweredMessages(
   /** Message IDs already attempted this process, to avoid re-recovery loops. */
   recoveredMessageIds: Set<string>,
   /**
-   * Trusted bot ids (OPENCLAW_MOCK_USER_BOT_ID) whose messages are
+   * Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) whose messages are
    * conversational, matching the live path. Their unanswered messages are
    * recoverable; every other bot's message is treated as a reply/banner.
    */

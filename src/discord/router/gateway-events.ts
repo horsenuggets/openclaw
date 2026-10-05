@@ -39,7 +39,7 @@ export type GatewayContext = {
   inflight: Set<string>;
   /** Best-effort channel -> guild map, learned from message/interaction events. */
   channelGuild: Map<string, string>;
-  /** Trusted bot ids (OPENCLAW_MOCK_USER_BOT_ID) that may converse. */
+  /** Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may converse. */
   allowedBotIds: Set<string>;
   describeInstance: (channelId: string) => InstanceStatus | null;
   channelCommandDeps: ChannelCommandDeps;
