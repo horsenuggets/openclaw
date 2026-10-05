@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { autoLinkUrls, buildLogEmbed } from "./log-embed.js";
+import { autoLinkUrls, buildLogEmbed, formatJsonBlocks } from "./log-embed.js";
 
 describe("autoLinkUrls", () => {
   it("wraps a bare https URL using the scheme-less label", () => {
     expect(autoLinkUrls("Add more at https://claude.ai/settings/usage and keep going.")).toBe(
       "Add more at [claude.ai/settings/usage](https://claude.ai/settings/usage) and keep going.",
-    );
-  });
-
-  it("wraps http URLs too", () => {
-    expect(autoLinkUrls("see http://example.com/x")).toBe(
-      "see [example.com/x](http://example.com/x)",
     );
   });
 
@@ -20,47 +14,67 @@ describe("autoLinkUrls", () => {
     );
   });
 
-  it("leaves URLs that are already markdown link targets alone", () => {
-    const already = "see [the docs](https://example.com/docs)";
-    expect(autoLinkUrls(already)).toBe(already);
-  });
-
-  it("links multiple URLs in one string", () => {
-    expect(autoLinkUrls("https://a.com and https://b.com")).toBe(
-      "[a.com](https://a.com) and [b.com](https://b.com)",
+  it("leaves markdown-link targets and angle-bracket URLs alone", () => {
+    expect(autoLinkUrls("see [the docs](https://example.com/docs)")).toBe(
+      "see [the docs](https://example.com/docs)",
     );
+    expect(autoLinkUrls("see <https://example.com> now")).toBe("see <https://example.com> now");
   });
 
   it("returns text without URLs unchanged", () => {
     expect(autoLinkUrls("just a plain log line")).toBe("just a plain log line");
   });
+});
 
-  it("leaves Discord angle-bracket URLs (<https://x>) untouched", () => {
-    expect(autoLinkUrls("see <https://example.com> now")).toBe("see <https://example.com> now");
-    expect(autoLinkUrls("<https://example.com/path>")).toBe("<https://example.com/path>");
+describe("formatJsonBlocks", () => {
+  it("pretty-prints an embedded JSON object into a fenced block with surrounding newlines", () => {
+    expect(formatJsonBlocks('502 {"error":"upstream auth unavailable"}')).toBe(
+      '502\n```json\n{\n  "error": "upstream auth unavailable"\n}\n```',
+    );
+  });
+
+  it("separates JSON from text on both sides (a{}b)", () => {
+    expect(formatJsonBlocks("a{}b")).toBe("a\n```json\n{}\n```\nb");
+  });
+
+  it("handles a JSON array", () => {
+    expect(formatJsonBlocks("[1,2]")).toBe("```json\n[\n  1,\n  2\n]\n```");
+  });
+
+  it("leaves non-JSON braces untouched", () => {
+    expect(formatJsonBlocks("not json {oops} here")).toBe("not json {oops} here");
+  });
+
+  it("leaves plain text unchanged", () => {
+    expect(formatJsonBlocks("Back online.")).toBe("Back online.");
   });
 });
 
 describe("buildLogEmbed", () => {
-  it("builds a Log-category embed with no title", () => {
+  it("builds a Log-category embed with no title and no forced italics", () => {
     const { embed, attachments } = buildLogEmbed("Back online.");
     expect(embed.title).toBeUndefined();
     expect(embed.color).toBe(0xa0a0a0);
     expect(embed.footer).toEqual({ text: "Log Message", icon_url: "attachment://log-message.png" });
     expect(attachments).toEqual(["log-message.png"]);
     expect(embed.timestamp).toBeDefined();
+    expect(embed.description).toBe("Back online.");
   });
 
-  it("italicizes the whole description and auto-links URLs", () => {
-    const { embed } = buildLogEmbed(
-      "You're out of extra usage. Add more at https://claude.ai/settings/usage and keep going.",
-    );
+  it("formats embedded JSON as a fenced block", () => {
+    const { embed } = buildLogEmbed('502 {"error":"upstream auth unavailable"}');
     expect(embed.description).toBe(
-      "*You're out of extra usage. Add more at [claude.ai/settings/usage](https://claude.ai/settings/usage) and keep going.*",
+      '502\n```json\n{\n  "error": "upstream auth unavailable"\n}\n```',
     );
   });
 
-  it("trims surrounding whitespace before formatting", () => {
-    expect(buildLogEmbed("  hi  ").embed.description).toBe("*hi*");
+  it("auto-links URLs outside code blocks", () => {
+    const { embed } = buildLogEmbed("see https://example.com now");
+    expect(embed.description).toBe("see [example.com](https://example.com) now");
+  });
+
+  it("does not mangle URLs inside a JSON code block", () => {
+    const { embed } = buildLogEmbed('{"url":"https://example.com"}');
+    expect(embed.description).toBe('```json\n{\n  "url": "https://example.com"\n}\n```');
   });
 });

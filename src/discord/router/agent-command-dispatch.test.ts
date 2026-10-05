@@ -52,7 +52,7 @@ describe("runAgentCommandDispatch", () => {
     expect(channelId).toBe("chan-1");
     expect(message.attachments).toEqual(["log-message.png"]);
     expect(message.embeds[0].color).toBe(0xa0a0a0);
-    expect(message.embeds[0].description).toBe("*Back online after a restart*");
+    expect(message.embeds[0].description).toBe("Back online after a restart");
   });
 
   it("relays a rejected log embed back to the agent as an error", async () => {
