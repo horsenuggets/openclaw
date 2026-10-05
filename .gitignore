@@ -1,6 +1,7 @@
 node_modules
 **/node_modules/
 .env
+.env.mirror
 docker-compose.extra.yml
 docker-compose.generated.yml
 *.tfstate
@@ -64,7 +65,6 @@ apps/ios/*.dSYM.zip
 
 # provisioning profiles (local)
 apps/ios/*.mobileprovision
-.env
 
 # Local untracked files
 .local/

@@ -40,7 +40,7 @@ export type GatewayContext = {
   inflight: Set<string>;
   /** Best-effort channel -> guild map, learned from message/interaction events. */
   channelGuild: Map<string, string>;
-  /** Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may converse. */
+  /** Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may converse. */
   allowedBotIds: Set<string>;
   /**
    * Whether to tell a non-owner why their message in a registered channel was
@@ -194,7 +194,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
 
   // Normal agent messages: ignore untrusted bots and empty messages.
   // Channel commands were already handled above so bots can still drive
-  // them. Trusted bots (OPENCLAW_ROUTER_ALLOW_BOT_IDS) may converse, but
+  // them. A trusted bot (OPENCLAW_MOCK_USER_BOT_ID) may converse, but
   // never the router's own bot (self-routing would loop).
   const botAllowed = isBot ? isConversationalBot(authorId, applicationId, allowedBotIds) : false;
   if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {

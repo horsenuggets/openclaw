@@ -190,16 +190,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   });
 
-  // Trusted bot ids (comma-separated OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may hold
-  // normal conversations with the agent, not just run /channel commands. Intended
-  // for an automated tester bot driving end-to-end tests; every other bot stays
-  // filtered out below to prevent bot-to-bot reply loops.
-  const allowedBotIds = new Set(
-    (process.env.OPENCLAW_ROUTER_ALLOW_BOT_IDS ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
-  );
+  // Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may hold normal conversations
+  // with the agent, not just run /channel commands. This is the single mock-user
+  // bot that drives end-to-end tests; every other bot stays filtered out below to
+  // prevent bot-to-bot reply loops.
+  const mockUserBotId = process.env.OPENCLAW_MOCK_USER_BOT_ID?.trim();
+  const allowedBotIds = new Set(mockUserBotId ? [mockUserBotId] : []);
 
   // When a non-owner messages a registered channel, reply with a Log-embed
   // notice (enabled by default) explaining the channel belongs to someone else.
@@ -759,8 +755,8 @@ async function recoverUnansweredMessages(
   /** Message IDs already attempted this process, to avoid re-recovery loops. */
   recoveredMessageIds: Set<string>,
   /**
-   * Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) whose messages are
-   * conversational, matching the live path. Their unanswered messages are
+   * Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) whose messages are
+   * conversational, matching the live path. Its unanswered messages are
    * recoverable; every other bot's message is treated as a reply/banner.
    */
   allowedBotIds: Set<string>,

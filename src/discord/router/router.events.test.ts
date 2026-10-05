@@ -261,7 +261,7 @@ describe("discord router channel-delete cleanup", () => {
   });
 
   it("routes messages from trusted bots in guild channels", async () => {
-    vi.stubEnv("OPENCLAW_ROUTER_ALLOW_BOT_IDS", "trusted-bot");
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "trusted-bot");
     void start();
     await vi.advanceTimersByTimeAsync(0);
     const ws = FakeWebSocket.instances[0];
@@ -496,7 +496,7 @@ describe("discord router channel-delete cleanup", () => {
   });
 
   it("recovers trusted bot messages in guild channels", async () => {
-    vi.stubEnv("OPENCLAW_ROUTER_ALLOW_BOT_IDS", "trusted-bot");
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "trusted-bot");
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {

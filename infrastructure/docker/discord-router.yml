@@ -34,10 +34,10 @@ services:
       # member of the auth server. Unset => no override (fail closed). Do not use
       # in production; add a real auth-server role instead.
       - OPENCLAW_ADMIN_OVERRIDE_IDS=${OPENCLAW_ADMIN_OVERRIDE_IDS}
-      # Trusted bot ids (comma-separated) allowed to hold normal conversations
-      # with the agent, not just run /channel commands. For an automated tester
-      # bot driving end-to-end tests. Unset => all bots are chat-filtered.
-      - OPENCLAW_ROUTER_ALLOW_BOT_IDS=${OPENCLAW_ROUTER_ALLOW_BOT_IDS}
+      # The mock-user bot id allowed to hold normal conversations with the agent,
+      # not just run /channel commands. This is the bot that drives end-to-end
+      # tests. Unset => all bots are chat-filtered.
+      - OPENCLAW_MOCK_USER_BOT_ID=${OPENCLAW_MOCK_USER_BOT_ID}
       # Reply to a non-owner messaging a registered channel with a Log embed
       # explaining the channel belongs to someone else. Unset/truthy => enabled;
       # set falsy (0/false/no/off) to deny silently.

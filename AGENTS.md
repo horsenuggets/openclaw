@@ -148,7 +148,8 @@
   1. Start the gateway with Discord channels enabled (do NOT use `gateway:dev` which sets
      `OPENCLAW_SKIP_CHANNELS=1`): `node dist/entry.js gateway --force` (build first with
      `pnpm build`). The Discord bot token is read from `~/.openclaw/openclaw.json`.
-  2. Set the `DISCORD_E2E_BOT_TOKEN` environment variable to the test bot's token.
+  2. Set the `OPENCLAW_MOCK_USER_BOT_TOKEN` environment variable to the mock-user (test
+     driver) bot's token.
   3. Run tests:
      `LIVE=1 npx vitest run --config vitest.e2e.config.ts src/discord/e2e/<file>`. Use
      `-t "test name"` to run a single test.
