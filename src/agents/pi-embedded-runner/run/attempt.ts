@@ -57,7 +57,10 @@ import {
   loadWorkspaceSkillEntries,
   resolveSkillsPromptForRun,
 } from "../../skills.js";
-import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../../subscription-prompt.js";
+import {
+  needsSubscriptionSystemPrompt,
+  resolveSystemPromptDelivery,
+} from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import {
@@ -216,10 +219,10 @@ export async function runEmbeddedAttempt(
     // Route each workspace context file to inline (system prompt), preamble
     // (leading <system-reminder> conversation message), or off (withheld, listed
     // in a pointer) per the agents.defaults.context config. Preamble delivery
-    // reaches the model on the subscription path too (where the inline Project
-    // Context block is stripped) without spilling to paid usage. The preamble
-    // message itself is built below, once the subscription/heartbeat inputs are
-    // resolved.
+    // reaches the model on every path (on the subscription path the whole prompt
+    // rides the reminder) without spilling to paid usage, while inline delivery
+    // does not reach the model on the subscription path. The preamble message
+    // itself is built below, once the subscription/heartbeat inputs are resolved.
     const contextDelivery = resolveWorkspaceContextDelivery(
       contextFiles,
       params.config?.agents?.defaults?.context,
@@ -381,9 +384,6 @@ export async function runEmbeddedAttempt(
     const heartbeatPromptText = isDefaultAgent
       ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
       : undefined;
-    const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
-      pointer: preamblePointer,
-    });
     const docsPath = await resolveOpenClawDocsPath({
       workspaceDir: effectiveWorkspace,
       argv1: process.argv[1],
@@ -414,12 +414,14 @@ export async function runEmbeddedAttempt(
       userTimezone,
       userTime,
       userTimeFormat,
-      contextFiles: inlineFiles,
+      // "inline" files are delivered in the system Project Context block, which the
+      // documented contract says is not delivered on the subscription path. Since
+      // the subscription path now routes this whole prompt into the reminder, drop
+      // inline files there so they stay undelivered on OAuth as before (preamble
+      // files are the OAuth-safe delivery mode and ride the reminder separately).
+      contextFiles: needsSubscriptionPrefix ? [] : inlineFiles,
       contextPointer: inlinePointer,
       memoryCitationsMode: params.config?.memory?.citations,
-      // Only the subscription path slices the Project Context block back out
-      // (wrapForSubscription below), so only it needs the sentinel markers.
-      wrapProjectContext: needsSubscriptionPrefix,
     });
     const systemPromptReport = buildSystemPromptReport({
       source: "run",
@@ -439,23 +441,31 @@ export async function runEmbeddedAttempt(
       })(),
       systemPrompt: appendPrompt,
       bootstrapFiles: hookAdjustedBootstrapFiles,
-      // Report files that actually reach the model: inline (system Project Context)
-      // and preamble (conversation <system-reminder>). "off" files are withheld
+      // Report files that actually reach the model. Preamble files ride the
+      // reminder on every path; inline files reach the model only on the API path
+      // (dropped on subscription, see contextFiles above). "off" files are withheld
       // (only their name is pointed at), so they are excluded from the byte count.
-      injectedFiles: [...inlineFiles, ...preambleFiles],
+      injectedFiles: needsSubscriptionPrefix
+        ? [...preambleFiles]
+        : [...inlineFiles, ...preambleFiles],
       skillsPrompt,
       tools,
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
-    // When using a subscription-authenticated provider (OAuth token),
     const rawSystemPrompt = systemPromptOverride();
-    // For subscription providers, wrap OpenClaw's prompt inside a Claude
-    // Code-compatible base prompt. The server validates system prompt
-    // content for OAuth requests — this matches the structure used by
-    // the official CLI's --append-system-prompt flag.
-    const systemPromptText = needsSubscriptionPrefix
-      ? wrapForSubscription(rawSystemPrompt)
-      : rawSystemPrompt;
+    // Subscription (OAuth) requests only bill on plan quota when the system block
+    // stays a pure Claude Code base, so the whole OpenClaw prompt (identity +
+    // operational instructions) is delivered in the leading user <system-reminder>
+    // instead (see subscription-billing-probe.ts case "full-prompt-in-reminder").
+    // On the API-key path the OpenClaw prompt stays in the system block as before.
+    const { systemPromptText, preambleSystemPrompt } = resolveSystemPromptDelivery({
+      needsSubscription: needsSubscriptionPrefix,
+      openClawSystemPrompt: rawSystemPrompt,
+    });
+    const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
+      pointer: preamblePointer,
+      systemPrompt: preambleSystemPrompt,
+    });
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
@@ -749,6 +759,14 @@ export async function runEmbeddedAttempt(
         onPartialReply: params.onPartialReply,
         onAssistantMessageStart: params.onAssistantMessageStart,
         onAgentEvent: params.onAgentEvent,
+        // Pi's automatic (overflow) compaction rebuilds the session from the
+        // persisted transcript, which never contains the persona preamble. Re-inject
+        // it before the retry so a subscription request keeps the full OpenClaw
+        // prompt (identity + operational instructions) instead of continuing with
+        // only the Claude Code base and reverting to Claude Code behavior.
+        onBeforeCompactionRetry: () => {
+          activeSession.agent.replaceMessages(applyPersonaAndValidate(activeSession.messages));
+        },
         enforceFinalTag: params.enforceFinalTag,
       });
 

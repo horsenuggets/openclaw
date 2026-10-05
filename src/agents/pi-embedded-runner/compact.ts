@@ -52,7 +52,10 @@ import {
   resolveSkillsPromptForRun,
   type SkillSnapshot,
 } from "../skills.js";
-import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../subscription-prompt.js";
+import {
+  needsSubscriptionSystemPrompt,
+  resolveSystemPromptDelivery,
+} from "../subscription-prompt.js";
 import { resolveTranscriptPolicy } from "../transcript-policy.js";
 import { buildEmbeddedExtensionPaths } from "./extensions.js";
 import {
@@ -366,12 +369,16 @@ export async function compactEmbeddedPiSessionDirect(
       userTimeFormat,
       contextFiles: inlineFiles,
       memoryCitationsMode: params.config?.memory?.citations,
-      wrapProjectContext: needsSubscriptionPrefix,
     });
     const rawSystemPrompt = createSystemPromptOverride(appendPrompt)();
-    const systemPromptText = needsSubscriptionPrefix
-      ? wrapForSubscription(rawSystemPrompt)
-      : rawSystemPrompt;
+    // Compaction is an internal summarization pass with no persona preamble; on the
+    // subscription (OAuth) path it uses the pure Claude Code base so the request
+    // bills on plan quota (it does not need the OpenClaw operational prompt to
+    // summarize history). The API-key path keeps the full prompt as before.
+    const { systemPromptText } = resolveSystemPromptDelivery({
+      needsSubscription: needsSubscriptionPrefix,
+      openClawSystemPrompt: rawSystemPrompt,
+    });
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,

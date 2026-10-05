@@ -31,6 +31,14 @@ export type SubscribeEmbeddedPiSessionParams = {
   onPartialReply?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
   onAssistantMessageStart?: () => void | Promise<void>;
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void | Promise<void>;
+  /**
+   * Called right after Pi's automatic (overflow) compaction rebuilds the session
+   * from the persisted transcript and before it retries. The rebuilt message list
+   * never contains the in-memory persona preamble, so the caller re-injects it here
+   * (otherwise a subscription retry would continue with only the Claude Code base
+   * and lose the OpenClaw prompt).
+   */
+  onBeforeCompactionRetry?: () => void;
   enforceFinalTag?: boolean;
 };
 
