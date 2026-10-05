@@ -348,21 +348,33 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     const built = buildCommandResultEmbed(result.description, result.state);
     // Defer ephemerally, then edit with the uploaded footer icon (the command
     // result embed needs the attachment-aware editor, like the /channel flow).
-    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: 5, data: { flags: 64 } }),
-    }).catch((err) => runtime.error(`[router] lifecycle defer failed: ${String(err)}`));
-    void editInteractionEmbedReply(applicationId, interactionToken, {
-      embeds: [built.embed],
-      attachments: built.attachments,
-    })
-      .then((res) => {
+    // The edit must wait for the defer to land, or the @original PATCH can race
+    // ahead of the response being created and fail.
+    void (async () => {
+      try {
+        const deferResp = await fetch(
+          `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+          },
+        );
+        if (!deferResp.ok) {
+          runtime.error(`[router] lifecycle defer failed (${deferResp.status})`);
+          return;
+        }
+        const res = await editInteractionEmbedReply(applicationId, interactionToken, {
+          embeds: [built.embed],
+          attachments: built.attachments,
+        });
         if (!res.ok) {
           runtime.error(`[router] lifecycle command result failed (${res.status})`);
         }
-      })
-      .catch((err) => runtime.error(`[router] lifecycle command result failed: ${String(err)}`));
+      } catch (err) {
+        runtime.error(`[router] lifecycle command result failed: ${String(err)}`);
+      }
+    })();
     runtime.log(
       `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${result.state}`,
     );

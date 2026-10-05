@@ -66,11 +66,11 @@ function balancedEnd(text: string, start: number): number {
 }
 
 /**
- * Replace every embedded JSON object/array with a fenced ```json block
- * (2-space indent), separated from surrounding text by newlines. Non-JSON text
- * is left as-is.
+ * Replace every embedded JSON object/array with a fenced ```json block,
+ * separated from surrounding text by newlines. `indent` controls pretty-printing
+ * (2 = readable, 0 = compact). Non-JSON text is left as-is.
  */
-export function formatJsonBlocks(text: string): string {
+export function formatJsonBlocks(text: string, indent = 2): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -79,9 +79,9 @@ export function formatJsonBlocks(text: string): string {
       const end = balancedEnd(text, i);
       if (end !== -1) {
         try {
-          const pretty = JSON.stringify(JSON.parse(text.slice(i, end)), null, 2);
+          const json = JSON.stringify(JSON.parse(text.slice(i, end)), null, indent);
           out = out.replace(/\s+$/, "");
-          out += `${out.length > 0 ? "\n" : ""}\`\`\`json\n${pretty}\n\`\`\``;
+          out += `${out.length > 0 ? "\n" : ""}\`\`\`json\n${json}\n\`\`\``;
           i = end;
           while (i < text.length && /\s/.test(text[i])) {
             i += 1;
@@ -101,19 +101,44 @@ export function formatJsonBlocks(text: string): string {
   return out;
 }
 
-/** Auto-link URLs only outside fenced code blocks (so JSON contents stay intact). */
-function autoLinkOutsideCode(text: string): string {
+/**
+ * Format raw log text: split on any pre-existing ```fenced``` blocks (left
+ * untouched so already-formatted JSON is not double-fenced), and on the
+ * remaining segments pretty-print embedded JSON and auto-link URLs (links only
+ * outside the fences those segments then introduce).
+ */
+function formatLogText(text: string, indent: number): string {
   return text
     .split(/(```[\s\S]*?```)/g)
-    .map((part) => (part.startsWith("```") ? part : autoLinkUrls(part)))
+    .map((part) => {
+      if (part.startsWith("```")) {
+        return part;
+      }
+      return formatJsonBlocks(part, indent)
+        .split(/(```[\s\S]*?```)/g)
+        .map((seg) => (seg.startsWith("```") ? seg : autoLinkUrls(seg)))
+        .join("");
+    })
     .join("");
 }
 
+/** Discord's hard limit on an embed description. */
+const EMBED_DESCRIPTION_LIMIT = 4096;
+
 /**
  * Build a Log-category embed from raw notice text: pretty-prints embedded JSON
- * and auto-links URLs. No title, no forced italics.
+ * and auto-links URLs. No title, no forced italics. Keeps the description within
+ * Discord's limit by falling back to compact JSON, then truncating, so a large
+ * payload never rejects the whole send.
  */
 export function buildLogEmbed(text: string): BuiltEmbed {
-  const formatted = autoLinkOutsideCode(formatJsonBlocks(text.trim()));
-  return buildEmbed({ category: "log", description: formatted });
+  const trimmed = text.trim();
+  let description = formatLogText(trimmed, 2);
+  if (description.length > EMBED_DESCRIPTION_LIMIT) {
+    description = formatLogText(trimmed, 0);
+  }
+  if (description.length > EMBED_DESCRIPTION_LIMIT) {
+    description = `${description.slice(0, EMBED_DESCRIPTION_LIMIT - 1)}…`;
+  }
+  return buildEmbed({ category: "log", description });
 }

@@ -3,7 +3,7 @@ import type { CommandResultState } from "./embed-categories.js";
 /**
  * Resolve the `/lifecycle [on|off]` command into the command-result message the
  * router renders. Shared by the text-command fallback and the slash handler so
- * both word identically and cover the same edge cases (toggling when already in
+ * both work identically and cover the same edge cases (toggling when already in
  * the requested state, and the bare status query).
  */
 

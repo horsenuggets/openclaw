@@ -77,4 +77,15 @@ describe("buildLogEmbed", () => {
     const { embed } = buildLogEmbed('{"url":"https://example.com"}');
     expect(embed.description).toBe('```json\n{\n  "url": "https://example.com"\n}\n```');
   });
+
+  it("leaves JSON already inside a fenced block alone (no double-fencing)", () => {
+    const already = '```json\n{"a":1}\n```';
+    expect(buildLogEmbed(already).embed.description).toBe(already);
+  });
+
+  it("stays within Discord's 4096-char description limit for huge payloads", () => {
+    const huge = `data ${JSON.stringify(Array.from({ length: 3000 }, (_, i) => i))}`;
+    const { embed } = buildLogEmbed(huge);
+    expect(embed.description!.length).toBeLessThanOrEqual(4096);
+  });
 });
