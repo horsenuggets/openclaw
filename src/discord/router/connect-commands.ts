@@ -162,30 +162,30 @@ export function connectTextCommandHasToken(parsed: {
   return (parsed.subcommand ?? "").toLowerCase() === "add" && parsed.args.length >= 2;
 }
 
-/** Status glyph for a connector given its stored connection (if any). */
-function statusGlyph(connector: Connector, connection: StoredConnection | null): string {
+/**
+ * The Status-column cell for a connector: a glyph plus a short label, and the
+ * linked account when known. Mirrors the glyph-led cells of the `/channel status`
+ * table (see channel-commands.ts).
+ */
+function statusCell(connector: Connector, connection: StoredConnection | null): string {
   if (!connector.available) {
-    return "🚧";
+    return "🚧 Coming soon";
   }
+  const account = connection?.accountLabel ? ` (${connection.accountLabel})` : "";
   const status: ConnectionStatus = connection?.status ?? "not_linked";
   if (status === "linked") {
-    return "✅";
+    return `✅ Linked${account}`;
   }
   if (status === "needs_reauth") {
-    return "♻️";
+    return `♻️ Needs reauth${account}`;
   }
-  return "⚪";
+  return "⚪ Not linked";
 }
 
-/** One line in the status embed for a connector. */
-function statusLine(connector: Connector, connection: StoredConnection | null): string {
-  const glyph = statusGlyph(connector, connection);
-  const account = connection?.accountLabel ? ` (${connection.accountLabel})` : "";
-  const note = !connector.available ? " — coming soon" : "";
-  return `${glyph} **${connector.label}**${account}${note}`;
-}
-
-/** Build the `/connections list` status embed from the catalog plus stored connections. */
+/**
+ * Build the `/connections list` status embed as a Service/Value table, matching
+ * the Property/Value layout of `/channel status`.
+ */
 function listReply(
   registry: ConnectorRegistry,
   connections: StoredConnection[],
@@ -194,13 +194,20 @@ function listReply(
   attachments: string[];
 } {
   const byId = new Map(connections.map((c) => [c.connectorId, c]));
-  const lines = registry
-    .all()
-    .map((connector) => statusLine(connector, byId.get(connector.id) ?? null))
-    .join("\n");
+  const services: string[] = [];
+  const statuses: string[] = [];
+  for (const connector of registry.all()) {
+    services.push(`**${connector.label}**`);
+    statuses.push(statusCell(connector, byId.get(connector.id) ?? null));
+  }
   return connectionsReply(
     "Your connections",
-    `${lines}\n\nUse \`/connections add <service>\` to link one, or \`/connections remove <service>\` to unlink.`,
+    "Below are the services you can link to this channel's agent and their current status. " +
+      "Use `/connections add <service>` to link one, or `/connections remove <service>` to unlink.",
+    [
+      { name: "Service", value: services.join("\n"), inline: true },
+      { name: "Status", value: statuses.join("\n"), inline: true },
+    ],
   );
 }
 
@@ -217,7 +224,7 @@ export async function handleConnectCommand(
   if (sub === "list") {
     const connections = deps.store.list(ctx.channelId);
     if (connections === null) {
-      await ctx.reply(connectionsReply("Connections", NOT_REGISTERED), { ephemeral: true });
+      await ctx.reply(connectionsReply("Your connections", NOT_REGISTERED), { ephemeral: true });
       return;
     }
     await ctx.reply(listReply(deps.registry, connections), { ephemeral: true });
@@ -334,7 +341,7 @@ export async function handleConnectCommand(
 
   await ctx.reply(
     connectionsReply(
-      "Connections",
+      "Help",
       "Usage: `/connections list`, `/connections add <service> <token>`, or `/connections remove <service>`.",
     ),
     { ephemeral: true },

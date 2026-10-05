@@ -149,7 +149,14 @@ function makeDeps(over: Partial<ConnectCommandDeps> = {}): ConnectCommandDeps {
 /** Pull the first embed out of a reply payload (fails if it is a string). */
 function embedOf(payload: ChannelReplyPayload) {
   expect(typeof payload).toBe("object");
-  const obj = payload as { embeds: { title?: string; description?: string; color?: number }[] };
+  const obj = payload as {
+    embeds: {
+      title?: string;
+      description?: string;
+      color?: number;
+      fields?: { name: string; value: string; inline?: boolean }[];
+    }[];
+  };
   return obj.embeds[0];
 }
 
@@ -161,17 +168,27 @@ describe("handleConnectCommand list", () => {
     expect(replies[0].ephemeral).toBe(true);
   });
 
-  it("shows every connector with a status glyph", async () => {
+  it("shows every connector with a status glyph in the Service/Status table", async () => {
     const seed: StoredConnection[] = [
-      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+      {
+        connectorId: "todoist",
+        status: "linked",
+        token: "t",
+        accountLabel: "chris",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
-    const desc = embedOf(replies[0].payload).description ?? "";
-    expect(desc).toContain("✅ **Todoist**"); // linked
-    expect(desc).toContain("⚪ **Notion**"); // not linked
-    expect(desc).toContain("🚧 **Google**"); // coming soon
-    expect(desc).toContain("coming soon");
+    const fields = embedOf(replies[0].payload).fields ?? [];
+    const services = fields.find((f) => f.name === "Service")?.value ?? "";
+    const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
+    expect(services).toContain("**Todoist**");
+    expect(services).toContain("**Notion**");
+    expect(services).toContain("**Google**");
+    expect(statuses).toContain("✅ Linked (chris)"); // linked with account label
+    expect(statuses).toContain("⚪ Not linked"); // Notion not linked
+    expect(statuses).toContain("🚧 Coming soon"); // Google not yet available
   });
 
   it("defaults a null subcommand to list", async () => {
