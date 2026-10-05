@@ -62,6 +62,21 @@ describe("buildPersonaPreambleMessage", () => {
     expect(content).toContain("this folder is home");
   });
 
+  it("frames SOUL/AGENTS as the model's own persona guide (non-identity)", () => {
+    const content = textOf(buildPersonaPreambleMessage([soul, agents]));
+    expect(content).toContain("treat them as your own persona and workspace guide");
+    // Framing only, no identity claim in this line.
+    expect(content).not.toContain("you are openclaw");
+    expect(content).not.toContain("not Claude Code");
+  });
+
+  it("omits the persona framing when no SOUL/AGENTS file is present", () => {
+    const userFile: EmbeddedContextFile = { path: "USER.md", content: "the owner is Alex" };
+    const content = textOf(buildPersonaPreambleMessage([userFile]));
+    expect(content).toContain("## USER.md");
+    expect(content).not.toContain("treat them as your own persona and workspace guide");
+  });
+
   it("leads the reminder with the systemPrompt block when provided", () => {
     // The subscription path delivers the whole OpenClaw system prompt here; it
     // must lead, ahead of the workspace files.

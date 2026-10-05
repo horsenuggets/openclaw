@@ -21,7 +21,74 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+
+// Non-identity framing emitted when SOUL.md/AGENTS.md ride the preamble, so the
+// model treats them as its own persona/workspace guide rather than inert reference
+// text. Identity itself is asserted by the operational prompt ("actually, you are
+// openclaw ...") and by SOUL.md's own content, so this framing deliberately carries
+// no identity claim (it only frames the files that follow). The editable source is
+// docs/reference/templates/PERSONA_FRAMING.md; this constant is the fallback used
+// when that template cannot be read.
+const PERSONA_FRAMING_FALLBACK =
+  "the files below are yours. treat them as your own persona and workspace guide, and let " +
+  "their voice, tone, and conventions shape every reply.";
+
+const PERSONA_FRAMING_TEMPLATE = "PERSONA_FRAMING.md";
+
+let cachedPersonaFraming: string | undefined;
+
+function stripTemplateFrontMatter(raw: string): string {
+  // Drop a leading YAML front-matter block (--- ... ---) like the other templates.
+  return raw.replace(/^---\n[\s\S]*?\n---\n/, "");
+}
+
+// Load the persona framing from the editable template once (cached). Mirrors the
+// template-dir candidates in workspace-templates.ts so it resolves in dev, packaged,
+// and binary (bun --compile) layouts; falls back to the constant if unreadable.
+function getPersonaFramingLine(): string {
+  if (cachedPersonaFraming !== undefined) {
+    return cachedPersonaFraming;
+  }
+  const rel = path.join("docs", "reference", "templates", PERSONA_FRAMING_TEMPLATE);
+  const candidates = [
+    typeof (globalThis as Record<string, unknown>).Bun !== "undefined"
+      ? path.join(path.dirname(process.execPath), rel)
+      : undefined,
+    path.resolve(process.cwd(), rel),
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..", rel),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  for (const candidate of candidates) {
+    try {
+      const text = stripTemplateFrontMatter(readFileSync(candidate, "utf-8"))
+        .replace(/\s*\n\s*/g, " ")
+        .trim();
+      if (text) {
+        cachedPersonaFraming = text;
+        return cachedPersonaFraming;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  cachedPersonaFraming = PERSONA_FRAMING_FALLBACK;
+  return cachedPersonaFraming;
+}
+
+function baseName(filePath: string): string {
+  const normalized = filePath.trim().replace(/\\/g, "/");
+  return (normalized.split("/").pop() ?? normalized).toLowerCase();
+}
+
+function hasPersonaFile(files: EmbeddedContextFile[]): boolean {
+  return files.some((file) => {
+    const base = baseName(file.path);
+    return base === "soul.md" || base === "agents.md";
+  });
+}
 
 export type PersonaPreambleOptions = {
   /** Pointer listing withheld ("off") files so the model can Read them. */
@@ -58,6 +125,10 @@ function buildPersonaPreambleContent(
   const systemPrompt = opts?.systemPrompt?.trim();
   if (systemPrompt) {
     blocks.push(systemPrompt);
+  }
+  // Frame SOUL/AGENTS as the model's own persona/workspace guide (non-identity).
+  if (sections.length > 0 && hasPersonaFile(files)) {
+    blocks.push(getPersonaFramingLine());
   }
   blocks.push(...sections);
   const pointer = opts?.pointer?.trim();

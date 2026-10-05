@@ -16,8 +16,10 @@ Docs: https://docs.openclaw.ai
   entirely, and is confirmed to stay on plan quota by the live
   `scripts/subscription-billing-probe.ts` case `full-prompt-in-reminder`. The hardcoded
   `PERSONA_IDENTITY_LINE` is gone; identity now comes from the prompt's own "actually, you
-  are openclaw" line (always delivered) and `SOUL.md`. The API-key path is unchanged (its
-  system block carries the full prompt as before).
+  are openclaw" line (always delivered) and `SOUL.md`. A short non-identity framing line
+  (editable at `docs/reference/templates/PERSONA_FRAMING.md`) still introduces SOUL/AGENTS
+  in the reminder so the model embodies them. The API-key path is unchanged (its system
+  block carries the full prompt as before).
 - Discord router: refine the embed system. Log embeds no longer force italics and now
   pretty-print any embedded JSON into a fenced `json` code block (2-space indent) for
   readability. Command results (e.g. `/lifecycle on|off`) now render as a dedicated
