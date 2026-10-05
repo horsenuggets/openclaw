@@ -43,6 +43,10 @@ export function handleAutoCompactionEnd(
   if (willRetry) {
     ctx.noteCompactionRetry();
     ctx.resetForCompactionRetry();
+    // Pi rebuilt the session from the persisted transcript (which never holds the
+    // persona preamble); re-inject it before the retry so a subscription request
+    // keeps the full OpenClaw prompt instead of reverting to the Claude Code base.
+    ctx.params.onBeforeCompactionRetry?.();
     ctx.log.debug(`embedded run compaction retry: runId=${ctx.params.runId}`);
   } else {
     ctx.maybeResolveCompactionWait();

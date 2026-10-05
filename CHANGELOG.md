@@ -6,6 +6,20 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Subscription (OAuth) prompt: stop scrubbing the OpenClaw system prompt into the system
+  block and instead keep the system block a pure Claude Code base (`CC_BASE_PROMPT`),
+  delivering the entire OpenClaw prompt (identity + operational instructions) in the
+  leading user `<system-reminder>` alongside SOUL/AGENTS. This fixes the agent identifying
+  itself as "Claude, made by Anthropic" when a workspace had no `SOUL.md` (the old path
+  stripped the identity line from the system and only added one to the reminder when a
+  persona file existed), removes the fragile `wrapForSubscription` regex-stripping
+  entirely, and is confirmed to stay on plan quota by the live
+  `scripts/subscription-billing-probe.ts` case `full-prompt-in-reminder`. The hardcoded
+  `PERSONA_IDENTITY_LINE` is gone; identity now comes from the prompt's own "actually, you
+  are openclaw" line (always delivered) and `SOUL.md`. A short non-identity framing line
+  (editable at `docs/reference/templates/PERSONA_FRAMING.md`) still introduces SOUL/AGENTS
+  in the reminder so the model embodies them. The API-key path is unchanged (its system
+  block carries the full prompt as before).
 - Discord router: when the agent emits `⁘ send_hook_embed welcome`, report a rejected
   welcome-card send back to the agent (mirroring the `⁘ log` branch) instead of always
   relaying "welcome card sent". Previously a failed send was swallowed, so the agent would
@@ -36,6 +50,14 @@ Docs: https://docs.openclaw.ai
   renderer (aligned code-block tables where supported, bullet lists on whatsapp/signal).
   The reply normalizer no longer rewrites em-dashes to commas; em-dash avoidance is left
   to the prompt.
+- Workspace templates: turn the proactive heartbeat guidance back on by default. The
+  example rotation (emails, calendar, mentions, weather), the
+  `memory/heartbeat-state.json` check-tracking shape, and the
+  reach-out/stay-quiet/proactive-work guidance move out of the commented-out block in
+  `AGENTS.md` and become live content in the `HEARTBEAT.md` template, prefaced with a note
+  to proactively organize notes and check in with the user and to skip any check whose
+  connection (email, calendar, weather) is not configured. These seed newly bootstrapped
+  workspaces only; existing workspaces keep their current `HEARTBEAT.md`.
 - Discord router: add a "Log Message" embed category for system notices. A new `log`
   four-dot control command (`⁘ log "..."`) lets the agent emit a log-styled embed; bare
   URLs in log text become clickable links and the description is italicized. The router's

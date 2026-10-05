@@ -49,7 +49,12 @@
 
 import { resolveAgentDir } from "../src/agents/agent-scope.js";
 import { ensureAuthProfileStore } from "../src/agents/auth-profiles/store.js";
-import { wrapForSubscription } from "../src/agents/subscription-prompt.js";
+import { buildPersonaPreambleMessage } from "../src/agents/pi-embedded-runner/persona-preamble.js";
+import {
+  buildWorkspaceContextPointer,
+  resolveWorkspaceContextDelivery,
+} from "../src/agents/pi-embedded-runner/workspace-context.js";
+import { resolveSystemPromptDelivery } from "../src/agents/subscription-prompt.js";
 import { buildAgentSystemPrompt } from "../src/agents/system-prompt.js";
 import { loadConfig } from "../src/config/config.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../src/routing/session-key.js";
@@ -141,16 +146,62 @@ const reminder = (text: string): Message => ({
 });
 const HELLO: Message = { role: "user", content: "Say hi in exactly three words." };
 
-// A representative built OpenClaw prompt, used for the real-code regression cases.
+// A representative built OpenClaw prompt, used for the raw-vs-reminder boundary
+// cases. No wrapProjectContext: production (runEmbeddedAttempt) no longer sets it.
 const builtOpenClawPrompt = buildAgentSystemPrompt({
   workspaceDir: "/tmp/openclaw-probe",
   heartbeatPrompt: "Read HEARTBEAT.md if it exists.",
-  wrapProjectContext: true,
   contextFiles: [
     { path: "USER.md", content: "The user is Alex. Prefers concise, casual replies." },
     { path: "TOOLS.md", content: "gog = google CLI. Use it for calendar and mail." },
   ],
 });
+
+// Reproduce the EXACT production subscription assembly, so the regression case can
+// only pass if the real routing + delivery + preamble code does. Mirrors
+// runEmbeddedAttempt: route workspace files (resolveWorkspaceContextDelivery),
+// drop inline files on OAuth, build the system via resolveSystemPromptDelivery, and
+// assemble the reminder via buildPersonaPreambleMessage.
+function buildProductionSubscriptionPayload(): { system: SystemBlock[]; messages: Message[] } {
+  const workspaceFiles = [
+    { path: "SOUL.md", content: "you are openclaw, warm and casual." },
+    { path: "AGENTS.md", content: "this folder is home. other files: MEMORY.md, USER.md." },
+    { path: "USER.md", content: "The user is Alex. Prefers concise, casual replies." },
+    { path: "TOOLS.md", content: "gog = google CLI. Use it for calendar and mail." },
+  ];
+  const { inlineFiles, preambleFiles, offFiles, pointerPlacement } =
+    resolveWorkspaceContextDelivery(workspaceFiles, undefined);
+  const pointer = buildWorkspaceContextPointer(offFiles);
+  // OAuth drops inline files (runEmbeddedAttempt passes [] on subscription), so
+  // any inline-routed file is intentionally not delivered; assert that here.
+  if (inlineFiles.length > 0) {
+    // With default routing nothing is inline; a non-empty set would mean the
+    // fixture no longer matches the OAuth contract.
+    throw new Error("probe fixture unexpectedly routed files to inline");
+  }
+  const openClawPrompt = buildAgentSystemPrompt({
+    workspaceDir: "/tmp/openclaw-probe",
+    heartbeatPrompt: "Read HEARTBEAT.md if it exists.",
+    contextFiles: [],
+  });
+  const { systemPromptText, preambleSystemPrompt } = resolveSystemPromptDelivery({
+    needsSubscription: true,
+    openClawSystemPrompt: openClawPrompt,
+  });
+  const preamble = buildPersonaPreambleMessage(preambleFiles, {
+    pointer: pointerPlacement === "preamble" ? pointer : undefined,
+    systemPrompt: preambleSystemPrompt,
+  });
+  if (!preamble || !Array.isArray(preamble.content)) {
+    throw new Error("expected a persona preamble message with array content");
+  }
+  const preambleMsg: Message = {
+    role: "user",
+    content: preamble.content as SystemBlock[],
+  };
+  return { system: [sb(CC_BLOCK0), sb(systemPromptText)], messages: [preambleMsg, HELLO] };
+}
+const productionSubscription = buildProductionSubscriptionPayload();
 
 function buildCases(): Case[] {
   return [
@@ -164,12 +215,12 @@ function buildCases(): Case[] {
       note: "Pure CC identity, plain message. Must always bill plan quota.",
     },
     {
-      name: "real-wrapForSubscription",
+      name: "real-subscription-shape",
       group: "assertion",
       expect: "plan",
-      system: [sb(CC_BLOCK0), sb(wrapForSubscription(builtOpenClawPrompt))],
-      messages: [HELLO],
-      note: "The actual production subscription prompt (wrapForSubscription of the real builder). Regression guard.",
+      system: productionSubscription.system,
+      messages: productionSubscription.messages,
+      note: "The actual production subscription shape, assembled through the real routing + delivery + preamble code (resolveWorkspaceContextDelivery, resolveSystemPromptDelivery, buildPersonaPreambleMessage): pure Claude Code base in the system, the whole OpenClaw prompt plus preamble files in a user <system-reminder>. Regression guard.",
     },
     {
       name: "openclaw-as-user-reminder",
@@ -185,6 +236,14 @@ function buildCases(): Case[] {
         HELLO,
       ],
       note: "OpenClaw persona + heartbeats delivered as a conversation <system-reminder>. Should stay plan quota (the 'disguised user message' design).",
+    },
+    {
+      name: "full-prompt-in-reminder",
+      group: "assertion",
+      expect: "plan",
+      system: [sb(CC_BLOCK0)],
+      messages: [reminder(builtOpenClawPrompt), HELLO],
+      note: "The ENTIRE built OpenClaw prompt (identity + operational sections + project context) delivered as a user <system-reminder>, with ONLY CC block 0 in the system. Validates the 'move everything to the reminder, keep the system pure Claude Code' refactor (the wrapForSubscription replacement) stays on plan quota.",
     },
     {
       name: "heartbeats-in-system",
@@ -207,7 +266,7 @@ function buildCases(): Case[] {
       expect: "spill",
       system: [sb(CC_BLOCK0), sb(builtOpenClawPrompt)],
       messages: [HELLO],
-      note: "The raw builder output (no wrapForSubscription) contains messaging/heartbeats/project-context and spills. Shows why the wrapper exists.",
+      note: "The raw builder output placed in the SYSTEM block contains messaging/heartbeats/identity and spills. Shows why OpenClaw content must ride the reminder, not the system block.",
     },
 
     // ---- probes (exploratory; informational only) ----

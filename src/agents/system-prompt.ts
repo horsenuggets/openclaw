@@ -6,54 +6,35 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 
 /**
- * Sentinel comment markers wrapping the injected Project Context block (the
- * workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...). They are emitted only
- * by this builder and never derived from file content, so downstream code can
- * identify the exact block boundaries even though workspace file bodies may
- * contain arbitrary text (including strings that mimic prompt headings). The
- * anthropic-subscription path uses them to strip workspace files out of the
- * OAuth system prompt (see stripProjectContext in subscription-prompt.ts). On
- * the API path they are inert HTML comments.
+ * Sentinel comment markers the builder can wrap around the injected Project
+ * Context block (the workspace files: SOUL.md, USER.md, BOOTSTRAP.md, ...) when
+ * `wrapProjectContext` is set. They are emitted only by this builder and never
+ * derived from file content, so a consumer could identify the exact block
+ * boundaries even though workspace file bodies may contain arbitrary text.
+ *
+ * Nothing in the runtime requests this anymore: the subscription (OAuth) path no
+ * longer strips workspace files from the system prompt (it keeps the system block
+ * a pure Claude Code base and delivers all OpenClaw content via the reminder, see
+ * subscription-prompt.ts), so these markers are an unused builder capability kept
+ * only for its direct unit test. Always inert HTML comments on the wire.
  */
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
-// Section headings whose content diverges from the Claude Code identity and flips
-// anthropic-subscription requests from free plan quota to paid extra usage.
-// Verified empirically by replaying prompts against the live API:
-//
-//  - "## reply tags" / "## messaging": messaging-surface content (native
-//    reply/quote, routing across Discord/Telegram/Signal, channel config).
-//    Dropping "## reply tags" alone moved a spilling request back onto plan quota.
-//
-// wrapForSubscription() strips these for the subscription path.
+// Messaging-surface section headings emitted by the builder. On the subscription
+// (OAuth) path the whole prompt rides the user <system-reminder> instead of the
+// system block, so this content no longer needs to be stripped; these constants
+// just keep the heading spelling in one place.
 export const REPLY_TAGS_HEADING = "## reply tags";
 export const MESSAGING_HEADING = "## messaging";
-// Legacy Title-case headings (and the removed "## Heartbeats" section) can still
-// arrive via caller-provided extraSystemPrompt or older configs. stripSection runs
-// over that text too, so keep stripping the legacy spellings as well; otherwise a
-// pasted "## Reply Tags" / "## Messaging" / "## Heartbeats" block would reach the
-// OAuth request and spill it to paid extra usage.
-export const LEGACY_SUBSCRIPTION_OMIT_HEADINGS = [
-  "## Reply Tags",
-  "## Messaging",
-  "## Heartbeats",
-] as const;
-export const SUBSCRIPTION_OMIT_HEADINGS = [
-  REPLY_TAGS_HEADING,
-  MESSAGING_HEADING,
-  ...LEGACY_SUBSCRIPTION_OMIT_HEADINGS,
-] as const;
 
 /**
- * Neutralize any Project Context sentinel literals in assembled prompt text.
- * Many prompt fields are arbitrary and user/workspace-derived (skillsPrompt,
- * extraSystemPrompt, workspace file bodies, conversation history, ...), so a
- * copy of a marker inside any of them would otherwise let the subscription
- * filter (stripProjectContext) anchor on a spoofed boundary. The subscription
- * build runs this over all content surrounding and inside the injected block
- * before adding the real marker pair, guaranteeing the only real
- * PROJECT_CONTEXT_BEGIN/END literals in the output are the ones the builder adds.
+ * Neutralize any Project Context sentinel literals in assembled prompt text, so
+ * that when `wrapProjectContext` adds the real marker pair they are the only such
+ * literals in the output (a copy inside an arbitrary field, skillsPrompt,
+ * extraSystemPrompt, workspace file bodies, could otherwise mimic a boundary).
+ * Only runs on the `wrapProjectContext` build path, which the runtime no longer
+ * uses; see the PROJECT_CONTEXT_BEGIN note above.
  */
 function neutralizeContextSentinels(text: string): string {
   return text
@@ -279,16 +260,16 @@ export function buildAgentSystemPrompt(params: {
   conversationHistory?: string;
   /**
    * When true, wrap the injected Project Context block in sentinel markers and
-   * neutralize any sentinel literals in caller-provided text. Only the
-   * anthropic-subscription path sets this (it slices the block back out via
-   * stripProjectContext to keep workspace files off the OAuth request). Left
-   * false for every other provider so their system prompt is byte-for-byte
-   * unchanged.
+   * neutralize any sentinel literals in caller-provided text. No caller in the
+   * runtime sets this anymore (the subscription path no longer strips workspace
+   * files from the system prompt); it is retained as a builder capability with a
+   * direct unit test. Left false everywhere in production, so the assembled prompt
+   * is byte-for-byte unchanged.
    */
   wrapProjectContext?: boolean;
 }) {
-  // Sentinel wrapping + caller-text escaping only apply to the subscription
-  // path; for every other provider this is a no-op so the prompt is unchanged.
+  // Sentinel wrapping + caller-text escaping only apply when wrapProjectContext is
+  // set, which no runtime caller does; otherwise this is a no-op.
   const wrapProjectContext = params.wrapProjectContext === true;
   const coreToolSummaries: Record<string, string> = {
     read: "read file contents",
@@ -606,9 +587,10 @@ export function buildAgentSystemPrompt(params: {
 
   const contextFiles = params.contextFiles ?? [];
   // Record the [start, end) span of the injected Project Context block within
-  // `lines` so the subscription path can wrap exactly that region in sentinels
-  // after everything is assembled (see the wrapProjectContext handling at the
-  // return). -1 means no block was injected.
+  // `lines` so the opt-in `wrapProjectContext` build path can wrap exactly that
+  // region in sentinels after everything is assembled (see the handling at the
+  // return). No runtime caller sets that flag; this span is otherwise unused.
+  // -1 means no block was injected.
   let contextBlockStart = -1;
   let contextBlockEnd = -1;
   if (contextFiles.length > 0) {
@@ -632,8 +614,9 @@ export function buildAgentSystemPrompt(params: {
   }
 
   // Pointer to withheld ("off") workspace files, when the pointer is placed inline.
-  // Sits outside the sentinel-wrapped Project Context block so it survives the
-  // subscription strip (it lists filenames only, which is CC-consistent).
+  // Sits outside the Project Context block so that under the opt-in
+  // `wrapProjectContext` build path it stays out of the sentinel-wrapped region (it
+  // lists filenames only, which is CC-consistent).
   if (params.contextPointer?.trim()) {
     lines.push(params.contextPointer.trim(), "");
   }
