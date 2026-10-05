@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Deploy: reconcile each registered agent instance's proxy URLs on boot. `boot.sh` now
+  runs `openclawctl reconcile <channelId>` (a new subcommand that re-asserts the model-
+  and container-proxy URLs from the current agent-bridge env) before starting each box, so
+  a deploy that changes the bridge gateway IP (e.g. the host-networking to bridge
+  migration) reaches existing on-disk configs. Previously a deploy started boxes with a
+  stale baseUrl (an old `127.0.0.1` that is now the box's own loopback), silently breaking
+  the model path until each channel was restarted by hand.
 - Discord router: when the agent emits `⁘ send_hook_embed welcome`, report a rejected
   welcome-card send back to the agent (mirroring the `⁘ log` branch) instead of always
   relaying "welcome card sent". Previously a failed send was swallowed, so the agent would

@@ -789,6 +789,22 @@ cmd_restart() {
   echo "Done."
 }
 
+# Re-assert a registered instance's proxy URLs (model proxy + container proxy) and
+# /workspace path from the current agent-bridge env, WITHOUT recreating the
+# container. boot.sh calls this before starting each box so a deploy that changed
+# the bridge gateway IP (e.g. a host-networking -> bridge migration) reaches the
+# existing instance configs; otherwise a box keeps a stale baseUrl (e.g. an old
+# 127.0.0.1 that is now its own loopback) and the model path silently breaks.
+cmd_reconcile() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl reconcile <channelId>" >&2
+    exit 1
+  fi
+  require_channel_id "$channelId"
+  force_box_config "$INSTANCES_DIR/$channelId/openclaw.json"
+}
+
 cmd_list() {
   BASE_PORT="$BASE_PORT" PORT_FILENAME="$PORT_FILENAME" python3 -c "
 import os, re, subprocess
@@ -844,6 +860,7 @@ case "${1:-}" in
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
+  reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
@@ -853,6 +870,7 @@ case "${1:-}" in
     echo "  add-channel <channelId> Register a text channel"
     echo "  remove <channelId>      Stop and deregister a channel"
     echo "  restart <channelId>     Restart a channel's container"
+    echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"
     ;;
 esac
