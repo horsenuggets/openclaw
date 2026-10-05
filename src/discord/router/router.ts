@@ -3,6 +3,7 @@ import path from "node:path";
 import WebSocket from "ws";
 import type { RouterConfig, InstanceConfig } from "./config.js";
 import type { RouterRuntime, RunAgentCommand } from "./types.js";
+import { parseBooleanValue } from "../../utils/boolean.js";
 import { runAgentCommandDispatch } from "./agent-command-dispatch.js";
 import {
   CHANNEL_COMMAND_SPEC,
@@ -196,6 +197,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const mockUserBotId = process.env.OPENCLAW_MOCK_USER_BOT_ID?.trim();
   const allowedBotIds = new Set(mockUserBotId ? [mockUserBotId] : []);
 
+  // When a non-owner messages a registered channel, reply with a Log-embed
+  // notice (enabled by default) explaining the channel belongs to someone else.
+  // The reply is threaded under the offending message and persists. Set
+  // OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE to a falsy value to deny silently (log
+  // only, no message).
+  const unauthorizedNoticeEnabled =
+    parseBooleanValue(process.env.OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE) !== false;
+
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
   const describeInstance = (channelId: string): InstanceStatus | null => {
@@ -369,6 +378,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     inflight,
     channelGuild,
     allowedBotIds,
+    unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
     runAgentCommand,

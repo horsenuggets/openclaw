@@ -6,6 +6,14 @@ import { readEmbedAsset } from "./embed-assets.js";
 export const DISCORD_API = "https://discord.com/api/v10";
 export const TYPING_INTERVAL_MS = 8_000;
 
+/** Discord `allowed_mentions`; use to suppress pings on an outgoing message. */
+export type AllowedMentions = {
+  parse?: ("users" | "roles" | "everyone")[];
+  users?: string[];
+  roles?: string[];
+  replied_user?: boolean;
+};
+
 export async function discordSend(
   token: string,
   channelId: string,
@@ -32,6 +40,7 @@ export async function discordSendReply(
   channelId: string,
   commandMessageId: string,
   payload: ChannelReplyPayload,
+  allowedMentions?: AllowedMentions,
 ): Promise<void> {
   const messageReference = {
     message_id: commandMessageId,
@@ -46,6 +55,7 @@ export async function discordSendReply(
       attachments: payload.attachments,
       components: payload.components,
       messageReference,
+      allowedMentions,
     });
     return;
   }
@@ -55,7 +65,11 @@ export async function discordSendReply(
       Authorization: `Bot ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ content: payload, message_reference: messageReference }),
+    body: JSON.stringify({
+      content: payload,
+      message_reference: messageReference,
+      ...(allowedMentions ? { allowed_mentions: allowedMentions } : {}),
+    }),
   });
 }
 
@@ -139,6 +153,8 @@ export type EmbedMessage = {
   components?: DiscordActionRow[];
   /** Post as a referenced reply to this message, when set. */
   messageReference?: { message_id: string; channel_id: string; fail_if_not_exists?: boolean };
+  /** `allowed_mentions` to attach, e.g. to suppress pings. */
+  allowedMentions?: AllowedMentions;
 };
 
 /** Fresh cached CDN URL for an icon, or null when absent or expired. */
@@ -224,6 +240,7 @@ type EmbedDispatch = {
   /** Always include a components field (interaction edits clear action rows with []). */
   forceComponents?: boolean;
   messageReference?: { message_id: string; channel_id: string; fail_if_not_exists?: boolean };
+  allowedMentions?: AllowedMentions;
 };
 
 /**
@@ -269,6 +286,9 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; sta
   }
   if (request.messageReference) {
     payload.message_reference = request.messageReference;
+  }
+  if (request.allowedMentions) {
+    payload.allowed_mentions = request.allowedMentions;
   }
   const authHeader: Record<string, string> = request.authToken
     ? { Authorization: `Bot ${request.authToken}` }
@@ -319,6 +339,7 @@ export async function sendEmbedMessage(
     attachments: message.attachments,
     components: message.components,
     messageReference: message.messageReference,
+    allowedMentions: message.allowedMentions,
   });
 }
 
