@@ -13,6 +13,9 @@ export type OutboundPayloadJson = {
   mediaUrl: string | null;
   mediaUrls?: string[];
   channelData?: Record<string, unknown>;
+  /** Preserved so a `deliver:false` caller (e.g. the Discord router) can tell an
+   * error reply from a normal one and render it accordingly. */
+  isError?: boolean;
 };
 
 function mergeMediaUrls(...lists: Array<Array<string | undefined> | undefined>): string[] {
@@ -95,6 +98,7 @@ export function normalizeOutboundPayloadsForJson(payloads: ReplyPayload[]): Outb
     mediaUrl: payload.mediaUrl ?? null,
     mediaUrls: payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : undefined),
     channelData: payload.channelData,
+    ...(payload.isError ? { isError: true } : {}),
   }));
 }
 

@@ -6,6 +6,10 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: render agent-runtime error replies (model/API failures the agent returns
+  as its turn, e.g. a `502 upstream auth unavailable`) as Log embeds instead of plain
+  italic text, using the payload's existing `isError` flag so no fragile text detection is
+  needed.
 - Discord router: refine the embed system. Log embeds no longer force italics and now
   pretty-print any embedded JSON into a fenced `json` code block (2-space indent) for
   readability. Command results (e.g. `/lifecycle on|off`) now render as a dedicated

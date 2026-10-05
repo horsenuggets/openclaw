@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { autoLinkUrls, buildLogEmbed, formatJsonBlocks } from "./log-embed.js";
+import {
+  autoLinkUrls,
+  buildLogEmbed,
+  formatJsonBlocks,
+  stripSurroundingItalics,
+} from "./log-embed.js";
 
 describe("autoLinkUrls", () => {
   it("wraps a bare https URL using the scheme-less label", () => {
@@ -87,5 +92,30 @@ describe("buildLogEmbed", () => {
     const huge = `data ${JSON.stringify(Array.from({ length: 3000 }, (_, i) => i))}`;
     const { embed } = buildLogEmbed(huge);
     expect(embed.description!.length).toBeLessThanOrEqual(4096);
+  });
+
+  it("renders an agent error reply as a fenced log embed once italics are stripped", () => {
+    // What errors.ts emits for a model-proxy 502, as the router would receive it.
+    const raw = '*502 {"error":"upstream auth unavailable"}*';
+    const { embed } = buildLogEmbed(stripSurroundingItalics(raw));
+    expect(embed.description).toBe(
+      '502\n```json\n{\n  "error": "upstream auth unavailable"\n}\n```',
+    );
+    expect(embed.footer?.text).toBe("Log Message");
+  });
+});
+
+describe("stripSurroundingItalics", () => {
+  it("strips a single surrounding *...* wrap", () => {
+    expect(stripSurroundingItalics("*502 upstream auth unavailable*")).toBe(
+      "502 upstream auth unavailable",
+    );
+    expect(stripSurroundingItalics("*x*")).toBe("x");
+  });
+
+  it("leaves bold (**...**) and unwrapped text untouched", () => {
+    expect(stripSurroundingItalics("**bold**")).toBe("**bold**");
+    expect(stripSurroundingItalics("no italics here")).toBe("no italics here");
+    expect(stripSurroundingItalics("*only one side")).toBe("*only one side");
   });
 });
