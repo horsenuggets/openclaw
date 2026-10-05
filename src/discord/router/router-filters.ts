@@ -7,11 +7,12 @@
  * message was already handled and must NOT be skipped; otherwise recovery
  * re-runs the same failing message on every reconnect (an endless error loop).
  *
- * Banners are posted as Log-category embeds, so the italicized phrase lives in
- * the embed description. The exact-phrase match is what keeps error log embeds
- * (which share the Log category but carry different text) from being skipped.
+ * Banners are posted as Log-category embeds (no forced italics), so the phrase
+ * lives verbatim in the embed description. The exact-phrase match is what keeps
+ * error log embeds (which share the Log category but carry different text) from
+ * being skipped.
  */
-export const LIFECYCLE_BANNERS = ["*Back online.*", "*Shutting down...*"];
+export const LIFECYCLE_BANNERS = ["Back online.", "Shutting down..."];
 
 /** A fetched message, narrowed to the fields that can carry a lifecycle banner. */
 export type LifecycleBannerMessage = {
@@ -19,19 +20,30 @@ export type LifecycleBannerMessage = {
   embeds?: Array<{ description?: string }>;
 };
 
+/**
+ * Match a banner phrase, tolerating the legacy italic content form
+ * (`*Back online.*`) by stripping surrounding asterisks. New banners are plain
+ * Log-embed descriptions; old ones in channel history may still be italic.
+ */
+function matchesBanner(text: string): boolean {
+  const normalized = text
+    .trim()
+    .replace(/^\*+|\*+$/g, "")
+    .trim();
+  return LIFECYCLE_BANNERS.includes(normalized);
+}
+
 export function isLifecycleBanner(message: string | LifecycleBannerMessage | undefined): boolean {
   if (message == null) {
     return false;
   }
   if (typeof message === "string") {
-    return LIFECYCLE_BANNERS.includes(message.trim());
+    return matchesBanner(message);
   }
-  if (message.content && LIFECYCLE_BANNERS.includes(message.content.trim())) {
+  if (message.content && matchesBanner(message.content)) {
     return true;
   }
-  return (message.embeds ?? []).some((embed) =>
-    LIFECYCLE_BANNERS.includes((embed.description ?? "").trim()),
-  );
+  return (message.embeds ?? []).some((embed) => matchesBanner(embed.description ?? ""));
 }
 
 /**

@@ -16,6 +16,8 @@ import {
   discordSendReply,
   editInteractionEmbedReply,
 } from "./discord-api.js";
+import { buildCommandResultEmbed } from "./embed-categories.js";
+import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { handleTextCommand, routeMessage } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -339,23 +341,42 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       interactionData.options as Array<{ name: string; value: string }> | undefined
     )?.find((o: { name: string }) => o.name === "setting")?.value;
 
-    let statusText: string;
-    if (setting === "on") {
-      setUserPreference(instance, "lifecycleMessages", true);
-      statusText =
-        "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.";
-    } else if (setting === "off") {
-      setUserPreference(instance, "lifecycleMessages", false);
-      statusText = "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.";
-    } else {
-      statusText = current
-        ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
-        : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.";
+    const result = resolveLifecycleCommand(current, setting);
+    if (result.newValue !== undefined) {
+      setUserPreference(instance, "lifecycleMessages", result.newValue);
     }
-
-    respondToInteraction(statusText);
+    const built = buildCommandResultEmbed(result.description, result.state);
+    // Defer ephemerally, then edit with the uploaded footer icon (the command
+    // result embed needs the attachment-aware editor, like the /channel flow).
+    // The edit must wait for the defer to land, or the @original PATCH can race
+    // ahead of the response being created and fail.
+    void (async () => {
+      try {
+        const deferResp = await fetch(
+          `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+          },
+        );
+        if (!deferResp.ok) {
+          runtime.error(`[router] lifecycle defer failed (${deferResp.status})`);
+          return;
+        }
+        const res = await editInteractionEmbedReply(applicationId, interactionToken, {
+          embeds: [built.embed],
+          attachments: built.attachments,
+        });
+        if (!res.ok) {
+          runtime.error(`[router] lifecycle command result failed (${res.status})`);
+        }
+      } catch (err) {
+        runtime.error(`[router] lifecycle command result failed: ${String(err)}`);
+      }
+    })();
     runtime.log(
-      `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${setting === "on" ? "true" : setting === "off" ? "false" : String(current)}`,
+      `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${result.state}`,
     );
   }
 

@@ -1,4 +1,3 @@
-import { Routes } from "discord-api-types/v10";
 import { randomUUID } from "node:crypto";
 import type { InstanceConfig } from "./config.js";
 import type { RouterRuntime, RunAgentCommand } from "./types.js";
@@ -9,7 +8,6 @@ import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
 import {
-  DISCORD_API,
   TYPING_INTERVAL_MS,
   chunkText,
   discordSend,
@@ -17,7 +15,9 @@ import {
   sendEmbedMessage,
   stripDashes,
 } from "./discord-api.js";
+import { buildCommandResultEmbed } from "./embed-categories.js";
 import { callGatewaySimple } from "./gateway-call.js";
+import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
@@ -418,43 +418,25 @@ export async function handleTextCommand(params: {
 }): Promise<boolean> {
   const { cmdName, cmdArg, userId, channelId, messageId, instance, discordToken, runtime } = params;
 
-  // Reply to the user's command message
-  async function reply(text: string): Promise<void> {
-    const resp = await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bot ${discordToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        content: text,
-        message_reference: { message_id: messageId },
-      }),
-    });
-    if (!resp.ok) {
-      runtime.error(`[router] text command reply failed (${resp.status})`);
-    }
-  }
-
   switch (cmdName) {
     case "lifecycle": {
       const current = instance.preferences.lifecycleMessages ?? false;
-      if (cmdArg === "on") {
-        setUserPreference(instance, "lifecycleMessages", true);
-        await reply(
-          "Lifecycle messages **enabled**. You'll see *Back online.* and *Shutting down...* messages.",
-        );
-      } else if (cmdArg === "off") {
-        setUserPreference(instance, "lifecycleMessages", false);
-        await reply(
-          "Lifecycle messages **disabled**. You won't see startup/shutdown notifications.",
-        );
-      } else {
-        await reply(
-          current
-            ? "Lifecycle messages are currently **enabled**. Use `/lifecycle off` to disable."
-            : "Lifecycle messages are currently **disabled**. Use `/lifecycle on` to enable.",
-        );
+      const result = resolveLifecycleCommand(current, cmdArg);
+      if (result.newValue !== undefined) {
+        setUserPreference(instance, "lifecycleMessages", result.newValue);
+      }
+      const built = buildCommandResultEmbed(result.description, result.state);
+      const sent = await sendEmbedMessage(discordToken, channelId, {
+        embeds: [built.embed],
+        attachments: built.attachments,
+        messageReference: {
+          message_id: messageId,
+          channel_id: channelId,
+          fail_if_not_exists: false,
+        },
+      });
+      if (!sent.ok) {
+        runtime.error(`[router] lifecycle command result failed (${sent.status})`);
       }
       runtime.log(`[router] text command /lifecycle for ${userId}: arg=${cmdArg ?? "status"}`);
       return true;
