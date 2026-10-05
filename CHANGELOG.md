@@ -6,6 +6,18 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Subscription (OAuth) prompt: stop scrubbing the OpenClaw system prompt into the system
+  block and instead keep the system block a pure Claude Code base (`CC_BASE_PROMPT`),
+  delivering the entire OpenClaw prompt (identity + operational instructions) in the
+  leading user `<system-reminder>` alongside SOUL/AGENTS. This fixes the agent identifying
+  itself as "Claude, made by Anthropic" when a workspace had no `SOUL.md` (the old path
+  stripped the identity line from the system and only added one to the reminder when a
+  persona file existed), removes the fragile `wrapForSubscription` regex-stripping
+  entirely, and is confirmed to stay on plan quota by the live
+  `scripts/subscription-billing-probe.ts` case `full-prompt-in-reminder`. The hardcoded
+  `PERSONA_IDENTITY_LINE` is gone; identity now comes from the prompt's own "actually, you
+  are openclaw" line (always delivered) and `SOUL.md`. The API-key path is unchanged (its
+  system block carries the full prompt as before).
 - Agent writing style: rework the workspace `SOUL.md` and `AGENTS.md` templates so replies
   read as a friendly conversation rather than a generic AI report. These templates seed
   newly bootstrapped workspaces only; existing workspaces keep their current files (the

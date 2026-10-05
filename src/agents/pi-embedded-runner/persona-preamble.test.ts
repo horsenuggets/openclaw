@@ -45,23 +45,49 @@ describe("buildPersonaPreambleMessage", () => {
     } as AgentMessage;
     const [merged] = validateAnthropicTurns([preamble as AgentMessage, priorUser]);
     const mergedText = textOf(merged);
-    expect(mergedText).toContain("You are OpenClaw");
     expect(mergedText).toContain("be warm and casual");
+    expect(mergedText).toContain("this folder is home");
     expect(mergedText).toContain("hello there");
   });
 
-  it("returns a user message wrapping the identity line and persona sections", () => {
+  it("returns a user message wrapping the persona sections", () => {
     const message = buildPersonaPreambleMessage([soul, agents]);
     expect(message?.role).toBe("user");
     const content = contentOf([soul, agents]);
     expect(content).toContain("<system-reminder>");
     expect(content).toContain("</system-reminder>");
-    expect(content).toContain("You are OpenClaw");
-    expect(content).toContain("not Claude Code");
     expect(content).toContain("## SOUL.md");
     expect(content).toContain("be warm and casual");
     expect(content).toContain("## AGENTS.md");
     expect(content).toContain("this folder is home");
+  });
+
+  it("leads the reminder with the systemPrompt block when provided", () => {
+    // The subscription path delivers the whole OpenClaw system prompt here; it
+    // must lead, ahead of the workspace files.
+    const content = textOf(
+      buildPersonaPreambleMessage([soul], {
+        systemPrompt: "actually, you are openclaw, a personal assistant",
+      }),
+    );
+    expect(content).toContain("actually, you are openclaw, a personal assistant");
+    expect(content).toContain("## SOUL.md");
+    const systemIdx = content?.indexOf("actually, you are openclaw") ?? -1;
+    const soulIdx = content?.indexOf("## SOUL.md") ?? -1;
+    expect(systemIdx).toBeGreaterThanOrEqual(0);
+    expect(soulIdx).toBeGreaterThan(systemIdx);
+  });
+
+  it("returns a reminder carrying only the systemPrompt when there are no files", () => {
+    // The no-persona-file case: identity still reaches the model because the
+    // operational system prompt rides the reminder.
+    const content = textOf(
+      buildPersonaPreambleMessage([], {
+        systemPrompt: "actually, you are openclaw, a personal assistant",
+      }),
+    );
+    expect(content).toContain("<system-reminder>");
+    expect(content).toContain("actually, you are openclaw, a personal assistant");
   });
 
   it("returns undefined when there are no persona files", () => {
@@ -76,17 +102,8 @@ describe("buildPersonaPreambleMessage", () => {
     expect(contentOf([soul, agents])).toEqual(contentOf([soul, agents]));
   });
 
-  it("returns undefined when there is neither persona nor pointer content", () => {
-    expect(buildPersonaPreambleMessage([], { pointer: "   " })).toBeUndefined();
-  });
-
-  it("renders non-persona preamble files without the identity line", () => {
-    const userFile: EmbeddedContextFile = { path: "USER.md", content: "the owner is Alex" };
-    const content = textOf(buildPersonaPreambleMessage([userFile]));
-    expect(content).toContain("## USER.md");
-    expect(content).toContain("the owner is Alex");
-    // No SOUL/AGENTS present, so the persona identity line is omitted.
-    expect(content).not.toContain("You are OpenClaw");
+  it("returns undefined when there is neither persona, systemPrompt, nor pointer content", () => {
+    expect(buildPersonaPreambleMessage([], { pointer: "   ", systemPrompt: "  " })).toBeUndefined();
   });
 
   it("appends the pointer block inside the same system-reminder", () => {

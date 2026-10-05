@@ -57,7 +57,7 @@ import {
   loadWorkspaceSkillEntries,
   resolveSkillsPromptForRun,
 } from "../../skills.js";
-import { needsSubscriptionSystemPrompt, wrapForSubscription } from "../../subscription-prompt.js";
+import { CC_BASE_PROMPT, needsSubscriptionSystemPrompt } from "../../subscription-prompt.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import {
@@ -381,9 +381,6 @@ export async function runEmbeddedAttempt(
     const heartbeatPromptText = isDefaultAgent
       ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
       : undefined;
-    const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
-      pointer: preamblePointer,
-    });
     const docsPath = await resolveOpenClawDocsPath({
       workspaceDir: effectiveWorkspace,
       argv1: process.argv[1],
@@ -417,9 +414,6 @@ export async function runEmbeddedAttempt(
       contextFiles: inlineFiles,
       contextPointer: inlinePointer,
       memoryCitationsMode: params.config?.memory?.citations,
-      // Only the subscription path slices the Project Context block back out
-      // (wrapForSubscription below), so only it needs the sentinel markers.
-      wrapProjectContext: needsSubscriptionPrefix,
     });
     const systemPromptReport = buildSystemPromptReport({
       source: "run",
@@ -447,15 +441,18 @@ export async function runEmbeddedAttempt(
       tools,
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
-    // When using a subscription-authenticated provider (OAuth token),
     const rawSystemPrompt = systemPromptOverride();
-    // For subscription providers, wrap OpenClaw's prompt inside a Claude
-    // Code-compatible base prompt. The server validates system prompt
-    // content for OAuth requests — this matches the structure used by
-    // the official CLI's --append-system-prompt flag.
-    const systemPromptText = needsSubscriptionPrefix
-      ? wrapForSubscription(rawSystemPrompt)
-      : rawSystemPrompt;
+    // Subscription (OAuth) requests only bill on plan quota when the system block
+    // stays a pure Claude Code base, so the whole OpenClaw prompt (identity +
+    // operational instructions) is delivered in the leading user <system-reminder>
+    // instead (see personaPreamble below and subscription-billing-probe.ts case
+    // "full-prompt-in-reminder"). On the API-key path there is no such constraint,
+    // so the OpenClaw prompt stays in the system block as before.
+    const systemPromptText = needsSubscriptionPrefix ? CC_BASE_PROMPT : rawSystemPrompt;
+    const personaPreamble = buildPersonaPreambleMessage(preambleFiles, {
+      pointer: preamblePointer,
+      systemPrompt: needsSubscriptionPrefix ? rawSystemPrompt : undefined,
+    });
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,

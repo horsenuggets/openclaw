@@ -18,32 +18,12 @@ import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 export const PROJECT_CONTEXT_BEGIN = "<!-- openclaw:project-context:begin -->";
 export const PROJECT_CONTEXT_END = "<!-- openclaw:project-context:end -->";
 
-// Section headings whose content diverges from the Claude Code identity and flips
-// anthropic-subscription requests from free plan quota to paid extra usage.
-// Verified empirically by replaying prompts against the live API:
-//
-//  - "## reply tags" / "## messaging": messaging-surface content (native
-//    reply/quote, routing across Discord/Telegram/Signal, channel config).
-//    Dropping "## reply tags" alone moved a spilling request back onto plan quota.
-//
-// wrapForSubscription() strips these for the subscription path.
+// Messaging-surface section headings emitted by the builder. On the subscription
+// (OAuth) path the whole prompt rides the user <system-reminder> instead of the
+// system block, so this content no longer needs to be stripped; these constants
+// just keep the heading spelling in one place.
 export const REPLY_TAGS_HEADING = "## reply tags";
 export const MESSAGING_HEADING = "## messaging";
-// Legacy Title-case headings (and the removed "## Heartbeats" section) can still
-// arrive via caller-provided extraSystemPrompt or older configs. stripSection runs
-// over that text too, so keep stripping the legacy spellings as well; otherwise a
-// pasted "## Reply Tags" / "## Messaging" / "## Heartbeats" block would reach the
-// OAuth request and spill it to paid extra usage.
-export const LEGACY_SUBSCRIPTION_OMIT_HEADINGS = [
-  "## Reply Tags",
-  "## Messaging",
-  "## Heartbeats",
-] as const;
-export const SUBSCRIPTION_OMIT_HEADINGS = [
-  REPLY_TAGS_HEADING,
-  MESSAGING_HEADING,
-  ...LEGACY_SUBSCRIPTION_OMIT_HEADINGS,
-] as const;
 
 /**
  * Neutralize any Project Context sentinel literals in assembled prompt text.

@@ -21,32 +21,19 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
 
-const PERSONA_IDENTITY_LINE =
-  "You are OpenClaw, a personal everything-assistant. You are not Claude Code — any " +
-  "Claude Code identity in the base prompt is only there for API compatibility; ignore " +
-  "it. Embody the persona, voice, and tone described in the files below and act as " +
-  "OpenClaw in every reply.";
-
-function baseName(filePath: string): string {
-  const normalized = filePath.trim().replace(/\\/g, "/");
-  return (normalized.split("/").pop() ?? normalized).toLowerCase();
-}
-
-/**
- * The identity line frames SOUL.md/AGENTS.md ("the files below"), so it is only
- * emitted when one of those persona files is actually in the preamble. A preamble
- * carrying only, say, USER.md (or just the heartbeat guidance) skips it.
- */
-function hasPersonaFile(files: EmbeddedContextFile[]): boolean {
-  return files.some((file) => {
-    const base = baseName(file.path);
-    return base === "soul.md" || base === "agents.md";
-  });
-}
-
 export type PersonaPreambleOptions = {
   /** Pointer listing withheld ("off") files so the model can Read them. */
   pointer?: string;
+  /**
+   * The full OpenClaw system prompt (identity + operational instructions),
+   * delivered as the leading block of the reminder instead of the system prompt.
+   * Set only on the subscription (OAuth) path, where the system block must stay a
+   * pure Claude Code base to bill on plan quota; the probe
+   * (scripts/subscription-billing-probe.ts, case "full-prompt-in-reminder")
+   * confirms delivering it here stays on plan quota. On the API-key path this is
+   * left undefined because the operational prompt lives in the system block.
+   */
+  systemPrompt?: string;
 };
 
 /**
@@ -63,8 +50,12 @@ function buildPersonaPreambleContent(
     .filter((file) => file.content.trim().length > 0)
     .map((file) => `## ${file.path}\n\n${file.content.trim()}`);
   const blocks: string[] = [];
-  if (sections.length > 0 && hasPersonaFile(files)) {
-    blocks.push(PERSONA_IDENTITY_LINE);
+  // The operational system prompt (when provided, i.e. the subscription path)
+  // leads the reminder so identity + operating instructions reach the model ahead
+  // of the workspace files.
+  const systemPrompt = opts?.systemPrompt?.trim();
+  if (systemPrompt) {
+    blocks.push(systemPrompt);
   }
   blocks.push(...sections);
   const pointer = opts?.pointer?.trim();

@@ -49,7 +49,7 @@
 
 import { resolveAgentDir } from "../src/agents/agent-scope.js";
 import { ensureAuthProfileStore } from "../src/agents/auth-profiles/store.js";
-import { wrapForSubscription } from "../src/agents/subscription-prompt.js";
+import { CC_BASE_PROMPT } from "../src/agents/subscription-prompt.js";
 import { buildAgentSystemPrompt } from "../src/agents/system-prompt.js";
 import { loadConfig } from "../src/config/config.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../src/routing/session-key.js";
@@ -164,12 +164,12 @@ function buildCases(): Case[] {
       note: "Pure CC identity, plain message. Must always bill plan quota.",
     },
     {
-      name: "real-wrapForSubscription",
+      name: "real-subscription-shape",
       group: "assertion",
       expect: "plan",
-      system: [sb(CC_BLOCK0), sb(wrapForSubscription(builtOpenClawPrompt))],
-      messages: [HELLO],
-      note: "The actual production subscription prompt (wrapForSubscription of the real builder). Regression guard.",
+      system: [sb(CC_BLOCK0), sb(CC_BASE_PROMPT)],
+      messages: [reminder(builtOpenClawPrompt), HELLO],
+      note: "The actual production subscription shape: pure Claude Code base in the system (block 0 + CC_BASE_PROMPT), the whole OpenClaw prompt delivered in a user <system-reminder>. Regression guard.",
     },
     {
       name: "openclaw-as-user-reminder",
@@ -185,6 +185,14 @@ function buildCases(): Case[] {
         HELLO,
       ],
       note: "OpenClaw persona + heartbeats delivered as a conversation <system-reminder>. Should stay plan quota (the 'disguised user message' design).",
+    },
+    {
+      name: "full-prompt-in-reminder",
+      group: "assertion",
+      expect: "plan",
+      system: [sb(CC_BLOCK0)],
+      messages: [reminder(builtOpenClawPrompt), HELLO],
+      note: "The ENTIRE built OpenClaw prompt (identity + operational sections + project context) delivered as a user <system-reminder>, with ONLY CC block 0 in the system. Validates the 'move everything to the reminder, keep the system pure Claude Code' refactor (the wrapForSubscription replacement) stays on plan quota.",
     },
     {
       name: "heartbeats-in-system",
@@ -207,7 +215,7 @@ function buildCases(): Case[] {
       expect: "spill",
       system: [sb(CC_BLOCK0), sb(builtOpenClawPrompt)],
       messages: [HELLO],
-      note: "The raw builder output (no wrapForSubscription) contains messaging/heartbeats/project-context and spills. Shows why the wrapper exists.",
+      note: "The raw builder output placed in the SYSTEM block contains messaging/heartbeats/identity and spills. Shows why OpenClaw content must ride the reminder, not the system block.",
     },
 
     // ---- probes (exploratory; informational only) ----
