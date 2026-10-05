@@ -189,7 +189,7 @@ export function waitForAgentReady(
  * The router only converses in registered channels (provisioning is explicit:
  * an unregistered guild channel is ignored), so every E2E channel must send
  * `/channel register` before it can get a reply. The tester bot is allowlisted
- * for provisioning (OPENCLAW_ADMIN_OVERRIDE_IDS / OPENCLAW_ROUTER_ALLOW_BOT_IDS),
+ * for provisioning (OPENCLAW_ADMIN_OVERRIDE_IDS / OPENCLAW_MOCK_USER_BOT_ID),
  * so it can self-register. We then wait for the agent's first turn so callers do
  * not race the box spin-up, and throw if it never comes up so the failure is
  * attributed here rather than surfacing as a silent timeout in the first probe.
@@ -252,10 +252,10 @@ export async function createE2eChannel(
 }
 
 export function resolveTestBotToken(): string {
-  const token = process.env.DISCORD_E2E_BOT_TOKEN?.trim();
+  const token = process.env.OPENCLAW_MOCK_USER_BOT_TOKEN?.trim();
   if (!token) {
     throw new Error(
-      "Discord E2E bot token not found. Set the DISCORD_E2E_BOT_TOKEN environment variable.",
+      "Mock-user bot token not found. Set the OPENCLAW_MOCK_USER_BOT_TOKEN environment variable.",
     );
   }
   return token;

@@ -468,9 +468,10 @@ scripts/prod-mirror.sh down [--clean]   # stop the box (and wipe the rig keypair
 ```
 
 By default the box ships a blank `DISCORD_BOT_TOKEN` so it never fights prod for the same
-bot session; `up --live` requires `OPENCLAW_MIRROR_DISCORD_TOKEN` (a dedicated bot, not
-prod's) to connect to real Discord. On Apple Silicon the deploy ships `linux-arm64`
-binaries automatically (`OPENCLAW_DEPLOY_ARCH`).
+bot session; `up --live` overlays `.env.mirror` onto `.env`, whose `DISCORD_BOT_TOKEN` is
+the dedicated OpenClawMirror bot (not prod's), to connect to real Discord. `.env.mirror`
+is gitignored and never deployed. On Apple Silicon the deploy ships `linux-arm64` binaries
+automatically (`OPENCLAW_DEPLOY_ARCH`).
 
 ## Docs sanity
 

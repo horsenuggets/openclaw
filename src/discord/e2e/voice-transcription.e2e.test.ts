@@ -29,7 +29,7 @@ const TEST_BOT_TOKEN = resolveTestBotToken();
 // (the default) would make the router reject the human's voice message. Unset
 // means the human won't be routed, so the test cannot pass; it is surfaced
 // below rather than failing with a silent timeout.
-const VOICE_OWNER_ID = process.env.DISCORD_E2E_VOICE_OWNER_ID?.trim();
+const VOICE_OWNER_ID = process.env.OPENCLAW_E2E_VOICE_OWNER_ID?.trim();
 
 // Long timeout — human needs time to send voice message from phone.
 const VOICE_MSG_WAIT_MS = 180_000;
@@ -57,7 +57,7 @@ describe("voice transcription", () => {
     // the router routes their voice message (see VOICE_OWNER_ID).
     if (!VOICE_OWNER_ID) {
       console.warn(
-        "DISCORD_E2E_VOICE_OWNER_ID is unset — the channel will be owned by the driver " +
+        "OPENCLAW_E2E_VOICE_OWNER_ID is unset. The channel will be owned by the driver " +
           "bot and the router will reject the human's voice message. Set it to the sender's " +
           "Discord user id for this test to pass.",
       );

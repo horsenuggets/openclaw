@@ -20,13 +20,13 @@
 #   scripts/prod-mirror.sh down [--clean]   # stop the box (and wipe the rig keypair)
 #
 # Discord: by default the box ships a BLANK DISCORD_BOT_TOKEN so it never fights
-# prod for the same bot session. `up --live` requires OPENCLAW_MIRROR_DISCORD_TOKEN
-# to be set (use a dedicated bot, not the prod one) so the box's router connects
-# to real Discord.
+# prod for the same bot session. `up --live` overlays .env.mirror onto .env (the
+# mirror file's DISCORD_BOT_TOKEN is the dedicated OpenClawMirror bot, not prod),
+# so the box's router connects to real Discord as that bot. .env.mirror is
+# gitignored and never deployed, so the prod bot and the mirror bot never mix.
 #
 # Env overrides:
-#   OPENCLAW_MIRROR_SSH_PORT       host port mapped to the box sshd (default 2299)
-#   OPENCLAW_MIRROR_DISCORD_TOKEN  bot token for `up --live`
+#   OPENCLAW_MIRROR_SSH_PORT  host port mapped to the box sshd (default 2299)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -84,17 +84,44 @@ wait_ready() {
   return 1
 }
 
-# Copy the repo .env but force DISCORD_BOT_TOKEN to the rig's choice so the box
-# never reuses the prod bot session by accident.
+# Merge KEY=VALUE env files, later files overriding earlier on duplicate keys,
+# preserving first-seen order. Comments and blank lines are dropped (box.env is a
+# machine file). This is the same overlay the shell does with
+# `set -a; . .env; . .env.mirror; set +a`, flattened into one deduped file.
+merge_env_files() {
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      eq = index($0, "=")
+      if (eq == 0) next
+      key = substr($0, 1, eq - 1)
+      if (!(key in seen)) { order[++n] = key; seen[key] = 1 }
+      val[key] = $0
+    }
+    END { for (i = 1; i <= n; i++) print val[order[i]] }
+  ' "$@"
+}
+
+# Build the box's ~/.env. In offline mode it is the base .env with a BLANK
+# DISCORD_BOT_TOKEN (the router stays down; use `register` for solo tests). In
+# live mode it is .env overlaid with .env.mirror (the OpenClawMirror bot plus the
+# mirror-only overrides), so the box never reuses the prod bot session.
 build_box_env() {
-  local token="$1"
+  local mode="$1" # "live" or "offline"
   mkdir -p "$RIG_DIR"
   [ -f "$ROOT_DIR/.env" ] || die "repo .env not found; the box needs the provisioner + guild/role vars."
   # box.env holds Discord + provisioner credentials; create it 0600 before
   # writing so other local users cannot read the rig's secrets.
   ( umask 077 && : >"$BOX_ENV" )
-  grep -v '^DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$BOX_ENV"
-  printf 'DISCORD_BOT_TOKEN=%s\n' "$token" >>"$BOX_ENV"
+  if [ "$mode" = "live" ]; then
+    [ -f "$ROOT_DIR/.env.mirror" ] ||
+      die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."
+    merge_env_files "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$BOX_ENV"
+  else
+    grep -v '^[[:space:]]*DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$BOX_ENV"
+    printf 'DISCORD_BOT_TOKEN=\n' >>"$BOX_ENV"
+  fi
 }
 
 # $1: "build" to force a recompile, anything else to reuse existing binaries.
@@ -162,18 +189,15 @@ cmd_up() {
   ensure_image
   ensure_key
 
-  local token=""
   if [ -n "$live" ]; then
-    # Require a dedicated mirror bot token. We deliberately do NOT fall back to
-    # the repo .env DISCORD_BOT_TOKEN: that is the production bot, and running the
-    # mirror's router on it starts a second gateway session for the same bot,
-    # which fights prod for the connection — the exact conflict this rig exists to
-    # avoid. To knowingly reuse the prod bot (only safe while prod's own router is
-    # stopped), set OPENCLAW_MIRROR_DISCORD_TOKEN to it explicitly.
-    token="${OPENCLAW_MIRROR_DISCORD_TOKEN:-}"
-    [ -n "$token" ] ||
-      die "--live requires OPENCLAW_MIRROR_DISCORD_TOKEN (a dedicated bot, not the prod one)."
-    echo "Live mode: using OPENCLAW_MIRROR_DISCORD_TOKEN."
+    # Overlay .env.mirror onto .env. The mirror file's DISCORD_BOT_TOKEN is the
+    # dedicated OpenClawMirror bot, never prod: running the mirror's router on the
+    # prod bot would start a second gateway session for the same bot and fight prod
+    # for the connection, the exact conflict this rig exists to avoid. (To
+    # knowingly reuse the prod bot while prod's own router is stopped, put its token
+    # in .env.mirror.)
+    echo "Live mode: overlaying .env.mirror (OpenClawMirror bot)."
+    build_box_env "live"
   else
     # The router requires a Discord token (loadRouterConfig throws on an empty
     # one), so with a blank token its container just crash-loops under the health
@@ -182,8 +206,8 @@ cmd_up() {
     # bring the router up against real Discord.
     echo "Offline mode: no Discord token. The router will not run; use 'register <id>'"
     echo "for solo agent testing, or 'up --live' for the full stack against Discord."
+    build_box_env "offline"
   fi
-  build_box_env "$token"
 
   echo "Starting the box (privileged, sshd on :$SSH_PORT)..."
   # -v on removal takes the anonymous /var/lib/docker volume (multi-GB inner image
@@ -207,8 +231,8 @@ cmd_deploy() {
   [ "${1:-}" = "--build" ] && build="build"
   require_docker
   docker inspect "$CONTAINER" >/dev/null 2>&1 || die "box not running; run 'up' first."
-  # Reuse whatever token the last box.env had; regenerate from repo if missing.
-  [ -f "$BOX_ENV" ] || build_box_env ""
+  # Reuse whatever the last box.env had; rebuild offline from repo if missing.
+  [ -f "$BOX_ENV" ] || build_box_env "offline"
   run_deploy "$build"
   start_provisioner
 }
