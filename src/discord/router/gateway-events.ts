@@ -13,7 +13,6 @@ import { setUserPreference } from "./config.js";
 import {
   DISCORD_API,
   discordSendEphemeral,
-  discordSendEphemeralEmbed,
   discordSendReply,
   editInteractionEmbedReply,
 } from "./discord-api.js";
@@ -281,7 +280,10 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
             ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
             : `Sorry, but this channel (<#${channelId}>) is registered under another user. Unfortunately, you are not authorized to use this channel's agent.`;
           const embed = buildLogEmbed(notice);
-          void discordSendEphemeralEmbed(discordToken, channelId, {
+          // A plain user message carries no interaction token, so a true
+          // ephemeral reply is impossible. Post a persistent Log embed threaded
+          // under the offending message instead.
+          void discordSendReply(discordToken, channelId, d.id, {
             embeds: [embed.embed],
             attachments: embed.attachments,
           });

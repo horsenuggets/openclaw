@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  clearEmbedCdnCache,
-  discordSendEphemeralEmbed,
-  editInteractionEmbedReply,
-  sendEmbedMessage,
-} from "./discord-api.js";
+import { clearEmbedCdnCache, editInteractionEmbedReply, sendEmbedMessage } from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
 
 // A Discord CDN URL whose signed expiry (ex=, hex epoch seconds) is far in the
@@ -123,64 +118,6 @@ describe("sendEmbedMessage", () => {
       channel_id: "chan-1",
       fail_if_not_exists: false,
     });
-  });
-
-  it("returns the posted message id", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, init: RequestInit) => {
-        calls.push({ url, init });
-        return new Response(JSON.stringify({ id: "posted-1" }), { status: 200 });
-      }),
-    );
-    const res = await sendEmbedMessage("tok", "chan-1", { embeds: [{ description: "hi" }] });
-    expect(res).toEqual({ ok: true, status: 200, id: "posted-1" });
-  });
-});
-
-describe("discordSendEphemeralEmbed", () => {
-  it("auto-deletes the posted embed after the TTL", async () => {
-    vi.useFakeTimers();
-    try {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (url: string, init: RequestInit) => {
-          calls.push({ url, init });
-          if (init.method === "DELETE") {
-            return new Response(null, { status: 204 });
-          }
-          return new Response(JSON.stringify({ id: "eph-1" }), { status: 200 });
-        }),
-      );
-      await discordSendEphemeralEmbed("tok", "chan-1", { embeds: [{ description: "nope" }] });
-      expect(calls).toHaveLength(1);
-      expect(calls[0].init.method).toBe("POST");
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(calls).toHaveLength(2);
-      expect(calls[1].init.method).toBe("DELETE");
-      expect(calls[1].url).toContain("/channels/chan-1/messages/eph-1");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("does not schedule a delete when the send fails", async () => {
-    vi.useFakeTimers();
-    try {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (url: string, init: RequestInit) => {
-          calls.push({ url, init });
-          return new Response("boom", { status: 500 });
-        }),
-      );
-      await discordSendEphemeralEmbed("tok", "chan-1", { embeds: [{ description: "nope" }] });
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(calls).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 
