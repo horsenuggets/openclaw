@@ -84,43 +84,71 @@ wait_ready() {
   return 1
 }
 
-# Build the box's ~/.env. In offline mode it is the base .env with a BLANK
-# DISCORD_BOT_TOKEN (the router stays down; use `register` for solo tests). In
-# live mode it is .env followed by .env.mirror (the OpenClawMirror bot plus the
-# mirror-only overrides), so the box never reuses the prod bot session.
+# Print the unique env-var names defined across the given files, in first-seen
+# order, tolerating leading whitespace and an optional `export ` prefix.
+env_key_names() {
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      sub(/^export[[:space:]]+/, "", line)
+      eq = index(line, "=")
+      if (eq == 0) next
+      key = substr(line, 1, eq - 1)
+      sub(/[[:space:]]+$/, "", key)
+      if (key != "" && !(key in seen)) { seen[key] = 1; print key }
+    }
+  ' "$@"
+}
+
+# Emit `KEY='value'` for each named var using its current (already-sourced)
+# value, single-quoted so any value re-sources identically under /bin/sh.
+emit_env_values() {
+  local k v
+  for k in "$@"; do
+    v=${!k-}
+    printf "%s='%s'\n" "$k" "${v//\'/\'\\\'\'}"
+  done
+}
+
+# Build the box's ~/.env by sourcing the inputs the same way boot.sh will and
+# serializing the EFFECTIVE value of each key exactly once. This both preserves
+# shell semantics (a value that references an earlier one resolves sequentially)
+# and guarantees the prod token never appears in the file: in live mode
+# DISCORD_BOT_TOKEN is emitted once with the mirror value, so the overridden prod
+# token is not written to the box at all. Offline mode omits the token entirely
+# (blank), leaving the router down for solo `register` testing.
 build_box_env() {
   local mode="$1" # "live" or "offline"
   mkdir -p "$RIG_DIR"
   [ -f "$ROOT_DIR/.env" ] || die "repo .env not found; the box needs the provisioner + guild/role vars."
   # Assemble into a temp file and only move it into place after validation passes,
   # so a failed live-mode check never leaves a box.env behind that a later
-  # `deploy` would reuse (which could ship the prod token to the mirror box).
-  # mktemp creates it 0600, so the rig's secrets are not world-readable.
-  local tmp
+  # `deploy` would reuse. mktemp creates it 0600, so secrets are not world-readable.
+  local tmp keys
   tmp=$(mktemp "$RIG_DIR/.box.env.XXXXXX")
   if [ "$mode" = "live" ]; then
     [ -f "$ROOT_DIR/.env.mirror" ] ||
       { rm -f "$tmp"; die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."; }
-    # Concatenate base then overlay. Sourcing the result is byte-for-byte the same
-    # as `set -a; . .env; . .env.mirror`, so duplicate keys resolve last-wins and
-    # any value that references an earlier one keeps sequential semantics.
-    cat "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$tmp"
-    # The overlay must actually replace the prod token. If .env.mirror omits (or
-    # blanks) DISCORD_BOT_TOKEN, the merged value falls back to .env's prod token
-    # and the box would open a second gateway session on the prod bot, fighting
-    # prod — the exact conflict this rig exists to avoid.
-    # Compare the EFFECTIVE values boot.sh will see (each file sourced the same
-    # way boot.sh sources ~/.env), not raw text. Comparing raw right-hand sides
-    # would let shell-equivalent quoting/whitespace mask a reused prod token
-    # (e.g. base `TOKEN=x` vs mirror `TOKEN="x"` are identical once sourced).
+    keys=$(env_key_names "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror")
+    # shellcheck disable=SC2086  # keys are var names (no spaces); word-split intended
+    (set -a; . "$ROOT_DIR/.env"; . "$ROOT_DIR/.env.mirror"; set +a; emit_env_values $keys) >"$tmp"
+    # The overlay must actually replace the prod token. Compare the EFFECTIVE
+    # sourced values (not raw text, which quoting/whitespace could make differ
+    # while sourcing to the same token) so an omitted/blank/duplicate mirror token
+    # fails fast instead of silently reusing the prod bot session.
     local base_token merged_token
     base_token=$(set -a; . "$ROOT_DIR/.env"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
     merged_token=$(set -a; . "$tmp"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
     [ -n "$merged_token" ] && [ "$merged_token" != "$base_token" ] ||
       { rm -f "$tmp"; die ".env.mirror must set a non-empty DISCORD_BOT_TOKEN (the OpenClawMirror bot) that differs from the prod token in .env."; }
   else
-    grep -vE '^[[:space:]]*(export[[:space:]]+)?DISCORD_BOT_TOKEN=' "$ROOT_DIR/.env" >"$tmp"
-    printf 'DISCORD_BOT_TOKEN=\n' >>"$tmp"
+    keys=$(env_key_names "$ROOT_DIR/.env" | grep -vx DISCORD_BOT_TOKEN || true)
+    # shellcheck disable=SC2086
+    (set -a; . "$ROOT_DIR/.env"; set +a; emit_env_values $keys) >"$tmp"
+    printf "DISCORD_BOT_TOKEN=''\n" >>"$tmp"
   fi
   mv "$tmp" "$BOX_ENV"
 }
