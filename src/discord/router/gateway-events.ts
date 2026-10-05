@@ -13,11 +13,13 @@ import { setUserPreference } from "./config.js";
 import {
   DISCORD_API,
   discordSendEphemeral,
+  discordSendEphemeralEmbed,
   discordSendReply,
   editInteractionEmbedReply,
 } from "./discord-api.js";
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
+import { buildLogEmbed } from "./log-embed.js";
 import { handleTextCommand, routeMessage } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -41,6 +43,12 @@ export type GatewayContext = {
   channelGuild: Map<string, string>;
   /** Trusted bot ids (OPENCLAW_ROUTER_ALLOW_BOT_IDS) that may converse. */
   allowedBotIds: Set<string>;
+  /**
+   * Whether to tell a non-owner why their message in a registered channel was
+   * ignored (OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE, default true). False => deny
+   * silently.
+   */
+  unauthorizedNoticeEnabled: boolean;
   describeInstance: (channelId: string) => InstanceStatus | null;
   channelCommandDeps: ChannelCommandDeps;
   runAgentCommand: RunAgentCommand;
@@ -109,6 +117,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     inflight,
     channelGuild,
     allowedBotIds,
+    unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
     runAgentCommand,
@@ -266,11 +275,17 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         runtime.log(
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
-        void discordSendEphemeral(
-          discordToken,
-          channelId,
-          "*You are not authorized to use this channel's agent.*",
-        );
+        if (unauthorizedNoticeEnabled) {
+          const ownerId = describeInstance(channelId)?.ownerId;
+          const notice = ownerId
+            ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
+            : `Sorry, but this channel (<#${channelId}>) is registered under another user. Unfortunately, you are not authorized to use this channel's agent.`;
+          const embed = buildLogEmbed(notice);
+          void discordSendEphemeralEmbed(discordToken, channelId, {
+            embeds: [embed.embed],
+            attachments: embed.attachments,
+          });
+        }
         return;
       }
       routeInstanceMessage();

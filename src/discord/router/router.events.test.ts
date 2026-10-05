@@ -268,6 +268,93 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
   });
 
+  it("notifies an unauthorized user why their message in a registered channel was ignored", async () => {
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.endsWith(`/channels/${CHANNEL}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(url);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // A non-owner human in a registered guild channel: owner is unknown (no
+    // .onboarding.json on disk), so the gate fails closed and denies.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "msg-unauth",
+      author: { id: "444444444444444444", bot: false },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "let me in",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("denied message from 444444444444444444"))).toBe(true);
+    expect(posts).toHaveLength(1);
+  });
+
+  it("denies silently when OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE is disabled", async () => {
+    vi.stubEnv("OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE", "0");
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.endsWith(`/channels/${CHANNEL}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(url);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "msg-unauth",
+      author: { id: "444444444444444444", bot: false },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "let me in",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("denied message from 444444444444444444"))).toBe(true);
+    expect(posts).toHaveLength(0);
+  });
+
   it("learns a channel's guild from interactions so GUILD_DELETE still cleans up", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);

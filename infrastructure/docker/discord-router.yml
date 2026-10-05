@@ -38,6 +38,10 @@ services:
       # with the agent, not just run /channel commands. For an automated tester
       # bot driving end-to-end tests. Unset => all bots are chat-filtered.
       - OPENCLAW_ROUTER_ALLOW_BOT_IDS=${OPENCLAW_ROUTER_ALLOW_BOT_IDS}
+      # Reply to a non-owner messaging a registered channel with an auto-deleting
+      # Log embed explaining the channel belongs to someone else. Unset/truthy =>
+      # enabled; set falsy (0/false/no/off) to deny silently.
+      - OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE=${OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE}
       # Host provisioning daemon (discord-provisioner) the router calls over
       # loopback for /channel register|unregister. Unset => those are disabled.
       - OPENCLAW_PROVISIONER_PORT=${OPENCLAW_PROVISIONER_PORT}

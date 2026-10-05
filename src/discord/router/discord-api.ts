@@ -6,6 +6,23 @@ import { readEmbedAsset } from "./embed-assets.js";
 export const DISCORD_API = "https://discord.com/api/v10";
 export const TYPING_INTERVAL_MS = 8_000;
 
+/** How long a pseudo-ephemeral message stays before it auto-deletes. */
+const EPHEMERAL_TTL_MS = 10_000;
+
+/**
+ * Schedule a best-effort delete of a message after {@link EPHEMERAL_TTL_MS},
+ * so a normal channel message reads as ephemeral (bots cannot send true
+ * ephemeral messages outside an interaction response).
+ */
+function scheduleEphemeralDelete(token: string, channelId: string, messageId: string): void {
+  setTimeout(() => {
+    void fetch(`${DISCORD_API}${Routes.channelMessage(channelId, messageId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${token}` },
+    }).catch(() => {});
+  }, EPHEMERAL_TTL_MS);
+}
+
 export async function discordSend(
   token: string,
   channelId: string,
@@ -78,16 +95,27 @@ export async function discordSendEphemeral(
     body: JSON.stringify({ content }),
   });
   if (resp.ok) {
-    // Auto-delete after 10 seconds
     const msg = (await resp.json()) as { id?: string };
     if (msg.id) {
-      setTimeout(() => {
-        void fetch(`${DISCORD_API}${Routes.channelMessage(channelId, msg.id!)}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bot ${token}` },
-        }).catch(() => {});
-      }, 10_000);
+      scheduleEphemeralDelete(token, channelId, msg.id);
     }
+  }
+}
+
+/**
+ * Send a Log-category embed that looks ephemeral: a normal channel message
+ * (bots cannot send true ephemeral messages outside an interaction) carrying an
+ * embed instead of italic text, which auto-deletes after a few seconds. Mirrors
+ * {@link discordSendEphemeral} but for embeds.
+ */
+export async function discordSendEphemeralEmbed(
+  token: string,
+  channelId: string,
+  message: EmbedMessage,
+): Promise<void> {
+  const res = await sendEmbedMessage(token, channelId, message);
+  if (res.ok && res.id) {
+    scheduleEphemeralDelete(token, channelId, res.id);
   }
 }
 
@@ -233,7 +261,9 @@ type EmbedDispatch = {
  * the response), or dropped when its file cannot be read. Works for both the
  * initial reply (cold cache uploads) and follow-up edits (warm cache reuses).
  */
-async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; status: number }> {
+async function dispatchEmbed(
+  request: EmbedDispatch,
+): Promise<{ ok: boolean; status: number; id?: string }> {
   const now = Date.now();
   const needed = [...new Set(request.attachments ?? [])];
 
@@ -280,7 +310,8 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; sta
       headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return { ok: resp.ok, status: resp.status };
+    const body = resp.ok ? await parseMessageResponse(resp) : undefined;
+    return { ok: resp.ok, status: resp.status, id: body?.id };
   }
 
   payload.attachments = toUpload.map((file, index) => ({ id: index, filename: file.filename }));
@@ -296,10 +327,13 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; sta
     headers: authHeader,
     body: form,
   });
-  if (resp.ok) {
-    await cacheUploadedIcons(resp, toUpload, now);
+  if (!resp.ok) {
+    return { ok: false, status: resp.status };
   }
-  return { ok: resp.ok, status: resp.status };
+  // Read the body once, then reuse it for both icon caching and the message id.
+  const body = await parseMessageResponse(resp);
+  cacheUploadedIcons(body, toUpload, now);
+  return { ok: true, status: resp.status, id: body.id };
 }
 
 /**
@@ -310,7 +344,7 @@ export async function sendEmbedMessage(
   token: string,
   channelId: string,
   message: EmbedMessage,
-): Promise<{ ok: boolean; status: number }> {
+): Promise<{ ok: boolean; status: number; id?: string }> {
   return dispatchEmbed({
     url: `${DISCORD_API}${Routes.channelMessages(channelId)}`,
     method: "POST",
@@ -343,24 +377,32 @@ export async function editInteractionEmbedReply(
   });
 }
 
-/** Cache CDN URLs from the send response for the icons we just uploaded. */
-async function cacheUploadedIcons(
-  resp: Response,
+/** Parsed fields of a Discord message-send response we care about. */
+type MessageResponseBody = {
+  id?: string;
+  attachments?: { filename?: string; url?: string }[];
+};
+
+/** Parse the JSON body of a message-send response, tolerating unreadable bodies. */
+async function parseMessageResponse(resp: Response): Promise<MessageResponseBody> {
+  try {
+    return (await resp.json()) as MessageResponseBody;
+  } catch {
+    return {};
+  }
+}
+
+/** Cache CDN URLs from a parsed send response for the icons we just uploaded. */
+function cacheUploadedIcons(
+  body: MessageResponseBody,
   uploaded: { filename: string; data: Buffer }[],
   now: number,
-): Promise<void> {
-  try {
-    const body = (await resp.json()) as {
-      attachments?: { filename?: string; url?: string }[];
-    };
-    const names = new Set(uploaded.map((file) => file.filename));
-    for (const att of body.attachments ?? []) {
-      if (att.filename && att.url && names.has(att.filename)) {
-        cdnCache.set(att.filename, { url: att.url, expiresAt: cdnExpiry(att.url, now) });
-      }
+): void {
+  const names = new Set(uploaded.map((file) => file.filename));
+  for (const att of body.attachments ?? []) {
+    if (att.filename && att.url && names.has(att.filename)) {
+      cdnCache.set(att.filename, { url: att.url, expiresAt: cdnExpiry(att.url, now) });
     }
-  } catch {
-    // Response body unreadable; skip caching (the next send re-uploads).
   }
 }
 
