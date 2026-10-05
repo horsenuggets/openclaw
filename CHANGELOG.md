@@ -20,6 +20,10 @@ Docs: https://docs.openclaw.ai
   (editable at `docs/reference/templates/PERSONA_FRAMING.md`) still introduces SOUL/AGENTS
   in the reminder so the model embodies them. The API-key path is unchanged (its system
   block carries the full prompt as before).
+- Discord router: when the agent emits `⁘ send_hook_embed welcome`, report a rejected
+  welcome-card send back to the agent (mirroring the `⁘ log` branch) instead of always
+  relaying "welcome card sent". Previously a failed send was swallowed, so the agent would
+  greet the user as if the welcome card had appeared when nothing rendered.
 - Discord router: render agent-runtime error replies (model/API failures the agent returns
   as its turn, e.g. a `502 upstream auth unavailable`) as Log embeds instead of plain
   italic text, using the payload's existing `isError` flag so no fragile text detection is

@@ -26,7 +26,19 @@ describe("runAgentCommandDispatch", () => {
     const [channelId, message] = sendEmbed.mock.calls[0];
     expect(channelId).toBe("chan-1");
     expect(message.attachments).toContain("general.png");
+    expect(message.attachments).toContain("openclaw.png");
     expect(message.embeds[0].title).toBe("Welcome to OpenClaw!");
+  });
+
+  it("relays a rejected welcome embed back to the agent as an error", async () => {
+    const sendEmbed = vi.fn(async () => ({ ok: false, status: 400 }));
+    const result = await runAgentCommandDispatch(
+      { command: "send_hook_embed", args: ["welcome"] },
+      "chan-1",
+      { sendEmbed },
+    );
+    expect(result).toBe("error: welcome embed rejected (400)");
+    expect(sendEmbed).toHaveBeenCalledTimes(1);
   });
 
   it("rejects an unknown hook embed name", async () => {

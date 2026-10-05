@@ -37,11 +37,13 @@ export async function runAgentCommandDispatch(
     const name = cmd.args[0];
     if (name === "welcome") {
       const welcome = buildWelcomeEmbed();
-      await deps.sendEmbed(channelId, {
+      const res = await deps.sendEmbed(channelId, {
         embeds: [welcome.embed],
         attachments: welcome.attachments,
       });
-      return "welcome card sent";
+      // Report a rejection back to the agent so it does not greet the user as if
+      // the card appeared when the send actually failed (e.g. a Discord 4xx).
+      return res.ok ? "welcome card sent" : `error: welcome embed rejected (${res.status})`;
     }
     return `error: unknown embed "${name ?? ""}"`;
   }
