@@ -33,6 +33,11 @@ describe("EMBED_CATEGORIES", () => {
       icon: "injected-system-prompt.png",
       color: 0x80ff80,
     });
+    expect(EMBED_CATEGORIES.connections).toEqual({
+      footerText: "Connections",
+      icon: "connections.png",
+      color: 0xa080ff,
+    });
   });
 });
 

@@ -43,8 +43,7 @@ export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
     color: 0xffff80,
   },
   system: { footerText: "System", icon: "injected-system-prompt.png", color: 0x80ff80 },
-  // Reuses general.png for now; a dedicated connections icon is Phase 1.5 polish.
-  connections: { footerText: "Connections", icon: "general.png", color: 0x63a0f2 },
+  connections: { footerText: "Connections", icon: "connections.png", color: 0xa080ff },
 };
 
 /**
