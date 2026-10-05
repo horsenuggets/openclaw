@@ -587,9 +587,10 @@ export function buildAgentSystemPrompt(params: {
 
   const contextFiles = params.contextFiles ?? [];
   // Record the [start, end) span of the injected Project Context block within
-  // `lines` so the subscription path can wrap exactly that region in sentinels
-  // after everything is assembled (see the wrapProjectContext handling at the
-  // return). -1 means no block was injected.
+  // `lines` so the opt-in `wrapProjectContext` build path can wrap exactly that
+  // region in sentinels after everything is assembled (see the handling at the
+  // return). No runtime caller sets that flag; this span is otherwise unused.
+  // -1 means no block was injected.
   let contextBlockStart = -1;
   let contextBlockEnd = -1;
   if (contextFiles.length > 0) {
@@ -613,8 +614,9 @@ export function buildAgentSystemPrompt(params: {
   }
 
   // Pointer to withheld ("off") workspace files, when the pointer is placed inline.
-  // Sits outside the sentinel-wrapped Project Context block so it survives the
-  // subscription strip (it lists filenames only, which is CC-consistent).
+  // Sits outside the Project Context block so that under the opt-in
+  // `wrapProjectContext` build path it stays out of the sentinel-wrapped region (it
+  // lists filenames only, which is CC-consistent).
   if (params.contextPointer?.trim()) {
     lines.push(params.contextPointer.trim(), "");
   }
