@@ -201,10 +201,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       .filter((id) => id.length > 0),
   );
 
-  // When a non-owner messages a registered channel, send a Log-embed notice
-  // (enabled by default) explaining the channel belongs to someone else, then
-  // auto-delete it. Set OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE to a falsy value to
-  // deny silently (log only, no message).
+  // When a non-owner messages a registered channel, reply with a Log-embed
+  // notice (enabled by default) explaining the channel belongs to someone else.
+  // The reply is threaded under the offending message and persists. Set
+  // OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE to a falsy value to deny silently (log
+  // only, no message).
   const unauthorizedNoticeEnabled =
     parseBooleanValue(process.env.OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE) !== false;
 

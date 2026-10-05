@@ -267,26 +267,34 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // In a shared guild channel, restrict human conversation to the channel
   // owner. Explicitly trusted automation bots remain allowed for E2E use.
   if (guildId && !botAllowed) {
+    // Read the instance once and reuse it for both the ownership decision and
+    // the owner mention in the denial notice, so an unauthorized message does
+    // not trigger a second `.onboarding.json` read on the hot path.
+    const status = describeInstance(channelId);
     void isAuthorizedForChannel(channelId, authorId, {
-      describeInstance,
+      describeInstance: () => status,
     }).then((allowed) => {
       if (!allowed) {
         runtime.log(
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
         if (unauthorizedNoticeEnabled) {
-          const ownerId = describeInstance(channelId)?.ownerId;
+          const ownerId = status?.ownerId;
           const notice = ownerId
             ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
             : `Sorry, but this channel (<#${channelId}>) is registered under another user. Unfortunately, you are not authorized to use this channel's agent.`;
           const embed = buildLogEmbed(notice);
           // A plain user message carries no interaction token, so a true
           // ephemeral reply is impossible. Post a persistent Log embed threaded
-          // under the offending message instead.
-          void discordSendReply(discordToken, channelId, d.id, {
-            embeds: [embed.embed],
-            attachments: embed.attachments,
-          });
+          // under the offending message instead. Suppress all mentions so the
+          // owner/author are never pinged, even under repeated denials.
+          void discordSendReply(
+            discordToken,
+            channelId,
+            d.id,
+            { embeds: [embed.embed], attachments: embed.attachments },
+            { parse: [], replied_user: false },
+          );
         }
         return;
       }

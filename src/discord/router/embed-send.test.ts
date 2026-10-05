@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearEmbedCdnCache, editInteractionEmbedReply, sendEmbedMessage } from "./discord-api.js";
+import {
+  clearEmbedCdnCache,
+  discordSendReply,
+  editInteractionEmbedReply,
+  sendEmbedMessage,
+} from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
 
 // A Discord CDN URL whose signed expiry (ex=, hex epoch seconds) is far in the
@@ -118,6 +123,32 @@ describe("sendEmbedMessage", () => {
       channel_id: "chan-1",
       fail_if_not_exists: false,
     });
+  });
+
+  it("forwards allowed_mentions to the payload", async () => {
+    stubFetch();
+    await sendEmbedMessage("tok", "chan-1", {
+      embeds: [{ description: "hi" }],
+      allowedMentions: { parse: [], replied_user: false },
+    });
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.allowed_mentions).toEqual({ parse: [], replied_user: false });
+  });
+});
+
+describe("discordSendReply", () => {
+  it("suppresses pings on an embed reply when allowed_mentions is passed", async () => {
+    stubFetch();
+    await discordSendReply(
+      "tok",
+      "chan-1",
+      "m1",
+      { embeds: [{ description: "not authorized" }] },
+      { parse: [], replied_user: false },
+    );
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.message_reference.message_id).toBe("m1");
+    expect(body.allowed_mentions).toEqual({ parse: [], replied_user: false });
   });
 });
 
