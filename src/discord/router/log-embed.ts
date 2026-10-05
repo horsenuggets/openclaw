@@ -126,6 +126,16 @@ function formatLogText(text: string, indent: number): string {
 const EMBED_DESCRIPTION_LIMIT = 4096;
 
 /**
+ * Strip a single surrounding `*...*` italic wrap that the agent-side error
+ * formatter (errors.ts) adds, so the raw error text can be rendered in a Log
+ * embed without stray asterisks. Leaves `**bold**` and unwrapped text untouched.
+ */
+export function stripSurroundingItalics(text: string): string {
+  const match = text.match(/^\*([^*][\s\S]*?[^*]|[^*])\*$/);
+  return match ? match[1] : text;
+}
+
+/**
  * Build a Log-category embed from raw notice text: pretty-prints embedded JSON
  * and auto-links URLs. No title, no forced italics. Keeps the description within
  * Discord's limit by falling back to compact JSON, then truncating, so a large

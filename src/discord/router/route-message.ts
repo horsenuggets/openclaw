@@ -18,7 +18,7 @@ import {
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
-import { buildLogEmbed } from "./log-embed.js";
+import { buildLogEmbed, stripSurroundingItalics } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
 import { resolveWhisperUrl } from "./whisper-url.js";
@@ -305,6 +305,23 @@ export async function routeMessage(params: {
           let text = unescapeAgentText(raw).trim();
           if (isLeakedError(text)) {
             runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
+            continue;
+          }
+          // Agent-runtime error replies (model/API failures formatted by
+          // errors.ts) arrive flagged as errors; render them as a Log embed
+          // rather than the plain italic text the formatter produced.
+          if (text && payload.isError) {
+            const log = buildLogEmbed(stripSurroundingItalics(text));
+            const sent = await sendEmbedMessage(discordToken, channelId, {
+              embeds: [log.embed],
+              attachments: log.attachments,
+            });
+            if (!sent.ok) {
+              runtime.error(`[router] error log embed failed (${sent.status})`);
+            }
+            deliveredAnything = true;
+            deliveredThisTurn = true;
+            handled = true;
             continue;
           }
           if (text) {

@@ -10,7 +10,15 @@ type AgentResult = {
   runId: string;
   status: string;
   result?: {
-    payloads?: Array<{ text?: string; mediaUrl?: string; mediaUrls?: string[] }>;
+    // `isError` is set by the agent run on an error reply (e.g. a model/API
+    // failure formatted by errors.ts), so the router can render it as a Log
+    // embed instead of plain text.
+    payloads?: Array<{
+      text?: string;
+      mediaUrl?: string;
+      mediaUrls?: string[];
+      isError?: boolean;
+    }>;
     // Set by the agent run when the model deliberately emitted the silent-reply
     // token, so the router can treat an empty result as an intentional no-op.
     meta?: { silent?: boolean };
