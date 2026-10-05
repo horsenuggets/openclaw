@@ -84,33 +84,9 @@ wait_ready() {
   return 1
 }
 
-# Merge KEY=VALUE env files, later files overriding earlier on duplicate keys,
-# preserving first-seen order. Comments and blank lines are dropped (box.env is a
-# machine file). This is the same overlay the shell does with
-# `set -a; . .env; . .env.mirror; set +a`, flattened into one deduped file.
-merge_env_files() {
-  awk '
-    /^[[:space:]]*#/ { next }
-    /^[[:space:]]*$/ { next }
-    {
-      eq = index($0, "=")
-      if (eq == 0) next
-      key = substr($0, 1, eq - 1)
-      # Normalize the key so dedup is reliable: strip leading/trailing whitespace
-      # and an optional `export ` prefix (e.g. `export FOO` and `FOO` collide).
-      sub(/^[[:space:]]+/, "", key)
-      sub(/^export[[:space:]]+/, "", key)
-      sub(/[[:space:]]+$/, "", key)
-      if (!(key in seen)) { order[++n] = key; seen[key] = 1 }
-      val[key] = $0
-    }
-    END { for (i = 1; i <= n; i++) print val[order[i]] }
-  ' "$@"
-}
-
 # Build the box's ~/.env. In offline mode it is the base .env with a BLANK
 # DISCORD_BOT_TOKEN (the router stays down; use `register` for solo tests). In
-# live mode it is .env overlaid with .env.mirror (the OpenClawMirror bot plus the
+# live mode it is .env followed by .env.mirror (the OpenClawMirror bot plus the
 # mirror-only overrides), so the box never reuses the prod bot session.
 build_box_env() {
   local mode="$1" # "live" or "offline"
@@ -125,7 +101,10 @@ build_box_env() {
   if [ "$mode" = "live" ]; then
     [ -f "$ROOT_DIR/.env.mirror" ] ||
       { rm -f "$tmp"; die "--live requires .env.mirror (the OpenClawMirror bot token + mirror-only overrides)."; }
-    merge_env_files "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$tmp"
+    # Concatenate base then overlay. Sourcing the result is byte-for-byte the same
+    # as `set -a; . .env; . .env.mirror`, so duplicate keys resolve last-wins and
+    # any value that references an earlier one keeps sequential semantics.
+    cat "$ROOT_DIR/.env" "$ROOT_DIR/.env.mirror" >"$tmp"
     # The overlay must actually replace the prod token. If .env.mirror omits (or
     # blanks) DISCORD_BOT_TOKEN, the merged value falls back to .env's prod token
     # and the box would open a second gateway session on the prod bot, fighting
@@ -215,9 +194,8 @@ cmd_up() {
     # Overlay .env.mirror onto .env. The mirror file's DISCORD_BOT_TOKEN is the
     # dedicated OpenClawMirror bot, never prod: running the mirror's router on the
     # prod bot would start a second gateway session for the same bot and fight prod
-    # for the connection, the exact conflict this rig exists to avoid. (To
-    # knowingly reuse the prod bot while prod's own router is stopped, put its token
-    # in .env.mirror.)
+    # for the connection, the exact conflict this rig exists to avoid. build_box_env
+    # enforces this by rejecting a mirror token equal to the prod token.
     echo "Live mode: overlaying .env.mirror (OpenClawMirror bot)."
     build_box_env "live"
   else
