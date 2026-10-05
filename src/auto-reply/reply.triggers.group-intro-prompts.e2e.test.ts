@@ -97,6 +97,10 @@ afterEach(() => {
 describe("group intro prompts", () => {
   const groupParticipationNote =
     "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
+  // Channels that render Markdown tables (discord, imessage, web) omit the "Avoid Markdown
+  // tables" hint; channels that would show raw pipes (whatsapp, telegram) keep it.
+  const groupParticipationNoteTables =
+    "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human. Don't type literal \\n sequences; use real line breaks sparingly.";
 
   it("labels Discord groups using the surface metadata", async () => {
     await withTempHome(async (home) => {
@@ -126,7 +130,7 @@ describe("group intro prompts", () => {
       const extraSystemPrompt =
         vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0]?.extraSystemPrompt ?? "";
       expect(extraSystemPrompt).toBe(
-        `You are replying inside the Discord group "Release Squad". Group members: Alice, Bob. Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). ${groupParticipationNote} Address the specific sender noted in the message context.`,
+        `You are replying inside the Discord group "Release Squad". Group members: Alice, Bob. Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). ${groupParticipationNoteTables} Address the specific sender noted in the message context.`,
       );
     });
   });

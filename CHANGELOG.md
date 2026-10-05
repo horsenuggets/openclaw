@@ -7,16 +7,20 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Agent writing style: rework the workspace `SOUL.md` and `AGENTS.md` templates so replies
-  read as a friendly conversation rather than a generic AI report. The agent now keeps
-  answers simple and casual by default (going long only when asked), prefers flowing prose
-  over bulleted lists (and uses a `→` arrow marker when a list is genuinely needed), never
-  emits `---` horizontal dividers, is allowed the occasional exclamation point for warmth,
-  and uses small text emoticons (`:)`, `:D`, `:(`, `:/`, `._.`) instead of emojis in
-  message text (emoji reactions are unaffected). It leans on light texting shorthand
-  without overdoing it, prefers ALL CAPS over bold/italics for emphasis, and avoids
-  semicolons. Markdown tables are now allowed on Discord (they render as aligned
-  code-block tables). The reply normalizer no longer rewrites em-dashes to commas; em-dash
-  avoidance is left to the prompt.
+  read as a friendly conversation rather than a generic AI report. These templates seed
+  newly bootstrapped workspaces only; existing workspaces keep their current files (the
+  bootstrap writer skips files that already exist), so adopt the new style there by
+  editing or recreating their `SOUL.md`/`AGENTS.md`. The agent now keeps answers simple
+  and casual by default (going long only when asked), prefers flowing prose over bulleted
+  lists (and uses a `→` arrow to link a thing to its explanation when a short list is
+  genuinely needed), never emits `---` horizontal dividers, is allowed the occasional
+  exclamation point for warmth, and uses small text emoticons (`:)`, `:D`, `:(`, `:/`,
+  `._.`) instead of emojis in message text (emoji reactions are unaffected). It leans on
+  light texting shorthand without overdoing it, prefers ALL CAPS over bold/italics for
+  emphasis, and avoids semicolons. Markdown tables are now allowed on channels that render
+  them (Discord, iMessage, web), including the group-chat style hint, where they show as
+  aligned code-block tables. The reply normalizer no longer rewrites em-dashes to commas;
+  em-dash avoidance is left to the prompt.
 - Discord router: add a "Log Message" embed category for system notices. A new `log`
   four-dot control command (`⁘ log "..."`) lets the agent emit a log-styled embed; bare
   URLs in log text become clickable links and the description is italicized. The router's

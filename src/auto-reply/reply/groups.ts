@@ -115,8 +115,13 @@ export function buildGroupIntro(params: {
       : undefined;
   const lurkLine =
     "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available.";
-  const styleLine =
-    "Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
+  // Channels that convert Markdown tables into aligned code-block tables render them
+  // cleanly, so only discourage tables on the channels that would show raw pipes.
+  const rendersMarkdownTables =
+    providerId === "discord" || providerId === "imessage" || isInternalMessageChannel(providerKey);
+  const styleLine = rendersMarkdownTables
+    ? "Write like a human. Don't type literal \\n sequences; use real line breaks sparingly."
+    : "Write like a human. Avoid Markdown tables. Don't type literal \\n sequences; use real line breaks sparingly.";
   return [
     subjectLine,
     membersLine,
