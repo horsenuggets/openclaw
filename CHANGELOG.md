@@ -20,6 +20,10 @@ Docs: https://docs.openclaw.ai
   (editable at `docs/reference/templates/PERSONA_FRAMING.md`) still introduces SOUL/AGENTS
   in the reminder so the model embodies them. The API-key path is unchanged (its system
   block carries the full prompt as before).
+- Discord router: render agent-runtime error replies (model/API failures the agent returns
+  as its turn, e.g. a `502 upstream auth unavailable`) as Log embeds instead of plain
+  italic text, using the payload's existing `isError` flag so no fragile text detection is
+  needed.
 - Discord router: refine the embed system. Log embeds no longer force italics and now
   pretty-print any embedded JSON into a fenced `json` code block (2-space indent) for
   readability. Command results (e.g. `/lifecycle on|off`) now render as a dedicated

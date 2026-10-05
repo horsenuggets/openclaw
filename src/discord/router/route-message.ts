@@ -18,7 +18,7 @@ import {
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { callGatewaySimple } from "./gateway-call.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
-import { buildLogEmbed } from "./log-embed.js";
+import { buildLogEmbed, stripSurroundingItalics } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
 import { resolveWhisperUrl } from "./whisper-url.js";
@@ -283,8 +283,10 @@ export async function routeMessage(params: {
           const raw = payload.text ?? "";
 
           // Control command? Never rendered to Discord; run it and capture a
-          // result to relay back to the agent.
-          const cmd = params.runCommand ? parseAgentCommand(raw) : null;
+          // result to relay back to the agent. Error payloads are data, not
+          // commands: a provider error returned verbatim could look like a `⁘`
+          // command, so never run it — fall through to the error-embed branch.
+          const cmd = params.runCommand && !payload.isError ? parseAgentCommand(raw) : null;
           if (cmd) {
             ranCommand = true;
             handled = true;
@@ -300,10 +302,44 @@ export async function routeMessage(params: {
             continue;
           }
 
-          // Normal message: unescape a leading `\⁘`, filter leaked errors, then
-          // format and send.
+          // Normal message: unescape a leading `\⁘`, then format and send.
           let text = unescapeAgentText(raw).trim();
-          if (isLeakedError(text)) {
+          // Agent-runtime error replies (model/API failures formatted by
+          // errors.ts) arrive flagged as errors; render them as a Log embed
+          // rather than the plain italic text the formatter produced. This runs
+          // before the leaked-error filter so a flagged error is never silently
+          // dropped just because its text resembles a raw leaked error.
+          if (text && payload.isError) {
+            const log = buildLogEmbed(stripSurroundingItalics(text));
+            let embedSent = false;
+            try {
+              const sent = await sendEmbedMessage(discordToken, channelId, {
+                embeds: [log.embed],
+                attachments: log.attachments,
+              });
+              embedSent = sent.ok;
+              if (!sent.ok) {
+                runtime.error(`[router] error log embed failed (${sent.status}); sending as text`);
+              }
+            } catch (err) {
+              // A rejected send (e.g. fetch failure) must still reach the
+              // plain-text fallback below rather than the outer error handler.
+              runtime.error(`[router] error log embed threw (${String(err)}); sending as text`);
+            }
+            if (embedSent) {
+              deliveredAnything = true;
+              deliveredThisTurn = true;
+              handled = true;
+              continue;
+            }
+            // Embed send failed: fall through to the plain-text path below so the
+            // user still gets the error rather than nothing.
+          }
+          // Suppress raw leaked errors (unflagged tool/JS errors that escaped
+          // into agent output). Flagged errors are excluded: one that fell
+          // through here after a failed embed send must still reach the
+          // plain-text fallback below rather than be silently dropped.
+          if (!payload.isError && isLeakedError(text)) {
             runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
             continue;
           }

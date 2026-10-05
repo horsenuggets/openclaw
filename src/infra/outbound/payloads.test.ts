@@ -46,6 +46,13 @@ describe("normalizeOutboundPayloadsForJson", () => {
       },
     ]);
   });
+
+  it("preserves the isError flag so a deliver:false caller can detect error replies", () => {
+    const [ok] = normalizeOutboundPayloadsForJson([{ text: "hi" }]);
+    expect(ok.isError).toBeUndefined();
+    const [err] = normalizeOutboundPayloadsForJson([{ text: "*boom*", isError: true }]);
+    expect(err.isError).toBe(true);
+  });
 });
 
 describe("normalizeOutboundPayloads", () => {
