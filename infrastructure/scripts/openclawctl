@@ -545,7 +545,7 @@ force_box_config() {
   if ! OPENCLAW_MODEL_PROXY_URL="$MODEL_PROXY_URL" \
     OPENCLAW_CONTAINER_PROXY_URL="$CONTAINER_PROXY_URL" \
     python3 - "$target" <<'PY' 2>/dev/null
-import json, os, sys
+import json, os, sys, tempfile
 
 target = sys.argv[1]
 with open(target) as f:
@@ -557,12 +557,31 @@ cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
     "anthropic-subscription", {}
 )["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
 cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
-# Preserve owner-only permissions (the config holds gateway.auth.token).
-fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-os.chmod(target, 0o600)
-with os.fdopen(fd, "w") as f:
-    json.dump(cfg, f, indent=2)
-    f.write("\n")
+# Write atomically: stage the full JSON in a same-directory temp file, then
+# os.replace() it onto the target, so a partial write (e.g. a full disk) never
+# truncates the existing config and leave it unparseable. Preserve the mode
+# (0600 - the config holds gateway.auth.token) and ownership (the box mounts it
+# read-only as the agent uid, so a root-owned replacement would be unreadable).
+st = os.stat(target)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(target) or ".", prefix=".openclaw.json.", suffix=".tmp")
+try:
+    os.fchmod(fd, 0o600)
+    try:
+        os.fchown(fd, st.st_uid, st.st_gid)
+    except PermissionError:
+        pass
+    with os.fdopen(fd, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, target)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 PY
   then
     echo "Warning: could not re-assert box config in $target; left unchanged" >&2
