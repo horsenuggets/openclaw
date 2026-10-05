@@ -92,4 +92,16 @@ describe("routeMessage payload delivery", () => {
     await route([{ text: "*boom*", isError: true }]);
     expect(discordSend).toHaveBeenCalledTimes(1);
   });
+
+  it("renders a flagged error even when its text resembles a leaked error", async () => {
+    await route([{ text: "TypeError: Cannot read properties of undefined", isError: true }]);
+    expect(sendEmbedMessage).toHaveBeenCalledTimes(1);
+    expect(discordSend).not.toHaveBeenCalled();
+  });
+
+  it("still suppresses an unflagged leaked error (no embed, no text)", async () => {
+    await route([{ text: "TypeError: Cannot read properties of undefined" }]);
+    expect(sendEmbedMessage).not.toHaveBeenCalled();
+    expect(discordSend).not.toHaveBeenCalled();
+  });
 });

@@ -302,16 +302,13 @@ export async function routeMessage(params: {
             continue;
           }
 
-          // Normal message: unescape a leading `\⁘`, filter leaked errors, then
-          // format and send.
+          // Normal message: unescape a leading `\⁘`, then format and send.
           let text = unescapeAgentText(raw).trim();
-          if (isLeakedError(text)) {
-            runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
-            continue;
-          }
           // Agent-runtime error replies (model/API failures formatted by
           // errors.ts) arrive flagged as errors; render them as a Log embed
-          // rather than the plain italic text the formatter produced.
+          // rather than the plain italic text the formatter produced. This runs
+          // before the leaked-error filter so a flagged error is never silently
+          // dropped just because its text resembles a raw leaked error.
           if (text && payload.isError) {
             const log = buildLogEmbed(stripSurroundingItalics(text));
             let embedSent = false;
@@ -337,6 +334,12 @@ export async function routeMessage(params: {
             }
             // Embed send failed: fall through to the plain-text path below so the
             // user still gets the error rather than nothing.
+          }
+          // Suppress raw leaked errors (unflagged tool/JS errors that escaped
+          // into agent output); flagged errors were already handled above.
+          if (isLeakedError(text)) {
+            runtime.log(`[router] suppressed leaked error: ${text.slice(0, 100)}`);
+            continue;
           }
           if (text) {
             text = convertMarkdownTables(text, "code");
