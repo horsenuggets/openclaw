@@ -108,25 +108,6 @@ merge_env_files() {
   ' "$@"
 }
 
-# Read the last value of KEY from an env file, tolerating the same leading
-# whitespace and optional `export ` prefix that merge_env_files normalizes, so
-# extraction and dedup agree.
-env_value() {
-  awk -v want="$1" '
-    {
-      line = $0
-      sub(/^[[:space:]]+/, "", line)
-      sub(/^export[[:space:]]+/, "", line)
-      eq = index(line, "=")
-      if (eq == 0) next
-      key = substr(line, 1, eq - 1)
-      sub(/[[:space:]]+$/, "", key)
-      if (key == want) val = substr(line, eq + 1)
-    }
-    END { print val }
-  ' "$2"
-}
-
 # Build the box's ~/.env. In offline mode it is the base .env with a BLANK
 # DISCORD_BOT_TOKEN (the router stays down; use `register` for solo tests). In
 # live mode it is .env overlaid with .env.mirror (the OpenClawMirror bot plus the
@@ -146,9 +127,13 @@ build_box_env() {
     # blanks) DISCORD_BOT_TOKEN, the merged value falls back to .env's prod token
     # and the box would open a second gateway session on the prod bot, fighting
     # prod — the exact conflict this rig exists to avoid.
+    # Compare the EFFECTIVE values boot.sh will see (each file sourced the same
+    # way boot.sh sources ~/.env), not raw text. Comparing raw right-hand sides
+    # would let shell-equivalent quoting/whitespace mask a reused prod token
+    # (e.g. base `TOKEN=x` vs mirror `TOKEN="x"` are identical once sourced).
     local base_token merged_token
-    base_token=$(env_value DISCORD_BOT_TOKEN "$ROOT_DIR/.env")
-    merged_token=$(env_value DISCORD_BOT_TOKEN "$BOX_ENV")
+    base_token=$(set -a; . "$ROOT_DIR/.env"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
+    merged_token=$(set -a; . "$BOX_ENV"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
     [ -n "$merged_token" ] && [ "$merged_token" != "$base_token" ] ||
       die ".env.mirror must set a non-empty DISCORD_BOT_TOKEN (the OpenClawMirror bot) that differs from the prod token in .env."
   else
