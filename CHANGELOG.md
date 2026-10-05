@@ -6,6 +6,11 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: refine the embed system. Log embeds no longer force italics and now
+  pretty-print any embedded JSON into a fenced `json` code block (2-space indent) for
+  readability. Command results (e.g. `/lifecycle on|off`) now render as a dedicated
+  "Command Result" embed with a state icon (enabled/disabled/neutral) instead of plain
+  text, covering the already-enabled/already-disabled and status-query edge cases.
 - Agent writing style: rework the workspace `SOUL.md` and `AGENTS.md` templates so replies
   read as a friendly conversation rather than a generic AI report. These templates seed
   newly bootstrapped workspaces only; existing workspaces keep their current files (the
