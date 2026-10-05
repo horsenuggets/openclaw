@@ -746,7 +746,7 @@ async function recoverUnansweredMessages(
   recoveredMessageIds: Set<string>,
   /**
    * Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) whose messages are
-   * conversational, matching the live path. Their unanswered messages are
+   * conversational, matching the live path. Its unanswered messages are
    * recoverable; every other bot's message is treated as a reply/banner.
    */
   allowedBotIds: Set<string>,

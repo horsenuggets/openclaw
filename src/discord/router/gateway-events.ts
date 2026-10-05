@@ -186,7 +186,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
 
   // Normal agent messages: ignore untrusted bots and empty messages.
   // Channel commands were already handled above so bots can still drive
-  // them. Trusted bots (OPENCLAW_MOCK_USER_BOT_ID) may converse, but
+  // them. A trusted bot (OPENCLAW_MOCK_USER_BOT_ID) may converse, but
   // never the router's own bot (self-routing would loop).
   const botAllowed = isBot ? isConversationalBot(authorId, applicationId, allowedBotIds) : false;
   if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
