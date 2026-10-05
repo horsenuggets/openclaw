@@ -50,5 +50,5 @@ skip that check and move on to the next one
 - read and organize memory files
 - check on projects (git status, etc.)
 - update documentation
-- commit and push your own changes
+- commit your own changes locally (ask before pushing to a shared remote)
 - review and update `MEMORY.md`
