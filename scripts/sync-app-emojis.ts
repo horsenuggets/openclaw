@@ -13,6 +13,8 @@
  * Usage (from repo root, with env loaded):
  *   set -a && . ./.env && set +a
  *   bun scripts/sync-app-emojis.ts [--dry-run] [--prune]
+ * Or use the wrapper, which loads .env for you:
+ *   scripts/sync-app-emojis.sh [--dry-run] [--prune]
  *
  * Env: DISCORD_BOT_TOKEN (prod, source), OPENCLAW_MIRROR_DISCORD_TOKEN (mirror,
  * target).
@@ -123,6 +125,15 @@ async function main(): Promise<void> {
   const dstToken = requireEnv("OPENCLAW_MIRROR_DISCORD_TOKEN");
   const srcApp = await appId(srcToken);
   const dstApp = await appId(dstToken);
+  // Guard against syncing an application onto itself (e.g. the mirror token is
+  // actually the prod token): that reads the same app on both sides and would
+  // report success without changing anything — and with --prune, compare it to
+  // itself as orphans. Comparing app ids also catches two tokens for one app.
+  if (srcApp === dstApp) {
+    throw new Error(
+      `source and target resolve to the same application (${srcApp}); set distinct prod and mirror bot tokens`,
+    );
+  }
   console.log(`source (prod) app ${srcApp} -> target (mirror) app ${dstApp}`);
   if (DRY_RUN) {
     console.log("[dry run] no changes will be made");
