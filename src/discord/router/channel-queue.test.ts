@@ -213,6 +213,38 @@ describe("ChannelQueue", () => {
     });
   });
 
+  describe("clear", () => {
+    it("drops buffered messages so a replaced instance never receives them", async () => {
+      const timers = fakeTimers();
+      const runTurn = vi.fn(async () => {});
+      const queue = new ChannelQueue({
+        runTurn,
+        debounceMs: 500,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      // Prior owner's messages are buffered (debounce not yet elapsed).
+      queue.enqueue("c1", textTurn("owner-a", "secret one"));
+      queue.enqueue("c1", textTurn("owner-a", "secret two"));
+      expect(queue.isBusy("c1")).toBe(true);
+
+      // Channel re-registered under a new owner -> clear.
+      queue.clear("c1");
+      expect(queue.isBusy("c1")).toBe(false);
+
+      // The debounce timer must not fire a stale drain after clearing.
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).not.toHaveBeenCalled();
+    });
+
+    it("is a no-op on an unknown channel", () => {
+      const queue = new ChannelQueue({ runTurn: async () => {}, debounceMs: 0 });
+      expect(() => queue.clear("never-seen")).not.toThrow();
+    });
+  });
+
   it("keeps running after a turn throws (does not wedge the channel)", async () => {
     const timers = fakeTimers();
     const runTurn = vi

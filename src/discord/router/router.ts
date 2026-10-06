@@ -265,6 +265,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     try {
       const fresh = loadRouterConfig({ instancesDir: config.instancesDir, discordToken });
       for (const [id, inst] of fresh.instances) {
+        const existing = instances.get(id);
+        // A channel re-registered under a new instance (e.g. different owner)
+        // keeps the same id but gets a fresh instanceDir. Drop any messages still
+        // buffered for the old instance so they can't be delivered to the new one.
+        if (existing && existing.instanceDir !== inst.instanceDir) {
+          channelQueue.clear(id);
+        }
         instances.set(id, inst);
       }
       const removed: string[] = [];
@@ -275,6 +282,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
       for (const id of removed) {
         instances.delete(id);
+        // The instance is gone; discard its buffered messages rather than leaving
+        // them to coalesce into a future registration of the same channel.
+        channelQueue.clear(id);
       }
       runtime.log(`[router] instances reloaded: ${instances.size}`);
     } catch (err) {

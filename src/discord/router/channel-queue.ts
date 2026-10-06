@@ -156,6 +156,30 @@ export class ChannelQueue {
     }
   }
 
+  /**
+   * Drop all buffered messages and cancel the pending drain for a channel. Call
+   * this when the channel's instance is removed or replaced (unregister, channel
+   * delete, re-registration under a new owner): queued turns resolve the target
+   * instance lazily at drain time, so without this a prior owner's buffered
+   * messages could be coalesced and delivered to the replacement instance,
+   * disclosing their content. A turn already running is left to finish against
+   * the instance it started on; only not-yet-run messages are discarded.
+   */
+  clear(channelId: string): void {
+    const state = this.channels.get(channelId);
+    if (!state) {
+      return;
+    }
+    if (state.timer) {
+      this.clearTimer(state.timer);
+      state.timer = null;
+    }
+    state.pending = [];
+    if (!state.running) {
+      this.channels.delete(channelId);
+    }
+  }
+
   private scheduleDrain(channelId: string): void {
     const state = this.state(channelId);
     // A running turn will drain whatever accumulated when it finishes.
