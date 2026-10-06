@@ -95,7 +95,10 @@ async function promptWebToolsConfig(
 ): Promise<OpenClawConfig> {
   const existingSearch = nextConfig.tools?.web?.search;
   const existingFetch = nextConfig.tools?.web?.fetch;
-  const hasSearchKey = Boolean(existingSearch?.apiKey);
+  // Trim so a whitespace-only stored key is not treated as present: runtime key
+  // resolution trims the same value to empty, so pinning Brave off it would fail
+  // with missing_brave_api_key and needlessly disable keyless native search.
+  const hasSearchKey = Boolean(existingSearch?.apiKey?.trim());
   // A Brave key supplied via the environment counts too: the wizard's documented
   // flow lets users leave the prompt blank and rely on BRAVE_API_KEY.
   const hasEnvBraveKey = Boolean(process.env.BRAVE_API_KEY?.trim());
