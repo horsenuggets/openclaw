@@ -20,7 +20,7 @@ import {
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
-import { handleTextCommand } from "./route-message.js";
+import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
 
@@ -233,27 +233,22 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // not by a router-side state machine.
   const routeInstanceMessage = (): void => {
     const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
-    if (commandMatch) {
-      const cmdName = commandMatch[1].toLowerCase();
-      const cmdArg = commandMatch[2]?.trim().toLowerCase();
-      const messageId = d.id;
+    const cmdName = commandMatch?.[1].toLowerCase();
+    // Only a recognized text command goes down the async host-side path. An
+    // unrecognized `/word` is just a normal message and must enqueue
+    // synchronously, in arrival order: deciding that inside handleTextCommand's
+    // `.then` would run a microtask later, so a message dispatched right after it
+    // (which enqueues synchronously) could jump ahead and break FIFO.
+    if (commandMatch && cmdName && isKnownTextCommand(cmdName)) {
       void handleTextCommand({
         cmdName,
-        cmdArg,
+        cmdArg: commandMatch[2]?.trim().toLowerCase(),
         userId: authorId,
         channelId,
-        messageId,
+        messageId: d.id,
         instance,
         discordToken,
         runtime,
-      }).then((handled) => {
-        if (!handled) {
-          channelQueue.enqueue(channelId, {
-            authorId,
-            messageContent: content,
-            attachments: rawAttachments,
-          });
-        }
       });
       return;
     }

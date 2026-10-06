@@ -400,6 +400,20 @@ export async function routeMessage(params: {
 }
 
 /**
+ * Text commands {@link handleTextCommand} handles itself (the slash-command
+ * fallback). Kept in sync with the switch below; anything not here is a normal
+ * message for the agent. Callers use {@link isKnownTextCommand} to decide
+ * synchronously whether a `/word` message needs the async command path at all,
+ * which keeps message ordering FIFO (see gateway-events routeInstanceMessage).
+ */
+const KNOWN_TEXT_COMMANDS = new Set(["lifecycle"]);
+
+/** True if `name` is a text command handled host-side rather than sent to the agent. */
+export function isKnownTextCommand(name: string): boolean {
+  return KNOWN_TEXT_COMMANDS.has(name);
+}
+
+/**
  * Handle text-based slash commands (fallback for when Discord slash commands
  * haven't propagated yet). Returns true if the command was handled.
  */

@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelTurn } from "./channel-queue.js";
-import { ChannelQueue, coalesceTurns } from "./channel-queue.js";
+import { ChannelQueue, coalesceTurns, planTurns } from "./channel-queue.js";
+
+function voiceTurn(authorId: string, messageContent = ""): ChannelTurn {
+  return {
+    authorId,
+    messageContent,
+    attachments: [
+      { id: "a1", filename: "voice.ogg", content_type: "audio/ogg", url: "x", size: 1 },
+    ],
+  };
+}
 
 /**
  * A controllable timer so debounce behaviour is deterministic: calling flush()
@@ -71,6 +81,35 @@ describe("coalesceTurns", () => {
         { authorId: "u1", messageContent: "b" },
       ]).systemTurn,
     ).toBe(false);
+  });
+});
+
+describe("planTurns", () => {
+  it("merges a run of text-only turns into one turn", () => {
+    const planned = planTurns([textTurn("u1", "a"), textTurn("u1", "b"), textTurn("u1", "c")]);
+    expect(planned).toHaveLength(1);
+    expect(planned[0].messageContent).toBe("a\n\nb\n\nc");
+  });
+
+  it("keeps a voice turn ahead of a later text turn (no transcript reordering)", () => {
+    // Regression: a voice message followed by "call me Sam" must not merge, or
+    // routeMessage would append the transcript after the newer text, inverting
+    // arrival order.
+    const planned = planTurns([voiceTurn("u1"), textTurn("u1", "call me Sam")]);
+    expect(planned).toHaveLength(2);
+    expect(planned[0].attachments).toHaveLength(1);
+    expect(planned[1].messageContent).toBe("call me Sam");
+  });
+
+  it("splits at attachment boundaries while still merging text runs around them", () => {
+    const planned = planTurns([
+      textTurn("u1", "first"),
+      textTurn("u1", "second"),
+      voiceTurn("u1"),
+      textTurn("u1", "after"),
+    ]);
+    expect(planned.map((t) => t.messageContent)).toEqual(["first\n\nsecond", "", "after"]);
+    expect(planned[1].attachments).toHaveLength(1);
   });
 });
 

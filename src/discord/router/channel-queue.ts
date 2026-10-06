@@ -86,6 +86,38 @@ export function coalesceTurns(batch: ChannelTurn[]): ChannelTurn {
   };
 }
 
+/**
+ * Plan how a buffered batch runs as one or more turns, preserving FIFO order.
+ *
+ * Consecutive text-only turns coalesce into one combined turn, but a turn that
+ * carries attachments is kept as its own turn (never merged across). This is
+ * because `routeMessage` transcribes audio attachments and appends the transcript
+ * *after* the message text: naively flattening all attachments onto the end of a
+ * coalesced turn would reorder a voice message that arrived before a later text
+ * message (its transcript would land after the newer text). Splitting at
+ * attachment boundaries keeps each original message's text/attachment ordering.
+ */
+export function planTurns(batch: ChannelTurn[]): ChannelTurn[] {
+  const planned: ChannelTurn[] = [];
+  let textRun: ChannelTurn[] = [];
+  const flushTextRun = () => {
+    if (textRun.length > 0) {
+      planned.push(coalesceTurns(textRun));
+      textRun = [];
+    }
+  };
+  for (const turn of batch) {
+    if (turn.attachments && turn.attachments.length > 0) {
+      flushTextRun();
+      planned.push(turn);
+    } else {
+      textRun.push(turn);
+    }
+  }
+  flushTextRun();
+  return planned;
+}
+
 export class ChannelQueue {
   private readonly channels = new Map<string, ChannelState>();
   private readonly runTurn: ChannelQueueOptions["runTurn"];
@@ -180,15 +212,18 @@ export class ChannelQueue {
     try {
       // Drain in a loop: messages that arrive mid-turn accumulate in `pending`
       // and are coalesced into the next iteration rather than racing a new turn.
-      // A failing turn is logged and swallowed (runTurn wraps routeMessage, which
-      // already handles its own errors) so one bad turn never wedges the channel
-      // or leaves buffered messages stranded.
+      // `planTurns` keeps FIFO order, merging text-only runs but splitting at
+      // attachment boundaries. A failing turn is logged and swallowed (runTurn
+      // wraps routeMessage, which already handles its own errors) so one bad turn
+      // never wedges the channel or leaves buffered messages stranded.
       while (state.pending.length > 0) {
         const batch = state.pending.splice(0, state.pending.length);
-        try {
-          await this.runTurn(channelId, coalesceTurns(batch));
-        } catch (err) {
-          this.log?.(`[router] channel ${channelId} turn failed: ${String(err)}`);
+        for (const turn of planTurns(batch)) {
+          try {
+            await this.runTurn(channelId, turn);
+          } catch (err) {
+            this.log?.(`[router] channel ${channelId} turn failed: ${String(err)}`);
+          }
         }
       }
     } finally {
