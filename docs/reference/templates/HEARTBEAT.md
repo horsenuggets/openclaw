@@ -37,6 +37,9 @@ skip that check and move on to the next one
 - calendar event coming up (&lt;2h)
 - something interesting you found
 - it's been >8h since you said anything
+- it's been a while and you can follow up on something specific from a recent conversation
+  (reference what you actually remember about them, never a generic "how are you?" — if
+  you have no real context to go on, stay quiet instead)
 
 **when to stay quiet (`⁘ return`)**
 

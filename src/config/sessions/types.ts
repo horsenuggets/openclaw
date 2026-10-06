@@ -100,14 +100,6 @@ export type SessionEntry = {
   lastThreadId?: string | number;
   skillsSnapshot?: SessionSkillSnapshot;
   systemPromptReport?: SessionSystemPromptReport;
-  /** Timestamp (ms) when a proactive check last ran for this session. */
-  lastProactiveCheckAt?: number;
-  /** Timestamp (ms) when a proactive message was last delivered. */
-  lastProactiveMessageSentAt?: number;
-  /** Number of proactive messages sent today. */
-  proactiveMessageCountToday?: number;
-  /** Date string (YYYY-MM-DD) for the daily counter (resets on new day). */
-  proactiveMessageCountDate?: string;
 };
 
 export function mergeSessionEntry(

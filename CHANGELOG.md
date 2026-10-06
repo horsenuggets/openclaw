@@ -6,6 +6,27 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Proactive messaging: retire the standalone `ProactiveService` (the session-scanning
+  timer under `src/proactive/`) in favor of heartbeats as the single proactive mechanism.
+  The service only ever acted on DM (`direct`) sessions and its gate
+  (`OPENCLAW_SKIP_PROACTIVE`) was dead code (the computed flag was never consumed, so the
+  service always started regardless), while heartbeats already cover periodic proactive
+  checks. Removes the module (service, heuristics, prompt, types + tests), its gateway
+  wiring (`buildGatewayProactiveService`, startup greeting, close hook), the `proactive`
+  config block (`config.proactive.*` and its Zod schema), and the per-session
+  `lastProactiveCheckAt` / `lastProactiveMessageSentAt` / `proactiveMessageCountToday` /
+  `proactiveMessageCountDate` fields (unused once the scanner is gone; existing session
+  stores simply ignore them). The one distinctive behavior it had, context-aware DM
+  follow-ups, moves into the `HEARTBEAT.md` template as a "reach out" guideline (follow up
+  on something specific you actually remember, else stay quiet). The agent can still send
+  proactive/unprompted messages via `cron` and `message` as before.
+- Heartbeat: add `OPENCLAW_SKIP_HEARTBEATS=1` to silence all heartbeat model calls without
+  touching config. It initializes the module-level enablement flag (still
+  runtime-togglable via the gateway), so it gates every trigger path (interval,
+  exec-event, wake) at the single `runHeartbeatOnce` choke point. Documented in
+  `.env.template` as a mirror-overlay value (`.env.mirror`) so the DinD test rig never
+  makes periodic background calls during test runs; left unset on prod so the agent stays
+  proactive there.
 - Deploy: reconcile each registered agent instance's proxy URLs on boot. `boot.sh` now
   runs `openclawctl reconcile <channelId>` (a new subcommand that re-asserts the model-
   and container-proxy URLs from the current agent-bridge env) before starting each box, so

@@ -62,7 +62,6 @@ import { hasConnectedMobileNode } from "./server-mobile-nodes.js";
 import { loadGatewayModelCatalog } from "./server-model-catalog.js";
 import { createNodeSubscriptionManager } from "./server-node-subscriptions.js";
 import { loadGatewayPlugins } from "./server-plugins.js";
-import { buildGatewayProactiveService } from "./server-proactive.js";
 import { createGatewayReloadHandlers } from "./server-reload-handlers.js";
 import { resolveGatewayRuntimeConfig } from "./server-runtime-config.js";
 import { createGatewayRuntimeState } from "./server-runtime-state.js";
@@ -382,12 +381,6 @@ export async function startGatewayServer(
   });
   let { cron, storePath: cronStorePath } = cronState;
 
-  const proactiveState = buildGatewayProactiveService({
-    cfg: cfgAtStart,
-    deps,
-  });
-  const { proactive } = proactiveState;
-
   const channelManager = createChannelManager({
     loadConfig,
     channelLogs,
@@ -474,7 +467,6 @@ export async function startGatewayServer(
   let heartbeatRunner = startHeartbeatRunner({ cfg: cfgAtStart });
 
   void cron.start().catch((err) => logCron.error(`failed to start: ${String(err)}`));
-  proactive.start();
 
   const execApprovalManager = new ExecApprovalManager();
   const execApprovalForwarder = createExecApprovalForwarder();
@@ -568,7 +560,6 @@ export async function startGatewayServer(
     defaultWorkspaceDir,
     deps,
     startChannels,
-    proactive,
     log,
     logHooks,
     logChannels,
@@ -622,7 +613,6 @@ export async function startGatewayServer(
     stopChannel,
     pluginServices,
     cron,
-    proactive,
     heartbeatRunner,
     nodePresenceTimers,
     broadcast,
