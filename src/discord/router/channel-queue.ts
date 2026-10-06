@@ -75,6 +75,20 @@ type ChannelState = {
   reserved: boolean;
   pending: ChannelTurn[];
   timer: ReturnType<typeof setTimeout> | null;
+  /**
+   * Serializes mid-turn steer attempts so they are tried in arrival order (two
+   * concurrent steer calls could otherwise reach the agent over separate
+   * connections out of order). Each mid-turn message chains onto this tail.
+   */
+  steerChain: Promise<void>;
+  /**
+   * Once a mid-turn message during the current run falls back to buffering
+   * (e.g. an attachment, or the run stopped streaming), every later arrival in
+   * this run must also buffer — otherwise a steerable text could overtake an
+   * already-buffered earlier message and break FIFO. Reset when the next turn
+   * starts.
+   */
+  bufferRest: boolean;
 };
 
 /**
@@ -122,7 +136,14 @@ export class ChannelQueue {
   private state(channelId: string): ChannelState {
     let state = this.channels.get(channelId);
     if (!state) {
-      state = { running: false, reserved: false, pending: [], timer: null };
+      state = {
+        running: false,
+        reserved: false,
+        pending: [],
+        timer: null,
+        steerChain: Promise.resolve(),
+        bufferRest: false,
+      };
       this.channels.set(channelId, state);
     }
     return state;
@@ -143,7 +164,8 @@ export class ChannelQueue {
   enqueue(channelId: string, turn: ChannelTurn): void {
     const state = this.state(channelId);
     if (state.running && !state.reserved && this.steer) {
-      void this.steerOrBuffer(channelId, turn);
+      // Chain onto the per-channel steer tail so attempts run in arrival order.
+      state.steerChain = state.steerChain.then(() => this.steerOrBuffer(channelId, turn));
       return;
     }
     this.buffer(channelId, turn);
@@ -161,6 +183,14 @@ export class ChannelQueue {
 
   /** Try mid-turn injection; fall back to buffering if the run didn't accept it. */
   private async steerOrBuffer(channelId: string, turn: ChannelTurn): Promise<void> {
+    const state = this.state(channelId);
+    // The turn ended while this attempt waited its turn in the chain, or an
+    // earlier arrival already had to buffer this run: either way, buffer to keep
+    // FIFO (never inject a later message ahead of an already-buffered earlier one).
+    if (!state.running || state.bufferRest) {
+      this.buffer(channelId, turn);
+      return;
+    }
     let accepted = false;
     try {
       accepted = await this.steer!(channelId, turn);
@@ -171,8 +201,9 @@ export class ChannelQueue {
       this.log?.(`[router] channel ${channelId} steered message into the active turn`);
       return;
     }
-    // No active streaming run accepted it (it ended, or was mid-compaction) —
-    // run it as the next turn.
+    // Not accepted (run ended, or mid-compaction, or carries attachments): run it
+    // as the next turn, and keep every later arrival this run in the same backlog.
+    state.bufferRest = true;
     this.buffer(channelId, turn);
   }
 
@@ -252,6 +283,8 @@ export class ChannelQueue {
       return;
     }
     state.running = true;
+    // Fresh run: mid-turn arrivals may steer again until one has to buffer.
+    state.bufferRest = false;
     // Take exactly one batch (everything buffered so far) and run it as a single
     // coalesced turn. Messages that arrive mid-turn stay in `pending` and are NOT
     // drained immediately in a loop: the `finally` reschedules them through the

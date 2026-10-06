@@ -187,6 +187,45 @@ describe("ChannelQueue", () => {
       expect(runTurn).toHaveBeenCalledTimes(1);
     });
 
+    it("keeps FIFO: once a mid-turn message buffers, later ones buffer too (no overtaking)", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      // Simulate the router's steer closure declining a message (e.g. it carries
+      // an attachment) by returning false for "att" and true otherwise.
+      const steer = vi.fn(async (_c: string, turn: ChannelTurn) => turn.messageContent !== "att");
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+
+      // "att" can't steer -> buffers; "text" arrives after and must NOT overtake it.
+      queue.enqueue("c1", textTurn("u1", "att"));
+      queue.enqueue("c1", textTurn("u1", "text"));
+      for (let i = 0; i < 6; i++) {
+        await Promise.resolve();
+      }
+      // Only "att" was offered to steer; "text" was forced to buffer behind it.
+      expect(steer).toHaveBeenCalledTimes(1);
+      expect(steer).toHaveBeenCalledWith("c1", expect.objectContaining({ messageContent: "att" }));
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      // The two buffered messages run together, in arrival order.
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1][1].messageContent).toBe("att\n\ntext");
+    });
+
     it("falls back to a buffered next turn when the run does not accept the steer", async () => {
       const { timers, runTurn, release, held } = startHeldTurn();
       const steer = vi.fn(async () => false);

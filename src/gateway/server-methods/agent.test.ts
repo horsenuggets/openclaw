@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   agentCommand: vi.fn(),
   registerAgentRunContext: vi.fn(),
   queueEmbeddedPiMessage: vi.fn(),
+  resolveSendPolicy: vi.fn(() => "allow"),
   loadConfigReturn: {} as Record<string, unknown>,
 }));
 
@@ -50,7 +51,7 @@ vi.mock("../../infra/agent-events.js", () => ({
 }));
 
 vi.mock("../../sessions/send-policy.js", () => ({
-  resolveSendPolicy: () => "allow",
+  resolveSendPolicy: mocks.resolveSendPolicy,
 }));
 
 vi.mock("../../utils/delivery-context.js", async () => {
@@ -290,5 +291,24 @@ describe("gateway agent.steer handler", () => {
       undefined,
       expect.objectContaining({ code: expect.any(String) }),
     );
+  });
+
+  it("declines (and never injects) when the session send policy denies", async () => {
+    mocks.queueEmbeddedPiMessage.mockReset();
+    mocks.loadSessionEntry.mockReturnValue({ cfg: {}, entry: { sessionId: "sess-1" } });
+    mocks.resolveSendPolicy.mockReturnValueOnce("deny");
+
+    const respond = vi.fn();
+    await agentHandlers["agent.steer"]({
+      params: { sessionKey: "agent:main:discord:default:channel:c1", message: "blocked" },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "s5", method: "agent.steer" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(mocks.queueEmbeddedPiMessage).not.toHaveBeenCalled();
+    expect(respond).toHaveBeenCalledWith(true, { accepted: false });
   });
 });

@@ -533,8 +533,22 @@ export const agentHandlers: GatewayRequestHandlers = {
     // message's reply is delivered through the already-running turn, so this
     // handler never produces output itself.
     const sessionKey = params.sessionKey.trim();
-    const sessionId = loadSessionEntry(sessionKey).entry?.sessionId;
-    const accepted = sessionId ? queueEmbeddedPiMessage(sessionId, params.message) : false;
+    const { cfg, entry } = loadSessionEntry(sessionKey);
+    const sessionId = entry?.sessionId;
+    // Honor the session send policy, like the `agent` / `chat.send` paths: never
+    // inject into a disabled session. Decline (accepted:false) rather than error
+    // so the caller's fallback turn hits the same check and is rejected there.
+    const sendPolicy = resolveSendPolicy({
+      cfg,
+      entry,
+      sessionKey,
+      channel: entry?.channel,
+      chatType: entry?.chatType,
+    });
+    const accepted =
+      sessionId && sendPolicy !== "deny"
+        ? queueEmbeddedPiMessage(sessionId, params.message)
+        : false;
     respond(true, { accepted });
   },
 };
