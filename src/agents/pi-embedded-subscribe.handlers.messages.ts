@@ -29,6 +29,31 @@ const stripTrailingDirective = (text: string): string => {
   return text.slice(0, openIndex);
 };
 
+// True when the buffered block-reply tail already ends at a natural message
+// boundary (end of a sentence, or a trailing paragraph break). Used to decide
+// whether a text block's leftover tail should be flushed on `text_end` or held
+// to coalesce with the following text block.
+//
+// Anthropic's native web search returns a cited answer as many small `text`
+// content blocks — one per cited span, with trailing punctuation (e.g. ". ") as
+// its own block. Flushing every text block's tail turns one sentence into
+// several Discord messages and emits a lone "." message. Holding tails that do
+// not end at a boundary lets those fragments reunite before they are sent,
+// while complete sentences (including short pre-tool ones like "Let me check.")
+// still flush immediately, preserving streaming order for CLI backends.
+export function endsAtBlockReplyBoundary(text: string): boolean {
+  // A trailing blank line is an explicit paragraph boundary.
+  if (/\n[\t ]*\n\s*$/.test(text)) {
+    return true;
+  }
+  const trimmed = text.replace(/\s+$/, "");
+  if (!trimmed) {
+    return false;
+  }
+  // Sentence-ending punctuation, allowing trailing closing quotes/brackets.
+  return /[.!?][)"'»”’\]]*$/.test(trimmed);
+}
+
 export function handleMessageStart(
   ctx: EmbeddedPiSubscribeContext,
   evt: AgentEvent & { message: AgentMessage },
@@ -179,13 +204,20 @@ export function handleMessageUpdate(
 
   if (evtType === "text_end" && ctx.state.blockReplyBreak === "text_end") {
     if (ctx.blockChunker?.hasBuffered()) {
-      ctx.blockChunker.drain({ force: true, emit: ctx.emitBlockChunk });
-      ctx.blockChunker.reset();
+      // Only flush the leftover tail when it ends at a sentence/paragraph
+      // boundary; otherwise hold it so consecutive text blocks (e.g. the many
+      // cited blocks a native web-search answer is split into) coalesce instead
+      // of fragmenting into separate messages and a lone "." A held tail is
+      // still force-flushed at tool-execution-start and message-end.
+      if (endsAtBlockReplyBoundary(ctx.blockChunker.bufferedText)) {
+        ctx.blockChunker.drain({ force: true, emit: ctx.emitBlockChunk });
+        ctx.blockChunker.reset();
+      }
     } else if (ctx.state.blockBuffer.length > 0) {
       ctx.emitBlockChunk(ctx.state.blockBuffer);
       ctx.state.blockBuffer = "";
     }
-    // Flush the pipeline coalescer so each text block boundary produces a
+    // Flush the pipeline coalescer so a completed text block boundary produces a
     // separate message. This is critical for CLI backends where tool events
     // bypass the session subscriber (no tool_execution_start → no
     // onBlockReplyFlush). For non-CLI backends this is harmless since the

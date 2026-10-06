@@ -404,8 +404,11 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     if (state.suppressBlockChunks) {
       return;
     }
-    // Strip <think> and <final> blocks across chunk boundaries to avoid leaking reasoning.
-    const chunk = stripBlockTags(text, state.blockState).trimEnd();
+    // Strip <think> and <final> blocks across chunk boundaries to avoid leaking
+    // reasoning. Also drop leading newlines so a chunk never opens with blank
+    // lines (a paragraph separator can lead a coalesced block when the break
+    // landed at buffer start, e.g. between native web-search citation blocks).
+    const chunk = stripBlockTags(text, state.blockState).replace(/^\n+/, "").trimEnd();
     if (!chunk) {
       return;
     }

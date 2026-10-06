@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Block streaming: coalesce consecutive assistant text blocks so a reply is no longer
+  fragmented into several messages (including a lone "."). Anthropic's native web search
+  returns a cited answer as many small `text` blocks (one per cited span, with trailing
+  punctuation as its own block); the block-reply streamer now only flushes a text block's
+  leftover tail on `text_end` when it ends at a sentence or paragraph boundary, holding it
+  to merge with the next block otherwise (still force-flushed at tool start and message
+  end). Block replies also no longer open with blank lines.
 - Web search: on genuine Anthropic models (first-party API key or Claude subscription
   OAuth), `web_search` now runs on Anthropic's native server-side web search tool (billed
   through the account, no Brave/Perplexity key). The embedded runner advertises
