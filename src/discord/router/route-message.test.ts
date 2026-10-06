@@ -44,8 +44,6 @@ function route(
     discordToken: "tok",
     runtime,
     agentTimeoutMs: 1000,
-    inflight: new Set<string>(),
-    preacquiredInflight: true,
     runCommand,
   });
 }

@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: coalesce rapid messages into one turn instead of a poll-mutex that ran
+  each message as its own turn. A short standalone message sent right after another (e.g.
+  "call me Sam") used to hit the agent's silence-bias and get no reply at all, and three
+  or more queued messages ran in nondeterministic order. A new per-channel queue debounces
+  a burst (configurable via `OPENCLAW_ROUTER_DEBOUNCE_MS`), coalesces everything buffered
+  while a turn runs into the next combined turn, and serializes FIFO, so nothing is
+  dropped or reordered and the agent always sees the full context.
 - Discord router: log a reasoned drop when a message to a registered channel is filtered
   out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
   returned silently, so a driver bot getting no reply looked like a hang with nothing in
