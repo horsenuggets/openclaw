@@ -21,6 +21,7 @@ import {
   sendEmbedMessage,
 } from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
+import { initAppEmojis } from "./emojis.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -52,6 +53,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     throw new Error("Failed to resolve Discord application ID");
   }
   runtime.log(`[router] application id: ${applicationId}`);
+
+  // Load this bot's application emojis once so embeds can reference them by name
+  // (prod and mirror self-resolve to their own ids). Non-fatal: resolveEmoji
+  // falls back to plain glyphs if this fails.
+  const emojiCount = await initAppEmojis(discordToken, applicationId);
+  runtime.log(`[router] loaded ${emojiCount} application emoji(s)`);
+
   runtime.log(`[router] instances: ${instances.size}`);
   for (const [channelId, inst] of instances) {
     runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
