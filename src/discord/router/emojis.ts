@@ -32,6 +32,9 @@ export async function initAppEmojis(
   try {
     const resp = await fetchImpl(`${DISCORD_API}/applications/${applicationId}/emojis`, {
       headers: { Authorization: `Bot ${token}` },
+      // Bound the call so a stalled emoji endpoint cannot hang the caller; the
+      // fallback text is always acceptable.
+      signal: AbortSignal.timeout(10_000),
     });
     if (!resp.ok) {
       return emojiMap?.size ?? 0;

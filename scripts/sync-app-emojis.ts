@@ -68,7 +68,14 @@ async function appId(token: string): Promise<string> {
 }
 
 async function listEmojis(token: string, app: string): Promise<Emoji[]> {
-  const body = (await (await discord(`${API}/applications/${app}/emojis`, token)).json()) as {
+  // Fail closed on a non-2xx: an error body is JSON without `items`, which would
+  // otherwise parse as an empty set and make every target emoji look like an
+  // orphan (deleted under --prune). A failed list must abort the whole sync.
+  const resp = await discord(`${API}/applications/${app}/emojis`, token);
+  if (!resp.ok) {
+    throw new Error(`list emojis for app ${app} failed: ${resp.status} ${await resp.text()}`);
+  }
+  const body = (await resp.json()) as {
     items?: Array<{ id: string; name: string; animated?: boolean }>;
   };
   return (body.items ?? []).map((e) => ({ id: e.id, name: e.name, animated: Boolean(e.animated) }));

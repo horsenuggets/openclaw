@@ -54,11 +54,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   }
   runtime.log(`[router] application id: ${applicationId}`);
 
-  // Load this bot's application emojis once so embeds can reference them by name
-  // (prod and mirror self-resolve to their own ids). Non-fatal: resolveEmoji
-  // falls back to plain glyphs if this fails.
-  const emojiCount = await initAppEmojis(discordToken, applicationId);
-  runtime.log(`[router] loaded ${emojiCount} application emoji(s)`);
+  // Load this bot's application emojis in the background so embeds can reference
+  // them by name (prod and mirror self-resolve to their own ids). Non-blocking
+  // and non-fatal: resolveEmoji falls back to plain glyphs until this resolves,
+  // and a stalled emoji endpoint must never gate router startup.
+  void initAppEmojis(discordToken, applicationId)
+    .then((count) => runtime.log(`[router] loaded ${count} application emoji(s)`))
+    .catch(() => {});
 
   runtime.log(`[router] instances: ${instances.size}`);
   for (const [channelId, inst] of instances) {
