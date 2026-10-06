@@ -13,6 +13,8 @@
  * Usage (from repo root, with env loaded):
  *   set -a && . ./.env && set +a
  *   bun scripts/sync-app-emojis.ts [--dry-run] [--prune]
+ * Or use the wrapper, which loads .env for you:
+ *   scripts/sync-app-emojis.sh [--dry-run] [--prune]
  *
  * Env: DISCORD_BOT_TOKEN (prod, source), OPENCLAW_MIRROR_DISCORD_TOKEN (mirror,
  * target).

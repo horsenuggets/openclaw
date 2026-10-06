@@ -6,6 +6,10 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Add `scripts/sync-app-emojis.sh`, a wrapper that loads the bot tokens from the repo-root
+  `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
+  through), so syncing the prod bot's application emojis onto the mirror bot is a single
+  command.
 - Tool deferral: fix `tool_search` returning a bare `{ type: "text", text }` block instead
   of an `AgentToolResult` (`{ content: [...], details }`). Its
   `as unknown as AnyAgentTool` cast hid the wrong shape from the type checker, so the
