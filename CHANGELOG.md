@@ -17,12 +17,12 @@ Docs: https://docs.openclaw.ai
 - Discord router: steer messages into a turn that is already running instead of only
   buffering them for the next turn (Phase 2 of the conversational fix, building on the
   per-channel queue). When the agent is mid-task and a new text message arrives, the
-  router injects it into the live run via a new `agent.steer` gateway method (which calls
-  `queueEmbeddedPiMessage`/`followUp`), so the agent sees "actually, also do X" while it
-  works and the reply rides the in-flight turn. If no run is actively streaming (it just
-  finished, or is compacting) the steer is declined and the message falls back to the
-  debounced, coalesced next turn. Messages carrying attachments and the onboarding kick's
-  reserved turn never steer (they need the full turn pipeline / ordering guarantee).
+  router injects it into the live run via a new `agent.steer` gateway method (see the
+  injection-mode note above), so the agent sees "actually, also do X" while it works and
+  the reply rides the in-flight turn. If no run is actively streaming (it just finished,
+  or is compacting) the steer is declined and the message falls back to the debounced,
+  coalesced next turn. Messages carrying attachments and the onboarding kick's reserved
+  turn never steer (they need the full turn pipeline / ordering guarantee).
 - Discord router: coalesce rapid messages into one turn instead of a poll-mutex that ran
   each message as its own turn. A short standalone message sent right after another (e.g.
   "call me Sam") used to hit the agent's silence-bias and get no reply at all, and three

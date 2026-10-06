@@ -1,6 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EmbeddedPiQueueMode } from "./runs.js";
-import { clearActiveEmbeddedRun, queueEmbeddedPiMessage, setActiveEmbeddedRun } from "./runs.js";
+import {
+  clearActiveEmbeddedRun,
+  deliverQueuedMessage,
+  queueEmbeddedPiMessage,
+  setActiveEmbeddedRun,
+} from "./runs.js";
+
+describe("deliverQueuedMessage mode dispatch", () => {
+  it("calls session.steer (not followUp) in steer mode", async () => {
+    const session = { steer: vi.fn(), followUp: vi.fn() };
+    await deliverQueuedMessage(session, "now", "steer");
+    expect(session.steer).toHaveBeenCalledWith("now");
+    expect(session.followUp).not.toHaveBeenCalled();
+  });
+
+  it("calls session.followUp (not steer) in followup mode", async () => {
+    const session = { steer: vi.fn(), followUp: vi.fn() };
+    await deliverQueuedMessage(session, "later", "followup");
+    expect(session.followUp).toHaveBeenCalledWith("later");
+    expect(session.steer).not.toHaveBeenCalled();
+  });
+});
 
 function fakeHandle(overrides: Partial<ReturnType<typeof baseHandle>> = {}) {
   return { ...baseHandle(), ...overrides };

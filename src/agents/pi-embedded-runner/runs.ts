@@ -14,6 +14,31 @@ import {
  */
 export type EmbeddedPiQueueMode = "followup" | "steer";
 
+/** The subset of an embedded agent session that queued-message delivery needs. */
+export type QueueableSession = {
+  steer: (text: string) => void | Promise<unknown>;
+  followUp: (text: string) => void | Promise<unknown>;
+};
+
+/**
+ * Deliver a queued mid-run message into an active session using the requested
+ * {@link EmbeddedPiQueueMode}: `steer` injects at the next tool boundary and
+ * skips the agent's remaining planned tools; `followup` waits for the agent to
+ * finish its current work first. Extracted so the mode→method mapping is unit
+ * testable without a live session.
+ */
+export async function deliverQueuedMessage(
+  session: QueueableSession,
+  text: string,
+  mode: EmbeddedPiQueueMode,
+): Promise<void> {
+  if (mode === "steer") {
+    await session.steer(text);
+  } else {
+    await session.followUp(text);
+  }
+}
+
 type EmbeddedPiQueueHandle = {
   queueMessage: (text: string, mode: EmbeddedPiQueueMode) => Promise<void>;
   isStreaming: () => boolean;
