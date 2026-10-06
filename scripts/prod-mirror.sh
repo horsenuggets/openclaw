@@ -243,7 +243,13 @@ cmd_up() {
   # bound to loopback only: the rig is driven entirely through localhost, so there
   # is no reason to expose root ssh to the LAN.
   docker rm -f -v "$CONTAINER" >/dev/null 2>&1 || true
-  docker run -d --privileged --name "$CONTAINER" -p "127.0.0.1:$SSH_PORT:22" \
+  # --init runs a real init (tini) as PID 1 that reaps zombies. The entrypoint
+  # ends in `exec tail -f`, which never calls wait(), so without this every
+  # orphaned process reparented to PID 1 (ssh sessions, docker exec children,
+  # the deploy pipeline's short-lived helpers) becomes a permanent zombie. Over
+  # a long-lived rig those pile into the thousands, exhausting PIDs/memory and
+  # starving the single-threaded router event loop (multi-second reply lag).
+  docker run -d --init --privileged --name "$CONTAINER" -p "127.0.0.1:$SSH_PORT:22" \
     -e AUTHORIZED_KEY="$(cat "$KEY.pub")" "$IMAGE" >/dev/null
   wait_ready || { echo "box did not become ready; see: scripts/prod-mirror.sh logs" >&2; exit 1; }
 
