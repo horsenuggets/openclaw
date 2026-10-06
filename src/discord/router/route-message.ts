@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { InstanceConfig } from "./config.js";
 import type { DiscordAttachment, RouterRuntime, RunAgentCommand } from "./types.js";
 import { wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
+import { chunkByParagraph } from "../../auto-reply/chunk.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
 import { stripHorizontalRules } from "../markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
@@ -9,7 +10,6 @@ import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
 import {
   TYPING_INTERVAL_MS,
-  chunkText,
   discordSend,
   discordTyping,
   sendEmbedMessage,
@@ -313,7 +313,13 @@ export async function routeMessage(params: {
             text = stripHorizontalRules(text);
             text = convertTimesToDiscordTimestamps(text);
             text = stripDashes(text);
-            for (const chunk of chunkText(text, 2000)) {
+            // Split on paragraph boundaries (blank lines) so each paragraph is
+            // sent as its own message. This reads more like natural texting
+            // than one wall of text joined by blank lines. Long paragraphs
+            // still fall back to length splitting, and fenced code blocks are
+            // never split. discordSend paces sends against Discord's per-channel
+            // message rate limit (5 messages / 5s).
+            for (const chunk of chunkByParagraph(text, 2000)) {
               await discordSend(discordToken, channelId, chunk);
             }
             deliveredAnything = true;
