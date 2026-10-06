@@ -28,6 +28,8 @@ import {
   AgentsListParamsSchema,
   type AgentsListResult,
   AgentsListResultSchema,
+  type AgentSteerParams,
+  AgentSteerParamsSchema,
   type AgentWaitParams,
   AgentWaitParamsSchema,
   type ChannelsLogoutParams,
@@ -222,6 +224,7 @@ export const validateAgentParams = ajv.compile(AgentParamsSchema);
 export const validateAgentIdentityParams =
   ajv.compile<AgentIdentityParams>(AgentIdentityParamsSchema);
 export const validateAgentWaitParams = ajv.compile<AgentWaitParams>(AgentWaitParamsSchema);
+export const validateAgentSteerParams = ajv.compile<AgentSteerParams>(AgentSteerParamsSchema);
 export const validateWakeParams = ajv.compile<WakeParams>(WakeParamsSchema);
 export const validateAgentsListParams = ajv.compile<AgentsListParams>(AgentsListParamsSchema);
 export const validateAgentsFilesListParams = ajv.compile<AgentsFilesListParams>(
@@ -482,6 +485,7 @@ export type {
   AgentIdentityParams,
   AgentIdentityResult,
   AgentWaitParams,
+  AgentSteerParams,
   ChatEvent,
   TickEvent,
   ShutdownEvent,

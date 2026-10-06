@@ -7,11 +7,16 @@ const mocks = vi.hoisted(() => ({
   updateSessionStore: vi.fn(),
   agentCommand: vi.fn(),
   registerAgentRunContext: vi.fn(),
+  queueEmbeddedPiMessage: vi.fn(),
   loadConfigReturn: {} as Record<string, unknown>,
 }));
 
 vi.mock("../session-utils.js", () => ({
   loadSessionEntry: mocks.loadSessionEntry,
+}));
+
+vi.mock("../../agents/pi-embedded.js", () => ({
+  queueEmbeddedPiMessage: mocks.queueEmbeddedPiMessage,
 }));
 
 vi.mock("../../config/sessions.js", async () => {
@@ -212,5 +217,78 @@ describe("gateway agent handler", () => {
     // Should be undefined, not cause an error
     expect(capturedEntry?.cliSessionIds).toBeUndefined();
     expect(capturedEntry?.claudeCliSessionId).toBeUndefined();
+  });
+});
+
+describe("gateway agent.steer handler", () => {
+  it("injects into the session's active run and reports accepted", async () => {
+    mocks.loadSessionEntry.mockReturnValue({ entry: { sessionId: "sess-1" } });
+    mocks.queueEmbeddedPiMessage.mockReturnValue(true);
+
+    const respond = vi.fn();
+    await agentHandlers["agent.steer"]({
+      params: { sessionKey: "agent:main:discord:default:channel:c1", message: "also do X" },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "s1", method: "agent.steer" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(mocks.queueEmbeddedPiMessage).toHaveBeenCalledWith("sess-1", "also do X");
+    expect(respond).toHaveBeenCalledWith(true, { accepted: true });
+  });
+
+  it("reports not accepted when there is no active streaming run", async () => {
+    mocks.loadSessionEntry.mockReturnValue({ entry: { sessionId: "sess-1" } });
+    mocks.queueEmbeddedPiMessage.mockReturnValue(false);
+
+    const respond = vi.fn();
+    await agentHandlers["agent.steer"]({
+      params: { sessionKey: "agent:main:discord:default:channel:c1", message: "late" },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "s2", method: "agent.steer" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(respond).toHaveBeenCalledWith(true, { accepted: false });
+  });
+
+  it("reports not accepted (and never injects) when the session has no sessionId yet", async () => {
+    mocks.queueEmbeddedPiMessage.mockReset();
+    mocks.loadSessionEntry.mockReturnValue({ entry: undefined });
+
+    const respond = vi.fn();
+    await agentHandlers["agent.steer"]({
+      params: { sessionKey: "agent:main:discord:default:channel:fresh", message: "hi" },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "s3", method: "agent.steer" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(mocks.queueEmbeddedPiMessage).not.toHaveBeenCalled();
+    expect(respond).toHaveBeenCalledWith(true, { accepted: false });
+  });
+
+  it("rejects invalid params", async () => {
+    const respond = vi.fn();
+    await agentHandlers["agent.steer"]({
+      params: { sessionKey: "", message: "x" },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "s4", method: "agent.steer" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    expect(respond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ code: expect.any(String) }),
+    );
   });
 });
