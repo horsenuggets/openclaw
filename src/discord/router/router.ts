@@ -11,6 +11,7 @@ import {
   type InstanceStatus,
   type ProvisioningClient,
 } from "./channel-commands.js";
+import { ChannelQueue } from "./channel-queue.js";
 import { loadRouterConfig, resolveProxyBindHost } from "./config.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
@@ -142,21 +143,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       });
     },
     routeMessage: (userId, channelId, message) => {
-      const instance = instances.get(channelId);
-      if (!instance) {
+      if (!instances.has(channelId)) {
         return Promise.resolve();
       }
-      return routeMessage({
-        authorId: userId,
-        channelId,
-        messageContent: message,
-        instance,
-        discordToken,
-        runtime,
-        agentTimeoutMs,
-        inflight,
-        runCommand: runAgentCommand,
-      }).then(() => {});
+      channelQueue.enqueue(channelId, { authorId: userId, messageContent: message });
+      return Promise.resolve();
     },
   });
 
@@ -169,7 +160,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     resolveAccessToken: createSharedAuthTokenResolver(config.instancesDir),
   });
 
-  const inflight = new Set<string>();
+  // Debounce window for coalescing a burst of messages into one turn. Overridable
+  // via OPENCLAW_ROUTER_DEBOUNCE_MS; falls back to a short settle window.
+  const debounceMs = (() => {
+    const raw = Number(process.env.OPENCLAW_ROUTER_DEBOUNCE_MS);
+    return Number.isFinite(raw) && raw >= 0 ? raw : 500;
+  })();
+
+  // Per-channel queue: debounces + coalesces + serializes inbound turns. Replaces
+  // the old inflight mutex so rapid messages collapse into one combined turn (the
+  // agent sees the full context instead of a bare line it might silently ignore)
+  // and nothing is dropped or reordered.
+  const channelQueue = new ChannelQueue({
+    debounceMs,
+    log: (message) => runtime.log(message),
+    runTurn: async (channelId, turn) => {
+      const instance = instances.get(channelId);
+      if (!instance) {
+        runtime.log(`[router] skipping queued turn for unregistered channel ${channelId}`);
+        return;
+      }
+      await routeMessage({
+        authorId: turn.authorId,
+        channelId,
+        messageContent: turn.messageContent,
+        attachments: turn.attachments,
+        instance,
+        discordToken,
+        runtime,
+        agentTimeoutMs,
+        runCommand: runAgentCommand,
+        systemTurn: turn.systemTurn,
+      });
+    },
+  });
   // Best-effort channel -> guild map, learned from message/interaction events.
   // Used to tear down a guild's instances on GUILD_DELETE, where Discord does
   // not emit a CHANNEL_DELETE per channel and instances carry no guild id.
@@ -241,6 +265,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     try {
       const fresh = loadRouterConfig({ instancesDir: config.instancesDir, discordToken });
       for (const [id, inst] of fresh.instances) {
+        const existing = instances.get(id);
+        // A channel re-registered under a new instance (e.g. different owner)
+        // keeps the same id but gets a fresh instanceDir. Drop any messages still
+        // buffered for the old instance so they can't be delivered to the new one.
+        if (existing && existing.instanceDir !== inst.instanceDir) {
+          channelQueue.clear(id);
+        }
         instances.set(id, inst);
       }
       const removed: string[] = [];
@@ -251,6 +282,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
       for (const id of removed) {
         instances.delete(id);
+        // The instance is gone; discard its buffered messages rather than leaving
+        // them to coalesce into a future registration of the same channel.
+        channelQueue.clear(id);
       }
       runtime.log(`[router] instances reloaded: ${instances.size}`);
     } catch (err) {
@@ -327,16 +361,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         channelId,
         ownerId,
         instance,
-        inflight,
+        slot: channelQueue,
         probe: (port) => probePort(port),
         runtime,
-        route: ({
-          channelId: cId,
-          ownerId: oId,
-          instance: inst,
-          systemTurn,
-          preacquiredInflight,
-        }) =>
+        route: ({ channelId: cId, ownerId: oId, instance: inst, systemTurn }) =>
           routeMessage({
             authorId: oId,
             channelId: cId,
@@ -346,10 +374,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             discordToken,
             runtime,
             agentTimeoutMs,
-            inflight,
             runCommand: runAgentCommand,
             systemTurn,
-            preacquiredInflight,
           }),
       });
     },
@@ -382,16 +408,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const gatewayCtx: GatewayContext = {
     discordToken,
     applicationId,
-    agentTimeoutMs,
     runtime,
     instances,
-    inflight,
+    channelQueue,
     channelGuild,
     allowedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
-    runAgentCommand,
     cleanupDeletedChannel,
   };
 
@@ -547,9 +571,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 discordToken,
                 instances,
                 runtime,
-                agentTimeoutMs,
-                inflight,
-                runAgentCommand,
+                channelQueue,
                 recoveredMessageIds,
                 allowedBotIds,
                 // Apply the same guild access control as live messages so a
@@ -759,9 +781,7 @@ async function recoverUnansweredMessages(
   discordToken: string,
   instances: Map<string, InstanceConfig>,
   runtime: RouterRuntime,
-  agentTimeoutMs: number,
-  inflight: Set<string>,
-  runCommand: RunAgentCommand,
+  channelQueue: ChannelQueue,
   /** Message IDs already attempted this process, to avoid re-recovery loops. */
   recoveredMessageIds: Set<string>,
   /**
@@ -779,7 +799,7 @@ async function recoverUnansweredMessages(
     }).then((r) => r.json())) as { id?: string }
   )?.id;
 
-  for (const [channelId, instance] of instances) {
+  for (const channelId of instances.keys()) {
     try {
       // Determine whether this is a guild channel (has a guild_id) or a DM. DMs
       // are inherently 1:1 with the owner, so they recover without a gate; guild
@@ -888,17 +908,10 @@ async function recoverUnansweredMessages(
         `[router] recovering unanswered message in channel ${channelId}: ${content?.slice(0, 60) || `(${msgAttachments.length} attachment(s))`}`,
       );
 
-      void routeMessage({
+      channelQueue.enqueue(channelId, {
         authorId: lastUserMsg.author.id,
-        channelId,
         messageContent: content ?? "",
         attachments: msgAttachments,
-        instance,
-        discordToken,
-        runtime,
-        agentTimeoutMs,
-        inflight,
-        runCommand,
       });
     } catch (err) {
       runtime.log(`[router] recovery failed for channel ${channelId}: ${String(err)}`);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { InstanceConfig } from "./config.js";
-import type { RouterRuntime, RunAgentCommand } from "./types.js";
+import type { DiscordAttachment, RouterRuntime, RunAgentCommand } from "./types.js";
 import { wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
 import { stripHorizontalRules } from "../markdown-strip.js";
@@ -22,14 +22,6 @@ import { buildLogEmbed, stripSurroundingItalics } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
 import { resolveWhisperUrl } from "./whisper-url.js";
-
-type DiscordAttachment = {
-  id: string;
-  filename: string;
-  content_type?: string;
-  url: string;
-  size: number;
-};
 
 /**
  * Decide whether an internal command result should be relayed back to the agent
@@ -65,7 +57,6 @@ export async function routeMessage(params: {
   discordToken: string;
   runtime: RouterRuntime;
   agentTimeoutMs: number;
-  inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
   /**
@@ -75,37 +66,11 @@ export async function routeMessage(params: {
    * onboarding kick, which has no real user message behind it.
    */
   systemTurn?: boolean;
-  /**
-   * The caller already holds this channel's `inflight` slot (and will release
-   * it). Skip acquiring/releasing it here. The onboarding kick reserves the slot
-   * before its readiness wait so a user message sent right after the register
-   * embed queues behind the kick instead of overtaking it.
-   */
-  preacquiredInflight?: boolean;
 }): Promise<boolean> {
-  const {
-    authorId,
-    channelId,
-    attachments,
-    instance,
-    discordToken,
-    runtime,
-    agentTimeoutMs,
-    inflight,
-  } = params;
-  const preacquiredInflight = params.preacquiredInflight === true;
+  const { authorId, channelId, attachments, instance, discordToken, runtime, agentTimeoutMs } =
+    params;
   let messageContent = params.messageContent;
 
-  // Serialize per-channel (unless the caller already holds the slot).
-  if (!preacquiredInflight) {
-    if (inflight.has(channelId)) {
-      runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
-    }
-    while (inflight.has(channelId)) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    inflight.add(channelId);
-  }
   try {
     runtime.log(
       `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
@@ -431,11 +396,21 @@ export async function routeMessage(params: {
       await sendLog("Something went wrong processing your message. Please try again.");
     }
     return false;
-  } finally {
-    if (!preacquiredInflight) {
-      inflight.delete(channelId);
-    }
   }
+}
+
+/**
+ * Text commands {@link handleTextCommand} handles itself (the slash-command
+ * fallback). Kept in sync with the switch below; anything not here is a normal
+ * message for the agent. Callers use {@link isKnownTextCommand} to decide
+ * synchronously whether a `/word` message needs the async command path at all,
+ * which keeps message ordering FIFO (see gateway-events routeInstanceMessage).
+ */
+const KNOWN_TEXT_COMMANDS = new Set(["lifecycle"]);
+
+/** True if `name` is a text command handled host-side rather than sent to the agent. */
+export function isKnownTextCommand(name: string): boolean {
+  return KNOWN_TEXT_COMMANDS.has(name);
 }
 
 /**

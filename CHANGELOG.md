@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: coalesce rapid messages into one turn instead of a poll-mutex that ran
+  each message as its own turn. A short standalone message sent right after another (e.g.
+  "call me Sam") used to hit the agent's silence-bias and get no reply at all, and three
+  or more queued messages ran in nondeterministic order. A new per-channel queue debounces
+  a burst (configurable via `OPENCLAW_ROUTER_DEBOUNCE_MS`), coalesces everything buffered
+  while a turn runs into the next combined turn, and serializes FIFO, so nothing is
+  dropped or reordered and the agent always sees the full context.
 - Add `scripts/sync-app-emojis.sh`, a wrapper that loads the bot tokens from the repo-root
   `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
   through), so syncing the prod bot's application emojis onto the mirror bot is a single

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { ChannelSlot } from "./channel-queue.js";
 import type { InstanceConfig } from "./config.js";
 import type { RouterRuntime } from "./types.js";
 import { type BuiltEmbed, buildEmbed } from "./embed-categories.js";
@@ -67,7 +68,6 @@ export type OnboardingKickRoute = (params: {
   ownerId: string;
   instance: InstanceConfig;
   systemTurn: true;
-  preacquiredInflight: true;
 }) => Promise<boolean>;
 
 /**
@@ -75,11 +75,12 @@ export type OnboardingKickRoute = (params: {
  * owner speaks. Extracted from the router closure so its concurrency/error paths
  * are unit-testable with injected `probe`/`route`.
  *
- * Serialization: reserves the channel's `inflight` slot BEFORE the readiness wait
- * so a user message sent right after the register embed queues behind the kick
- * instead of overtaking it (which would invert ordering and could double the
- * welcome). If a turn is already in flight, the kick is skipped — that turn drives
- * onboarding itself. The slot is always released.
+ * Serialization: reserves the channel's queue slot BEFORE the readiness wait so a
+ * user message sent right after the register embed buffers behind the kick instead
+ * of overtaking it (which would invert ordering and could double the welcome). If
+ * the channel is already busy, the kick is skipped — that turn drives onboarding
+ * itself. The slot is always released, which drains anything that buffered during
+ * the hold.
  *
  * Readiness: the provisioner can report ready before the agent gateway accepts
  * connections, and `routeMessage` turns an ECONNREFUSED into a one-shot error
@@ -93,23 +94,22 @@ export async function runOnboardingKick(params: {
   channelId: string;
   ownerId: string;
   instance: InstanceConfig;
-  inflight: Set<string>;
+  slot: ChannelSlot;
   probe: (port: number) => Promise<boolean>;
   route: OnboardingKickRoute;
   runtime: RouterRuntime;
   attempts?: number;
   intervalMs?: number;
 }): Promise<"busy" | "not-ready" | "kicked"> {
-  const { channelId, ownerId, instance, inflight, probe, route, runtime } = params;
+  const { channelId, ownerId, instance, slot, probe, route, runtime } = params;
   const attempts = params.attempts ?? 20;
   const intervalMs = params.intervalMs ?? 1000;
 
   // A message could already be in flight (e.g. the owner started typing
   // immediately); that turn will drive onboarding itself, so do not kick.
-  if (inflight.has(channelId)) {
+  if (!slot.reserve(channelId)) {
     return "busy";
   }
-  inflight.add(channelId);
   try {
     let ready = false;
     for (let i = 0; i < attempts; i++) {
@@ -126,9 +126,9 @@ export async function runOnboardingKick(params: {
       return "not-ready";
     }
     runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
-    await route({ channelId, ownerId, instance, systemTurn: true, preacquiredInflight: true });
+    await route({ channelId, ownerId, instance, systemTurn: true });
     return "kicked";
   } finally {
-    inflight.delete(channelId);
+    slot.release(channelId);
   }
 }
