@@ -228,7 +228,8 @@
       "sharp"
     ],
     "patchedDependencies": {
-      "@mariozechner/pi-ai@0.52.5": "patches/@mariozechner__pi-ai@0.52.5.patch"
+      "@mariozechner/pi-ai@0.52.5": "patches/@mariozechner__pi-ai@0.52.5.patch",
+      "@mariozechner/pi-coding-agent@0.52.5": "patches/@mariozechner__pi-coding-agent@0.52.5.patch"
     }
   },
   "vitest": {
