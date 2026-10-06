@@ -6,13 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- Deploy: only start the whisper speech-to-text container when its `whisper-server` binary
-  is actually present on the host. Where it was never compiled, the bind mount became an
-  empty directory and the container crash-looped (exit 126) every couple of seconds,
+- Deploy: only start the whisper speech-to-text container when both artifacts it needs are
+  present on the host: the `whisper-server` binary and the `ggml-base.en.bin` model. When
+  either was missing the container crash-looped (exit 126) every couple of seconds,
   churning CPU and memory until the single-threaded Discord router's event loop was
-  starved and replies lagged by seconds; it is now skipped cleanly when unbuilt. Also adds
-  a test-only `OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS` router env (default empty) so an E2E
-  driver bot can exercise the unauthorized-access denial. (#105)
+  starved and replies lagged by seconds; it is now skipped cleanly until fully
+  provisioned. Also adds a test-only `OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS` router env
+  (default empty) so an E2E driver bot can exercise the unauthorized-access denial. (#105)
 - Mid-turn steering now uses the agent's `steer()` primitive instead of `followUp()`, so a
   message injected via `agent.steer` (the Discord router's mid-turn path) is delivered at
   the next tool boundary and skips the agent's remaining planned tools — it reacts to an

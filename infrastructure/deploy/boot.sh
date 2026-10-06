@@ -254,19 +254,20 @@ case "${WHISPER_PORT:-}" in
 esac
 export WHISPER_PORT
 
-# Start whisper (speech-to-text) only when its binary was actually compiled in.
-# whisper-server is a locally-built artifact that setup.sh preserves across
-# deploys (it is not shipped in the tarball). On a host where it was never
-# compiled, ~/deploy/bin/whisper-server does not exist, and starting the compose
-# service would bind-mount a path Docker auto-creates as an empty directory, so
-# `exec whisper-server` fails with exit 126 and the container crash-loops
-# forever (re-running apt-get every couple of seconds, starving the box). Gate
-# on a real regular file so voice transcription is simply absent when unbuilt
+# Start whisper (speech-to-text) only when BOTH artifacts it needs are present:
+# the locally-built whisper-server binary and the model file the compose command
+# loads (`--model /models/ggml-base.en.bin`). Both are host-staged, not shipped in
+# the tarball, and setup.sh only preserves them across deploys. If either is
+# missing, starting the compose service bind-mounts a path Docker auto-creates as
+# an empty directory (or hands whisper-server a model that is not there), so the
+# process exits and the `restart: unless-stopped` container crash-loops forever
+# (re-running apt-get every couple of seconds, starving the box). Gate on both
+# real files so voice transcription is simply absent until it is fully provisioned
 # instead of degrading the whole host.
-if [ -f ~/deploy/bin/whisper-server ]; then
+if [ -f ~/deploy/bin/whisper-server ] && [ -f ~/deploy/models/ggml-base.en.bin ]; then
   docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
 else
-  echo "Skipping whisper: ~/deploy/bin/whisper-server not found (compile with scripts/compile-whisper.sh to enable voice transcription)."
+  echo "Skipping whisper: need both ~/deploy/bin/whisper-server (build with scripts/compile-whisper.sh) and the ~/deploy/models/ggml-base.en.bin model to enable voice transcription."
 fi
 
 # Start discord router

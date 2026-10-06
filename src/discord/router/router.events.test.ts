@@ -753,14 +753,10 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(false);
   });
 
-  it("subjects an owner-gated bot to the owner gate during recovery", async () => {
-    // An owner-gated bot must not bypass the owner check on reconnect: with no
-    // owner recorded the gate fails closed, so its message is skipped, not routed.
-    // Deliberately NOT allowlisted (OPENCLAW_MOCK_USER_BOT_ID unset) to prove the
-    // bot is still picked up as recoverable rather than dropped as an untrusted
-    // bot — guarding against both the original bypass and over-correcting into
-    // discarding the message before the owner check runs.
-    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+  // Recovery fetch mock: a guild channel whose only recent message is from
+  // "gated-bot". No .onboarding.json on disk, so the owner is unknown and the
+  // gate fails closed.
+  const stubGatedRecoveryFetch = () =>
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -783,6 +779,38 @@ describe("discord router channel-delete cleanup", () => {
         return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
       }) as unknown as typeof fetch,
     );
+
+  it("subjects a trusted owner-gated bot to the owner gate during recovery", async () => {
+    // The deployed mirror bot is both trusted (OPENCLAW_MOCK_USER_BOT_ID) and
+    // owner-gated. A plain trusted bot bypasses the owner check on reconnect, so
+    // this pins the override: here !lastUserMsgIsTrustedBot is false, so only
+    // `|| lastUserMsgIsOwnerGated` forces the owner check. With no owner recorded
+    // the gate fails closed, so the message is skipped, not recovered — the test
+    // would fail if that override were removed.
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "gated-bot");
+    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+    stubGatedRecoveryFetch();
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+  });
+
+  it("keeps an owner-gated bot recoverable during recovery even when not allowlisted", async () => {
+    // Owner-gated but NOT trusted (OPENCLAW_MOCK_USER_BOT_ID unset). The bot must
+    // still be picked up as a recoverable author rather than dropped as an
+    // untrusted bot, then face the owner check. If it were dropped before the
+    // check, neither the skip nor the recover log would appear, so asserting the
+    // skip log pins that it reached the owner gate.
+    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+    stubGatedRecoveryFetch();
 
     void start();
     await vi.advanceTimersByTimeAsync(0);
