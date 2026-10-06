@@ -61,8 +61,16 @@ export async function discordSend(
       },
       body: JSON.stringify({ content }),
     });
-    if (resp.status !== 429) {
+    if (resp.ok) {
       return;
+    }
+    // Non-429 failures (e.g. 401/403/5xx) are not retryable: throw so the caller
+    // treats the message as undelivered instead of silently dropping it.
+    if (resp.status !== 429) {
+      const detail = (await resp.text().catch(() => "")).slice(0, 200);
+      throw new Error(
+        `Discord send to channel ${channelId} failed (${resp.status})${detail ? `: ${detail}` : ""}`,
+      );
     }
     // Still rate limited on the final attempt: throw rather than return, so the
     // caller treats the message as undelivered instead of silently dropping it.

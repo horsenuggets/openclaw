@@ -4,9 +4,11 @@ import { discordSend } from "./discord-api.js";
 function response(status: number, opts?: { retryAfterHeader?: string; retryAfterBody?: number }) {
   return {
     status,
+    ok: status >= 200 && status < 300,
     headers: {
       get: (name: string) => (name === "retry-after" ? (opts?.retryAfterHeader ?? null) : null),
     },
+    text: async () => "",
     clone: () => ({ json: async () => ({ retry_after: opts?.retryAfterBody }) }),
   } as unknown as Response;
 }
@@ -46,6 +48,14 @@ describe("discordSend rate-limit handling", () => {
 
     await discordSend("tok", "c1", "hello");
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws on a non-429 error response instead of reporting success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(500));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(discordSend("tok", "c1", "hello")).rejects.toThrow(/failed \(500\)/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
