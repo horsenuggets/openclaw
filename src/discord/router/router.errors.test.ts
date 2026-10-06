@@ -153,6 +153,14 @@ describe("isLifecycleBanner", () => {
     ).toBe(false);
   });
 
+  it("requires the payload to parse as JSON, not just any fenced/brace-led text", () => {
+    // A reply that opens with the lead phrase and a fenced block whose body is not a
+    // JSON object must NOT be skipped, or recovery would replay the message beneath it.
+    expect(isLifecycleBanner("The agent is starting up...\n```text\nfailed\n```")).toBe(false);
+    expect(isLifecycleBanner("The agent is shutting down... {not valid json")).toBe(false);
+    expect(isLifecycleBanner('The agent is starting up... ["an","array"]')).toBe(false);
+  });
+
   it("matches the exact diagnostics embed the sidecar sends (sender/matcher consistency)", () => {
     // buildLifecycleMessage -> buildLogEmbed is the real sidecar path; its output
     // description (lead phrase + fenced JSON) must be what recovery recognizes.

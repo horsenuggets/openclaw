@@ -140,15 +140,20 @@ async function sendLifecycleMessage(
   if (channels.length === 0) {
     return;
   }
+  // Snapshot event time, uptime, and memory BEFORE the probe: measureDiscordApiPing
+  // can block up to 3s, and sampling after it would inflate downtime/uptime by that
+  // wait (and misreport memory at probe-completion time rather than event time).
+  const now = Date.now();
+  const uptimeSeconds = process.uptime();
   const mem = process.memoryUsage();
   const discordApiPingMs = await measureDiscordApiPing();
   const phrase = buildLifecycleMessage({
     event,
     reason: context.reason,
     pid: context.pid,
-    uptimeSeconds: process.uptime(),
+    uptimeSeconds,
     downSince: context.downSince,
-    now: Date.now(),
+    now,
     discordApiPingMs,
     memory: { rss: mem.rss, heapUsed: mem.heapUsed },
   });

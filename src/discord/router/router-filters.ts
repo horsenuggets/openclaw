@@ -34,12 +34,37 @@ export type LifecycleBannerMessage = {
   embeds?: Array<{ description?: string }>;
 };
 
+/** The payload after a banner's lead phrase, unwrapped from a ```json fence if present. */
+function extractBannerPayload(rest: string): string | null {
+  const trimmed = rest.trim();
+  if (trimmed.startsWith("```")) {
+    // Drop the opening fence line (``` or ```json) and the closing fence, keeping the body.
+    const firstNewline = trimmed.indexOf("\n");
+    if (firstNewline === -1) {
+      return null;
+    }
+    const body = trimmed.slice(firstNewline + 1);
+    const closeFence = body.lastIndexOf("```");
+    return closeFence === -1 ? null : body.slice(0, closeFence).trim();
+  }
+  return trimmed.startsWith("{") ? trimmed : null;
+}
+
+/** Whether `text` parses to a JSON object (not an array or primitive). */
+function isJsonObject(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Match a banner phrase, tolerating the legacy italic content form
- * (`*Back online.*`) by stripping surrounding asterisks. Current banners are
- * plain Log-embed descriptions matched by lead-phrase prefix (the trailing JSON
- * varies); legacy banners are matched exactly, and old italic ones in channel
- * history still normalize via the asterisk strip.
+ * (`*Back online.*`) by stripping surrounding asterisks. Legacy banners are matched
+ * exactly (old italic ones normalize via the asterisk strip); current banners must
+ * be a lead phrase followed by a payload that actually parses as a JSON object.
  */
 function matchesBanner(text: string): boolean {
   const normalized = text
@@ -50,16 +75,16 @@ function matchesBanner(text: string): boolean {
     return true;
   }
   // Current banners are "<lead> <JSON>" (compact, before embedding) or
-  // "<lead>\n```json ..." (the fenced form buildLogEmbed produces). Require BOTH the
-  // lead phrase and the JSON payload after it: matching the lead alone would treat an
-  // ordinary bot reply that happens to open with the phrase as lifecycle noise and let
-  // recovery replay the user message beneath it.
+  // "<lead>\n```json ...``` " (the fenced form buildLogEmbed produces). Require BOTH the
+  // lead phrase AND a payload that parses as a JSON object: matching the lead (or any
+  // fenced block) alone would treat an ordinary bot reply that merely opens with the
+  // phrase as lifecycle noise and let recovery replay the user message beneath it.
   return LIFECYCLE_BANNER_PREFIXES.some((lead) => {
     if (!normalized.startsWith(lead)) {
       return false;
     }
-    const rest = normalized.slice(lead.length).trimStart();
-    return rest.startsWith("{") || rest.startsWith("```");
+    const payload = extractBannerPayload(normalized.slice(lead.length));
+    return payload != null && isJsonObject(payload);
   });
 }
 
