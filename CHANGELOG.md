@@ -30,6 +30,42 @@ Docs: https://docs.openclaw.ai
   documented in `.env.template`. Leave unset on prod so the agent stays proactive there.
   (Wiring it through the mirror rig's per-channel agent containers, which use a fixed env
   allowlist, is a follow-up.)
+- Discord router: log a reasoned drop when a message to a registered channel is filtered
+  out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
+  returned silently, so a driver bot getting no reply looked like a hang with nothing in
+  the logs between the `MESSAGE_CREATE` line and the absent `routing message` line. The
+  router now emits `[router] dropped message from <id> in channel <id> (<reason>)` for
+  registered channels (unregistered channels stay quiet to avoid log spam), matching the
+  existing owner-check `denied`/`skipping` log style.
+- Tool deferral: fix `tool_search` returning a bare `{ type: "text", text }` block instead
+  of an `AgentToolResult` (`{ content: [...], details }`). Its
+  `as unknown as AnyAgentTool` cast hid the wrong shape from the type checker, so the
+  recorded tool result had `content: undefined` and the next turn crashed with
+  `undefined is not an object (evaluating 'content.some')`. Because `tool_search` is how
+  the subscription (OAuth) path loads deferred tools, this crashed the agent every time it
+  tried to discover a deferred tool (e.g. a web search). Both return paths now emit a
+  proper content array, with a regression test pinning the shape. Verified live on the
+  rig: the agent now runs `tool_search` and handles the result without crashing.
+- Discord router: resolve the bot's own application emojis by name at startup and
+  reference them in embeds via a cached `name -> id` map (`src/discord/router/emojis.ts`),
+  so the prod and mirror bots each self-resolve to their own emoji ids with no hardcoded
+  ids or per-environment config. `/channel status` now renders the
+  registration/onboarded/running flags with the custom `bluecheckfilled` /
+  `bluecheckempty` emojis (falling back to the ✅/❌ unicode glyphs if the set has not
+  loaded) and labels the table column "Attribute". Adds `scripts/sync-app-emojis.ts` to
+  copy the prod bot's application emojis onto the mirror bot idempotently (create missing,
+  replace only when the image bytes differ, `--prune` for mirror-only orphans, `--dry-run`
+  to preview).
+- Discord router: the health-monitor sidecar's channel lifecycle banners now carry a JSON
+  diagnostics payload instead of the bare `Back online.` / `Shutting down...` text.
+  Startup leads with `The agent is starting up...` and reports `reason` (`INITIAL_BOOT` /
+  `ROUTER_RESTART`), `pid`, `downtime` (null on the initial boot), `discordApiPing`, and
+  `memory`; shutdown leads with `The agent is shutting down...` and reports `reason` (the
+  signal), `pid`, `uptime`, `discordApiPing`, and `memory`. `discordApiPing` is a timed
+  `GET /api/v10/gateway` round-trip (3s timeout, omitted if the probe fails). The crash-
+  recovery scan now matches banners by lead-phrase prefix (keeping the legacy exact
+  phrases for banners still in channel history) so the varying JSON cannot break recovery
+  (#91).
 - Deploy: reconcile each registered agent instance's proxy URLs on boot. `boot.sh` now
   runs `openclawctl reconcile <channelId>` (a new subcommand that re-asserts the model-
   and container-proxy URLs from the current agent-bridge env) before starting each box, so

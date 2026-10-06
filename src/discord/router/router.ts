@@ -21,6 +21,7 @@ import {
   sendEmbedMessage,
 } from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
+import { initAppEmojis } from "./emojis.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -52,6 +53,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     throw new Error("Failed to resolve Discord application ID");
   }
   runtime.log(`[router] application id: ${applicationId}`);
+
+  // Load this bot's application emojis in the background so embeds can reference
+  // them by name (prod and mirror self-resolve to their own ids). Non-blocking
+  // and non-fatal: resolveEmoji falls back to plain glyphs until this resolves,
+  // and a stalled emoji endpoint must never gate router startup.
+  void initAppEmojis(discordToken, applicationId)
+    .then((count) => runtime.log(`[router] loaded ${count} application emoji(s)`))
+    .catch(() => {});
+
   runtime.log(`[router] instances: ${instances.size}`);
   for (const [channelId, inst] of instances) {
     runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
@@ -817,12 +827,13 @@ async function recoverUnansweredMessages(
       }
 
       // Walk newest-first. For a BOT message, skip ONLY genuine lifecycle banners
-      // (*Back online.*, *Shutting down...*), which are not replies to a user
-      // message; any other bot message — including an error reply — means the
+      // (the "agent is starting up/shutting down" diagnostics embeds, plus legacy
+      // "*Back online.*"/"*Shutting down...*" ones), which are not replies to a
+      // user message; any other bot message — including an error reply — means the
       // newest user message was already handled, so stop and do not re-run it.
       // (Previously all italic text was skipped, swallowing error replies and
       // re-attempting the same failing message on every reconnect.) Authorship is
-      // checked first so a user literally typing "*Back online.*" is not mistaken
+      // checked first so a user literally typing a banner phrase is not mistaken
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       let lastUserMsgIsTrustedBot = false;

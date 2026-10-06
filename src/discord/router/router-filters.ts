@@ -8,11 +8,25 @@
  * re-runs the same failing message on every reconnect (an endless error loop).
  *
  * Banners are posted as Log-category embeds (no forced italics), so the phrase
- * lives verbatim in the embed description. The exact-phrase match is what keeps
- * error log embeds (which share the Log category but carry different text) from
- * being skipped.
+ * lives verbatim in the embed description. Current banners lead with a static
+ * phrase followed by a JSON diagnostics block, so they match by prefix; the
+ * legacy exact phrases are kept for banners still in channel history from older
+ * builds. Both forms are distinctive enough that error log embeds (which share
+ * the Log category but carry different text) are never skipped.
  */
 export const LIFECYCLE_BANNERS = ["Back online.", "Shutting down..."];
+
+/**
+ * Lead phrases for current diagnostics banners (see
+ * discord-health-monitor/lifecycle-message.ts LIFECYCLE_LEAD). A banner is this
+ * lead phrase followed by its JSON payload; the lead alone is not enough to match
+ * (see matchesBanner), so an ordinary reply that merely opens with the phrase is
+ * not treated as lifecycle noise.
+ */
+export const LIFECYCLE_BANNER_PREFIXES = [
+  "The agent is starting up...",
+  "The agent is shutting down...",
+];
 
 /** A fetched message, narrowed to the fields that can carry a lifecycle banner. */
 export type LifecycleBannerMessage = {
@@ -21,16 +35,57 @@ export type LifecycleBannerMessage = {
 };
 
 /**
+ * The payload after a banner's lead phrase: the whole remainder as compact JSON, or
+ * the body of a ```json fence that spans the entire remainder (the exact shape
+ * buildLogEmbed emits). Returns null for anything else — notably a fence with a
+ * different label or trailing text after the close, so an ordinary reply that embeds
+ * a valid-looking block mid-message is not mistaken for a banner.
+ */
+function extractBannerPayload(rest: string): string | null {
+  const trimmed = rest.trim();
+  if (trimmed.startsWith("```")) {
+    const fenced = trimmed.match(/^```json\n([\s\S]*)\n```$/);
+    return fenced ? fenced[1].trim() : null;
+  }
+  return trimmed.startsWith("{") ? trimmed : null;
+}
+
+/** Whether `text` parses to a JSON object (not an array or primitive). */
+function isJsonObject(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Match a banner phrase, tolerating the legacy italic content form
- * (`*Back online.*`) by stripping surrounding asterisks. New banners are plain
- * Log-embed descriptions; old ones in channel history may still be italic.
+ * (`*Back online.*`) by stripping surrounding asterisks. Legacy banners are matched
+ * exactly (old italic ones normalize via the asterisk strip); current banners must
+ * be a lead phrase followed by a payload that actually parses as a JSON object.
  */
 function matchesBanner(text: string): boolean {
   const normalized = text
     .trim()
     .replace(/^\*+|\*+$/g, "")
     .trim();
-  return LIFECYCLE_BANNERS.includes(normalized);
+  if (LIFECYCLE_BANNERS.includes(normalized)) {
+    return true;
+  }
+  // Current banners are "<lead> <JSON>" (compact, before embedding) or
+  // "<lead>\n```json ...``` " (the fenced form buildLogEmbed produces). Require BOTH the
+  // lead phrase AND a payload that parses as a JSON object: matching the lead (or any
+  // fenced block) alone would treat an ordinary bot reply that merely opens with the
+  // phrase as lifecycle noise and let recovery replay the user message beneath it.
+  return LIFECYCLE_BANNER_PREFIXES.some((lead) => {
+    if (!normalized.startsWith(lead)) {
+      return false;
+    }
+    const payload = extractBannerPayload(normalized.slice(lead.length));
+    return payload != null && isJsonObject(payload);
+  });
 }
 
 export function isLifecycleBanner(message: string | LifecycleBannerMessage | undefined): boolean {

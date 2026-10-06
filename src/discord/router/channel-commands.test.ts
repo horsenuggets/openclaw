@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type ChannelCommandDeps,
   type ChannelReplyPayload,
@@ -10,6 +10,11 @@ import {
   parseUnregisterCustomId,
   parseUserMention,
 } from "./channel-commands.js";
+import { initAppEmojis, resetAppEmojis } from "./emojis.js";
+
+// Status renders custom emojis when the bot's set has loaded; drop the cache
+// after every test so the default (fallback-glyph) cases stay deterministic.
+afterEach(() => resetAppEmojis());
 
 describe("parseChannelTextCommand", () => {
   it("parses the bare command", () => {
@@ -166,6 +171,65 @@ describe("handleChannelCommand status", () => {
     expect(isWhitelisted).not.toHaveBeenCalled();
     expect(isAdmin).not.toHaveBeenCalled();
     expect(embedOf(replies[0].payload).embed.title).toBe("Status");
+  });
+
+  it("renders the custom check emojis under 'Attribute' when the bot's set is loaded", async () => {
+    // Load a mock app-emoji set so resolveEmoji returns the custom references.
+    await initAppEmojis(
+      "tok",
+      "appid",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          items: [
+            { name: "bluecheckfilled", id: "111" },
+            { name: "bluecheckempty", id: "222" },
+          ],
+        }),
+      })) as unknown as typeof fetch,
+    );
+    const status: InstanceStatus = { port: 18795, ownerId: "999", onboarded: true };
+    const { ctx, replies } = makeCtx("status");
+    await handleChannelCommand(
+      ctx,
+      makeDeps({ describeInstance: () => status, probeRunning: vi.fn(async () => true) }),
+    );
+    const { embed } = embedOf(replies[0].payload);
+    // The table column is "Attribute" (not "Property").
+    expect(embed.fields?.map((f) => f.name)).toEqual(["Attribute", "Value"]);
+    const values = embed.fields?.find((f) => f.name === "Value")?.value.split("\n") ?? [];
+    // Registered / Onboarded / Running resolve to the custom filled check.
+    expect(values[0]).toBe("<:bluecheckfilled:111>");
+    expect(values[3]).toBe("<:bluecheckfilled:111>");
+    expect(values[4]).toBe("<:bluecheckfilled:111>");
+  });
+
+  it("renders the custom empty check for a stopped instance", async () => {
+    await initAppEmojis(
+      "tok",
+      "appid",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          items: [
+            { name: "bluecheckfilled", id: "111" },
+            { name: "bluecheckempty", id: "222" },
+          ],
+        }),
+      })) as unknown as typeof fetch,
+    );
+    const status: InstanceStatus = { port: 18795, ownerId: "999", onboarded: true };
+    const { ctx, replies } = makeCtx("status");
+    await handleChannelCommand(
+      ctx,
+      makeDeps({ describeInstance: () => status, probeRunning: vi.fn(async () => false) }),
+    );
+    const values =
+      embedOf(replies[0].payload)
+        .embed.fields?.find((f) => f.name === "Value")
+        ?.value.split("\n") ?? [];
+    // Running is the custom empty check.
+    expect(values[4]).toBe("<:bluecheckempty:222>");
   });
 });
 
