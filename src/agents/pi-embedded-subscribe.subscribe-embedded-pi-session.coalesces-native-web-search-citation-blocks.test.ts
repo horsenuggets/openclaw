@@ -96,6 +96,70 @@ describe("subscribeEmbeddedPiSession native web-search citation coalescing", () 
   });
 });
 
+describe("held pre-tool tail at tool-execution-start", () => {
+  function setup() {
+    let handler: ((evt: unknown) => void) | undefined;
+    const session: StubSession = {
+      subscribe: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+    const onBlockReply = vi.fn();
+    const onBlockReplyFlush = vi.fn();
+    const onBlockReplyDiscard = vi.fn();
+    subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<typeof subscribeEmbeddedPiSession>[0]["session"],
+      runId: "run",
+      onBlockReply,
+      onBlockReplyFlush,
+      onBlockReplyDiscard,
+      blockReplyBreak: "text_end",
+      blockReplyChunking: { minChars: 1, maxChars: 2000, breakPreference: "paragraph" },
+    });
+    const emit = (evt: unknown) => handler?.(evt);
+    return { emit, onBlockReply, onBlockReplyDiscard };
+  }
+
+  it("flushes a completed (text_end'd) tail rather than discarding it as hedging", () => {
+    const { emit, onBlockReply, onBlockReplyDiscard } = setup();
+    emit({ type: "message_start", message: { role: "assistant" } });
+    // A finished pre-tool sentence without trailing punctuation is held to
+    // coalesce, but it DID cross text_end.
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: "Let me check" },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_end" },
+    });
+    emit({ type: "tool_execution_start", toolName: "exec", toolCallId: "t1", args: {} });
+
+    const texts = onBlockReply.mock.calls.map((c) => c[0].text as string);
+    expect(texts).toContain("Let me check");
+    expect(onBlockReplyDiscard).not.toHaveBeenCalled();
+  });
+
+  it("still discards genuine mid-stream text (no text_end before the tool)", () => {
+    const { emit, onBlockReply, onBlockReplyDiscard } = setup();
+    emit({ type: "message_start", message: { role: "assistant" } });
+    // Text streamed but the tool interrupts before text_end — true hedging.
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: "I don't have access, let me" },
+    });
+    emit({ type: "tool_execution_start", toolName: "exec", toolCallId: "t1", args: {} });
+
+    const texts = onBlockReply.mock.calls.map((c) => c[0].text as string);
+    expect(texts).not.toContain("I don't have access, let me");
+    expect(onBlockReplyDiscard).toHaveBeenCalled();
+  });
+});
+
 describe("endsAtBlockReplyBoundary", () => {
   it("is true at sentence and paragraph boundaries", () => {
     expect(endsAtBlockReplyBoundary("Done.")).toBe(true);

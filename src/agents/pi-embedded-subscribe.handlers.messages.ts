@@ -134,6 +134,12 @@ export function handleMessageUpdate(
     } else {
       ctx.state.blockBuffer += chunk;
     }
+    // New streaming text is in-progress again until the next text_end decides to
+    // hold it; clear the "completed tail" marker so mid-stream text arriving
+    // after a held tail is not mistaken for finished text at tool start.
+    if (evtType === "text_delta") {
+      ctx.state.heldTailCrossedTextEnd = false;
+    }
   }
 
   if (ctx.state.streamReasoning) {
@@ -214,6 +220,12 @@ export function handleMessageUpdate(
       if (endsAtBlockReplyBoundary(ctx.blockChunker.bufferedText)) {
         ctx.blockChunker.drain({ force: true, emit: ctx.emitBlockChunk });
         ctx.blockChunker.reset();
+        ctx.state.heldTailCrossedTextEnd = false;
+      } else {
+        // The finished text block is held to coalesce with the next one. Record
+        // that this buffered tail already crossed a text_end so tool-start
+        // flushes it instead of discarding it as mid-stream hedging.
+        ctx.state.heldTailCrossedTextEnd = true;
       }
     } else if (ctx.state.blockBuffer.length > 0) {
       ctx.emitBlockChunk(ctx.state.blockBuffer);

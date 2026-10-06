@@ -35,6 +35,14 @@ export type EmbeddedPiSubscribeState = {
 
   deltaBuffer: string;
   blockBuffer: string;
+  /**
+   * True when the block chunker is holding a tail that already completed a
+   * `text_end` (a finished text block kept back only because it did not end at a
+   * sentence/paragraph boundary, so it can coalesce with the next block). Lets
+   * tool-execution-start flush such completed text instead of discarding it as
+   * mid-stream hedging.
+   */
+  heldTailCrossedTextEnd: boolean;
   blockState: { thinking: boolean; final: boolean; inlineCode: InlineCodeState };
   partialBlockState: { thinking: boolean; final: boolean; inlineCode: InlineCodeState };
   lastStreamedAssistant?: string;
