@@ -188,4 +188,15 @@ export const LEGACY_CONFIG_MIGRATIONS_PART_3: LegacyConfigMigration[] = [
       delete raw.identity;
     },
   },
+  {
+    id: "proactive-removed",
+    describe: "Remove the retired proactive config block (heartbeats handle proactive messaging)",
+    apply: (raw, changes) => {
+      if (!("proactive" in raw)) {
+        return;
+      }
+      delete raw.proactive;
+      changes.push("Removed proactive (retired; heartbeats handle proactive messaging).");
+    },
+  },
 ];
