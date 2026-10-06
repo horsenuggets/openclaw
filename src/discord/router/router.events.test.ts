@@ -754,12 +754,12 @@ describe("discord router channel-delete cleanup", () => {
   });
 
   it("subjects an owner-gated bot to the owner gate during recovery", async () => {
-    // The same bot is trusted (recoverable) AND owner-gated. Unlike a plain
-    // trusted bot it must not bypass the owner check on reconnect: with no owner
-    // recorded the gate fails closed, so its message is skipped, not routed. This
-    // guards against both the original bypass and over-correcting into discarding
-    // the message before the owner check runs.
-    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "gated-bot");
+    // An owner-gated bot must not bypass the owner check on reconnect: with no
+    // owner recorded the gate fails closed, so its message is skipped, not routed.
+    // Deliberately NOT allowlisted (OPENCLAW_MOCK_USER_BOT_ID unset) to prove the
+    // bot is still picked up as recoverable rather than dropped as an untrusted
+    // bot — guarding against both the original bypass and over-correcting into
+    // discarding the message before the owner check runs.
     vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
     vi.stubGlobal(
       "fetch",

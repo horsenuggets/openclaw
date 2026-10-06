@@ -925,7 +925,19 @@ async function recoverUnansweredMessages(
         const isTrustedBot = Boolean(
           msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
         );
-        const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
+        // An owner-gated bot is also recoverable (independent of the allowlist, so
+        // it mirrors the live path regardless of whether it is additionally a
+        // trusted bot), but — like a human — it must still face the owner check
+        // below rather than bypassing it as an ordinary trusted bot does. Exclude
+        // the router itself, as the live path does.
+        const isOwnerGatedBot = Boolean(
+          msg.author.bot &&
+          msg.author.id &&
+          msg.author.id !== botId &&
+          ownerGatedBotIds.has(msg.author.id),
+        );
+        const isBotMsg =
+          (msg.author.bot || msg.author.id === botId) && !isTrustedBot && !isOwnerGatedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg)) {
             continue;
@@ -934,10 +946,7 @@ async function recoverUnansweredMessages(
         }
         lastUserMsg = msg;
         lastUserMsgIsTrustedBot = isTrustedBot;
-        // An owner-gated bot is recoverable (picked up above like any trusted bot)
-        // but, like a human, must still face the owner check below rather than
-        // bypassing it as an ordinary trusted bot does.
-        lastUserMsgIsOwnerGated = Boolean(msg.author.id && ownerGatedBotIds.has(msg.author.id));
+        lastUserMsgIsOwnerGated = isOwnerGatedBot;
         break;
       }
 
