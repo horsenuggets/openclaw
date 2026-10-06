@@ -21,6 +21,7 @@
  */
 
 import { buildEmbed } from "./embed-categories.js";
+import { resolveEmoji } from "./emojis.js";
 
 export type ChannelSubcommand = "register" | "status" | "unregister";
 
@@ -261,32 +262,37 @@ function unregisterButtons(channelId: string, initiatorId: string): DiscordActio
   };
 }
 
-/** Build the `/channel status` reply as a Property/Value table. */
+/** Build the `/channel status` reply as an Attribute/Value table. */
 function formatStatus(status: InstanceStatus | null): {
   embeds: DiscordEmbed[];
   attachments: string[];
 } {
+  // Custom check emojis, resolved by name to the running bot's own application
+  // emoji (prod and mirror self-resolve to their own ids); fall back to unicode
+  // glyphs if the bot's emoji set has not loaded.
+  const yes = resolveEmoji("bluecheckfilled", "✅");
+  const no = resolveEmoji("bluecheckempty", "❌");
   const registered = status !== null;
   const runningValue = !registered
-    ? "❌"
+    ? no
     : status.running === undefined
       ? "`unknown`"
       : status.running
-        ? "✅"
-        : "❌";
-  const properties = ["Registered", "User", "Port", "Onboarded", "Running"].join("\n");
+        ? yes
+        : no;
+  const attributes = ["Registered", "User", "Port", "Onboarded", "Running"].join("\n");
   const values = [
-    registered ? "✅" : "❌",
+    registered ? yes : no,
     status?.ownerId ? `<@${status.ownerId}>` : "`null`",
     registered ? String(status.port) : "`null`",
-    status?.onboarded ? "✅" : "❌",
+    status?.onboarded ? yes : no,
     runningValue,
   ].join("\n");
   return registrationReply(
     "Status",
     "Below are some details about the current registration status of this channel.",
     [
-      { name: "Property", value: properties, inline: true },
+      { name: "Attribute", value: attributes, inline: true },
       { name: "Value", value: values, inline: true },
     ],
   );
