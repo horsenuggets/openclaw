@@ -202,8 +202,12 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     // bot's messages to a registered channel got no reply and no log line
     // explained why. Surface the reason, but only for registered channels
     // (unregistered channels are a routine, high-volume case and get their
-    // own handling below). Match the `[router] ...` drop/skip log style.
-    if (channelId && instances.get(channelId)) {
+    // own handling below). Skip the router's own messages: Discord echoes the
+    // bot's replies as MESSAGE_CREATE and `isConversationalBot` rejects
+    // `authorId === applicationId`, so logging them would spam a bogus
+    // "untrusted bot" drop for every normal response. Match the
+    // `[router] ...` drop/skip log style.
+    if (channelId && authorId !== applicationId && instances.get(channelId)) {
       const reason = !authorId
         ? "missing author id"
         : isBot && !botAllowed
