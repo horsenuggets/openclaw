@@ -15,6 +15,16 @@ Docs: https://docs.openclaw.ai
   tried to discover a deferred tool (e.g. a web search). Both return paths now emit a
   proper content array, with a regression test pinning the shape. Verified live on the
   rig: the agent now runs `tool_search` and handles the result without crashing.
+- Discord router: resolve the bot's own application emojis by name at startup and
+  reference them in embeds via a cached `name -> id` map (`src/discord/router/emojis.ts`),
+  so the prod and mirror bots each self-resolve to their own emoji ids with no hardcoded
+  ids or per-environment config. `/channel status` now renders the
+  registration/onboarded/running flags with the custom `bluecheckfilled` /
+  `bluecheckempty` emojis (falling back to the ✅/❌ unicode glyphs if the set has not
+  loaded) and labels the table column "Attribute". Adds `scripts/sync-app-emojis.ts` to
+  copy the prod bot's application emojis onto the mirror bot idempotently (create missing,
+  replace only when the image bytes differ, `--prune` for mirror-only orphans, `--dry-run`
+  to preview).
 - Discord router: the health-monitor sidecar's channel lifecycle banners now carry a JSON
   diagnostics payload instead of the bare `Back online.` / `Shutting down...` text.
   Startup leads with `The agent is starting up...` and reports `reason` (`INITIAL_BOOT` /
