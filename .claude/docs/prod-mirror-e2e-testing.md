@@ -125,13 +125,5 @@ across all turns. Keep the finished driver in gitignored `.prod-mirror/` as evid
   model (`~/deploy/models/ggml-base.en.bin`) are provisioned, so on Apple Silicon (no
   linux-arm64 whisper build) the container simply does not start. Voice transcription is
   absent until you stage both artifacts; the box is no longer degraded by a crash loop.
-- `OPENCLAW_SKIP_BOOTSTRAP` (set in `.env.mirror`, propagated to the box `~/.env`) is a
-  rig-only debug toggle. When truthy, `seed_workspace` seeds the full workspace then
-  deletes `BOOTSTRAP.md`, so the agent keeps its `SOUL.md` persona but the router's
-  `bootstrapExists` is false and `runOnboardingKick` is skipped SILENTLY (no log line).
-  Symptom: registration succeeds and later messages get replies, but the first-run
-  welcome/greeting never fires. Set it to `0` in `.env.mirror`, box.env, and the box
-  `~/.env`, then `deploy` (no `--build`) to exercise onboarding like prod. Prod never sets
-  this, so onboarding is unaffected there.
 - Leave the test channel in place as evidence. Do not auto-delete channels or driver
   scripts after a run.
