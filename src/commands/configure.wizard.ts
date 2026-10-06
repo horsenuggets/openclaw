@@ -96,6 +96,9 @@ async function promptWebToolsConfig(
   const existingSearch = nextConfig.tools?.web?.search;
   const existingFetch = nextConfig.tools?.web?.fetch;
   const hasSearchKey = Boolean(existingSearch?.apiKey);
+  // A Brave key supplied via the environment counts too: the wizard's documented
+  // flow lets users leave the prompt blank and rely on BRAVE_API_KEY.
+  const hasEnvBraveKey = Boolean(process.env.BRAVE_API_KEY?.trim());
 
   note(
     [
@@ -135,16 +138,19 @@ async function promptWebToolsConfig(
       // models, where an unset provider would otherwise prefer Anthropic's
       // native server-side search and silently ignore this key.
       nextSearch = { ...nextSearch, apiKey: key, provider: "brave" };
-    } else if (hasSearchKey && !existingSearch?.provider) {
-      // Legacy configs created before native search stored a Brave key with no
-      // provider. Keeping that key (blank input) must also pin Brave, or the
-      // stored key would be silently ignored on Anthropic models.
+    } else if ((hasSearchKey || hasEnvBraveKey) && !existingSearch?.provider) {
+      // A Brave key is already available (stored in config, or via BRAVE_API_KEY
+      // in the environment) and no provider is pinned. This is the documented
+      // Brave flow the user just enabled, so pin Brave; otherwise an unset
+      // provider would silently select native search on Anthropic models and
+      // ignore the Brave key the user intended to use.
       nextSearch = { ...nextSearch, provider: "brave" };
-    } else if (!hasSearchKey) {
+    } else if (!hasSearchKey && !hasEnvBraveKey) {
       note(
         [
-          "No key stored yet, so web_search will stay unavailable.",
-          "Store a key here or set BRAVE_API_KEY in the Gateway environment.",
+          "No Brave key found (config or BRAVE_API_KEY). On Anthropic models web_search",
+          "still works via native server-side search; other models need a Brave key here",
+          "or BRAVE_API_KEY in the Gateway environment.",
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",
