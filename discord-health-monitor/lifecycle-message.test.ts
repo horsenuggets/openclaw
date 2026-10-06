@@ -13,7 +13,7 @@ const BASE: LifecycleInput = {
   reason: "ROUTER_RESTART",
   pid: 4321,
   uptimeSeconds: 3723,
-  lastHealthyAt: Date.parse("2026-10-05T00:00:00.000Z"),
+  downSince: Date.parse("2026-10-05T00:00:00.000Z"),
   now: Date.parse("2026-10-05T00:00:12.000Z"),
   discordApiPingMs: 83,
   memory: { rss: 89_214_976, heapUsed: 23_170_000 },
@@ -64,8 +64,8 @@ describe("buildLifecycleInfo", () => {
     });
   });
 
-  it("reports downtime as null on the initial boot (no prior health)", () => {
-    const info = buildLifecycleInfo({ ...BASE, reason: "INITIAL_BOOT", lastHealthyAt: null });
+  it("reports downtime as null on the initial boot (no prior exit)", () => {
+    const info = buildLifecycleInfo({ ...BASE, reason: "INITIAL_BOOT", downSince: null });
     expect(info).toEqual({
       reason: "INITIAL_BOOT",
       pid: 4321,

@@ -18,10 +18,15 @@ export const LIFECYCLE_BANNERS = ["Back online.", "Shutting down..."];
 
 /**
  * Lead phrases for current diagnostics banners (see
- * discord-health-monitor/lifecycle-message.ts LIFECYCLE_LEAD). The JSON payload
- * that follows varies per event, so these are matched as prefixes.
+ * discord-health-monitor/lifecycle-message.ts LIFECYCLE_LEAD). A banner is this
+ * lead phrase followed by its JSON payload; the lead alone is not enough to match
+ * (see matchesBanner), so an ordinary reply that merely opens with the phrase is
+ * not treated as lifecycle noise.
  */
-export const LIFECYCLE_BANNER_PREFIXES = ["The agent is starting up", "The agent is shutting down"];
+export const LIFECYCLE_BANNER_PREFIXES = [
+  "The agent is starting up...",
+  "The agent is shutting down...",
+];
 
 /** A fetched message, narrowed to the fields that can carry a lifecycle banner. */
 export type LifecycleBannerMessage = {
@@ -44,7 +49,18 @@ function matchesBanner(text: string): boolean {
   if (LIFECYCLE_BANNERS.includes(normalized)) {
     return true;
   }
-  return LIFECYCLE_BANNER_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  // Current banners are "<lead> <JSON>" (compact, before embedding) or
+  // "<lead>\n```json ..." (the fenced form buildLogEmbed produces). Require BOTH the
+  // lead phrase and the JSON payload after it: matching the lead alone would treat an
+  // ordinary bot reply that happens to open with the phrase as lifecycle noise and let
+  // recovery replay the user message beneath it.
+  return LIFECYCLE_BANNER_PREFIXES.some((lead) => {
+    if (!normalized.startsWith(lead)) {
+      return false;
+    }
+    const rest = normalized.slice(lead.length).trimStart();
+    return rest.startsWith("{") || rest.startsWith("```");
+  });
 }
 
 export function isLifecycleBanner(message: string | LifecycleBannerMessage | undefined): boolean {

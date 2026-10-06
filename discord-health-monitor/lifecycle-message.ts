@@ -29,8 +29,8 @@ export type LifecycleInput = {
   pid?: number | null;
   /** Health-monitor process uptime, in seconds (reported on shutdown). */
   uptimeSeconds: number;
-  /** When the router was last confirmed healthy (epoch ms), or null if never. */
-  lastHealthyAt: number | null;
+  /** When the router went down (epoch ms); null on the initial boot. Feeds downtime. */
+  downSince: number | null;
   /** Current time (epoch ms); injected so tests stay deterministic. */
   now: number;
   /** Discord REST round-trip latency in ms, or null if the probe failed. */
@@ -85,10 +85,10 @@ export function buildLifecycleInfo(input: LifecycleInput): Record<string, unknow
     info.pid = input.pid;
   }
   if (input.event === "startup") {
-    // Downtime is only meaningful across a restart, where the router had been
-    // healthy before it died; on the initial boot it is reported as null.
+    // Downtime spans the previous router's death (downSince) to this spawn; it is
+    // only meaningful across a restart, so the initial boot reports it as null.
     info.downtime =
-      input.lastHealthyAt != null ? formatDuration((input.now - input.lastHealthyAt) / 1000) : null;
+      input.downSince != null ? formatDuration((input.now - input.downSince) / 1000) : null;
   } else {
     info.uptime = formatDuration(input.uptimeSeconds);
   }

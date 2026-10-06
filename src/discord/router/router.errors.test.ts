@@ -10,7 +10,7 @@ function banner(event: "startup" | "shutdown"): string {
     reason: event === "startup" ? "ROUTER_RESTART" : "SIGTERM",
     pid: 4321,
     uptimeSeconds: 3723,
-    lastHealthyAt: Date.parse("2026-10-05T00:00:00.000Z"),
+    downSince: Date.parse("2026-10-05T00:00:00.000Z"),
     now: Date.parse("2026-10-05T00:00:12.000Z"),
     discordApiPingMs: 83,
     memory: { rss: 89_214_976, heapUsed: 23_170_000 },
@@ -135,11 +135,22 @@ describe("isLifecycleBanner", () => {
     expect(isLifecycleBanner({ embeds: [buildLogEmbed("Shutting down...").embed] })).toBe(true);
   });
 
-  it("matches current diagnostics banners by lead phrase despite the JSON payload", () => {
+  it("matches current diagnostics banners (lead phrase + JSON payload)", () => {
     // The trailing JSON varies per event, so matching keys off the static lead
-    // phrase only.
+    // phrase, but the JSON must be present for it to count as a banner.
     expect(isLifecycleBanner(banner("startup"))).toBe(true);
     expect(isLifecycleBanner(banner("shutdown"))).toBe(true);
+  });
+
+  it("does NOT match a bot reply that merely opens with the lead phrase", () => {
+    // Guards the recovery-loop regression: an ordinary reply starting with the
+    // phrase but without the JSON payload is NOT lifecycle noise, so recovery must
+    // treat the user message beneath it as already handled.
+    expect(isLifecycleBanner("The agent is starting up failed to reach the gateway.")).toBe(false);
+    expect(isLifecycleBanner("The agent is starting up...")).toBe(false);
+    expect(
+      isLifecycleBanner({ embeds: [{ description: "The agent is shutting down soon." }] }),
+    ).toBe(false);
   });
 
   it("matches the exact diagnostics embed the sidecar sends (sender/matcher consistency)", () => {

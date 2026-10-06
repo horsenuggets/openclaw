@@ -11,6 +11,7 @@ import http from "node:http";
 import path from "node:path";
 import { DISCORD_API, sendEmbedMessage } from "../src/discord/router/discord-api.js";
 import { buildLogEmbed } from "../src/discord/router/log-embed.js";
+import { buildLifecycleMessage, type LifecycleEvent } from "./lifecycle-message.js";
 import { readInstancePort } from "./ports.js";
 
 const HEALTH_PORT = 18801;
@@ -133,7 +134,7 @@ async function measureDiscordApiPing(): Promise<number | null> {
 async function sendLifecycleMessage(
   token: string,
   event: LifecycleEvent,
-  context: { reason: string; pid?: number | null; lastHealthyAt: number | null },
+  context: { reason: string; pid?: number | null; downSince: number | null },
 ): Promise<void> {
   const channels = loadChannels();
   if (channels.length === 0) {
@@ -146,7 +147,7 @@ async function sendLifecycleMessage(
     reason: context.reason,
     pid: context.pid,
     uptimeSeconds: process.uptime(),
-    lastHealthyAt: context.lastHealthyAt,
+    downSince: context.downSince,
     now: Date.now(),
     discordApiPingMs,
     memory: { rss: mem.rss, heapUsed: mem.heapUsed },
@@ -182,6 +183,9 @@ let routerProcess: ChildProcess | null = null;
 let supervisorState: SupervisorState = "stopped";
 let reconnectAttempts = 0;
 let lastHealthyAt = 0;
+// When the running router last exited/failed (epoch ms), so the next startup banner
+// can report the actual downtime (spawn time minus this), not the prior run's length.
+let lastExitAt = 0;
 let shuttingDown = false;
 let discordToken = "";
 
@@ -217,9 +221,8 @@ function spawnRouter(): ChildProcess {
   child.on("spawn", () => {
     console.log(`[health] discord-router started (pid ${child.pid})`);
     supervisorState = "running";
-    // Capture the prior healthy time before overwriting it, so the startup
-    // banner can report how long the router was down across a restart.
-    const previousHealthyAt = lastHealthyAt;
+    // Downtime is from the previous router's exit to now; 0 on the initial boot.
+    const downSince = lastExitAt;
     const attempt = reconnectAttempts;
     lastHealthyAt = Date.now();
     try {
@@ -230,7 +233,7 @@ function spawnRouter(): ChildProcess {
     void sendLifecycleMessage(discordToken, "startup", {
       reason: attempt > 0 ? "ROUTER_RESTART" : "INITIAL_BOOT",
       pid: child.pid,
-      lastHealthyAt: previousHealthyAt > 0 ? previousHealthyAt : null,
+      downSince: downSince > 0 ? downSince : null,
     });
 
     // Reset backoff after 30s stable
@@ -245,6 +248,7 @@ function spawnRouter(): ChildProcess {
   child.on("exit", (code, signal) => {
     console.log(`[health] discord-router exited (code=${code}, signal=${signal})`);
     routerProcess = null;
+    lastExitAt = Date.now();
 
     if (shuttingDown) {
       supervisorState = "stopped";
@@ -257,6 +261,7 @@ function spawnRouter(): ChildProcess {
   child.on("error", (err) => {
     console.error(`[health] discord-router spawn error: ${err.message}`);
     routerProcess = null;
+    lastExitAt = Date.now();
     // Treat spawn errors same as exit — schedule restart with backoff
     if (!shuttingDown && supervisorState !== "restarting") {
       scheduleRestart();
@@ -325,10 +330,12 @@ async function main() {
     shuttingDown = true;
     console.log(`[health] received ${signal}, shutting down`);
 
-    // Best-effort shutdown banner with timeout (don't block shutdown).
+    // Best-effort shutdown banner with timeout (don't block shutdown). Capture the
+    // router pid before we stop the child below, so the banner can report it.
     await sendLifecycleMessage(discordToken, "shutdown", {
       reason: signal,
-      lastHealthyAt: lastHealthyAt > 0 ? lastHealthyAt : null,
+      pid: routerProcess?.pid ?? null,
+      downSince: null,
     });
 
     // Stop router
