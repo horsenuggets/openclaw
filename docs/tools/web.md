@@ -163,7 +163,10 @@ Search the web using your configured provider.
 ### Requirements
 
 - `tools.web.search.enabled` must not be `false` (default: enabled)
-- API key for your chosen provider:
+- On genuine Anthropic models (first-party API key or Claude subscription OAuth), **no key
+  is required**: the search runs on Anthropic's native server-side tool by default.
+- Otherwise (non-Anthropic models, or when you pin `tools.web.search.provider`), an API
+  key for your chosen provider:
   - **Brave**: `BRAVE_API_KEY` or `tools.web.search.apiKey`
   - **Perplexity**: `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, or
     `tools.web.search.perplexity.apiKey`
@@ -178,6 +181,7 @@ Search the web using your configured provider.
         enabled: true,
         apiKey: "BRAVE_API_KEY_HERE", // optional if BRAVE_API_KEY is set
         maxResults: 5,
+        maxUses: 5, // cap per Messages API request for Anthropic native search
         timeoutSeconds: 30,
         cacheTtlMinutes: 15,
       },

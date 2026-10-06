@@ -135,6 +135,11 @@ async function promptWebToolsConfig(
       // models, where an unset provider would otherwise prefer Anthropic's
       // native server-side search and silently ignore this key.
       nextSearch = { ...nextSearch, apiKey: key, provider: "brave" };
+    } else if (hasSearchKey && !existingSearch?.provider) {
+      // Legacy configs created before native search stored a Brave key with no
+      // provider. Keeping that key (blank input) must also pin Brave, or the
+      // stored key would be silently ignored on Anthropic models.
+      nextSearch = { ...nextSearch, provider: "brave" };
     } else if (!hasSearchKey) {
       note(
         [
