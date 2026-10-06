@@ -360,7 +360,8 @@ describe("discord router channel-delete cleanup", () => {
         content: "hello from the owner",
         attachments: [],
       });
-      await vi.advanceTimersByTimeAsync(0);
+      // The queue debounces before running the turn, so advance past that window.
+      await vi.advanceTimersByTimeAsync(600);
 
       expect(logs.some((l) => l.includes("routing message from gated-bot"))).toBe(true);
       expect(logs.some((l) => l.includes("denied message from gated-bot"))).toBe(false);
