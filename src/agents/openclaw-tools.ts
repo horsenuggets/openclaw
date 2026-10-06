@@ -59,6 +59,8 @@ export function createOpenClawTools(options?: {
   requireExplicitMessageTarget?: boolean;
   /** If true, omit the message tool from the tool list. */
   disableMessageTool?: boolean;
+  /** Prefer Anthropic's native server-side web search (anthropic-messages models). */
+  preferAnthropicServerWebSearch?: boolean;
 }): AnyAgentTool[] {
   const imageTool = options?.agentDir?.trim()
     ? createImageTool({
@@ -71,6 +73,7 @@ export function createOpenClawTools(options?: {
   const webSearchTool = createWebSearchTool({
     config: options?.config,
     sandboxed: options?.sandboxed,
+    preferAnthropicServerTool: options?.preferAnthropicServerWebSearch,
   });
   const webFetchTool = createWebFetchTool({
     config: options?.config,

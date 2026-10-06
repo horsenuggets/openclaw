@@ -21,6 +21,13 @@ const SEARCH_PROVIDERS = ["brave", "perplexity"] as const;
 const DEFAULT_SEARCH_COUNT = 5;
 const MAX_SEARCH_COUNT = 10;
 
+// Anthropic's server-side web search tool. When the agent runs on an
+// anthropic-messages model, the API can run the search itself (billed through
+// the account, no Brave/Perplexity key), so OpenClaw advertises `web_search` as
+// this server tool instead of its client-side Brave/Perplexity implementation.
+const ANTHROPIC_WEB_SEARCH_TYPE = "web_search_20250305";
+const DEFAULT_ANTHROPIC_WEB_SEARCH_MAX_USES = 5;
+
 const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 const DEFAULT_PERPLEXITY_BASE_URL = "https://openrouter.ai/api/v1";
 const PERPLEXITY_DIRECT_BASE_URL = "https://api.perplexity.ai";
@@ -156,6 +163,25 @@ function resolveSearchProvider(search?: WebSearchConfig): (typeof SEARCH_PROVIDE
     return "brave";
   }
   return "brave";
+}
+
+function hasExplicitSearchProvider(search?: WebSearchConfig): boolean {
+  if (!search || typeof search !== "object" || !("provider" in search)) {
+    return false;
+  }
+  const raw = typeof search.provider === "string" ? search.provider.trim().toLowerCase() : "";
+  return raw === "brave" || raw === "perplexity";
+}
+
+function resolveAnthropicWebSearchMaxUses(search?: WebSearchConfig): number {
+  const raw =
+    search && "maxUses" in search && typeof search.maxUses === "number"
+      ? search.maxUses
+      : undefined;
+  if (raw === undefined || !Number.isFinite(raw) || raw < 1) {
+    return DEFAULT_ANTHROPIC_WEB_SEARCH_MAX_USES;
+  }
+  return Math.floor(raw);
 }
 
 function resolvePerplexityConfig(search?: WebSearchConfig): PerplexityConfig {
@@ -458,13 +484,55 @@ async function runWebSearch(params: {
   return payload;
 }
 
+// Minimal server-tool schema. Anthropic generates the query server-side, so
+// this is only for display/deferral; it is never sent on the wire (the patched
+// pi-ai convertTools emits the server-tool `type` instead of an input schema).
+const AnthropicWebSearchSchema = Type.Object({
+  query: Type.String({ description: "Search query string." }),
+});
+
+function buildAnthropicServerSearchTool(search?: WebSearchConfig): AnyAgentTool {
+  const maxUses = resolveAnthropicWebSearchMaxUses(search);
+  const tool = {
+    label: "Web Search",
+    name: "web_search",
+    description:
+      "Search the web for current information. Runs natively on the model; returns results the model cites in its answer.",
+    parameters: AnthropicWebSearchSchema,
+    // Executed by Anthropic server-side, so this is never invoked. If it ever
+    // is (e.g. a non-Anthropic transport), return a clear no-op result.
+    execute: async () =>
+      jsonResult({
+        status: "pending",
+        tool: "web_search",
+        message: "web_search runs natively on the model and needs no client execution.",
+      }),
+    // Marker read by the patched pi-ai convertTools (see tools/common.ts).
+    anthropicServerTool: {
+      type: ANTHROPIC_WEB_SEARCH_TYPE,
+      config: { max_uses: maxUses },
+    },
+  };
+  return tool as unknown as AnyAgentTool;
+}
+
 export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
+  /**
+   * When the model runs on an anthropic-messages API, prefer Anthropic's
+   * native server-side web search (no Brave/Perplexity key) unless the user
+   * explicitly pinned a search provider.
+   */
+  preferAnthropicServerTool?: boolean;
 }): AnyAgentTool | null {
   const search = resolveSearchConfig(options?.config);
   if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
     return null;
+  }
+
+  if (options?.preferAnthropicServerTool && !hasExplicitSearchProvider(search)) {
+    return buildAnthropicServerSearchTool(search);
   }
 
   const provider = resolveSearchProvider(search);

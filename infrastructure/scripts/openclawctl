@@ -511,6 +511,13 @@ cfg = {
                         "name": "Claude Sonnet 4.6",
                         "reasoning": False,
                         "input": ["text", "image"],
+                        # The model proxy is a trusted route to Anthropic (it
+                        # injects the real subscription OAuth bearer), so opt this
+                        # model in to Anthropic's native server-side web search.
+                        # The gate otherwise rejects the non-api.anthropic.com
+                        # proxy baseUrl and would fall back to the Brave client
+                        # tool (which these boxes have no key for).
+                        "supportsAnthropicServerWebSearch": True,
                         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
                         "contextWindow": 200000,
                         "maxTokens": 64000,
@@ -558,9 +565,18 @@ with open(target) as f:
 cfg.setdefault("channels", {}).setdefault("discord", {})["proxyUrl"] = os.environ[
     "OPENCLAW_CONTAINER_PROXY_URL"
 ]
-cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
+sub_provider = cfg.setdefault("models", {}).setdefault("providers", {}).setdefault(
     "anthropic-subscription", {}
-)["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
+)
+sub_provider["baseUrl"] = os.environ["OPENCLAW_MODEL_PROXY_URL"]
+# Opt the proxied subscription model in to Anthropic's native server-side web
+# search. The model proxy is a trusted route to Anthropic, but its baseUrl is not
+# api.anthropic.com, so without this flag the native-search gate rejects it and
+# falls back to the keyless-on-these-boxes Brave client tool. Reconcile existing
+# prepared instances too, not just freshly provisioned ones.
+for model in sub_provider.get("models") or []:
+    if isinstance(model, dict) and model.get("id") == "claude-sonnet-4-6":
+        model["supportsAnthropicServerWebSearch"] = True
 cfg.setdefault("agents", {}).setdefault("defaults", {})["workspace"] = "/workspace"
 # Write atomically: stage the full JSON in a same-directory temp file, then
 # os.replace() it onto the target, so a partial write (full disk, crash) never

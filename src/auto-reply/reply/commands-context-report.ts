@@ -5,8 +5,12 @@ import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { resolveBootstrapMaxChars } from "../../agents/pi-embedded-helpers.js";
+import { resolveModel } from "../../agents/pi-embedded-runner/model.js";
 import { resolveWorkspaceContextDelivery } from "../../agents/pi-embedded-runner/workspace-context.js";
-import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
+import {
+  createOpenClawCodingTools,
+  resolveAnthropicServerWebSearchInputs,
+} from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../../agents/skills/refresh.js";
@@ -90,6 +94,22 @@ async function resolveContextReport(
     cfg: params.cfg,
     sessionKey: params.ctx.SessionKey ?? params.sessionKey,
   });
+  // Resolve the selected model so transport overrides and custom endpoints use
+  // the same web_search shape as a live run.
+  const model = (() => {
+    try {
+      return resolveModel(params.provider, params.model, undefined, params.cfg).model;
+    } catch {
+      return undefined;
+    }
+  })();
+  const { modelApi, modelBaseUrl, modelSupportsAnthropicServerWebSearch } =
+    resolveAnthropicServerWebSearchInputs({
+      config: params.cfg,
+      provider: params.provider,
+      modelId: params.model,
+      model,
+    });
   const tools = (() => {
     try {
       return createOpenClawCodingTools({
@@ -104,6 +124,9 @@ async function resolveContextReport(
         senderIsOwner: params.command.senderIsOwner,
         modelProvider: params.provider,
         modelId: params.model,
+        modelApi,
+        modelBaseUrl,
+        modelSupportsAnthropicServerWebSearch,
       });
     } catch {
       return [];

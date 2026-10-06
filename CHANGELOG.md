@@ -6,6 +6,16 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Web search: on genuine Anthropic models (first-party API key or Claude subscription
+  OAuth), `web_search` now runs on Anthropic's native server-side web search tool (billed
+  through the account, no Brave/Perplexity key). The embedded runner advertises
+  `web_search` as an Anthropic server tool (via a patched pi-ai `convertTools`) instead of
+  the client Brave/Perplexity tool; the model runs the search itself and cites results.
+  Providers that merely speak the anthropic-messages wire (MiniMax, Synthetic, Xiaomi,
+  custom pass-throughs) keep the client provider. Pin `tools.web.search.provider` to
+  `brave` or `perplexity` to force the client provider, and cap searches per Messages API
+  request with `tools.web.search.maxUses` (default 5). Non-Anthropic models are unchanged.
+  (#103)
 - Mid-turn steering now uses the agent's `steer()` primitive instead of `followUp()`, so a
   message injected via `agent.steer` (the Discord router's mid-turn path) is delivered at
   the next tool boundary and skips the agent's remaining planned tools — it reacts to an

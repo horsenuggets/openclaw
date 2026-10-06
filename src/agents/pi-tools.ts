@@ -21,6 +21,7 @@ import {
   type ProcessToolDefaults,
 } from "./bash-tools.js";
 import { listChannelAgentTools } from "./channel-tools.js";
+import { normalizeProviderId } from "./model-selection.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
@@ -56,6 +57,75 @@ import {
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-codex";
+}
+
+// Anthropic's hosted `web_search_20250305` server tool is a first-party
+// capability, not a property of the anthropic-messages wire format. Several
+// non-Anthropic providers (MiniMax Portal, Synthetic, Xiaomi, custom
+// pass-throughs) also speak anthropic-messages but do not implement the hosted
+// tool, so gating on the transport alone would send them an unsupported
+// server-tool payload. Require both the transport AND a genuine Anthropic
+// provider (first-party API key or Claude subscription OAuth). Custom endpoints
+// require an explicit model capability opt-in.
+export function supportsAnthropicServerWebSearch(params: {
+  modelApi?: string;
+  modelProvider?: string;
+  modelBaseUrl?: string;
+  modelSupportsAnthropicServerWebSearch?: boolean;
+}): boolean {
+  if (params.modelApi !== "anthropic-messages") {
+    return false;
+  }
+  const provider = normalizeProviderId(params.modelProvider ?? "");
+  if (provider !== "anthropic" && provider !== "anthropic-subscription") {
+    return false;
+  }
+  if (params.modelSupportsAnthropicServerWebSearch === true) {
+    return true;
+  }
+  if (!params.modelBaseUrl) {
+    return true;
+  }
+  try {
+    const endpoint = new URL(params.modelBaseUrl);
+    return (
+      endpoint.protocol === "https:" &&
+      endpoint.hostname === "api.anthropic.com" &&
+      !endpoint.port &&
+      !endpoint.username &&
+      !endpoint.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the gating inputs for Anthropic native web search from config + the
+ * resolved model. The `supportsAnthropicServerWebSearch` capability is read from
+ * the configured `models.providers.<provider>.models[]` entry, because
+ * pi-coding-agent's `ModelRegistry.parseModels()` reconstructs models from known
+ * fields and drops this custom property (so reading it off the runtime model
+ * object alone always yields `undefined`). Callers pass these into
+ * `createOpenClawCodingTools` so the live run, compaction, and the /context
+ * fallback report all gate identically.
+ */
+export function resolveAnthropicServerWebSearchInputs(params: {
+  config?: OpenClawConfig;
+  provider?: string;
+  modelId?: string;
+  model?: { api?: string | null; baseUrl?: string | null } | null;
+}): { modelApi?: string; modelBaseUrl?: string; modelSupportsAnthropicServerWebSearch?: boolean } {
+  const providerConfig = params.provider
+    ? params.config?.models?.providers?.[params.provider]
+    : undefined;
+  const configuredModel = providerConfig?.models?.find((entry) => entry.id === params.modelId);
+  return {
+    modelApi: configuredModel?.api ?? providerConfig?.api ?? params.model?.api ?? undefined,
+    modelBaseUrl: providerConfig?.baseUrl ?? params.model?.baseUrl ?? undefined,
+    modelSupportsAnthropicServerWebSearch:
+      configuredModel?.supportsAnthropicServerWebSearch ?? undefined,
+  };
 }
 
 function isApplyPatchAllowedForModel(params: {
@@ -131,6 +201,13 @@ export function createOpenClawCodingTools(options?: {
   modelProvider?: string;
   /** Model id for the current provider (used for model-specific tool gating). */
   modelId?: string;
+  /**
+   * Model API transport (e.g. "anthropic-messages"). Used to prefer Anthropic's
+   * native server-side web search over the Brave/Perplexity client tool.
+   */
+  modelApi?: string;
+  modelBaseUrl?: string;
+  modelSupportsAnthropicServerWebSearch?: boolean;
   /**
    * Auth mode for the current provider. We only need this for Anthropic OAuth
    * tool-name blocking quirks.
@@ -358,6 +435,12 @@ export function createOpenClawCodingTools(options?: {
       requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
       disableMessageTool: options?.disableMessageTool,
       requesterAgentIdOverride: agentId,
+      preferAnthropicServerWebSearch: supportsAnthropicServerWebSearch({
+        modelApi: options?.modelApi,
+        modelProvider: options?.modelProvider,
+        modelBaseUrl: options?.modelBaseUrl,
+        modelSupportsAnthropicServerWebSearch: options?.modelSupportsAnthropicServerWebSearch,
+      }),
     }),
   ];
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)

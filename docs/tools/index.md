@@ -244,10 +244,13 @@ Core parameters:
 
 Notes:
 
-- Requires a Brave API key (recommended: `openclaw configure --section web`, or set
-  `BRAVE_API_KEY`).
+- On genuine Anthropic models (first-party API key or Claude subscription OAuth), uses
+  Anthropic's native server-side web search (no key). On other models (including providers
+  that only speak the anthropic-messages wire), requires a Brave API key (recommended:
+  `openclaw configure --section web`, or set `BRAVE_API_KEY`) or a Perplexity key.
 - Enable via `tools.web.search.enabled`.
-- Responses are cached (default 15 min).
+- Client-provider (Brave/Perplexity) responses are cached (default 15 min); native
+  Anthropic search runs server-side and is not cached.
 - See [Web tools](/tools/web) for setup.
 
 ### `web_fetch`

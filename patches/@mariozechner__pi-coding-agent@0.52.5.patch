@@ -1,0 +1,16 @@
+diff --git a/dist/core/extensions/wrapper.js b/dist/core/extensions/wrapper.js
+index 869d1f20c292e152bb9c920e7358ac5615907693..f0ec7f681ff473bb99104a1fa433f3dcaa66e095 100644
+--- a/dist/core/extensions/wrapper.js
++++ b/dist/core/extensions/wrapper.js
+@@ -7,7 +7,11 @@
+  */
+ export function wrapRegisteredTool(registeredTool, runner) {
+     const { definition } = registeredTool;
++    // Spread the full definition so provider-specific markers (e.g.
++    // `anthropicServerTool`, read later by the Anthropic transport) survive this
++    // reconstruction; only the execute signature is adapted to inject context.
+     return {
++        ...definition,
+         name: definition.name,
+         label: definition.label,
+         description: definition.description,

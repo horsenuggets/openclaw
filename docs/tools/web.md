@@ -11,8 +11,9 @@ title: "Web Tools"
 
 OpenClaw ships two lightweight web tools:
 
-- `web_search` — Search the web via Brave Search API (default) or Perplexity Sonar (direct
-  or via OpenRouter).
+- `web_search` — Search the web. On genuine Anthropic models (first-party API key or
+  Claude subscription OAuth) the search runs natively on the model (no API key); on other
+  models it uses Brave Search API or Perplexity Sonar (direct or via OpenRouter).
 - `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text).
 
 These are **not** browser automation. For JS-heavy sites or logins, use the
@@ -20,21 +21,38 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 
 ## How it works
 
-- `web_search` calls your configured provider and returns results.
-  - **Brave** (default): returns structured results (title, URL, snippet).
+- `web_search` returns results the model can cite.
+  - **Anthropic native** (default on genuine Anthropic models): the search runs
+    server-side on the model and needs no key. Pin a provider below to opt out.
+  - **Brave**: returns structured results (title, URL, snippet).
   - **Perplexity**: returns AI-synthesized answers with citations from real-time web
     search.
-- Results are cached by query for 15 minutes (configurable).
+- Client-provider (Brave/Perplexity) results are cached by query for 15 minutes
+  (configurable via `cacheTtlMinutes`). Anthropic native search runs server-side and does
+  not use this cache.
 - `web_fetch` does a plain HTTP GET and extracts readable content (HTML → markdown/text).
   It does **not** execute JavaScript.
 - `web_fetch` is enabled by default (unless explicitly disabled).
 
 ## Choosing a search provider
 
-| Provider            | Pros                                         | Cons                                     | API Key                                      |
-| ------------------- | -------------------------------------------- | ---------------------------------------- | -------------------------------------------- |
-| **Brave** (default) | Fast, structured results, free tier          | Traditional search results               | `BRAVE_API_KEY`                              |
-| **Perplexity**      | AI-synthesized answers, citations, real-time | Requires Perplexity or OpenRouter access | `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` |
+| Provider                       | Pros                                         | Cons                                     | API Key                                      |
+| ------------------------------ | -------------------------------------------- | ---------------------------------------- | -------------------------------------------- |
+| **Anthropic native** (default) | No key, runs on the model, billed to account | Genuine Anthropic models only            | none                                         |
+| **Brave**                      | Fast, structured results, free tier          | Traditional search results               | `BRAVE_API_KEY`                              |
+| **Perplexity**                 | AI-synthesized answers, citations, real-time | Requires Perplexity or OpenRouter access | `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` |
+
+On a genuine Anthropic model (first-party API key or Claude subscription OAuth), leaving
+`tools.web.search.provider` unset uses Anthropic's native web search. Setting it to
+`brave` or `perplexity` forces that client provider (and its key) instead. Providers that
+merely speak the anthropic-messages wire (MiniMax, Synthetic, Xiaomi, custom
+pass-throughs) and all non-Anthropic models default to Brave.
+
+Custom endpoints configured under the `anthropic` or `anthropic-subscription` provider do
+not enable native search automatically. To opt in when the endpoint supports Anthropic's
+hosted web-search tool, set
+`models.providers.<provider>.models[].supportsAnthropicServerWebSearch: true` on that
+model.
 
 See [Brave Search setup](/brave-search) and [Perplexity Sonar](/perplexity) for
 provider-specific details.
@@ -151,7 +169,10 @@ Search the web using your configured provider.
 ### Requirements
 
 - `tools.web.search.enabled` must not be `false` (default: enabled)
-- API key for your chosen provider:
+- On genuine Anthropic models (first-party API key or Claude subscription OAuth), **no key
+  is required**: the search runs on Anthropic's native server-side tool by default.
+- Otherwise (non-Anthropic models, or when you pin `tools.web.search.provider`), an API
+  key for your chosen provider:
   - **Brave**: `BRAVE_API_KEY` or `tools.web.search.apiKey`
   - **Perplexity**: `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, or
     `tools.web.search.perplexity.apiKey`
@@ -166,6 +187,7 @@ Search the web using your configured provider.
         enabled: true,
         apiKey: "BRAVE_API_KEY_HERE", // optional if BRAVE_API_KEY is set
         maxResults: 5,
+        maxUses: 5, // cap per Messages API request for Anthropic native search
         timeoutSeconds: 30,
         cacheTtlMinutes: 15,
       },
