@@ -205,7 +205,10 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // Test-only: a bot listed in OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS is treated like
   // a human for access control, so it must pass the bot filter here (rather than
   // being dropped as an untrusted bot) and then face the ownership gate below.
-  const ownerGatedBot = isBot && !!authorId && ownerGatedBotIds.has(authorId);
+  // Exclude the router's own id (as isConversationalBot does): Discord echoes our
+  // replies back as MESSAGE_CREATE, so gating self would let a denial reply loop.
+  const ownerGatedBot =
+    isBot && !!authorId && authorId !== applicationId && ownerGatedBotIds.has(authorId);
   if (
     !authorId ||
     (isBot && !botAllowed && !ownerGatedBot) ||

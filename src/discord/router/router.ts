@@ -625,6 +625,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 channelQueue,
                 recoveredMessageIds,
                 allowedBotIds,
+                ownerGatedBotIds,
                 // Apply the same guild access control as live messages so a
                 // non-owner's message in a shared guild channel is not replayed
                 // to the agent on restart.
@@ -841,6 +842,15 @@ async function recoverUnansweredMessages(
    * recoverable; every other bot's message is treated as a reply/banner.
    */
   allowedBotIds: Set<string>,
+  /**
+   * Test-only owner-gated bot ids (OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS). These are
+   * also trusted conversational bots, but the live path subjects them to the
+   * channel-owner gate rather than letting them bypass it. Recovery must not treat
+   * them as trusted-and-always-recoverable, or a message that would be denied live
+   * could be routed after a reconnect; so they are excluded from the trusted-bot
+   * fast path and left subject to the owner check below.
+   */
+  ownerGatedBotIds: Set<string>,
   /** Same guild access control applied to live messages (owner only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
@@ -912,7 +922,9 @@ async function recoverUnansweredMessages(
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
         const isTrustedBot = Boolean(
-          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
+          msg.author.bot &&
+          isConversationalBot(msg.author.id, botId, allowedBotIds) &&
+          !(msg.author.id && ownerGatedBotIds.has(msg.author.id)),
         );
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {

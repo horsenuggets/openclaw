@@ -289,6 +289,14 @@ describe("discord router channel-delete cleanup", () => {
     // unauthorized-access denial: unlike a trusted conversational bot it does not
     // bypass the ownership gate, and unlike an untrusted bot it is not dropped by
     // the bot filter — it is treated like a human non-owner and denied.
+    //
+    // The real mirror driver is trusted too (it is OPENCLAW_MOCK_USER_BOT_ID), so
+    // mark the same id trusted here. That covers the deployed combination and proves
+    // owner-gating overrides the trusted-bot bypass: with only the gate env set the
+    // test would still pass even if the override were removed (botAllowed is false),
+    // but with the bot also trusted the denial can only fire because owner-gating
+    // wins over the bypass.
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "gated-bot");
     vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
     const posts: RequestInit[] = [];
     vi.stubGlobal(
