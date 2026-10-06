@@ -138,9 +138,9 @@
   (persona/`SOUL.md`, onboarding, routing, command gating) in a real Discord channel
   before merging, use `scripts/prod-mirror.sh` against the OpenClaw Lab test server. The
   full procedure (setup, deploying branch code, the mock-user driver pattern, gotchas)
-  lives in `.claude/docs/prod-mirror-e2e-testing.md`, a local git-excluded file (it holds
-  the lab's real bot/guild ids, so it is not committed; it may be absent on a fresh
-  clone).
+  lives in `.claude/docs/prod-mirror-e2e-testing.md` (tracked). The real lab guild/bot ids
+  stay out of that doc; read them from the gitignored `.env.mirror` /
+  `.prod-mirror/box.env` at runtime.
 - **Never leave gateway processes running.** If you do start a gateway or watchdog for
   testing, you MUST stop it before finishing your task. Run `pnpm gateway:killall` to
   clean up.
