@@ -1,0 +1,18 @@
+diff --git a/dist/providers/anthropic.js b/dist/providers/anthropic.js
+index 1954cc92887793559c3b73c15bb84db4b5af0d93..28a782973b88c9e2b57f8b405aa3849e6fddb891 100644
+--- a/dist/providers/anthropic.js
++++ b/dist/providers/anthropic.js
+@@ -634,6 +634,13 @@ function convertTools(tools, isOAuthToken) {
+     if (!tools)
+         return [];
+     return tools.map((tool) => {
++        // Anthropic server-side tools (e.g. web search) are executed by the API,
++        // not the client. They are emitted with their wire `type` and canonical
++        // name (never Claude Code-mangled) and carry no client input_schema.
++        const serverTool = tool.anthropicServerTool;
++        if (serverTool && serverTool.type) {
++            return { type: serverTool.type, name: tool.name, ...(serverTool.config || {}) };
++        }
+         const jsonSchema = tool.parameters; // TypeBox already generates JSON Schema
+         return {
+             name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name,

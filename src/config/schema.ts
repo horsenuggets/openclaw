@@ -192,6 +192,7 @@ const FIELD_LABELS: Record<string, string> = {
   "tools.web.search.provider": "Web Search Provider",
   "tools.web.search.apiKey": "Brave Search API Key",
   "tools.web.search.maxResults": "Web Search Max Results",
+  "tools.web.search.maxUses": "Web Search Max Uses (per request)",
   "tools.web.search.timeoutSeconds": "Web Search Timeout (sec)",
   "tools.web.search.cacheTtlMinutes": "Web Search Cache TTL (min)",
   "tools.web.fetch.enabled": "Enable Web Fetch Tool",
@@ -470,10 +471,13 @@ const FIELD_HELP: Record<string, string> = {
   "tools.message.crossContext.marker.suffix":
     'Text suffix for cross-context markers (supports "{channel}").',
   "tools.message.broadcast.enabled": "Enable broadcast action (default: true).",
-  "tools.web.search.enabled": "Enable the web_search tool (requires a provider API key).",
+  "tools.web.search.enabled":
+    "Enable the web_search tool. Uses Anthropic native server-side search on Anthropic models (no key); other models/providers need a Brave or Perplexity API key.",
   "tools.web.search.provider": 'Search provider ("brave" or "perplexity").',
   "tools.web.search.apiKey": "Brave Search API key (fallback: BRAVE_API_KEY env var).",
   "tools.web.search.maxResults": "Default number of results to return (1-10).",
+  "tools.web.search.maxUses":
+    "Max web searches Anthropic native server-side search may run per model request (default 5).",
   "tools.web.search.timeoutSeconds": "Timeout in seconds for web_search requests.",
   "tools.web.search.cacheTtlMinutes": "Cache TTL in minutes for web_search results.",
   "tools.web.search.perplexity.apiKey":

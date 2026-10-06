@@ -89,18 +89,41 @@ async function promptChannelMode(runtime: RuntimeEnv): Promise<ChannelsWizardMod
   ) as ChannelsWizardMode;
 }
 
-async function promptWebToolsConfig(
+export async function promptWebToolsConfig(
   nextConfig: OpenClawConfig,
   runtime: RuntimeEnv,
 ): Promise<OpenClawConfig> {
   const existingSearch = nextConfig.tools?.web?.search;
   const existingFetch = nextConfig.tools?.web?.fetch;
-  const hasSearchKey = Boolean(existingSearch?.apiKey);
+  // Trim so a whitespace-only stored key is not treated as present: runtime key
+  // resolution trims the same value to empty, so pinning Brave off it would fail
+  // with missing_brave_api_key and needlessly disable keyless native search.
+  const hasSearchKey = Boolean(existingSearch?.apiKey?.trim());
+  // A Brave key supplied via the environment counts too: the wizard's documented
+  // flow lets users leave the prompt blank and rely on BRAVE_API_KEY.
+  const hasEnvBraveKey = Boolean(process.env.BRAVE_API_KEY?.trim());
+  // Perplexity resolves its key from config or either of two env vars (mirrors
+  // resolvePerplexityApiKey), so the no-key warning for a perplexity-pinned
+  // config must check those sources rather than the Brave ones.
+  const hasPerplexityKey = Boolean(
+    existingSearch?.perplexity?.apiKey?.trim() ||
+    process.env.PERPLEXITY_API_KEY?.trim() ||
+    process.env.OPENROUTER_API_KEY?.trim(),
+  );
+  // Does the currently pinned provider (if any) already have a usable key?
+  const pinnedProviderHasKey =
+    existingSearch?.provider === "perplexity"
+      ? hasPerplexityKey
+      : existingSearch?.provider === "brave"
+        ? hasSearchKey || hasEnvBraveKey
+        : false;
 
   note(
     [
       "Web search lets your agent look things up online using the `web_search` tool.",
-      "It requires a Brave Search API key (you can store it in the config or set BRAVE_API_KEY in the Gateway environment).",
+      "On Anthropic models it runs on Anthropic's native server-side search (no key).",
+      "Other models use a Brave Search API key (stored in config or BRAVE_API_KEY), or",
+      "Perplexity. web_search is enabled by default.",
       "Docs: https://docs.openclaw.ai/tools/web",
     ].join("\n"),
     "Web search",
@@ -108,8 +131,11 @@ async function promptWebToolsConfig(
 
   const enableSearch = guardCancel(
     await confirm({
-      message: "Enable web_search (Brave Search)?",
-      initialValue: existingSearch?.enabled ?? hasSearchKey,
+      message: "Enable web_search?",
+      // web_search is enabled by default at runtime (and keyless on Anthropic
+      // models), so default this prompt to enabled rather than to key presence;
+      // otherwise accepting the default on a fresh config would disable it.
+      initialValue: existingSearch?.enabled ?? true,
     }),
     runtime,
   );
@@ -131,12 +157,41 @@ async function promptWebToolsConfig(
     );
     const key = String(keyInput ?? "").trim();
     if (key) {
-      nextSearch = { ...nextSearch, apiKey: key };
-    } else if (!hasSearchKey) {
+      // Pin provider to Brave so the key is honored even on genuine Anthropic
+      // models, where an unset provider would otherwise prefer Anthropic's
+      // native server-side search and silently ignore this key.
+      nextSearch = { ...nextSearch, apiKey: key, provider: "brave" };
+    } else if ((hasSearchKey || hasEnvBraveKey) && !existingSearch?.provider) {
+      // A Brave key is already available (stored in config, or via BRAVE_API_KEY
+      // in the environment) and no provider is pinned. This is the documented
+      // Brave flow the user just enabled, so pin Brave; otherwise an unset
+      // provider would silently select native search on Anthropic models and
+      // ignore the Brave key the user intended to use.
+      nextSearch = { ...nextSearch, provider: "brave" };
+    } else if (existingSearch?.provider) {
+      // A provider is pinned (so native keyless search is disabled). Warn only
+      // when that specific provider has no usable key, checking the credential
+      // sources that match the pinned provider (not just Brave's).
+      if (!pinnedProviderHasKey) {
+        note(
+          [
+            `No ${existingSearch.provider} key found (config or environment). While`,
+            `tools.web.search.provider is pinned to "${existingSearch.provider}", web_search`,
+            "needs that provider's key. Remove the pinned provider to use Anthropic's keyless",
+            "native search on Anthropic models, or add the key here or in the environment.",
+            "Docs: https://docs.openclaw.ai/tools/web",
+          ].join("\n"),
+          "Web search",
+        );
+      }
+    } else if (!hasSearchKey && !hasEnvBraveKey) {
+      // No provider pinned and no Brave key: native keyless search still covers
+      // Anthropic models; other models need a Brave key.
       note(
         [
-          "No key stored yet, so web_search will stay unavailable.",
-          "Store a key here or set BRAVE_API_KEY in the Gateway environment.",
+          "No Brave key found (config or BRAVE_API_KEY). On Anthropic models web_search",
+          "still works via native server-side search; other models need a Brave key here",
+          "or BRAVE_API_KEY in the Gateway environment.",
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",

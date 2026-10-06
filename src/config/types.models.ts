@@ -19,6 +19,7 @@ export type ModelDefinitionConfig = {
   id: string;
   name: string;
   api?: ModelApi;
+  supportsAnthropicServerWebSearch?: boolean;
   reasoning: boolean;
   input: Array<"text" | "image">;
   cost: {

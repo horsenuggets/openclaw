@@ -8,7 +8,7 @@ import type { ClientToolDefinition } from "./pi-embedded-runner/run/params.js";
 import { logDebug, logError } from "../logger.js";
 import { runBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
 import { normalizeToolName } from "./tool-policy.js";
-import { jsonResult } from "./tools/common.js";
+import { getAnthropicServerTool, jsonResult } from "./tools/common.js";
 
 // oxlint-disable-next-line typescript/no-explicit-any
 type AnyAgentTool = AgentTool<any, unknown>;
@@ -85,11 +85,16 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
   return tools.map((tool) => {
     const name = tool.name || "tool";
     const normalizedName = normalizeToolName(name);
+    // Preserve the Anthropic server-tool marker through this conversion (this
+    // is the one spot that rebuilds the object instead of spreading it). The
+    // patched pi-ai convertTools reads it to emit a server tool on the wire.
+    const anthropicServerTool = getAnthropicServerTool(tool);
     return {
       name,
       label: tool.label ?? name,
       description: tool.description ?? "",
       parameters: tool.parameters,
+      ...(anthropicServerTool ? { anthropicServerTool } : {}),
       execute: async (...args: ToolExecuteArgs): Promise<AgentToolResult<unknown>> => {
         const { toolCallId, params, onUpdate, signal } = splitToolExecuteArgs(args);
         try {

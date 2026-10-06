@@ -6,6 +6,32 @@ import { sanitizeToolResultImages } from "../tool-images.js";
 // oxlint-disable-next-line typescript/no-explicit-any
 export type AnyAgentTool = AgentTool<any, unknown>;
 
+/**
+ * Marker attached to a tool to request that it be emitted as an Anthropic
+ * server-side tool (executed by the API, not the client) rather than a normal
+ * custom tool with a client input schema. The patched pi-ai `convertTools`
+ * reads this off the tool object and emits `{ type, name, ...config }`.
+ */
+export type AnthropicServerTool = {
+  /** Anthropic server tool wire type, e.g. "web_search_20250305". */
+  type: string;
+  /** Extra fields merged into the tool sent to Anthropic (e.g. `max_uses`). */
+  config?: Record<string, unknown>;
+};
+
+/** Read the Anthropic server-tool marker off a tool object, if present. */
+export function getAnthropicServerTool(tool: unknown): AnthropicServerTool | undefined {
+  if (!tool || typeof tool !== "object") {
+    return undefined;
+  }
+  const marker = (tool as { anthropicServerTool?: unknown }).anthropicServerTool;
+  if (!marker || typeof marker !== "object") {
+    return undefined;
+  }
+  const type = (marker as { type?: unknown }).type;
+  return typeof type === "string" && type ? (marker as AnthropicServerTool) : undefined;
+}
+
 export type StringParamOptions = {
   required?: boolean;
   trim?: boolean;

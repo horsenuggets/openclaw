@@ -336,12 +336,28 @@ export type ToolsConfig = {
     search?: {
       /** Enable web search tool (default: true when API key is present). */
       enabled?: boolean;
-      /** Search provider ("brave" or "perplexity"). */
+      /**
+       * Search provider ("brave" or "perplexity"). On genuine Anthropic models
+       * (the `anthropic`/`anthropic-subscription` providers on Anthropic's
+       * first-party endpoint, or a custom endpoint with
+       * `supportsAnthropicServerWebSearch: true`), leaving this unset uses
+       * Anthropic's native server-side web search (no key). Providers that only
+       * speak the anthropic-messages wire (MiniMax, Synthetic, Xiaomi, custom
+       * pass-throughs) and all other models fall back to the Brave client tool.
+       * Set this explicitly to force Brave/Perplexity.
+       */
       provider?: "brave" | "perplexity";
       /** Brave Search API key (optional; defaults to BRAVE_API_KEY env var). */
       apiKey?: string;
       /** Default search results count (1-10). */
       maxResults?: number;
+      /**
+       * Cap on searches Anthropic's native server-side web search may run per
+       * Messages API request (maps to the tool's `max_uses`; default: 5). Note
+       * this is per request, not per agent turn: a turn that issues more than
+       * one model request resets the allowance each request.
+       */
+      maxUses?: number;
       /** Timeout in seconds for search requests. */
       timeoutSeconds?: number;
       /** Cache TTL in minutes for search results. */
