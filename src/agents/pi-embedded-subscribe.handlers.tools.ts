@@ -42,7 +42,17 @@ export async function handleToolExecutionStart(
 ) {
   if (ctx.params.onBlockReplyDiscard) {
     const hasUnflushedText = ctx.blockChunker?.hasBuffered() || ctx.state.blockBuffer.length > 0;
-    if (hasUnflushedText) {
+    if (hasUnflushedText && ctx.state.heldTailCrossedTextEnd) {
+      // The buffered tail is a finished text block held back only to coalesce
+      // (it crossed text_end but did not end at a sentence/paragraph boundary,
+      // e.g. "Let me check"). It is intentional pre-tool text, so flush it
+      // rather than discarding it as hedging.
+      ctx.flushBlockReplyBuffer();
+      ctx.state.heldTailCrossedTextEnd = false;
+      if (ctx.params.onBlockReplyFlush) {
+        void ctx.params.onBlockReplyFlush();
+      }
+    } else if (hasUnflushedText) {
       // Mid-stream text: tool started before text_end. Likely
       // hedging (e.g., "I don't have access..." right before a
       // successful exec). Discard to suppress misleading text.

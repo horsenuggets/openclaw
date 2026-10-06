@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Block streaming: coalesce consecutive assistant text blocks so a reply is no longer
+  fragmented into several messages (including a lone "."). Anthropic's native web search
+  returns a cited answer as many small `text` blocks (one per cited span, with trailing
+  punctuation as its own block); the block-reply streamer now only flushes a text block's
+  leftover tail on `text_end` when it ends at a sentence or paragraph boundary, holding it
+  to merge with the next block otherwise (still force-flushed at tool start and message
+  end). Block replies also no longer open with blank lines.
 - Deploy: only start the whisper speech-to-text container when both artifacts it needs are
   present on the host: the `whisper-server` binary and the `ggml-base.en.bin` model. When
   either was missing the container crash-looped (exit 126) every couple of seconds,

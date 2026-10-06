@@ -46,6 +46,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     streamReasoning: reasoningMode === "stream" && typeof params.onReasoningStream === "function",
     deltaBuffer: "",
     blockBuffer: "",
+    heldTailCrossedTextEnd: false,
     // Track if a streamed chunk opened a <think> block (stateful across chunks).
     blockState: { thinking: false, final: false, inlineCode: createInlineCodeState() },
     partialBlockState: { thinking: false, final: false, inlineCode: createInlineCodeState() },
@@ -87,6 +88,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   const resetAssistantMessageState = (nextAssistantTextBaseline: number) => {
     state.deltaBuffer = "";
     state.blockBuffer = "";
+    state.heldTailCrossedTextEnd = false;
     blockChunker?.reset();
     replyDirectiveAccumulator.reset();
     partialReplyDirectiveAccumulator.reset();
@@ -404,8 +406,15 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     if (state.suppressBlockChunks) {
       return;
     }
-    // Strip <think> and <final> blocks across chunk boundaries to avoid leaking reasoning.
-    const chunk = stripBlockTags(text, state.blockState).trimEnd();
+    // Strip <think> and <final> blocks across chunk boundaries to avoid leaking
+    // reasoning. Also drop leading blank lines so a chunk never opens with empty
+    // lines (a paragraph separator can lead a coalesced block when the break
+    // landed at buffer start, e.g. between native web-search citation blocks).
+    // Matches complete leading blank-line sequences, including horizontal
+    // whitespace and CRLF, while preserving indentation on the first real line.
+    const chunk = stripBlockTags(text, state.blockState)
+      .replace(/^(?:[ \t]*\r?\n)+/, "")
+      .trimEnd();
     if (!chunk) {
       return;
     }

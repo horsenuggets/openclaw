@@ -134,6 +134,21 @@ describe("subscribeEmbeddedPiSession", () => {
         assistantMessageEvent: { type: "text_end" },
       });
 
+      // A non-sentence-terminated final tail ("Final answer") coalesces and is
+      // flushed on message_end, which always follows text_end in a real stream.
+      handler?.({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: `${open}Reasoning chunk that should not leak${close}\n\nFinal answer`,
+            },
+          ],
+        },
+      });
+
       const payloadTexts = onBlockReply.mock.calls
         .map((call) => call[0]?.text)
         .filter((value): value is string => typeof value === "string");
