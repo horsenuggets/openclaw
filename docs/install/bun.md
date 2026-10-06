@@ -59,6 +59,14 @@ If you hit a real runtime issue that requires these scripts, trust them explicit
 bun pm trust @whiskeysockets/baileys protobufjs
 ```
 
+## Dependency patches
+
+- This repo patches a couple of dependencies (for example to route Anthropic native web
+  search to the wire). Patches are declared twice so both package managers apply them:
+  under `pnpm.patchedDependencies` (for pnpm) and under the top-level
+  `patchedDependencies` (for Bun). Keep the two lists in sync when adding, changing, or
+  removing a patch, or Bun installs will get the stock, unpatched dependency.
+
 ## Caveats
 
 - Some scripts still hardcode pnpm (e.g. `docs:build`, `ui:*`, `protocol:check`). Run
