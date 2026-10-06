@@ -118,15 +118,25 @@ export function createToolSearchTool(
 
       if (matches.length === 0) {
         return {
-          type: "text" as const,
-          text: `No deferred tools match "${query}". Available deferred tools: ${[...deferred.values()].map((t) => t.name).join(", ")}`,
+          content: [
+            {
+              type: "text" as const,
+              text: `No deferred tools match "${query}". Available deferred tools: ${[...deferred.values()].map((t) => t.name).join(", ")}`,
+            },
+          ],
+          details: { loaded: [] as string[] },
         };
       }
 
       const lines = matches.map((t) => `- ${t.name}: ${t.description}`);
       return {
-        type: "text" as const,
-        text: `Loaded ${matches.length} tool(s). They are now available for use:\n${lines.join("\n")}`,
+        content: [
+          {
+            type: "text" as const,
+            text: `Loaded ${matches.length} tool(s). They are now available for use:\n${lines.join("\n")}`,
+          },
+        ],
+        details: { loaded: matches.map((t) => t.name) },
       };
     },
   } as unknown as AnyAgentTool;
