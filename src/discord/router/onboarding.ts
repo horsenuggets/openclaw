@@ -11,7 +11,7 @@ export function buildWelcomeEmbed(): BuiltEmbed {
     category: "general",
     title: "Welcome to OpenClaw!",
     description:
-      "I'm your personal everything-assistant. Let's get you set up! I'll ask you a few quick questions to personalize your experience.",
+      "I'm your personal everything-assistant. I can help with almost anything - questions, code, reminders, the web, and more. Nice to meet you!",
     thumbnail: "openclaw.png",
   });
 }
