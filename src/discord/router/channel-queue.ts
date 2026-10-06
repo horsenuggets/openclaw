@@ -89,6 +89,21 @@ type ChannelState = {
    * starts.
    */
   bufferRest: boolean;
+  /**
+   * Count of steer attempts queued on {@link steerChain} that have not settled.
+   * Keeps outstanding steer work part of the channel's busy lifecycle: state is
+   * not cleaned up, and later arrivals keep ordering behind it, until it reaches
+   * zero. Without this a steer could outlive its run — cleanup would drop the
+   * state and a newer message would run ahead of the older, still-pending one.
+   */
+  pendingSteers: number;
+  /**
+   * Bumped by {@link ChannelQueue.clear} (instance removed/replaced). A steer
+   * attempt captures the generation when queued and drops its message if the
+   * generation changed by the time it settles, so a prior instance's message is
+   * never buffered for the replacement.
+   */
+  generation: number;
 };
 
 /**
@@ -143,29 +158,37 @@ export class ChannelQueue {
         timer: null,
         steerChain: Promise.resolve(),
         bufferRest: false,
+        pendingSteers: 0,
+        generation: 0,
       };
       this.channels.set(channelId, state);
     }
     return state;
   }
 
-  /** True when a turn is running or messages are buffered for this channel. */
+  /** True when a turn is running, messages are buffered, or a steer is pending. */
   isBusy(channelId: string): boolean {
     const state = this.channels.get(channelId);
-    return Boolean(state && (state.running || state.pending.length > 0));
+    return Boolean(state && (state.running || state.pending.length > 0 || state.pendingSteers > 0));
   }
 
   /**
-   * Accept a message for a channel. When a normal turn is already running and a
-   * steer hook is configured, try to inject it into the live run (so the agent
-   * sees it mid-turn); otherwise buffer it for a debounced, coalesced turn. A
-   * reserved (onboarding-kick) hold never steers — see {@link ChannelState}.
+   * Accept a message for a channel. When a normal turn is running (or a steer is
+   * still in flight) and a steer hook is configured, chain it through the
+   * per-channel steer tail so it is tried in arrival order and injected into the
+   * live run; otherwise buffer it for a debounced, coalesced turn. A reserved
+   * (onboarding-kick) hold never steers — see {@link ChannelState}.
    */
   enqueue(channelId: string, turn: ChannelTurn): void {
     const state = this.state(channelId);
-    if (state.running && !state.reserved && this.steer) {
-      // Chain onto the per-channel steer tail so attempts run in arrival order.
-      state.steerChain = state.steerChain.then(() => this.steerOrBuffer(channelId, turn));
+    // Route through the steer chain while a turn is running OR an earlier steer
+    // is still settling, so a later arrival can never run ahead of it.
+    if (!state.reserved && this.steer && (state.running || state.pendingSteers > 0)) {
+      state.pendingSteers += 1;
+      const generation = state.generation;
+      state.steerChain = state.steerChain.then(() =>
+        this.steerOrBuffer(channelId, turn, generation),
+      );
       return;
     }
     this.buffer(channelId, turn);
@@ -182,29 +205,47 @@ export class ChannelQueue {
   }
 
   /** Try mid-turn injection; fall back to buffering if the run didn't accept it. */
-  private async steerOrBuffer(channelId: string, turn: ChannelTurn): Promise<void> {
+  private async steerOrBuffer(
+    channelId: string,
+    turn: ChannelTurn,
+    generation: number,
+  ): Promise<void> {
     const state = this.state(channelId);
-    // The turn ended while this attempt waited its turn in the chain, or an
-    // earlier arrival already had to buffer this run: either way, buffer to keep
-    // FIFO (never inject a later message ahead of an already-buffered earlier one).
-    if (!state.running || state.bufferRest) {
-      this.buffer(channelId, turn);
-      return;
-    }
-    let accepted = false;
     try {
-      accepted = await this.steer!(channelId, turn);
-    } catch {
-      accepted = false;
+      // The channel was cleared/replaced (instance removed or re-registered)
+      // after this was queued: drop it rather than deliver it to a new instance.
+      if (state.generation !== generation) {
+        return;
+      }
+      // The turn ended while this attempt waited its turn in the chain, or an
+      // earlier arrival already had to buffer this run: buffer to keep FIFO (never
+      // inject a later message ahead of an already-buffered earlier one).
+      if (!state.running || state.bufferRest) {
+        this.buffer(channelId, turn);
+        return;
+      }
+      let accepted = false;
+      try {
+        accepted = await this.steer!(channelId, turn);
+      } catch {
+        accepted = false;
+      }
+      // Re-check: a clear() may have landed while the steer call was in flight.
+      if (state.generation !== generation) {
+        return;
+      }
+      if (accepted) {
+        this.log?.(`[router] channel ${channelId} steered message into the active turn`);
+        return;
+      }
+      // Not accepted (run ended, mid-compaction, or carries attachments): run it
+      // as the next turn, and keep every later arrival this run in the same backlog.
+      state.bufferRest = true;
+      this.buffer(channelId, turn);
+    } finally {
+      state.pendingSteers = Math.max(0, state.pendingSteers - 1);
+      this.cleanup(channelId);
     }
-    if (accepted) {
-      this.log?.(`[router] channel ${channelId} steered message into the active turn`);
-      return;
-    }
-    // Not accepted (run ended, or mid-compaction, or carries attachments): run it
-    // as the next turn, and keep every later arrival this run in the same backlog.
-    state.bufferRest = true;
-    this.buffer(channelId, turn);
   }
 
   /**
@@ -215,7 +256,7 @@ export class ChannelQueue {
    */
   reserve(channelId: string): boolean {
     const state = this.state(channelId);
-    if (state.running || state.pending.length > 0) {
+    if (state.running || state.pending.length > 0 || state.pendingSteers > 0) {
       return false;
     }
     state.running = true;
@@ -257,7 +298,12 @@ export class ChannelQueue {
       state.timer = null;
     }
     state.pending = [];
-    if (!state.running) {
+    state.bufferRest = false;
+    // Invalidate any in-flight steer: when it settles it will see the changed
+    // generation and drop its message instead of buffering it for the new
+    // instance. The state object is kept until that outstanding work settles.
+    state.generation += 1;
+    if (!state.running && state.pendingSteers === 0) {
       this.channels.delete(channelId);
     }
   }
@@ -311,7 +357,13 @@ export class ChannelQueue {
   /** Drop empty, idle channel state so the map doesn't grow unbounded. */
   private cleanup(channelId: string): void {
     const state = this.channels.get(channelId);
-    if (state && !state.running && state.pending.length === 0 && !state.timer) {
+    if (
+      state &&
+      !state.running &&
+      state.pending.length === 0 &&
+      state.pendingSteers === 0 &&
+      !state.timer
+    ) {
       this.channels.delete(channelId);
     }
   }
