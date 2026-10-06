@@ -27,10 +27,20 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+# Preserve a caller-provided mirror token before sourcing .env: .env may also
+# assign OPENCLAW_MIRROR_DISCORD_TOKEN (even empty), which would otherwise discard
+# the caller's explicit override. Restored after the load so the caller wins.
+CALLER_MIRROR_TOKEN="${OPENCLAW_MIRROR_DISCORD_TOKEN:-}"
+
 set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
+
+if [ -n "$CALLER_MIRROR_TOKEN" ]; then
+  OPENCLAW_MIRROR_DISCORD_TOKEN="$CALLER_MIRROR_TOKEN"
+  export OPENCLAW_MIRROR_DISCORD_TOKEN
+fi
 
 # Resolve the mirror (target) token. The overlay stores it as DISCORD_BOT_TOKEN
 # (it overrides the base prod token when the mirror rig sources it), so read it in
