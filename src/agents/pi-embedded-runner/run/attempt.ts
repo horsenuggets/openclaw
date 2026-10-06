@@ -265,6 +265,13 @@ export async function runEmbeddedAttempt(
           modelProvider: params.model.provider,
           modelId: params.modelId,
           modelApi: params.model.api,
+          modelBaseUrl: params.model.baseUrl,
+          modelSupportsAnthropicServerWebSearch:
+            (
+              params.model as typeof params.model & {
+                supportsAnthropicServerWebSearch?: boolean;
+              }
+            ).supportsAnthropicServerWebSearch === true,
           modelAuthMode: resolveModelAuthMode(params.model.provider, params.config),
           currentChannelId: params.currentChannelId,
           currentThreadTs: params.currentThreadTs,

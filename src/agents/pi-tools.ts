@@ -65,16 +65,39 @@ function isOpenAIProvider(provider?: string) {
 // pass-throughs) also speak anthropic-messages but do not implement the hosted
 // tool, so gating on the transport alone would send them an unsupported
 // server-tool payload. Require both the transport AND a genuine Anthropic
-// provider (first-party API key or Claude subscription OAuth).
+// provider (first-party API key or Claude subscription OAuth). Custom endpoints
+// require an explicit model capability opt-in.
 export function supportsAnthropicServerWebSearch(params: {
   modelApi?: string;
   modelProvider?: string;
+  modelBaseUrl?: string;
+  modelSupportsAnthropicServerWebSearch?: boolean;
 }): boolean {
   if (params.modelApi !== "anthropic-messages") {
     return false;
   }
   const provider = normalizeProviderId(params.modelProvider ?? "");
-  return provider === "anthropic" || provider === "anthropic-subscription";
+  if (provider !== "anthropic" && provider !== "anthropic-subscription") {
+    return false;
+  }
+  if (params.modelSupportsAnthropicServerWebSearch === true) {
+    return true;
+  }
+  if (!params.modelBaseUrl) {
+    return true;
+  }
+  try {
+    const endpoint = new URL(params.modelBaseUrl);
+    return (
+      endpoint.protocol === "https:" &&
+      endpoint.hostname === "api.anthropic.com" &&
+      !endpoint.port &&
+      !endpoint.username &&
+      !endpoint.password
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isApplyPatchAllowedForModel(params: {
@@ -155,6 +178,8 @@ export function createOpenClawCodingTools(options?: {
    * native server-side web search over the Brave/Perplexity client tool.
    */
   modelApi?: string;
+  modelBaseUrl?: string;
+  modelSupportsAnthropicServerWebSearch?: boolean;
   /**
    * Auth mode for the current provider. We only need this for Anthropic OAuth
    * tool-name blocking quirks.
@@ -385,6 +410,8 @@ export function createOpenClawCodingTools(options?: {
       preferAnthropicServerWebSearch: supportsAnthropicServerWebSearch({
         modelApi: options?.modelApi,
         modelProvider: options?.modelProvider,
+        modelBaseUrl: options?.modelBaseUrl,
+        modelSupportsAnthropicServerWebSearch: options?.modelSupportsAnthropicServerWebSearch,
       }),
     }),
   ];

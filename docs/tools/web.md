@@ -48,6 +48,12 @@ On a genuine Anthropic model (first-party API key or Claude subscription OAuth),
 merely speak the anthropic-messages wire (MiniMax, Synthetic, Xiaomi, custom
 pass-throughs) and all non-Anthropic models default to Brave.
 
+Custom endpoints configured under the `anthropic` or `anthropic-subscription` provider do
+not enable native search automatically. To opt in when the endpoint supports Anthropic's
+hosted web-search tool, set
+`models.providers.<provider>.models[].supportsAnthropicServerWebSearch: true` on that
+model.
+
 See [Brave Search setup](/brave-search) and [Perplexity Sonar](/perplexity) for
 provider-specific details.
 

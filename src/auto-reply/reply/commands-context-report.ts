@@ -3,8 +3,9 @@ import type { ReplyPayload } from "../types.js";
 import type { HandleCommandsParams } from "./commands-types.js";
 import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
-import { normalizeProviderId, resolveDefaultModelForAgent } from "../../agents/model-selection.js";
+import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { resolveBootstrapMaxChars } from "../../agents/pi-embedded-helpers.js";
+import { resolveModel } from "../../agents/pi-embedded-runner/model.js";
 import { resolveWorkspaceContextDelivery } from "../../agents/pi-embedded-runner/workspace-context.js";
 import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
@@ -90,16 +91,23 @@ async function resolveContextReport(
     cfg: params.cfg,
     sessionKey: params.ctx.SessionKey ?? params.sessionKey,
   });
-  // Genuine Anthropic providers always use the anthropic-messages transport.
-  // Pass it through so the fallback /context report reconstructs the same tool
-  // shape the live run uses (native web_search vs the Brave client schema);
-  // otherwise Anthropic sessions without a stored run report would show the
-  // wrong tool description and skewed context/token estimates.
-  const normalizedProvider = normalizeProviderId(params.provider ?? "");
-  const modelApi =
-    normalizedProvider === "anthropic" || normalizedProvider === "anthropic-subscription"
-      ? "anthropic-messages"
-      : undefined;
+  // Resolve the selected model so transport overrides and custom endpoints use
+  // the same web_search shape as a live run.
+  const model = (() => {
+    try {
+      return resolveModel(params.provider, params.model, undefined, params.cfg).model;
+    } catch {
+      return undefined;
+    }
+  })();
+  const modelConfig = params.cfg?.models?.providers?.[params.provider];
+  const configuredModel = modelConfig?.models?.find((entry) => entry.id === params.model);
+  const modelApi = configuredModel?.api ?? modelConfig?.api ?? model?.api;
+  const modelBaseUrl = modelConfig?.baseUrl ?? model?.baseUrl;
+  const modelSupportsAnthropicServerWebSearch =
+    configuredModel?.supportsAnthropicServerWebSearch ??
+    (model as (typeof model & { supportsAnthropicServerWebSearch?: boolean }) | undefined)
+      ?.supportsAnthropicServerWebSearch;
   const tools = (() => {
     try {
       return createOpenClawCodingTools({
@@ -115,6 +123,8 @@ async function resolveContextReport(
         modelProvider: params.provider,
         modelId: params.model,
         modelApi,
+        modelBaseUrl,
+        modelSupportsAnthropicServerWebSearch,
       });
     } catch {
       return [];

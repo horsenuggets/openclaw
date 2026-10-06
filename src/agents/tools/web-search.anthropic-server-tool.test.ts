@@ -1,26 +1,9 @@
+import { streamSimple, type Model, type Tool } from "@mariozechner/pi-ai";
 import { wrapRegisteredTool } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { toToolDefinitions } from "../pi-tool-definition-adapter.js";
 import { getAnthropicServerTool } from "./common.js";
 import { createWebSearchTool } from "./web-search.js";
-
-// Mirror of the patched pi-ai `convertTools` emit for a marked server tool
-// (patches/@mariozechner__pi-ai@0.52.5.patch). The real function is not
-// exported from pi-ai, so we pin its contract here: a marked tool is emitted
-// with its wire `type`, its canonical (never OAuth-mangled) name, the merged
-// config, and NO client `input_schema`. This fails loudly if the patch's shape
-// ever drifts from what the Anthropic transport expects.
-function convertMarkedToolLikePiAi(tool: {
-  name: string;
-  anthropicServerTool?: { type: string; config?: Record<string, unknown> };
-}): Record<string, unknown> {
-  const serverTool = tool.anthropicServerTool;
-  if (serverTool && serverTool.type) {
-    return { type: serverTool.type, name: tool.name, ...serverTool.config };
-  }
-  // Non-marked tools go through the normal custom-tool path (client schema).
-  return { name: tool.name, input_schema: {} };
-}
 
 describe("web_search Anthropic server-tool mode", () => {
   it("emits a server-tool marker on anthropic-messages models", () => {
@@ -99,25 +82,60 @@ describe("web_search Anthropic server-tool mode", () => {
     });
   });
 
-  it("emits a server-tool wire payload (type + canonical name + max_uses, no input_schema)", () => {
+  it("sends a server-tool payload through the Anthropic transport", async () => {
     const tool = createWebSearchTool({
       config: { tools: { web: { search: { maxUses: 7 } } } },
       preferAnthropicServerTool: true,
     })!;
-    // Run the tool through the pi-coding-agent seam, then through the pi-ai
-    // convertTools contract, and assert the final Anthropic request payload.
+    const [definition] = toToolDefinitions([tool]);
     const fakeRunner = { createContext: () => ({}) } as never;
-    const wrapped = wrapRegisteredTool({ definition: tool } as never, fakeRunner) as {
-      name: string;
-      anthropicServerTool?: { type: string; config?: Record<string, unknown> };
-    };
-    const wirePayload = convertMarkedToolLikePiAi(wrapped);
-    expect(wirePayload).toEqual({
+    const wrapped = wrapRegisteredTool({ definition } as never, fakeRunner);
+    let requestBody: Record<string, unknown> | undefined;
+    let requestUrl: string | undefined;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      requestUrl = String(input);
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          type: "error",
+          error: { type: "invalid_request_error", message: "test response" },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      await streamSimple(
+        {
+          id: "claude-sonnet-4-6",
+          name: "Claude Sonnet",
+          api: "anthropic-messages",
+          provider: "anthropic",
+          baseUrl: "https://api.anthropic.com",
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 1000,
+          maxTokens: 100,
+        } satisfies Model<"anthropic-messages">,
+        {
+          messages: [{ role: "user", content: "search for something" }],
+          tools: [wrapped as unknown as Tool],
+        },
+        { apiKey: "sk-ant-oat01-test" },
+      ).result();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    const wirePayload = (requestBody?.tools as Record<string, unknown>[] | undefined)?.[0];
+    expect(requestUrl).toContain("/v1/messages");
+    expect(wirePayload).toMatchObject({
       type: "web_search_20250305",
       name: "web_search",
       max_uses: 7,
     });
-    // Must NOT carry a client input schema (the API runs the search itself).
     expect(wirePayload).not.toHaveProperty("input_schema");
   });
 });
