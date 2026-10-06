@@ -92,7 +92,9 @@ memory/
 .builds/
 .watchdog/
 .pm2-ecosystem.json
-.claude/scheduled_tasks.lock
+# Local .claude tooling stays untracked; only shared docs under .claude/docs/ are committed
+.claude/*
+!.claude/docs/
 .sea-cache/
 
 # prod-mirror rig staging (scripts/prod-mirror.sh)
