@@ -10,6 +10,30 @@ Docs: https://docs.openclaw.ai
   `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
   through), so syncing the prod bot's application emojis onto the mirror bot is a single
   command.
+- Proactive messaging: retire the standalone `ProactiveService` (the session-scanning
+  timer under `src/proactive/`) in favor of heartbeats as the single proactive mechanism.
+  The service only ever acted on DM (`direct`) sessions and its gate
+  (`OPENCLAW_SKIP_PROACTIVE`) was dead code (the computed flag was never consumed, so the
+  service always started regardless), while heartbeats already cover periodic proactive
+  checks. Removes the module (service, heuristics, prompt, types + tests), its gateway
+  wiring (`buildGatewayProactiveService`, startup greeting, close hook), the `proactive`
+  config block (`config.proactive.*` and its Zod schema; a legacy rule + migration drops a
+  leftover `proactive` key on load, so existing configs keep starting instead of failing
+  strict validation), and the per-session `lastProactiveCheckAt` /
+  `lastProactiveMessageSentAt` / `proactiveMessageCountToday` /
+  `proactiveMessageCountDate` fields (unused once the scanner is gone; existing session
+  stores simply ignore them). The one distinctive behavior it had, context-aware DM
+  follow-ups, moves into the `HEARTBEAT.md` template as a "reach out" guideline (follow up
+  on something specific you actually remember, else stay quiet). The agent can still send
+  proactive/unprompted messages via `cron` and `message` as before.
+- Heartbeat: add `OPENCLAW_SKIP_HEARTBEATS=1` to silence all heartbeat model calls without
+  touching config. It initializes the module-level enablement flag (still
+  runtime-togglable via the gateway), so it gates every trigger path (interval,
+  exec-event, wake) at the single `runHeartbeatOnce` choke point. Takes effect wherever
+  the gateway/agent process inherits it (e.g. a local or isolated test gateway);
+  documented in `.env.template`. Leave unset on prod so the agent stays proactive there.
+  (Wiring it through the mirror rig's per-channel agent containers, which use a fixed env
+  allowlist, is a follow-up.)
 - Discord router: log a reasoned drop when a message to a registered channel is filtered
   out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
   returned silently, so a driver bot getting no reply looked like a hang with nothing in

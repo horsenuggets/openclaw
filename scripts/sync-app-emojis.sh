@@ -38,6 +38,10 @@ set +a
 # prod DISCORD_BOT_TOKEN we just loaded intact.
 if [ -z "${OPENCLAW_MIRROR_DISCORD_TOKEN:-}" ] && [ -f "$MIRROR_ENV_FILE" ]; then
   OPENCLAW_MIRROR_DISCORD_TOKEN="$(
+    # Clear the inherited prod token first, so an overlay that omits
+    # DISCORD_BOT_TOKEN yields an empty result (hitting the error path below)
+    # rather than silently reusing the prod token and syncing prod to itself.
+    unset DISCORD_BOT_TOKEN
     set -a
     # shellcheck disable=SC1090
     . "$MIRROR_ENV_FILE"
