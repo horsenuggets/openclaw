@@ -1,7 +1,6 @@
 import type { CliDeps } from "../cli/deps.js";
 import type { loadConfig } from "../config/config.js";
 import type { loadOpenClawPlugins } from "../plugins/loader.js";
-import type { ProactiveService } from "../proactive/service.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import {
@@ -18,7 +17,6 @@ import {
 import { loadInternalHooks } from "../hooks/loader.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { type PluginServicesHandle, startPluginServices } from "../plugins/services.js";
-import { PROACTIVE_DEFAULTS } from "../proactive/types.js";
 import { startBrowserControlServerIfEnabled } from "./server-browser.js";
 import {
   scheduleRestartSentinelWake,
@@ -32,7 +30,6 @@ export async function startGatewaySidecars(params: {
   defaultWorkspaceDir: string;
   deps: CliDeps;
   startChannels: () => Promise<void>;
-  proactive?: ProactiveService;
   log: { warn: (msg: string) => void };
   logHooks: {
     info: (msg: string) => void;
@@ -148,18 +145,6 @@ export async function startGatewaySidecars(params: {
         params.logChannels.error(`startup-recovery failed: ${String(err)}`);
       });
     }, 500);
-
-    // Run a proactive startup greeting after recovery has had time to finish.
-    const startupGreeting =
-      params.cfg.proactive?.startupGreeting ?? PROACTIVE_DEFAULTS.startupGreeting;
-    if (startupGreeting && params.proactive) {
-      const proactive = params.proactive;
-      setTimeout(() => {
-        void proactive.checkNow({ isStartup: true }).catch((err) => {
-          params.logChannels.error(`proactive startup greeting failed: ${String(err)}`);
-        });
-      }, 2000);
-    }
   }
 
   if (params.cfg.hooks?.internal?.enabled) {
