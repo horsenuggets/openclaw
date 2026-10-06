@@ -254,8 +254,20 @@ case "${WHISPER_PORT:-}" in
 esac
 export WHISPER_PORT
 
-# Start whisper (speech-to-text)
-docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
+# Start whisper (speech-to-text) only when its binary was actually compiled in.
+# whisper-server is a locally-built artifact that setup.sh preserves across
+# deploys (it is not shipped in the tarball). On a host where it was never
+# compiled, ~/deploy/bin/whisper-server does not exist, and starting the compose
+# service would bind-mount a path Docker auto-creates as an empty directory, so
+# `exec whisper-server` fails with exit 126 and the container crash-loops
+# forever (re-running apt-get every couple of seconds, starving the box). Gate
+# on a real regular file so voice transcription is simply absent when unbuilt
+# instead of degrading the whole host.
+if [ -f ~/deploy/bin/whisper-server ]; then
+  docker compose -f ~/deploy/docker/whisper.yml -p services-whisper up -d
+else
+  echo "Skipping whisper: ~/deploy/bin/whisper-server not found (compile with scripts/compile-whisper.sh to enable voice transcription)."
+fi
 
 # Start discord router
 DISCORD_BOT_TOKEN="$DISCORD_BOT_TOKEN" \
