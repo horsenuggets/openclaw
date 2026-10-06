@@ -10,6 +10,11 @@ Docs: https://docs.openclaw.ai
   `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
   through), so syncing the prod bot's application emojis onto the mirror bot is a single
   command.
+- Persona: dial back the default SOUL.md writing style. Lowercase is now the strong
+  default including names and brand names (so "call me Alex" is answered as "alex" and
+  "Brave Search API" is written "brave search api"), and `:)` and other emoticons are
+  framed as a rare thing rather than something to reach for, so the agent stops ending
+  nearly every message with a smiley.
 - Proactive messaging: retire the standalone `ProactiveService` (the session-scanning
   timer under `src/proactive/`) in favor of heartbeats as the single proactive mechanism.
   The service only ever acted on DM (`direct`) sessions and its gate
