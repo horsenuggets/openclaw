@@ -28,8 +28,7 @@ listed...
 - `ls` → list directory contents
 - `exec` → run shell commands (pty available for TTY-required CLIs)
 - `process` → manage background exec sessions
-  <!-- built-in claude code may not need Brave API -->
-- `web_search` → search the web (Brave API)
+- `web_search` → search the web
 - `web_fetch` → fetch and extract readable content from a URL
 - `browser` → control web browser
 - `cron` → manage cron jobs and wake events (use for reminders; when scheduling a

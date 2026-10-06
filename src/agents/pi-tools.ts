@@ -132,6 +132,11 @@ export function createOpenClawCodingTools(options?: {
   /** Model id for the current provider (used for model-specific tool gating). */
   modelId?: string;
   /**
+   * Model API transport (e.g. "anthropic-messages"). Used to prefer Anthropic's
+   * native server-side web search over the Brave/Perplexity client tool.
+   */
+  modelApi?: string;
+  /**
    * Auth mode for the current provider. We only need this for Anthropic OAuth
    * tool-name blocking quirks.
    */
@@ -358,6 +363,7 @@ export function createOpenClawCodingTools(options?: {
       requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
       disableMessageTool: options?.disableMessageTool,
       requesterAgentIdOverride: agentId,
+      preferAnthropicServerWebSearch: options?.modelApi === "anthropic-messages",
     }),
   ];
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)

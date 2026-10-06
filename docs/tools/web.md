@@ -11,8 +11,9 @@ title: "Web Tools"
 
 OpenClaw ships two lightweight web tools:
 
-- `web_search` — Search the web via Brave Search API (default) or Perplexity Sonar (direct
-  or via OpenRouter).
+- `web_search` — Search the web. On Anthropic models the search runs natively on the model
+  (no API key); on other models it uses Brave Search API or Perplexity Sonar (direct or
+  via OpenRouter).
 - `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text).
 
 These are **not** browser automation. For JS-heavy sites or logins, use the
@@ -20,8 +21,10 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 
 ## How it works
 
-- `web_search` calls your configured provider and returns results.
-  - **Brave** (default): returns structured results (title, URL, snippet).
+- `web_search` returns results the model can cite.
+  - **Anthropic native** (default on `anthropic-messages` models): the search runs
+    server-side on the model and needs no key. Pin a provider below to opt out.
+  - **Brave**: returns structured results (title, URL, snippet).
   - **Perplexity**: returns AI-synthesized answers with citations from real-time web
     search.
 - Results are cached by query for 15 minutes (configurable).
@@ -31,10 +34,15 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 
 ## Choosing a search provider
 
-| Provider            | Pros                                         | Cons                                     | API Key                                      |
-| ------------------- | -------------------------------------------- | ---------------------------------------- | -------------------------------------------- |
-| **Brave** (default) | Fast, structured results, free tier          | Traditional search results               | `BRAVE_API_KEY`                              |
-| **Perplexity**      | AI-synthesized answers, citations, real-time | Requires Perplexity or OpenRouter access | `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` |
+| Provider                       | Pros                                         | Cons                                     | API Key                                      |
+| ------------------------------ | -------------------------------------------- | ---------------------------------------- | -------------------------------------------- |
+| **Anthropic native** (default) | No key, runs on the model, billed to account | Anthropic models only                    | none                                         |
+| **Brave**                      | Fast, structured results, free tier          | Traditional search results               | `BRAVE_API_KEY`                              |
+| **Perplexity**                 | AI-synthesized answers, citations, real-time | Requires Perplexity or OpenRouter access | `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY` |
+
+On an `anthropic-messages` model, leaving `tools.web.search.provider` unset uses
+Anthropic's native web search. Setting it to `brave` or `perplexity` forces that client
+provider (and its key) instead. On non-Anthropic models, Brave is the default.
 
 See [Brave Search setup](/brave-search) and [Perplexity Sonar](/perplexity) for
 provider-specific details.
