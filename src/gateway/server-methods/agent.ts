@@ -545,9 +545,12 @@ export const agentHandlers: GatewayRequestHandlers = {
       channel: entry?.channel,
       chatType: entry?.chatType,
     });
+    // "steer" mode: deliver at the next tool boundary and skip the agent's
+    // remaining planned tools so it reacts to this message promptly, rather than
+    // only after the whole in-flight turn finishes (that is the point of a steer).
     const accepted =
       sessionId && sendPolicy !== "deny"
-        ? queueEmbeddedPiMessage(sessionId, params.message)
+        ? queueEmbeddedPiMessage(sessionId, params.message, "steer")
         : false;
     respond(true, { accepted });
   },

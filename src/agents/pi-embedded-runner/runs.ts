@@ -4,8 +4,18 @@ import {
   logSessionStateChange,
 } from "../../logging/diagnostic.js";
 
+/**
+ * How a mid-run message is injected into an active embedded run.
+ * - `followup`: wait until the agent finishes its current work, then handle it
+ *   (never loses in-flight tool calls). The default.
+ * - `steer`: deliver at the next tool boundary, skipping the agent's remaining
+ *   planned tool calls so it reacts to the message sooner. Used for explicit
+ *   "handle this now" steering (the Discord router's `agent.steer`).
+ */
+export type EmbeddedPiQueueMode = "followup" | "steer";
+
 type EmbeddedPiQueueHandle = {
-  queueMessage: (text: string) => Promise<void>;
+  queueMessage: (text: string, mode: EmbeddedPiQueueMode) => Promise<void>;
   isStreaming: () => boolean;
   isCompacting: () => boolean;
   abort: () => void;
@@ -18,7 +28,11 @@ type EmbeddedRunWaiter = {
 };
 const EMBEDDED_RUN_WAITERS = new Map<string, Set<EmbeddedRunWaiter>>();
 
-export function queueEmbeddedPiMessage(sessionId: string, text: string): boolean {
+export function queueEmbeddedPiMessage(
+  sessionId: string,
+  text: string,
+  mode: EmbeddedPiQueueMode = "followup",
+): boolean {
   const handle = ACTIVE_EMBEDDED_RUNS.get(sessionId);
   if (!handle) {
     diag.debug(`queue message failed: sessionId=${sessionId} reason=no_active_run`);
@@ -33,7 +47,7 @@ export function queueEmbeddedPiMessage(sessionId: string, text: string): boolean
     return false;
   }
   logMessageQueued({ sessionId, source: "pi-embedded-runner" });
-  void handle.queueMessage(text);
+  void handle.queueMessage(text, mode);
   return true;
 }
 

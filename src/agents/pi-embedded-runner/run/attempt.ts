@@ -782,12 +782,18 @@ export async function runEmbeddedAttempt(
       } = subscription;
 
       const queueHandle: EmbeddedPiQueueHandle = {
-        queueMessage: async (text: string) => {
-          // Use followUp instead of steer so the current turn's
-          // tool calls complete before the user message is injected.
-          // steer() skips remaining tools ("Skipped due to queued
-          // user message"), while followUp() lets work finish.
-          await activeSession.followUp(text);
+        queueMessage: async (text: string, mode) => {
+          // `followup` (default) waits for the agent's current tool calls to
+          // finish before injecting the message, so no in-flight work is lost.
+          // `steer` delivers at the next tool boundary and skips the agent's
+          // remaining planned tools ("Skipped due to queued user message"), so
+          // it reacts to an urgent mid-run message sooner at the cost of the
+          // rest of the current task's planned steps.
+          if (mode === "steer") {
+            await activeSession.steer(text);
+          } else {
+            await activeSession.followUp(text);
+          }
         },
         isStreaming: () => activeSession.isStreaming,
         isCompacting: () => subscription.isCompacting(),

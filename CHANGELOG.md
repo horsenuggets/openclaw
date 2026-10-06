@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Mid-turn steering now uses the agent's `steer()` primitive instead of `followUp()`, so a
+  message injected via `agent.steer` (the Discord router's mid-turn path) is delivered at
+  the next tool boundary and skips the agent's remaining planned tools — it reacts to an
+  urgent "handle this now" message promptly rather than waiting for the whole in-flight
+  turn to finish. `queueEmbeddedPiMessage` takes an injection mode (`followup` default,
+  `steer` opt-in); the auto-reply and subagent paths keep `followup` so no in-flight work
+  is lost there. Note a single long-running tool call (e.g. a `sleep`) still can't be
+  interrupted mid-execution — steering is only evaluated between tools.
 - Discord router: steer messages into a turn that is already running instead of only
   buffering them for the next turn (Phase 2 of the conversational fix, building on the
   per-channel queue). When the agent is mid-task and a new text message arrives, the
