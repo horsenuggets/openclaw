@@ -13,6 +13,13 @@ Docs: https://docs.openclaw.ai
   leftover tail on `text_end` when it ends at a sentence or paragraph boundary, holding it
   to merge with the next block otherwise (still force-flushed at tool start and message
   end). Block replies also no longer open with blank lines.
+- Deploy: only start the whisper speech-to-text container when both artifacts it needs are
+  present on the host: the `whisper-server` binary and the `ggml-base.en.bin` model. When
+  either was missing the container crash-looped (exit 126) every couple of seconds,
+  churning CPU and memory until the single-threaded Discord router's event loop was
+  starved and replies lagged by seconds; it is now skipped cleanly until fully
+  provisioned. Also adds a test-only `OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS` router env
+  (default empty) so an E2E driver bot can exercise the unauthorized-access denial. (#105)
 - Web search: on genuine Anthropic models (first-party API key or Claude subscription
   OAuth), `web_search` now runs on Anthropic's native server-side web search tool (billed
   through the account, no Brave/Perplexity key). The embedded runner advertises

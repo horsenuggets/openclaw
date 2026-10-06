@@ -121,7 +121,9 @@ across all turns. Keep the finished driver in gitignored `.prod-mirror/` as evid
 - The agent reaches the model through the router model-proxy using a minted subscription
   token in the box shared auth store. It expires about 24h after minting; re-mint with
   `scripts/prod-mirror.sh mint` if replies start 502-ing.
-- `services.whisper` crash-loops on Apple Silicon (no linux-arm64 whisper build). Ignore
-  it unless testing voice.
+- `services.whisper` is skipped unless BOTH its binary (`~/deploy/bin/whisper-server`) and
+  model (`~/deploy/models/ggml-base.en.bin`) are provisioned, so on Apple Silicon (no
+  linux-arm64 whisper build) the container simply does not start. Voice transcription is
+  absent until you stage both artifacts; the box is no longer degraded by a crash loop.
 - Leave the test channel in place as evidence. Do not auto-delete channels or driver
   scripts after a run.

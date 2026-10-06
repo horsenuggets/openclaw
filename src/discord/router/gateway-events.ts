@@ -44,6 +44,12 @@ export type GatewayContext = {
   /** Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may converse. */
   allowedBotIds: Set<string>;
   /**
+   * Test-only (OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS): bot ids subjected to the
+   * human channel-owner access gate instead of bypassing it, so an E2E driver
+   * bot can exercise the unauthorized-access denial. Empty by default.
+   */
+  ownerGatedBotIds: Set<string>;
+  /**
    * Whether to tell a non-owner why their message in a registered channel was
    * ignored (OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE, default true). False => deny
    * silently.
@@ -115,6 +121,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     channelQueue,
     channelGuild,
     allowedBotIds,
+    ownerGatedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
@@ -195,7 +202,18 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // them. A trusted bot (OPENCLAW_MOCK_USER_BOT_ID) may converse, but
   // never the router's own bot (self-routing would loop).
   const botAllowed = isBot ? isConversationalBot(authorId, applicationId, allowedBotIds) : false;
-  if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
+  // Test-only: a bot listed in OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS is treated like
+  // a human for access control, so it must pass the bot filter here (rather than
+  // being dropped as an untrusted bot) and then face the ownership gate below.
+  // Exclude the router's own id (as isConversationalBot does): Discord echoes our
+  // replies back as MESSAGE_CREATE, so gating self would let a denial reply loop.
+  const ownerGatedBot =
+    isBot && !!authorId && authorId !== applicationId && ownerGatedBotIds.has(authorId);
+  if (
+    !authorId ||
+    (isBot && !botAllowed && !ownerGatedBot) ||
+    (!content.trim() && !hasAttachments)
+  ) {
     // Silent drops here looked like hangs during a real incident: a driver
     // bot's messages to a registered channel got no reply and no log line
     // explained why. Surface the reason, but only for registered channels
@@ -264,7 +282,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // pass through untouched (onboarding a brand-new user happens here).
   // In a shared guild channel, restrict human conversation to the channel
   // owner. Explicitly trusted automation bots remain allowed for E2E use.
-  if (guildId && !botAllowed) {
+  if (guildId && (!botAllowed || ownerGatedBot)) {
     // Read the instance once and reuse it for both the ownership decision and
     // the owner mention in the denial notice, so an unauthorized message does
     // not trigger a second `.onboarding.json` read on the hot path.

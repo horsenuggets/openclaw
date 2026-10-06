@@ -38,6 +38,11 @@ services:
       # not just run /channel commands. This is the bot that drives end-to-end
       # tests. Unset => all bots are chat-filtered.
       - OPENCLAW_MOCK_USER_BOT_ID=${OPENCLAW_MOCK_USER_BOT_ID}
+      # Test-only: comma-separated bot ids subjected to the human channel-owner
+      # access gate (denied when not the channel owner) instead of bypassing it as
+      # trusted bots do, so an E2E driver bot can exercise the unauthorized-access
+      # denial. Unset => no bot is owner-gated. Never set in production.
+      - OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS=${OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS}
       # Reply to a non-owner messaging a registered channel with a Log embed
       # explaining the channel belongs to someone else. Unset/truthy => enabled;
       # set falsy (0/false/no/off) to deny silently.

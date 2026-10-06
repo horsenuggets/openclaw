@@ -266,6 +266,21 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const mockUserBotId = process.env.OPENCLAW_MOCK_USER_BOT_ID?.trim();
   const allowedBotIds = new Set(mockUserBotId ? [mockUserBotId] : []);
 
+  // Test-only: bot ids subject to the same channel-owner access gate as humans,
+  // instead of bypassing it as trusted conversational bots do. A real human
+  // non-owner is the only thing that normally reaches the unauthorized-access
+  // denial (untrusted bots are dropped by the bot filter; trusted bots bypass
+  // ownership), so there is no way to exercise that denial from an E2E driver
+  // bot. Listing a driver bot here makes it hit the denial when it is not the
+  // channel owner, so the unauthorized path can be tested end to end. Empty by
+  // default, so prod and the normal E2E suite are unaffected.
+  const ownerGatedBotIds = new Set(
+    (process.env.OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+
   // When a non-owner messages a registered channel, reply with a Log-embed
   // notice (enabled by default) explaining the channel belongs to someone else.
   // The reply is threaded under the offending message and persists. Set
@@ -448,6 +463,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     channelQueue,
     channelGuild,
     allowedBotIds,
+    ownerGatedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
@@ -609,6 +625,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 channelQueue,
                 recoveredMessageIds,
                 allowedBotIds,
+                ownerGatedBotIds,
                 // Apply the same guild access control as live messages so a
                 // non-owner's message in a shared guild channel is not replayed
                 // to the agent on restart.
@@ -825,6 +842,15 @@ async function recoverUnansweredMessages(
    * recoverable; every other bot's message is treated as a reply/banner.
    */
   allowedBotIds: Set<string>,
+  /**
+   * Test-only owner-gated bot ids (OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS). These are
+   * also trusted conversational bots, but the live path subjects them to the
+   * channel-owner gate rather than letting them bypass it. Recovery mirrors that:
+   * their unanswered messages are still recoverable, but they face the owner check
+   * instead of bypassing it as an ordinary trusted bot does, so a message that
+   * would be denied live is not routed after a reconnect.
+   */
+  ownerGatedBotIds: Set<string>,
   /** Same guild access control applied to live messages (owner only). */
   isAuthorized?: (channelId: string, userId: string) => Promise<boolean>,
 ): Promise<void> {
@@ -892,13 +918,26 @@ async function recoverUnansweredMessages(
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       let lastUserMsgIsTrustedBot = false;
+      let lastUserMsgIsOwnerGated = false;
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
         const isTrustedBot = Boolean(
           msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
         );
-        const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
+        // An owner-gated bot is also recoverable (independent of the allowlist, so
+        // it mirrors the live path regardless of whether it is additionally a
+        // trusted bot), but — like a human — it must still face the owner check
+        // below rather than bypassing it as an ordinary trusted bot does. Exclude
+        // the router itself, as the live path does.
+        const isOwnerGatedBot = Boolean(
+          msg.author.bot &&
+          msg.author.id &&
+          msg.author.id !== botId &&
+          ownerGatedBotIds.has(msg.author.id),
+        );
+        const isBotMsg =
+          (msg.author.bot || msg.author.id === botId) && !isTrustedBot && !isOwnerGatedBot;
         if (isBotMsg) {
           if (isLifecycleBanner(msg)) {
             continue;
@@ -907,6 +946,7 @@ async function recoverUnansweredMessages(
         }
         lastUserMsg = msg;
         lastUserMsgIsTrustedBot = isTrustedBot;
+        lastUserMsgIsOwnerGated = isOwnerGatedBot;
         break;
       }
 
@@ -921,7 +961,7 @@ async function recoverUnansweredMessages(
 
       // In a shared guild channel, only recover a message from the channel
       // owner, matching the live MESSAGE_CREATE gate. Fail closed.
-      if (isGuildChannel && isAuthorized && !lastUserMsgIsTrustedBot) {
+      if (isGuildChannel && isAuthorized && (!lastUserMsgIsTrustedBot || lastUserMsgIsOwnerGated)) {
         const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
         if (!allowed) {
           runtime.log(
