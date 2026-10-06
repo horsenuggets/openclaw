@@ -121,7 +121,9 @@ async function promptWebToolsConfig(
   note(
     [
       "Web search lets your agent look things up online using the `web_search` tool.",
-      "It requires a Brave Search API key (you can store it in the config or set BRAVE_API_KEY in the Gateway environment).",
+      "On Anthropic models it runs on Anthropic's native server-side search (no key).",
+      "Other models use a Brave Search API key (stored in config or BRAVE_API_KEY), or",
+      "Perplexity. web_search is enabled by default.",
       "Docs: https://docs.openclaw.ai/tools/web",
     ].join("\n"),
     "Web search",
@@ -129,8 +131,11 @@ async function promptWebToolsConfig(
 
   const enableSearch = guardCancel(
     await confirm({
-      message: "Enable web_search (Brave Search)?",
-      initialValue: existingSearch?.enabled ?? hasSearchKey,
+      message: "Enable web_search?",
+      // web_search is enabled by default at runtime (and keyless on Anthropic
+      // models), so default this prompt to enabled rather than to key presence;
+      // otherwise accepting the default on a fresh config would disable it.
+      initialValue: existingSearch?.enabled ?? true,
     }),
     runtime,
   );
