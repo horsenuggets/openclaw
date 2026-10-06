@@ -50,6 +50,14 @@ export type ChannelQueueOptions = {
    * that arrive within this window of each other are coalesced.
    */
   debounceMs: number;
+  /**
+   * Optional mid-turn steering: when a turn is already running, try to inject
+   * the message into the live run instead of buffering it for the next turn.
+   * Resolves true when the agent accepted it (there was an actively streaming
+   * run, and its reply will carry the response), false when it must fall back to
+   * the normal queued path. Omitted (or a rejected promise) => always buffer.
+   */
+  steer?: (channelId: string, turn: ChannelTurn) => Promise<boolean>;
   log?: (message: string) => void;
   /** Injectable timers for deterministic tests. Default to global timers. */
   setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
@@ -58,6 +66,13 @@ export type ChannelQueueOptions = {
 
 type ChannelState = {
   running: boolean;
+  /**
+   * The channel is held by an exclusive {@link ChannelQueue.reserve} (the
+   * onboarding kick) rather than a normal drained turn. Steering is skipped
+   * while reserved so a user message sent during onboarding queues behind the
+   * kick (preserving its ordering) instead of being injected into it.
+   */
+  reserved: boolean;
   pending: ChannelTurn[];
   timer: ReturnType<typeof setTimeout> | null;
 };
@@ -90,6 +105,7 @@ export class ChannelQueue {
   private readonly channels = new Map<string, ChannelState>();
   private readonly runTurn: ChannelQueueOptions["runTurn"];
   private readonly debounceMs: number;
+  private readonly steer?: ChannelQueueOptions["steer"];
   private readonly log?: (message: string) => void;
   private readonly setTimer: NonNullable<ChannelQueueOptions["setTimer"]>;
   private readonly clearTimer: NonNullable<ChannelQueueOptions["clearTimer"]>;
@@ -97,6 +113,7 @@ export class ChannelQueue {
   constructor(options: ChannelQueueOptions) {
     this.runTurn = options.runTurn;
     this.debounceMs = Math.max(0, options.debounceMs);
+    this.steer = options.steer;
     this.log = options.log;
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle));
@@ -105,7 +122,7 @@ export class ChannelQueue {
   private state(channelId: string): ChannelState {
     let state = this.channels.get(channelId);
     if (!state) {
-      state = { running: false, pending: [], timer: null };
+      state = { running: false, reserved: false, pending: [], timer: null };
       this.channels.set(channelId, state);
     }
     return state;
@@ -117,14 +134,46 @@ export class ChannelQueue {
     return Boolean(state && (state.running || state.pending.length > 0));
   }
 
-  /** Buffer a message and schedule a (debounced) drain. */
+  /**
+   * Accept a message for a channel. When a normal turn is already running and a
+   * steer hook is configured, try to inject it into the live run (so the agent
+   * sees it mid-turn); otherwise buffer it for a debounced, coalesced turn. A
+   * reserved (onboarding-kick) hold never steers — see {@link ChannelState}.
+   */
   enqueue(channelId: string, turn: ChannelTurn): void {
+    const state = this.state(channelId);
+    if (state.running && !state.reserved && this.steer) {
+      void this.steerOrBuffer(channelId, turn);
+      return;
+    }
+    this.buffer(channelId, turn);
+  }
+
+  /** Buffer a message and schedule a (debounced) drain. */
+  private buffer(channelId: string, turn: ChannelTurn): void {
     const state = this.state(channelId);
     state.pending.push(turn);
     if (state.pending.length > 1) {
       this.log?.(`[router] channel ${channelId} coalescing (${state.pending.length} buffered)`);
     }
     this.scheduleDrain(channelId);
+  }
+
+  /** Try mid-turn injection; fall back to buffering if the run didn't accept it. */
+  private async steerOrBuffer(channelId: string, turn: ChannelTurn): Promise<void> {
+    let accepted = false;
+    try {
+      accepted = await this.steer!(channelId, turn);
+    } catch {
+      accepted = false;
+    }
+    if (accepted) {
+      this.log?.(`[router] channel ${channelId} steered message into the active turn`);
+      return;
+    }
+    // No active streaming run accepted it (it ended, or was mid-compaction) —
+    // run it as the next turn.
+    this.buffer(channelId, turn);
   }
 
   /**
@@ -139,6 +188,7 @@ export class ChannelQueue {
       return false;
     }
     state.running = true;
+    state.reserved = true;
     return true;
   }
 
@@ -149,6 +199,7 @@ export class ChannelQueue {
       return;
     }
     state.running = false;
+    state.reserved = false;
     if (state.pending.length > 0) {
       this.scheduleDrain(channelId);
     } else {

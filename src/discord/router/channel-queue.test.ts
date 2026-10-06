@@ -139,6 +139,133 @@ describe("ChannelQueue", () => {
     expect(runTurn.mock.calls[1][1].messageContent).toBe("second\n\nthird");
   });
 
+  describe("mid-turn steering", () => {
+    /** Start a turn and keep it running until the returned release() is called. */
+    function startHeldTurn() {
+      const timers = fakeTimers();
+      let release!: () => void;
+      const held = new Promise<void>((r) => {
+        release = r;
+      });
+      const runTurn = vi
+        .fn<(channelId: string, turn: ChannelTurn) => Promise<void>>()
+        .mockImplementationOnce(async () => held)
+        .mockImplementation(async () => {});
+      return { timers, runTurn, release, held };
+    }
+
+    it("injects a mid-turn message into the live run instead of buffering it", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+
+      // Arrives while the first turn is still running -> steered, not buffered.
+      queue.enqueue("c1", textTurn("u1", "also do X"));
+      await Promise.resolve();
+      expect(steer).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ messageContent: "also do X" }),
+      );
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      // No second turn: the steered message rode the active run.
+      expect(runTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to a buffered next turn when the run does not accept the steer", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      const steer = vi.fn(async () => false);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+
+      queue.enqueue("c1", textTurn("u1", "late"));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(steer).toHaveBeenCalledTimes(1);
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      // Rejected steer -> ran as the next turn.
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1][1].messageContent).toBe("late");
+    });
+
+    it("never steers while the channel is reserved for the onboarding kick", async () => {
+      const timers = fakeTimers();
+      const runTurn = vi.fn(async () => {});
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      expect(queue.reserve("c1")).toBe(true);
+      queue.enqueue("c1", textTurn("u1", "typed during onboarding"));
+      await Promise.resolve();
+      // Reserved hold: the message queues behind the kick rather than injecting.
+      expect(steer).not.toHaveBeenCalled();
+
+      queue.release("c1");
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ messageContent: "typed during onboarding" }),
+      );
+    });
+
+    it("does not steer an idle channel (no active run)", async () => {
+      const timers = fakeTimers();
+      const runTurn = vi.fn(async () => {});
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "hello"));
+      timers.flush();
+      await Promise.resolve();
+      expect(steer).not.toHaveBeenCalled();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("processes channels independently", async () => {
     const timers = fakeTimers();
     const runTurn = vi.fn(async () => {});
