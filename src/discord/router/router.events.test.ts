@@ -753,6 +753,49 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(false);
   });
 
+  it("subjects an owner-gated bot to the owner gate during recovery", async () => {
+    // The same bot is trusted (recoverable) AND owner-gated. Unlike a plain
+    // trusted bot it must not bypass the owner check on reconnect: with no owner
+    // recorded the gate fails closed, so its message is skipped, not routed. This
+    // guards against both the original bypass and over-correcting into discarding
+    // the message before the owner check runs.
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "gated-bot");
+    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({ guild_id: GUILD }) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: "gated-recover",
+                author: { id: "gated-bot", bot: true },
+                content: "recover me",
+              },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("skipping recovery in guild channel"))).toBe(true);
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+  });
+
   it("does not re-recover a message that already got an error reply", async () => {
     // Retry-loop repro: the last user message is followed by the router's own
     // italic error reply. Recovery must treat that reply as "already handled"

@@ -845,10 +845,10 @@ async function recoverUnansweredMessages(
   /**
    * Test-only owner-gated bot ids (OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS). These are
    * also trusted conversational bots, but the live path subjects them to the
-   * channel-owner gate rather than letting them bypass it. Recovery must not treat
-   * them as trusted-and-always-recoverable, or a message that would be denied live
-   * could be routed after a reconnect; so they are excluded from the trusted-bot
-   * fast path and left subject to the owner check below.
+   * channel-owner gate rather than letting them bypass it. Recovery mirrors that:
+   * their unanswered messages are still recoverable, but they face the owner check
+   * instead of bypassing it as an ordinary trusted bot does, so a message that
+   * would be denied live is not routed after a reconnect.
    */
   ownerGatedBotIds: Set<string>,
   /** Same guild access control applied to live messages (owner only). */
@@ -918,13 +918,12 @@ async function recoverUnansweredMessages(
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       let lastUserMsgIsTrustedBot = false;
+      let lastUserMsgIsOwnerGated = false;
       for (const msg of messages) {
         // A trusted bot (allowlisted, and not the router itself) converses like a
         // human on the live path, so its unanswered message is recoverable too.
         const isTrustedBot = Boolean(
-          msg.author.bot &&
-          isConversationalBot(msg.author.id, botId, allowedBotIds) &&
-          !(msg.author.id && ownerGatedBotIds.has(msg.author.id)),
+          msg.author.bot && isConversationalBot(msg.author.id, botId, allowedBotIds),
         );
         const isBotMsg = (msg.author.bot || msg.author.id === botId) && !isTrustedBot;
         if (isBotMsg) {
@@ -935,6 +934,10 @@ async function recoverUnansweredMessages(
         }
         lastUserMsg = msg;
         lastUserMsgIsTrustedBot = isTrustedBot;
+        // An owner-gated bot is recoverable (picked up above like any trusted bot)
+        // but, like a human, must still face the owner check below rather than
+        // bypassing it as an ordinary trusted bot does.
+        lastUserMsgIsOwnerGated = Boolean(msg.author.id && ownerGatedBotIds.has(msg.author.id));
         break;
       }
 
@@ -949,7 +952,7 @@ async function recoverUnansweredMessages(
 
       // In a shared guild channel, only recover a message from the channel
       // owner, matching the live MESSAGE_CREATE gate. Fail closed.
-      if (isGuildChannel && isAuthorized && !lastUserMsgIsTrustedBot) {
+      if (isGuildChannel && isAuthorized && (!lastUserMsgIsTrustedBot || lastUserMsgIsOwnerGated)) {
         const allowed = await isAuthorized(channelId, lastUserMsg.author.id);
         if (!allowed) {
           runtime.log(
