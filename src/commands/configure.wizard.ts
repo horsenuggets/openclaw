@@ -131,7 +131,10 @@ async function promptWebToolsConfig(
     );
     const key = String(keyInput ?? "").trim();
     if (key) {
-      nextSearch = { ...nextSearch, apiKey: key };
+      // Pin provider to Brave so the key is honored even on genuine Anthropic
+      // models, where an unset provider would otherwise prefer Anthropic's
+      // native server-side search and silently ignore this key.
+      nextSearch = { ...nextSearch, apiKey: key, provider: "brave" };
     } else if (!hasSearchKey) {
       note(
         [

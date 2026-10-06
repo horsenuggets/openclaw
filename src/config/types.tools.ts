@@ -346,7 +346,12 @@ export type ToolsConfig = {
       apiKey?: string;
       /** Default search results count (1-10). */
       maxResults?: number;
-      /** Max searches per turn for Anthropic native web search (default: 5). */
+      /**
+       * Cap on searches Anthropic's native server-side web search may run per
+       * Messages API request (maps to the tool's `max_uses`; default: 5). Note
+       * this is per request, not per agent turn: a turn that issues more than
+       * one model request resets the allowance each request.
+       */
       maxUses?: number;
       /** Timeout in seconds for search requests. */
       timeoutSeconds?: number;

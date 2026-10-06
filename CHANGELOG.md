@@ -6,13 +6,16 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- Web search: on `anthropic-messages` models, `web_search` now runs on Anthropic's native
-  server-side web search tool (billed through the account, no Brave/Perplexity key). The
-  embedded runner advertises `web_search` as an Anthropic server tool (via a patched pi-ai
-  `convertTools`) instead of the client Brave/Perplexity tool; the model runs the search
-  itself and cites results. Pin `tools.web.search.provider` to `brave` or `perplexity` to
-  keep the client provider, and tune searches per turn with `tools.web.search.maxUses`
-  (default 5). Non-Anthropic models are unchanged. (#103)
+- Web search: on genuine Anthropic models (first-party API key or Claude subscription
+  OAuth), `web_search` now runs on Anthropic's native server-side web search tool (billed
+  through the account, no Brave/Perplexity key). The embedded runner advertises
+  `web_search` as an Anthropic server tool (via a patched pi-ai `convertTools`) instead of
+  the client Brave/Perplexity tool; the model runs the search itself and cites results.
+  Providers that merely speak the anthropic-messages wire (MiniMax, Synthetic, Xiaomi,
+  custom pass-throughs) keep the client provider. Pin `tools.web.search.provider` to
+  `brave` or `perplexity` to force the client provider, and cap searches per Messages API
+  request with `tools.web.search.maxUses` (default 5). Non-Anthropic models are unchanged.
+  (#103)
 - Discord router: steer messages into a turn that is already running instead of only
   buffering them for the next turn (Phase 2 of the conversational fix, building on the
   per-channel queue). When the agent is mid-task and a new text message arrives, the

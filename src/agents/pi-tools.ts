@@ -21,6 +21,7 @@ import {
   type ProcessToolDefaults,
 } from "./bash-tools.js";
 import { listChannelAgentTools } from "./channel-tools.js";
+import { normalizeProviderId } from "./model-selection.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
@@ -56,6 +57,24 @@ import {
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-codex";
+}
+
+// Anthropic's hosted `web_search_20250305` server tool is a first-party
+// capability, not a property of the anthropic-messages wire format. Several
+// non-Anthropic providers (MiniMax Portal, Synthetic, Xiaomi, custom
+// pass-throughs) also speak anthropic-messages but do not implement the hosted
+// tool, so gating on the transport alone would send them an unsupported
+// server-tool payload. Require both the transport AND a genuine Anthropic
+// provider (first-party API key or Claude subscription OAuth).
+export function supportsAnthropicServerWebSearch(params: {
+  modelApi?: string;
+  modelProvider?: string;
+}): boolean {
+  if (params.modelApi !== "anthropic-messages") {
+    return false;
+  }
+  const provider = normalizeProviderId(params.modelProvider ?? "");
+  return provider === "anthropic" || provider === "anthropic-subscription";
 }
 
 function isApplyPatchAllowedForModel(params: {
@@ -363,7 +382,10 @@ export function createOpenClawCodingTools(options?: {
       requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
       disableMessageTool: options?.disableMessageTool,
       requesterAgentIdOverride: agentId,
-      preferAnthropicServerWebSearch: options?.modelApi === "anthropic-messages",
+      preferAnthropicServerWebSearch: supportsAnthropicServerWebSearch({
+        modelApi: options?.modelApi,
+        modelProvider: options?.modelProvider,
+      }),
     }),
   ];
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)
