@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { buildLifecycleMessage } from "../../../discord-health-monitor/lifecycle-message.js";
 import { buildLogEmbed } from "./log-embed.js";
 import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router-filters.js";
+
+/** A representative diagnostics banner string for each event. */
+function banner(event: "startup" | "shutdown"): string {
+  return buildLifecycleMessage({
+    event,
+    reason: event === "startup" ? "ROUTER_RESTART" : "SIGTERM",
+    pid: 4321,
+    uptimeSeconds: 3723,
+    downSince: Date.parse("2026-10-05T00:00:00.000Z"),
+    now: Date.parse("2026-10-05T00:00:12.000Z"),
+    discordApiPingMs: 83,
+    memory: { rss: 89_214_976, heapUsed: 23_170_000 },
+  });
+}
 
 describe("isConversationalBot", () => {
   const allow = new Set(["111", "222"]);
@@ -114,10 +129,53 @@ describe("isLifecycleBanner", () => {
     ).toBe(false);
   });
 
-  it("matches the exact embed the sidecar sends (sender/matcher consistency)", () => {
-    // buildLogEmbed is what the health-monitor sidecar now uses for banners, so
-    // its output description must be what the recovery scan recognizes.
+  it("matches the legacy exact phrases still in channel history", () => {
+    // Older builds posted these verbatim; recovery must still skip them.
     expect(isLifecycleBanner({ embeds: [buildLogEmbed("Back online.").embed] })).toBe(true);
     expect(isLifecycleBanner({ embeds: [buildLogEmbed("Shutting down...").embed] })).toBe(true);
+  });
+
+  it("matches current diagnostics banners (lead phrase + JSON payload)", () => {
+    // The trailing JSON varies per event, so matching keys off the static lead
+    // phrase, but the JSON must be present for it to count as a banner.
+    expect(isLifecycleBanner(banner("startup"))).toBe(true);
+    expect(isLifecycleBanner(banner("shutdown"))).toBe(true);
+  });
+
+  it("does NOT match a bot reply that merely opens with the lead phrase", () => {
+    // Guards the recovery-loop regression: an ordinary reply starting with the
+    // phrase but without the JSON payload is NOT lifecycle noise, so recovery must
+    // treat the user message beneath it as already handled.
+    expect(isLifecycleBanner("The agent is starting up failed to reach the gateway.")).toBe(false);
+    expect(isLifecycleBanner("The agent is starting up...")).toBe(false);
+    expect(
+      isLifecycleBanner({ embeds: [{ description: "The agent is shutting down soon." }] }),
+    ).toBe(false);
+  });
+
+  it("requires the payload to parse as JSON, not just any fenced/brace-led text", () => {
+    // A reply that opens with the lead phrase and a fenced block whose body is not a
+    // JSON object must NOT be skipped, or recovery would replay the message beneath it.
+    expect(isLifecycleBanner("The agent is starting up...\n```text\nfailed\n```")).toBe(false);
+    expect(isLifecycleBanner("The agent is shutting down... {not valid json")).toBe(false);
+    expect(isLifecycleBanner('The agent is starting up... ["an","array"]')).toBe(false);
+  });
+
+  it("requires the fence to span the whole message (no trailing reply after it)", () => {
+    // A valid-looking fenced block mid-message must not classify the whole reply as a
+    // banner, or recovery would replay the user message beneath an ordinary reply.
+    expect(isLifecycleBanner("The agent is starting up...\n```json\n{}\n```\nnormal reply")).toBe(
+      false,
+    );
+    expect(isLifecycleBanner('The agent is shutting down... {"a":1} and then more text')).toBe(
+      false,
+    );
+  });
+
+  it("matches the exact diagnostics embed the sidecar sends (sender/matcher consistency)", () => {
+    // buildLifecycleMessage -> buildLogEmbed is the real sidecar path; its output
+    // description (lead phrase + fenced JSON) must be what recovery recognizes.
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed(banner("startup")).embed] })).toBe(true);
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed(banner("shutdown")).embed] })).toBe(true);
   });
 });
