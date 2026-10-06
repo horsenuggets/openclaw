@@ -83,6 +83,17 @@ describe("subscribeEmbeddedPiSession native web-search citation coalescing", () 
     const messages = onBlockReply.mock.calls.map((c) => c[0].text as string);
     expect(messages).toEqual(["Let me check that for you."]);
   });
+
+  it("strips a leading CRLF blank line from a coalesced block", () => {
+    // A paragraph separator (here CRLF) can lead a held block; the reply must
+    // not open with blank lines.
+    const { onBlockReply } = drive(["First sentence.", "\r\n\r\nSecond sentence."]);
+    const messages = onBlockReply.mock.calls.map((c) => c[0].text as string);
+    for (const m of messages) {
+      expect(m).not.toMatch(/^[\s]/);
+    }
+    expect(messages).toContain("Second sentence.");
+  });
 });
 
 describe("endsAtBlockReplyBoundary", () => {
@@ -92,6 +103,14 @@ describe("endsAtBlockReplyBoundary", () => {
     expect(endsAtBlockReplyBoundary("Wow!")).toBe(true);
     expect(endsAtBlockReplyBoundary('He said "go."')).toBe(true);
     expect(endsAtBlockReplyBoundary("Paragraph break\n\n")).toBe(true);
+  });
+
+  it("recognizes full-width / CJK sentence terminators", () => {
+    expect(endsAtBlockReplyBoundary("調べます。")).toBe(true);
+    expect(endsAtBlockReplyBoundary("そうですか？")).toBe(true);
+    expect(endsAtBlockReplyBoundary("はい！")).toBe(true);
+    expect(endsAtBlockReplyBoundary("「はい」。")).toBe(true);
+    expect(endsAtBlockReplyBoundary("結果は")).toBe(false);
   });
 
   it("is false mid-sentence (so the tail is held to coalesce)", () => {

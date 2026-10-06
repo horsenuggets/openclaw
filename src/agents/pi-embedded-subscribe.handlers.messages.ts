@@ -50,8 +50,10 @@ export function endsAtBlockReplyBoundary(text: string): boolean {
   if (!trimmed) {
     return false;
   }
-  // Sentence-ending punctuation, allowing trailing closing quotes/brackets.
-  return /[.!?][)"'»”’\]]*$/.test(trimmed);
+  // Sentence-ending punctuation — ASCII plus common full-width/CJK terminators
+  // (。．！？｡ and the ellipsis …) — allowing trailing closing quotes/brackets
+  // (western and CJK), so non-Latin sentences still flush promptly on text_end.
+  return /[.!?…。．！？｡][)\]}"'»”’）］｝」』》】〕〉]*$/u.test(trimmed);
 }
 
 export function handleMessageStart(

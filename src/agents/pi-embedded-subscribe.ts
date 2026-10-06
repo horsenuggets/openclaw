@@ -405,10 +405,14 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     // Strip <think> and <final> blocks across chunk boundaries to avoid leaking
-    // reasoning. Also drop leading newlines so a chunk never opens with blank
+    // reasoning. Also drop leading blank lines so a chunk never opens with empty
     // lines (a paragraph separator can lead a coalesced block when the break
     // landed at buffer start, e.g. between native web-search citation blocks).
-    const chunk = stripBlockTags(text, state.blockState).replace(/^\n+/, "").trimEnd();
+    // Matches complete leading blank-line sequences, including horizontal
+    // whitespace and CRLF, while preserving indentation on the first real line.
+    const chunk = stripBlockTags(text, state.blockState)
+      .replace(/^(?:[ \t]*\r?\n)+/, "")
+      .trimEnd();
     if (!chunk) {
       return;
     }
