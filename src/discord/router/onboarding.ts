@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ChannelSlot } from "./channel-queue.js";
 import type { InstanceConfig } from "./config.js";
 import type { RouterRuntime } from "./types.js";
 import { type BuiltEmbed, buildEmbed } from "./embed-categories.js";
@@ -55,7 +54,7 @@ export function readBootstrapDirective(instance: InstanceConfig): string | null 
       "",
       "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw, never as Claude, Claude Code, or any other model or product name. If you need a noun, call yourself an assistant or your assistant.",
       "",
-      "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
+      'Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Keep all of this invisible to the user: never mention the checklist, that setup is happening, saving to files, ticking boxes, or wrapping up. Do not narrate mechanics like "let me save that" or "let me finish setup" - just chat naturally and do the bookkeeping silently. Now handle the user\'s message:',
     ].join("\n");
   } catch {
     return null;
@@ -68,6 +67,7 @@ export type OnboardingKickRoute = (params: {
   ownerId: string;
   instance: InstanceConfig;
   systemTurn: true;
+  preacquiredInflight: true;
 }) => Promise<boolean>;
 
 /**
@@ -75,12 +75,11 @@ export type OnboardingKickRoute = (params: {
  * owner speaks. Extracted from the router closure so its concurrency/error paths
  * are unit-testable with injected `probe`/`route`.
  *
- * Serialization: reserves the channel's queue slot BEFORE the readiness wait so a
- * user message sent right after the register embed buffers behind the kick instead
- * of overtaking it (which would invert ordering and could double the welcome). If
- * the channel is already busy, the kick is skipped — that turn drives onboarding
- * itself. The slot is always released, which drains anything that buffered during
- * the hold.
+ * Serialization: reserves the channel's `inflight` slot BEFORE the readiness wait
+ * so a user message sent right after the register embed queues behind the kick
+ * instead of overtaking it (which would invert ordering and could double the
+ * welcome). If a turn is already in flight, the kick is skipped — that turn drives
+ * onboarding itself. The slot is always released.
  *
  * Readiness: the provisioner can report ready before the agent gateway accepts
  * connections, and `routeMessage` turns an ECONNREFUSED into a one-shot error
@@ -94,22 +93,23 @@ export async function runOnboardingKick(params: {
   channelId: string;
   ownerId: string;
   instance: InstanceConfig;
-  slot: ChannelSlot;
+  inflight: Set<string>;
   probe: (port: number) => Promise<boolean>;
   route: OnboardingKickRoute;
   runtime: RouterRuntime;
   attempts?: number;
   intervalMs?: number;
 }): Promise<"busy" | "not-ready" | "kicked"> {
-  const { channelId, ownerId, instance, slot, probe, route, runtime } = params;
+  const { channelId, ownerId, instance, inflight, probe, route, runtime } = params;
   const attempts = params.attempts ?? 20;
   const intervalMs = params.intervalMs ?? 1000;
 
   // A message could already be in flight (e.g. the owner started typing
   // immediately); that turn will drive onboarding itself, so do not kick.
-  if (!slot.reserve(channelId)) {
+  if (inflight.has(channelId)) {
     return "busy";
   }
+  inflight.add(channelId);
   try {
     let ready = false;
     for (let i = 0; i < attempts; i++) {
@@ -126,9 +126,9 @@ export async function runOnboardingKick(params: {
       return "not-ready";
     }
     runtime.log(`[router] kicking onboarding for channel ${channelId} (owner ${ownerId})`);
-    await route({ channelId, ownerId, instance, systemTurn: true });
+    await route({ channelId, ownerId, instance, systemTurn: true, preacquiredInflight: true });
     return "kicked";
   } finally {
-    slot.release(channelId);
+    inflight.delete(channelId);
   }
 }

@@ -11,9 +11,11 @@ this folder is home! treat it that way
 ## first run
 
 if `BOOTSTRAP.md` exists, it is your setup checklist! work through its items with your
-human across as many messages as it takes, naturally, not as a dumped list. as you
-complete each item, tick its box (change `- [ ]` to `- [x]`) in that file. when every box
-is `[x]`, delete `BOOTSTRAP.md`. you will not need it again
+human across as many messages as it takes, naturally, not as a dumped list. keep it
+invisible: never mention the checklist, that setup is happening, saving files, or ticking
+boxes - just chat warmly and do the bookkeeping silently. as you complete each item, tick
+its box (change `- [ ]` to `- [x]`) in that file. when every box is `[x]`, delete
+`BOOTSTRAP.md`. you will not need it again
 
 ## every session
 
