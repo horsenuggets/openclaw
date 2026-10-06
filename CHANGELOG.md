@@ -13,6 +13,11 @@ Docs: https://docs.openclaw.ai
   a burst (configurable via `OPENCLAW_ROUTER_DEBOUNCE_MS`), coalesces everything buffered
   while a turn runs into the next combined turn, and serializes FIFO, so nothing is
   dropped or reordered and the agent always sees the full context.
+- Discord: the multi-user router now sends each paragraph of a reply as its own message
+  instead of one blank-line-separated block, so replies read more like natural texting
+  than a wall of text. Long paragraphs still split by length, fenced code blocks are never
+  broken, and sends are paced against Discord's per-channel rate limit (429 retry-after)
+  so a burst of split messages is never silently dropped.
 - Add `scripts/sync-app-emojis.sh`, a wrapper that loads the bot tokens from the repo-root
   `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
   through), so syncing the prod bot's application emojis onto the mirror bot is a single

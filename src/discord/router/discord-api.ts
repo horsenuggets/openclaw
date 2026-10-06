@@ -14,19 +14,74 @@ export type AllowedMentions = {
   replied_user?: boolean;
 };
 
+/** Max attempts for a rate-limited (429) message send before giving up. */
+const SEND_MAX_ATTEMPTS = 5;
+/** Fallback wait when a 429 response carries no retry-after hint. */
+const SEND_RETRY_FALLBACK_MS = 1_000;
+/** Cushion added to Discord's retry-after so the bucket has fully reset. */
+const SEND_RETRY_CUSHION_MS = 50;
+
+/**
+ * Read the retry-after delay (ms) from a 429 response. Prefers the
+ * `Retry-After` header (seconds) and falls back to the JSON body's
+ * `retry_after` field. Returns a safe default when neither is present.
+ */
+async function parseRetryAfterMs(resp: Response): Promise<number> {
+  const header = resp.headers.get("retry-after");
+  const headerSeconds = header ? Number(header) : Number.NaN;
+  if (Number.isFinite(headerSeconds) && headerSeconds >= 0) {
+    return Math.ceil(headerSeconds * 1_000) + SEND_RETRY_CUSHION_MS;
+  }
+  try {
+    const body = (await resp.clone().json()) as { retry_after?: number };
+    if (typeof body.retry_after === "number" && body.retry_after >= 0) {
+      return Math.ceil(body.retry_after * 1_000) + SEND_RETRY_CUSHION_MS;
+    }
+  } catch {
+    // Body was not JSON; fall through to the default.
+  }
+  return SEND_RETRY_FALLBACK_MS;
+}
+
 export async function discordSend(
   token: string,
   channelId: string,
   content: string,
 ): Promise<void> {
-  await fetch(`${DISCORD_API}${Routes.channelMessages(channelId)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ content }),
-  });
+  const url = `${DISCORD_API}${Routes.channelMessages(channelId)}`;
+  // Replies are split into one message per paragraph, so a single turn can
+  // exceed Discord's per-channel rate limit (5 messages / 5s). Honor the
+  // 429 retry-after so paragraphs are paced out rather than silently dropped.
+  for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    });
+    if (resp.ok) {
+      return;
+    }
+    // Non-429 failures (e.g. 401/403/5xx) are not retryable: throw so the caller
+    // treats the message as undelivered instead of silently dropping it.
+    if (resp.status !== 429) {
+      const detail = (await resp.text().catch(() => "")).slice(0, 200);
+      throw new Error(
+        `Discord send to channel ${channelId} failed (${resp.status})${detail ? `: ${detail}` : ""}`,
+      );
+    }
+    // Still rate limited on the final attempt: throw rather than return, so the
+    // caller treats the message as undelivered instead of silently dropping it.
+    if (attempt === SEND_MAX_ATTEMPTS) {
+      throw new Error(
+        `Discord send to channel ${channelId} rate limited after ${SEND_MAX_ATTEMPTS} attempts`,
+      );
+    }
+    const retryAfterMs = await parseRetryAfterMs(resp);
+    await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+  }
 }
 
 /**
@@ -414,28 +469,4 @@ export function probePort(port: number, timeoutMs = 1000): Promise<boolean> {
  */
 export function stripDashes(text: string): string {
   return text.replace(/\s*[—–]\s*/g, ", ").replace(/,\s+,/g, ",");
-}
-
-export function chunkText(text: string, limit: number): string[] {
-  if (text.length <= limit) {
-    return [text];
-  }
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= limit) {
-      chunks.push(remaining);
-      break;
-    }
-    let splitAt = remaining.lastIndexOf("\n", limit);
-    if (splitAt < limit * 0.3) {
-      splitAt = remaining.lastIndexOf(" ", limit);
-    }
-    if (splitAt < limit * 0.3) {
-      splitAt = limit;
-    }
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt).replace(/^\n/, "");
-  }
-  return chunks;
 }

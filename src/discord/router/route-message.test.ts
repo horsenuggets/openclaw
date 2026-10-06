@@ -78,6 +78,17 @@ describe("routeMessage payload delivery", () => {
     expect(sendEmbedMessage).not.toHaveBeenCalled();
   });
 
+  it("sends each paragraph of a multi-paragraph reply as its own message", async () => {
+    await route([{ text: "first paragraph\n\nsecond paragraph\n\nthird paragraph" }]);
+    const contents = (discordSend as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[2]);
+    expect(contents).toEqual(["first paragraph", "second paragraph", "third paragraph"]);
+  });
+
+  it("keeps a single-paragraph reply as one message", async () => {
+    await route([{ text: "just one line with no blank-line breaks" }]);
+    expect(discordSend).toHaveBeenCalledTimes(1);
+  });
+
   it("never runs a control command from an error payload", async () => {
     const runCommand = vi.fn(async () => "ran");
     await route([{ text: "⁘ lifecycle off", isError: true }], runCommand);

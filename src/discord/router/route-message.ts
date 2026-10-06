@@ -3,13 +3,13 @@ import type { InstanceConfig } from "./config.js";
 import type { DiscordAttachment, RouterRuntime, RunAgentCommand } from "./types.js";
 import { wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
+import { chunkDiscordTextWithMode } from "../chunk.js";
 import { stripHorizontalRules } from "../markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
 import {
   TYPING_INTERVAL_MS,
-  chunkText,
   discordSend,
   discordTyping,
   sendEmbedMessage,
@@ -313,7 +313,16 @@ export async function routeMessage(params: {
             text = stripHorizontalRules(text);
             text = convertTimesToDiscordTimestamps(text);
             text = stripDashes(text);
-            for (const chunk of chunkText(text, 2000)) {
+            // Split on paragraph boundaries (blank lines) so each paragraph is
+            // sent as its own message. This reads more like natural texting than
+            // one wall of text joined by blank lines. The Discord-aware chunker
+            // keeps fenced code blocks balanced and rebalances inline formatting
+            // when a long paragraph has to be split by length. discordSend paces
+            // sends against Discord's per-channel rate limit (5 messages / 5s).
+            for (const chunk of chunkDiscordTextWithMode(text, {
+              maxChars: 2000,
+              chunkMode: "newline",
+            })) {
               await discordSend(discordToken, channelId, chunk);
             }
             deliveredAnything = true;
