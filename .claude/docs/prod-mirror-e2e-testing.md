@@ -55,9 +55,13 @@ Run `./scripts/prod-mirror.sh deploy --build` from the worktree. It recompiles t
 linux binaries, redeploys over the box's sshd, and restarts the router and provisioner.
 Confirm the compile log shows the worktree path.
 
-Existing `agents.channel-*` containers keep their OLD workspace until recreated, and
-workspace template files (like `SOUL.md`) are only copied into a workspace on first
-registration. So to exercise new code or a new template, always register a FRESH channel.
+A deploy stops and recreates every registered `agents.channel-*` container with the new
+binary (`setup.sh` removes all containers, `boot.sh` brings each channel back up), so
+existing channels DO pick up new code. Workspace files are the exception: they are seeded
+only when missing (`writeFileIfMissing`, `src/agents/workspace.ts`), so an existing
+workspace keeps its OLD templates (e.g. `SOUL.md`). To exercise a template or other
+workspace-file change, register a FRESH channel (or delete that file from the channel's
+workspace so it gets re-seeded).
 
 If you only changed env (e.g. adding `OPENCLAW_MOCK_USER_BOT_ID` to `box.env`), skip
 `--build` and run `deploy` alone: it reuses the binaries and just recreates the router
@@ -110,8 +114,10 @@ across all turns. Keep the finished driver in gitignored `.prod-mirror/` as evid
   ```bash
   docker exec openclaw-prod-mirror bash -c 'ids=$(docker ps -aq --filter name=agents.channel); for i in $ids; do docker update --restart=no $i; done; docker stop $ids; docker rm $ids; docker restart services.discord-router'
   ```
-- A `deploy` recreates agent containers from persisted state, so cleaning them does not
-  keep them gone across a redeploy. Register fresh channels for the actual test.
+- A `deploy` recreates agent containers from persisted instance state, so cleaning them
+  does not keep them gone across a redeploy. Only register a fresh channel when you need a
+  fresh workspace (e.g. a template change); otherwise reuse existing channels to avoid
+  piling up more persistent instances.
 - The agent reaches the model through the router model-proxy using a minted subscription
   token in the box shared auth store. It expires about 24h after minting; re-mint with
   `scripts/prod-mirror.sh mint` if replies start 502-ing.
