@@ -3,6 +3,7 @@ import type {
   AgentEventSchema,
   AgentIdentityParamsSchema,
   AgentIdentityResultSchema,
+  AgentSteerParamsSchema,
   AgentWaitParamsSchema,
   PollParamsSchema,
   WakeParamsSchema,
@@ -138,6 +139,7 @@ export type AgentIdentityParams = Static<typeof AgentIdentityParamsSchema>;
 export type AgentIdentityResult = Static<typeof AgentIdentityResultSchema>;
 export type PollParams = Static<typeof PollParamsSchema>;
 export type AgentWaitParams = Static<typeof AgentWaitParamsSchema>;
+export type AgentSteerParams = Static<typeof AgentSteerParamsSchema>;
 export type WakeParams = Static<typeof WakeParamsSchema>;
 export type NodePairRequestParams = Static<typeof NodePairRequestParamsSchema>;
 export type NodePairListParams = Static<typeof NodePairListParamsSchema>;

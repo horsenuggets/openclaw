@@ -631,6 +631,23 @@ public struct AgentWaitParams: Codable, Sendable {
     }
 }
 
+public struct AgentSteerParams: Codable, Sendable {
+    public let sessionkey: String
+    public let message: String
+
+    public init(
+        sessionkey: String,
+        message: String
+    ) {
+        self.sessionkey = sessionkey
+        self.message = message
+    }
+    private enum CodingKeys: String, CodingKey {
+        case sessionkey = "sessionKey"
+        case message
+    }
+}
+
 public struct WakeParams: Codable, Sendable {
     public let mode: AnyCodable
     public let text: String

@@ -22,7 +22,7 @@ import type { InstanceConfig } from "./config.js";
 import type { RouterRuntime } from "./types.js";
 import { discordSend, sendEmbedMessage } from "./discord-api.js";
 import { callGatewaySimple } from "./gateway-call.js";
-import { routeMessage } from "./route-message.js";
+import { isKnownTextCommand, routeMessage } from "./route-message.js";
 
 const instance = {
   port: 18999,
@@ -44,13 +44,21 @@ function route(
     discordToken: "tok",
     runtime,
     agentTimeoutMs: 1000,
-    inflight: new Set<string>(),
-    preacquiredInflight: true,
     runCommand,
   });
 }
 
 afterEach(() => vi.clearAllMocks());
+
+describe("isKnownTextCommand", () => {
+  it("recognizes only host-handled text commands", () => {
+    expect(isKnownTextCommand("lifecycle")).toBe(true);
+    // An unknown `/word` is a normal message for the agent, so the router must
+    // enqueue it synchronously rather than routing through the async command path.
+    expect(isKnownTextCommand("foo")).toBe(false);
+    expect(isKnownTextCommand("help")).toBe(false);
+  });
+});
 
 describe("routeMessage payload delivery", () => {
   it("renders an isError payload as a Log embed, not plain text", async () => {
@@ -68,6 +76,17 @@ describe("routeMessage payload delivery", () => {
     await route([{ text: "hello world" }]);
     expect(discordSend).toHaveBeenCalledTimes(1);
     expect(sendEmbedMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends each paragraph of a multi-paragraph reply as its own message", async () => {
+    await route([{ text: "first paragraph\n\nsecond paragraph\n\nthird paragraph" }]);
+    const contents = (discordSend as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[2]);
+    expect(contents).toEqual(["first paragraph", "second paragraph", "third paragraph"]);
+  });
+
+  it("keeps a single-paragraph reply as one message", async () => {
+    await route([{ text: "just one line with no blank-line breaks" }]);
+    expect(discordSend).toHaveBeenCalledTimes(1);
   });
 
   it("never runs a control command from an error payload", async () => {

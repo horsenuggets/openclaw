@@ -66,7 +66,12 @@ type HeartbeatDeps = OutboundSendDeps &
   };
 
 const log = createSubsystemLogger("gateway/heartbeat");
-let heartbeatsEnabled = true;
+// Heartbeats run by default. OPENCLAW_SKIP_HEARTBEATS=1 silences all heartbeat
+// model calls (e.g. in the mirror test rig) without touching config; the gateway
+// can still re-enable them at runtime via setHeartbeatsEnabled. The check at the
+// start of runHeartbeatOnce is the single choke point for every trigger path
+// (interval, exec-event, wake), so gating here covers them all.
+let heartbeatsEnabled = process.env.OPENCLAW_SKIP_HEARTBEATS !== "1";
 
 export function setHeartbeatsEnabled(enabled: boolean) {
   heartbeatsEnabled = enabled;

@@ -13,6 +13,60 @@ Docs: https://docs.openclaw.ai
   itself and cites results. Pin `tools.web.search.provider` to `brave` or `perplexity` to
   keep the client provider, and tune searches per turn with `tools.web.search.maxUses`
   (default 5). Non-Anthropic models are unchanged. (#103)
+- Discord router: steer messages into a turn that is already running instead of only
+  buffering them for the next turn (Phase 2 of the conversational fix, building on the
+  per-channel queue). When the agent is mid-task and a new text message arrives, the
+  router injects it into the live run via a new `agent.steer` gateway method (which calls
+  `queueEmbeddedPiMessage`/`followUp`), so the agent sees "actually, also do X" while it
+  works and the reply rides the in-flight turn. If no run is actively streaming (it just
+  finished, or is compacting) the steer is declined and the message falls back to the
+  debounced, coalesced next turn. Messages carrying attachments and the onboarding kick's
+  reserved turn never steer (they need the full turn pipeline / ordering guarantee).
+- Discord router: coalesce rapid messages into one turn instead of a poll-mutex that ran
+  each message as its own turn. A short standalone message sent right after another (e.g.
+  "call me Sam") used to hit the agent's silence-bias and get no reply at all, and three
+  or more queued messages ran in nondeterministic order. A new per-channel queue debounces
+  a burst (configurable via `OPENCLAW_ROUTER_DEBOUNCE_MS`), coalesces everything buffered
+  while a turn runs into the next combined turn, and serializes FIFO, so nothing is
+  dropped or reordered and the agent always sees the full context.
+- Discord: the multi-user router now sends each paragraph of a reply as its own message
+  instead of one blank-line-separated block, so replies read more like natural texting
+  than a wall of text. Long paragraphs still split by length, fenced code blocks are never
+  broken, and sends are paced against Discord's per-channel rate limit (429 retry-after)
+  so a burst of split messages is never silently dropped.
+- Add `scripts/sync-app-emojis.sh`, a wrapper that loads the bot tokens from the repo-root
+  `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
+  through), so syncing the prod bot's application emojis onto the mirror bot is a single
+  command.
+- Persona: dial back the default SOUL.md writing style. Lowercase is now the strong
+  default including names and brand names (so "call me Alex" is answered as "alex" and
+  "Brave Search API" is written "brave search api"), and `:)` and other emoticons are
+  framed as a rare thing rather than something to reach for, so the agent stops ending
+  nearly every message with a smiley.
+- Proactive messaging: retire the standalone `ProactiveService` (the session-scanning
+  timer under `src/proactive/`) in favor of heartbeats as the single proactive mechanism.
+  The service only ever acted on DM (`direct`) sessions and its gate
+  (`OPENCLAW_SKIP_PROACTIVE`) was dead code (the computed flag was never consumed, so the
+  service always started regardless), while heartbeats already cover periodic proactive
+  checks. Removes the module (service, heuristics, prompt, types + tests), its gateway
+  wiring (`buildGatewayProactiveService`, startup greeting, close hook), the `proactive`
+  config block (`config.proactive.*` and its Zod schema; a legacy rule + migration drops a
+  leftover `proactive` key on load, so existing configs keep starting instead of failing
+  strict validation), and the per-session `lastProactiveCheckAt` /
+  `lastProactiveMessageSentAt` / `proactiveMessageCountToday` /
+  `proactiveMessageCountDate` fields (unused once the scanner is gone; existing session
+  stores simply ignore them). The one distinctive behavior it had, context-aware DM
+  follow-ups, moves into the `HEARTBEAT.md` template as a "reach out" guideline (follow up
+  on something specific you actually remember, else stay quiet). The agent can still send
+  proactive/unprompted messages via `cron` and `message` as before.
+- Heartbeat: add `OPENCLAW_SKIP_HEARTBEATS=1` to silence all heartbeat model calls without
+  touching config. It initializes the module-level enablement flag (still
+  runtime-togglable via the gateway), so it gates every trigger path (interval,
+  exec-event, wake) at the single `runHeartbeatOnce` choke point. Takes effect wherever
+  the gateway/agent process inherits it (e.g. a local or isolated test gateway);
+  documented in `.env.template`. Leave unset on prod so the agent stays proactive there.
+  (Wiring it through the mirror rig's per-channel agent containers, which use a fixed env
+  allowlist, is a follow-up.)
 - Discord router: log a reasoned drop when a message to a registered channel is filtered
   out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
   returned silently, so a driver bot getting no reply looked like a hang with nothing in

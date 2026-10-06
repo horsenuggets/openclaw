@@ -6,6 +6,15 @@ export type RouterRuntime = {
   error: (...args: unknown[]) => void;
 };
 
+/** A Discord message attachment as delivered on MESSAGE_CREATE. */
+export type DiscordAttachment = {
+  id: string;
+  filename: string;
+  content_type?: string;
+  url: string;
+  size: number;
+};
+
 /** Runs a control command emitted by the agent; returns a result string to
  * relay back to the agent, or null for a no-op (no relay). */
 export type RunAgentCommand = (

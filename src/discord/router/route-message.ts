@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { InstanceConfig } from "./config.js";
-import type { RouterRuntime, RunAgentCommand } from "./types.js";
+import type { DiscordAttachment, RouterRuntime, RunAgentCommand } from "./types.js";
 import { wrapSystemReminder } from "../../agents/conversation/system-reminder.js";
 import { convertMarkdownTables } from "../../markdown/tables.js";
+import { chunkDiscordTextWithMode } from "../chunk.js";
 import { stripHorizontalRules } from "../markdown-strip.js";
 import { convertTimesToDiscordTimestamps } from "../timestamps.js";
 import { parseAgentCommand, unescapeAgentText } from "./agent-commands.js";
 import { refreshToken, setUserPreference } from "./config.js";
 import {
   TYPING_INTERVAL_MS,
-  chunkText,
   discordSend,
   discordTyping,
   sendEmbedMessage,
@@ -22,14 +22,6 @@ import { buildLogEmbed, stripSurroundingItalics } from "./log-embed.js";
 import { readBootstrapDirective } from "./onboarding.js";
 import { classifyRouterError, isLeakedError } from "./router-filters.js";
 import { resolveWhisperUrl } from "./whisper-url.js";
-
-type DiscordAttachment = {
-  id: string;
-  filename: string;
-  content_type?: string;
-  url: string;
-  size: number;
-};
 
 /**
  * Decide whether an internal command result should be relayed back to the agent
@@ -55,6 +47,15 @@ export function shouldRelayCommandResult(params: {
   );
 }
 
+/**
+ * The agent session key for a Discord channel. One session per channel, shared
+ * by every turn (and by mid-turn steer injections) so they all land in the same
+ * conversation.
+ */
+export function channelSessionKey(channelId: string): string {
+  return `agent:main:discord:default:channel:${channelId}`;
+}
+
 /** Returns true if the agent responded successfully. */
 export async function routeMessage(params: {
   authorId: string;
@@ -65,7 +66,6 @@ export async function routeMessage(params: {
   discordToken: string;
   runtime: RouterRuntime;
   agentTimeoutMs: number;
-  inflight: Set<string>;
   /** Handler for `⁘` control commands emitted by the agent. */
   runCommand?: RunAgentCommand;
   /**
@@ -75,37 +75,11 @@ export async function routeMessage(params: {
    * onboarding kick, which has no real user message behind it.
    */
   systemTurn?: boolean;
-  /**
-   * The caller already holds this channel's `inflight` slot (and will release
-   * it). Skip acquiring/releasing it here. The onboarding kick reserves the slot
-   * before its readiness wait so a user message sent right after the register
-   * embed queues behind the kick instead of overtaking it.
-   */
-  preacquiredInflight?: boolean;
 }): Promise<boolean> {
-  const {
-    authorId,
-    channelId,
-    attachments,
-    instance,
-    discordToken,
-    runtime,
-    agentTimeoutMs,
-    inflight,
-  } = params;
-  const preacquiredInflight = params.preacquiredInflight === true;
+  const { authorId, channelId, attachments, instance, discordToken, runtime, agentTimeoutMs } =
+    params;
   let messageContent = params.messageContent;
 
-  // Serialize per-channel (unless the caller already holds the slot).
-  if (!preacquiredInflight) {
-    if (inflight.has(channelId)) {
-      runtime.log(`[router] channel ${channelId} already in-flight, queuing`);
-    }
-    while (inflight.has(channelId)) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    inflight.add(channelId);
-  }
   try {
     runtime.log(
       `[router] routing message from ${authorId} in channel ${channelId}: ${messageContent.slice(0, 80)}`,
@@ -238,7 +212,7 @@ export async function routeMessage(params: {
             channel: "discord",
             deliver: false,
             idempotencyKey,
-            sessionKey: `agent:main:discord:default:channel:${channelId}`,
+            sessionKey: channelSessionKey(channelId),
             timeout: Math.floor(agentTimeoutMs / 1000),
             ...(attachmentsForCall.length > 0 ? { attachments: attachmentsForCall } : {}),
           },
@@ -348,7 +322,16 @@ export async function routeMessage(params: {
             text = stripHorizontalRules(text);
             text = convertTimesToDiscordTimestamps(text);
             text = stripDashes(text);
-            for (const chunk of chunkText(text, 2000)) {
+            // Split on paragraph boundaries (blank lines) so each paragraph is
+            // sent as its own message. This reads more like natural texting than
+            // one wall of text joined by blank lines. The Discord-aware chunker
+            // keeps fenced code blocks balanced and rebalances inline formatting
+            // when a long paragraph has to be split by length. discordSend paces
+            // sends against Discord's per-channel rate limit (5 messages / 5s).
+            for (const chunk of chunkDiscordTextWithMode(text, {
+              maxChars: 2000,
+              chunkMode: "newline",
+            })) {
               await discordSend(discordToken, channelId, chunk);
             }
             deliveredAnything = true;
@@ -431,11 +414,21 @@ export async function routeMessage(params: {
       await sendLog("Something went wrong processing your message. Please try again.");
     }
     return false;
-  } finally {
-    if (!preacquiredInflight) {
-      inflight.delete(channelId);
-    }
   }
+}
+
+/**
+ * Text commands {@link handleTextCommand} handles itself (the slash-command
+ * fallback). Kept in sync with the switch below; anything not here is a normal
+ * message for the agent. Callers use {@link isKnownTextCommand} to decide
+ * synchronously whether a `/word` message needs the async command path at all,
+ * which keeps message ordering FIFO (see gateway-events routeInstanceMessage).
+ */
+const KNOWN_TEXT_COMMANDS = new Set(["lifecycle"]);
+
+/** True if `name` is a text command handled host-side rather than sent to the agent. */
+export function isKnownTextCommand(name: string): boolean {
+  return KNOWN_TEXT_COMMANDS.has(name);
 }
 
 /**
