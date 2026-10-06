@@ -103,6 +103,7 @@ describe("endsAtBlockReplyBoundary", () => {
     expect(endsAtBlockReplyBoundary("Wow!")).toBe(true);
     expect(endsAtBlockReplyBoundary('He said "go."')).toBe(true);
     expect(endsAtBlockReplyBoundary("Paragraph break\n\n")).toBe(true);
+    expect(endsAtBlockReplyBoundary("Heading\r\n\r\n")).toBe(true);
   });
 
   it("recognizes full-width / CJK sentence terminators", () => {

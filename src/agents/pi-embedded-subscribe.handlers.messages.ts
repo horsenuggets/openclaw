@@ -42,8 +42,8 @@ const stripTrailingDirective = (text: string): string => {
 // while complete sentences (including short pre-tool ones like "Let me check.")
 // still flush immediately, preserving streaming order for CLI backends.
 export function endsAtBlockReplyBoundary(text: string): boolean {
-  // A trailing blank line is an explicit paragraph boundary.
-  if (/\n[\t ]*\n\s*$/.test(text)) {
+  // A trailing blank line is an explicit paragraph boundary (CRLF or LF).
+  if (/\r?\n[\t ]*\r?\n\s*$/.test(text)) {
     return true;
   }
   const trimmed = text.replace(/\s+$/, "");
