@@ -10,6 +10,13 @@ Docs: https://docs.openclaw.ai
   `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
   through), so syncing the prod bot's application emojis onto the mirror bot is a single
   command.
+- Discord router: log a reasoned drop when a message to a registered channel is filtered
+  out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
+  returned silently, so a driver bot getting no reply looked like a hang with nothing in
+  the logs between the `MESSAGE_CREATE` line and the absent `routing message` line. The
+  router now emits `[router] dropped message from <id> in channel <id> (<reason>)` for
+  registered channels (unregistered channels stay quiet to avoid log spam), matching the
+  existing owner-check `denied`/`skipping` log style.
 - Tool deferral: fix `tool_search` returning a bare `{ type: "text", text }` block instead
   of an `AgentToolResult` (`{ content: [...], details }`). Its
   `as unknown as AnyAgentTool` cast hid the wrong shape from the type checker, so the
