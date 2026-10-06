@@ -162,10 +162,16 @@ build_box_env() {
 require_mock_user_bot_id() {
   [ -f "$BOX_ENV" ] || return 0
   local token mock
-  token=$(set -a; . "$BOX_ENV"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
-  mock=$(set -a; . "$BOX_ENV"; printf '%s' "${OPENCLAW_MOCK_USER_BOT_ID:-}")
+  # Read the values from the box.env FILE, never from the caller's shell: deploy.sh ships
+  # the file, and these vars are often already exported here (e.g. after `source box.env`
+  # to drive a test), so an exported value could mask a key the file omits. `unset` in each
+  # subshell first so only the file's value survives.
+  token=$(unset DISCORD_BOT_TOKEN; set -a; . "$BOX_ENV"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
+  mock=$(unset OPENCLAW_MOCK_USER_BOT_ID; set -a; . "$BOX_ENV"; printf '%s' "${OPENCLAW_MOCK_USER_BOT_ID:-}")
   [ -z "$token" ] && return 0
-  [ -n "$mock" ] && return 0
+  # A whitespace-only id is blank to the router, which trims it (router.ts) into an empty
+  # allowlist, so strip whitespace before the emptiness test.
+  [ -n "${mock//[[:space:]]/}" ] && return 0
   die "box.env sets a Discord token but leaves OPENCLAW_MOCK_USER_BOT_ID blank, so the router would drop the OpenClawMockUser bot's chat as an untrusted bot and onboarding would re-fire forever. Add OPENCLAW_MOCK_USER_BOT_ID to \".env.mirror\" and re-run (a copied box.env can be stale and predate it)."
 }
 
