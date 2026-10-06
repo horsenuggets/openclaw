@@ -283,6 +283,91 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
   });
 
+  it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
+    // OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS lets an E2E driver bot exercise the
+    // unauthorized-access denial: unlike a trusted conversational bot it does not
+    // bypass the ownership gate, and unlike an untrusted bot it is not dropped by
+    // the bot filter — it is treated like a human non-owner and denied.
+    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+    const posts: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.includes(`/channels/${CHANNEL}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(init);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "gated-msg",
+      author: { id: "gated-bot", bot: true },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "let me in",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("denied message from gated-bot"))).toBe(true);
+    // Not silently dropped as an untrusted bot would be.
+    expect(logs.some((l) => l.includes("dropped message from gated-bot"))).toBe(false);
+    // Gets the real "not authorized" notice embed, threaded under its message.
+    expect(posts).toHaveLength(1);
+    const payload = payloadOf(posts[0]);
+    expect(payload.embeds?.[0].description).toContain("not authorized");
+    expect(payload.message_reference?.message_id).toBe("gated-msg");
+  });
+
+  it("routes an owner-gated bot when it is the channel owner", async () => {
+    // The gate is ownership, not an outright block: when the owner-gated bot owns
+    // the channel it converses normally, so the same bot can both own a channel
+    // and be denied in one it does not own.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gated-"));
+    fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: "gated-bot" }));
+    vi.stubEnv("OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS", "gated-bot");
+    try {
+      void start(dir);
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "gated-owner-msg",
+        author: { id: "gated-bot", bot: true },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: "hello from the owner",
+        attachments: [],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(logs.some((l) => l.includes("routing message from gated-bot"))).toBe(true);
+      expect(logs.some((l) => l.includes("denied message from gated-bot"))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("logs a reasoned drop for an untrusted bot in a registered channel", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);

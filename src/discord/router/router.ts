@@ -207,6 +207,21 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const mockUserBotId = process.env.OPENCLAW_MOCK_USER_BOT_ID?.trim();
   const allowedBotIds = new Set(mockUserBotId ? [mockUserBotId] : []);
 
+  // Test-only: bot ids subject to the same channel-owner access gate as humans,
+  // instead of bypassing it as trusted conversational bots do. A real human
+  // non-owner is the only thing that normally reaches the unauthorized-access
+  // denial (untrusted bots are dropped by the bot filter; trusted bots bypass
+  // ownership), so there is no way to exercise that denial from an E2E driver
+  // bot. Listing a driver bot here makes it hit the denial when it is not the
+  // channel owner, so the unauthorized path can be tested end to end. Empty by
+  // default, so prod and the normal E2E suite are unaffected.
+  const ownerGatedBotIds = new Set(
+    (process.env.OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+
   // When a non-owner messages a registered channel, reply with a Log-embed
   // notice (enabled by default) explaining the channel belongs to someone else.
   // The reply is threaded under the offending message and persists. Set
@@ -388,6 +403,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     inflight,
     channelGuild,
     allowedBotIds,
+    ownerGatedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
