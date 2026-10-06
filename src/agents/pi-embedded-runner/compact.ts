@@ -40,7 +40,7 @@ import {
   ensurePiCompactionReserveTokens,
   resolveCompactionReserveTokensFloor,
 } from "../pi-settings.js";
-import { createOpenClawCodingTools } from "../pi-tools.js";
+import { createOpenClawCodingTools, resolveAnthropicServerWebSearchInputs } from "../pi-tools.js";
 import { resolveSandboxContext } from "../sandbox.js";
 import { repairSessionFileIfNeeded } from "../session-file-repair.js";
 import { guardSessionManager } from "../session-tool-result-guard-wrapper.js";
@@ -227,6 +227,12 @@ export async function compactEmbeddedPiSessionDirect(
       params.config?.agents?.defaults?.context,
     );
     const runAbortController = new AbortController();
+    const anthropicWebSearchInputs = resolveAnthropicServerWebSearchInputs({
+      config: params.config,
+      provider: model.provider,
+      modelId,
+      model,
+    });
     const toolsRaw = createOpenClawCodingTools({
       exec: {
         ...resolveExecToolDefaults(params.config),
@@ -247,7 +253,10 @@ export async function compactEmbeddedPiSessionDirect(
       abortSignal: runAbortController.signal,
       modelProvider: model.provider,
       modelId,
-      modelApi: model.api,
+      modelApi: anthropicWebSearchInputs.modelApi ?? model.api,
+      modelBaseUrl: anthropicWebSearchInputs.modelBaseUrl,
+      modelSupportsAnthropicServerWebSearch:
+        anthropicWebSearchInputs.modelSupportsAnthropicServerWebSearch,
       modelAuthMode: resolveModelAuthMode(model.provider, params.config),
     });
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider });

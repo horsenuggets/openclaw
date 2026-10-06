@@ -100,6 +100,34 @@ export function supportsAnthropicServerWebSearch(params: {
   }
 }
 
+/**
+ * Resolve the gating inputs for Anthropic native web search from config + the
+ * resolved model. The `supportsAnthropicServerWebSearch` capability is read from
+ * the configured `models.providers.<provider>.models[]` entry, because
+ * pi-coding-agent's `ModelRegistry.parseModels()` reconstructs models from known
+ * fields and drops this custom property (so reading it off the runtime model
+ * object alone always yields `undefined`). Callers pass these into
+ * `createOpenClawCodingTools` so the live run, compaction, and the /context
+ * fallback report all gate identically.
+ */
+export function resolveAnthropicServerWebSearchInputs(params: {
+  config?: OpenClawConfig;
+  provider?: string;
+  modelId?: string;
+  model?: { api?: string | null; baseUrl?: string | null } | null;
+}): { modelApi?: string; modelBaseUrl?: string; modelSupportsAnthropicServerWebSearch?: boolean } {
+  const providerConfig = params.provider
+    ? params.config?.models?.providers?.[params.provider]
+    : undefined;
+  const configuredModel = providerConfig?.models?.find((entry) => entry.id === params.modelId);
+  return {
+    modelApi: configuredModel?.api ?? providerConfig?.api ?? params.model?.api ?? undefined,
+    modelBaseUrl: providerConfig?.baseUrl ?? params.model?.baseUrl ?? undefined,
+    modelSupportsAnthropicServerWebSearch:
+      configuredModel?.supportsAnthropicServerWebSearch ?? undefined,
+  };
+}
+
 function isApplyPatchAllowedForModel(params: {
   modelProvider?: string;
   modelId?: string;

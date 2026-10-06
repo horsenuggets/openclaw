@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { supportsAnthropicServerWebSearch } from "./pi-tools.js";
+import type { OpenClawConfig } from "../config/config.js";
+import {
+  resolveAnthropicServerWebSearchInputs,
+  supportsAnthropicServerWebSearch,
+} from "./pi-tools.js";
 
 // Anthropic's hosted web_search_20250305 tool is a first-party capability, not
 // a property of the anthropic-messages wire format. Several non-Anthropic
@@ -77,5 +81,53 @@ describe("supportsAnthropicServerWebSearch", () => {
 
   it("does not enable native search when provider is unknown", () => {
     expect(supportsAnthropicServerWebSearch({ modelApi: "anthropic-messages" })).toBe(false);
+  });
+});
+
+// pi-coding-agent's ModelRegistry reconstructs models from known fields and
+// drops custom props like supportsAnthropicServerWebSearch, so the capability
+// must be read from config by provider/model id, not off the runtime model.
+describe("resolveAnthropicServerWebSearchInputs", () => {
+  it("reads the capability opt-in from the configured model entry", () => {
+    const config = {
+      models: {
+        providers: {
+          anthropic: {
+            api: "anthropic-messages",
+            baseUrl: "https://anthropic-proxy.example",
+            models: [{ id: "claude-proxy", supportsAnthropicServerWebSearch: true }],
+          },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    const inputs = resolveAnthropicServerWebSearchInputs({
+      config,
+      provider: "anthropic",
+      modelId: "claude-proxy",
+      model: { api: "anthropic-messages", baseUrl: "https://anthropic-proxy.example" },
+    });
+    expect(inputs.modelSupportsAnthropicServerWebSearch).toBe(true);
+    expect(inputs.modelBaseUrl).toBe("https://anthropic-proxy.example");
+    // The gate should now allow native search on this custom endpoint.
+    expect(
+      supportsAnthropicServerWebSearch({
+        modelApi: inputs.modelApi,
+        modelProvider: "anthropic",
+        modelBaseUrl: inputs.modelBaseUrl,
+        modelSupportsAnthropicServerWebSearch: inputs.modelSupportsAnthropicServerWebSearch,
+      }),
+    ).toBe(true);
+  });
+
+  it("falls back to the runtime model api/baseUrl when config has no entry", () => {
+    const inputs = resolveAnthropicServerWebSearchInputs({
+      config: {} as OpenClawConfig,
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+      model: { api: "anthropic-messages", baseUrl: "https://api.anthropic.com" },
+    });
+    expect(inputs.modelApi).toBe("anthropic-messages");
+    expect(inputs.modelBaseUrl).toBe("https://api.anthropic.com");
+    expect(inputs.modelSupportsAnthropicServerWebSearch).toBeUndefined();
   });
 });

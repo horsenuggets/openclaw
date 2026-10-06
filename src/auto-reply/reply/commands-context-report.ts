@@ -7,7 +7,10 @@ import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import { resolveBootstrapMaxChars } from "../../agents/pi-embedded-helpers.js";
 import { resolveModel } from "../../agents/pi-embedded-runner/model.js";
 import { resolveWorkspaceContextDelivery } from "../../agents/pi-embedded-runner/workspace-context.js";
-import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
+import {
+  createOpenClawCodingTools,
+  resolveAnthropicServerWebSearchInputs,
+} from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../../agents/skills/refresh.js";
@@ -100,14 +103,13 @@ async function resolveContextReport(
       return undefined;
     }
   })();
-  const modelConfig = params.cfg?.models?.providers?.[params.provider];
-  const configuredModel = modelConfig?.models?.find((entry) => entry.id === params.model);
-  const modelApi = configuredModel?.api ?? modelConfig?.api ?? model?.api;
-  const modelBaseUrl = modelConfig?.baseUrl ?? model?.baseUrl;
-  const modelSupportsAnthropicServerWebSearch =
-    configuredModel?.supportsAnthropicServerWebSearch ??
-    (model as (typeof model & { supportsAnthropicServerWebSearch?: boolean }) | undefined)
-      ?.supportsAnthropicServerWebSearch;
+  const { modelApi, modelBaseUrl, modelSupportsAnthropicServerWebSearch } =
+    resolveAnthropicServerWebSearchInputs({
+      config: params.cfg,
+      provider: params.provider,
+      modelId: params.model,
+      model,
+    });
   const tools = (() => {
     try {
       return createOpenClawCodingTools({

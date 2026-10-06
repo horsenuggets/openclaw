@@ -45,7 +45,10 @@ import {
   resolveCompactionReserveTokensFloor,
 } from "../../pi-settings.js";
 import { toClientToolDefinitions } from "../../pi-tool-definition-adapter.js";
-import { createOpenClawCodingTools } from "../../pi-tools.js";
+import {
+  createOpenClawCodingTools,
+  resolveAnthropicServerWebSearchInputs,
+} from "../../pi-tools.js";
 import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSandboxRuntimeStatus } from "../../sandbox/runtime-status.js";
 import { repairSessionFileIfNeeded } from "../../session-file-repair.js";
@@ -237,6 +240,12 @@ export async function runEmbeddedAttempt(
 
     // Check if the model supports native image input
     const modelHasVision = params.model.input?.includes("image") ?? false;
+    const anthropicWebSearchInputs = resolveAnthropicServerWebSearchInputs({
+      config: params.config,
+      provider: params.model.provider,
+      modelId: params.modelId,
+      model: params.model,
+    });
     const toolsRaw = params.disableTools
       ? []
       : createOpenClawCodingTools({
@@ -265,14 +274,10 @@ export async function runEmbeddedAttempt(
           abortSignal: runAbortController.signal,
           modelProvider: params.model.provider,
           modelId: params.modelId,
-          modelApi: params.model.api,
-          modelBaseUrl: params.model.baseUrl,
+          modelApi: anthropicWebSearchInputs.modelApi ?? params.model.api,
+          modelBaseUrl: anthropicWebSearchInputs.modelBaseUrl,
           modelSupportsAnthropicServerWebSearch:
-            (
-              params.model as typeof params.model & {
-                supportsAnthropicServerWebSearch?: boolean;
-              }
-            ).supportsAnthropicServerWebSearch === true,
+            anthropicWebSearchInputs.modelSupportsAnthropicServerWebSearch,
           modelAuthMode: resolveModelAuthMode(params.model.provider, params.config),
           currentChannelId: params.currentChannelId,
           currentThreadTs: params.currentThreadTs,
