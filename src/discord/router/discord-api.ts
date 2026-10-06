@@ -52,7 +52,7 @@ export async function discordSend(
   // Replies are split into one message per paragraph, so a single turn can
   // exceed Discord's per-channel rate limit (5 messages / 5s). Honor the
   // 429 retry-after so paragraphs are paced out rather than silently dropped.
-  for (let attempt = 0; attempt < SEND_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= SEND_MAX_ATTEMPTS; attempt++) {
     const resp = await fetch(url, {
       method: "POST",
       headers: {
@@ -63,6 +63,13 @@ export async function discordSend(
     });
     if (resp.status !== 429) {
       return;
+    }
+    // Still rate limited on the final attempt: throw rather than return, so the
+    // caller treats the message as undelivered instead of silently dropping it.
+    if (attempt === SEND_MAX_ATTEMPTS) {
+      throw new Error(
+        `Discord send to channel ${channelId} rate limited after ${SEND_MAX_ATTEMPTS} attempts`,
+      );
     }
     const retryAfterMs = await parseRetryAfterMs(resp);
     await new Promise((resolve) => setTimeout(resolve, retryAfterMs));

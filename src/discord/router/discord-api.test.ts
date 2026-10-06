@@ -49,12 +49,11 @@ describe("discordSend rate-limit handling", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("gives up after the maximum number of attempts", async () => {
+  it("throws after exhausting the maximum number of attempts", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(429, { retryAfterHeader: "0" }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await discordSend("tok", "c1", "hello");
-
+    await expect(discordSend("tok", "c1", "hello")).rejects.toThrow(/rate limited/);
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });
