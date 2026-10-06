@@ -236,7 +236,7 @@ describe("gateway agent.steer handler", () => {
       isWebchatConnect: () => false,
     });
 
-    expect(mocks.queueEmbeddedPiMessage).toHaveBeenCalledWith("sess-1", "also do X");
+    expect(mocks.queueEmbeddedPiMessage).toHaveBeenCalledWith("sess-1", "also do X", "steer");
     expect(respond).toHaveBeenCalledWith(true, { accepted: true });
   });
 

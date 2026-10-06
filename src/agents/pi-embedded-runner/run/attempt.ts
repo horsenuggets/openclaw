@@ -84,6 +84,7 @@ import { buildModelAliasLines } from "../model.js";
 import { buildPersonaPreambleMessage } from "../persona-preamble.js";
 import {
   clearActiveEmbeddedRun,
+  deliverQueuedMessage,
   type EmbeddedPiQueueHandle,
   setActiveEmbeddedRun,
 } from "../runs.js";
@@ -790,13 +791,10 @@ export async function runEmbeddedAttempt(
       } = subscription;
 
       const queueHandle: EmbeddedPiQueueHandle = {
-        queueMessage: async (text: string) => {
-          // Use followUp instead of steer so the current turn's
-          // tool calls complete before the user message is injected.
-          // steer() skips remaining tools ("Skipped due to queued
-          // user message"), while followUp() lets work finish.
-          await activeSession.followUp(text);
-        },
+        // `followup` (default) waits for the agent's current tool calls to finish
+        // before injecting; `steer` delivers at the next tool boundary and skips
+        // the agent's remaining planned tools. See deliverQueuedMessage.
+        queueMessage: (text: string, mode) => deliverQueuedMessage(activeSession, text, mode),
         isStreaming: () => activeSession.isStreaming,
         isCompacting: () => subscription.isCompacting(),
         abort: abortRun,
