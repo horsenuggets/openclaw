@@ -161,6 +161,17 @@ describe("isLifecycleBanner", () => {
     expect(isLifecycleBanner('The agent is starting up... ["an","array"]')).toBe(false);
   });
 
+  it("requires the fence to span the whole message (no trailing reply after it)", () => {
+    // A valid-looking fenced block mid-message must not classify the whole reply as a
+    // banner, or recovery would replay the user message beneath an ordinary reply.
+    expect(isLifecycleBanner("The agent is starting up...\n```json\n{}\n```\nnormal reply")).toBe(
+      false,
+    );
+    expect(isLifecycleBanner('The agent is shutting down... {"a":1} and then more text')).toBe(
+      false,
+    );
+  });
+
   it("matches the exact diagnostics embed the sidecar sends (sender/matcher consistency)", () => {
     // buildLifecycleMessage -> buildLogEmbed is the real sidecar path; its output
     // description (lead phrase + fenced JSON) must be what recovery recognizes.

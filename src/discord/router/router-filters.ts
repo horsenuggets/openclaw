@@ -34,18 +34,18 @@ export type LifecycleBannerMessage = {
   embeds?: Array<{ description?: string }>;
 };
 
-/** The payload after a banner's lead phrase, unwrapped from a ```json fence if present. */
+/**
+ * The payload after a banner's lead phrase: the whole remainder as compact JSON, or
+ * the body of a ```json fence that spans the entire remainder (the exact shape
+ * buildLogEmbed emits). Returns null for anything else — notably a fence with a
+ * different label or trailing text after the close, so an ordinary reply that embeds
+ * a valid-looking block mid-message is not mistaken for a banner.
+ */
 function extractBannerPayload(rest: string): string | null {
   const trimmed = rest.trim();
   if (trimmed.startsWith("```")) {
-    // Drop the opening fence line (``` or ```json) and the closing fence, keeping the body.
-    const firstNewline = trimmed.indexOf("\n");
-    if (firstNewline === -1) {
-      return null;
-    }
-    const body = trimmed.slice(firstNewline + 1);
-    const closeFence = body.lastIndexOf("```");
-    return closeFence === -1 ? null : body.slice(0, closeFence).trim();
+    const fenced = trimmed.match(/^```json\n([\s\S]*)\n```$/);
+    return fenced ? fenced[1].trim() : null;
   }
   return trimmed.startsWith("{") ? trimmed : null;
 }
