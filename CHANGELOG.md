@@ -6,6 +6,39 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Mid-turn steering now uses the agent's `steer()` primitive instead of `followUp()`, so a
+  message injected via `agent.steer` (the Discord router's mid-turn path) is delivered at
+  the next tool boundary and skips the agent's remaining planned tools — it reacts to an
+  urgent "handle this now" message promptly rather than waiting for the whole in-flight
+  turn to finish. `queueEmbeddedPiMessage` takes an injection mode (`followup` default,
+  `steer` opt-in); the auto-reply and subagent paths keep `followup` so no in-flight work
+  is lost there. Note a single long-running tool call (e.g. a `sleep`) still can't be
+  interrupted mid-execution — steering is only evaluated between tools.
+- Discord router: steer messages into a turn that is already running instead of only
+  buffering them for the next turn (Phase 2 of the conversational fix, building on the
+  per-channel queue). When the agent is mid-task and a new text message arrives, the
+  router injects it into the live run via a new `agent.steer` gateway method (see the
+  injection-mode note above), so the agent sees "actually, also do X" while it works and
+  the reply rides the in-flight turn. If no run is actively streaming (it just finished,
+  or is compacting) the steer is declined and the message falls back to the debounced,
+  coalesced next turn. Messages carrying attachments and the onboarding kick's reserved
+  turn never steer (they need the full turn pipeline / ordering guarantee).
+- Discord router: coalesce rapid messages into one turn instead of a poll-mutex that ran
+  each message as its own turn. A short standalone message sent right after another (e.g.
+  "call me Sam") used to hit the agent's silence-bias and get no reply at all, and three
+  or more queued messages ran in nondeterministic order. A new per-channel queue debounces
+  a burst (configurable via `OPENCLAW_ROUTER_DEBOUNCE_MS`), coalesces everything buffered
+  while a turn runs into the next combined turn, and serializes FIFO, so nothing is
+  dropped or reordered and the agent always sees the full context.
+- Discord: the multi-user router now sends each paragraph of a reply as its own message
+  instead of one blank-line-separated block, so replies read more like natural texting
+  than a wall of text. Long paragraphs still split by length, fenced code blocks are never
+  broken, and sends are paced against Discord's per-channel rate limit (429 retry-after)
+  so a burst of split messages is never silently dropped.
+- Add `scripts/sync-app-emojis.sh`, a wrapper that loads the bot tokens from the repo-root
+  `.env` and runs `scripts/sync-app-emojis.ts` (flags like `--dry-run` / `--prune` pass
+  through), so syncing the prod bot's application emojis onto the mirror bot is a single
+  command.
 - Persona: dial back the default SOUL.md writing style. Lowercase is now the strong
   default including names and brand names (so "call me Alex" is answered as "alex" and
   "Brave Search API" is written "brave search api"), and `:)` and other emoticons are

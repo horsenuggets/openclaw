@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { GatewayRequestHandlers } from "./types.js";
 import { listAgentIds } from "../../agents/agent-scope.js";
+import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
 import { agentCommand } from "../../commands/agent.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -35,6 +36,7 @@ import {
   formatValidationErrors,
   validateAgentIdentityParams,
   validateAgentParams,
+  validateAgentSteerParams,
   validateAgentWaitParams,
 } from "../protocol/index.js";
 import { loadSessionEntry } from "../session-utils.js";
@@ -511,5 +513,45 @@ export const agentHandlers: GatewayRequestHandlers = {
       endedAt: snapshot.endedAt,
       error: snapshot.error,
     });
+  },
+  "agent.steer": ({ params, respond }) => {
+    if (!validateAgentSteerParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid agent.steer params: ${formatValidationErrors(validateAgentSteerParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    // Inject a message into the session's in-flight run (if one is actively
+    // streaming) so the agent sees it mid-turn instead of only on the next turn.
+    // `accepted` is false when there is no active streaming run for the session —
+    // the caller then falls back to starting a normal turn. The injected
+    // message's reply is delivered through the already-running turn, so this
+    // handler never produces output itself.
+    const sessionKey = params.sessionKey.trim();
+    const { cfg, entry } = loadSessionEntry(sessionKey);
+    const sessionId = entry?.sessionId;
+    // Honor the session send policy, like the `agent` / `chat.send` paths: never
+    // inject into a disabled session. Decline (accepted:false) rather than error
+    // so the caller's fallback turn hits the same check and is rejected there.
+    const sendPolicy = resolveSendPolicy({
+      cfg,
+      entry,
+      sessionKey,
+      channel: entry?.channel,
+      chatType: entry?.chatType,
+    });
+    // "steer" mode: deliver at the next tool boundary and skip the agent's
+    // remaining planned tools so it reacts to this message promptly, rather than
+    // only after the whole in-flight turn finishes (that is the point of a steer).
+    const accepted =
+      sessionId && sendPolicy !== "deny"
+        ? queueEmbeddedPiMessage(sessionId, params.message, "steer")
+        : false;
+    respond(true, { accepted });
   },
 };

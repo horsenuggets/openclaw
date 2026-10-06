@@ -1,5 +1,6 @@
+import type { ChannelQueue } from "./channel-queue.js";
 import type { InstanceConfig } from "./config.js";
-import type { RouterRuntime, RunAgentCommand } from "./types.js";
+import type { RouterRuntime } from "./types.js";
 import {
   type ChannelCommandDeps,
   type ChannelReplyPayload,
@@ -19,7 +20,7 @@ import {
 import { buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
-import { handleTextCommand, routeMessage } from "./route-message.js";
+import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
 
@@ -27,17 +28,17 @@ import { isAuthorizedForChannel } from "./router.js";
  * The closed-over router state a gateway DISPATCH handler needs. Assembled once
  * in {@link startRouter} and passed to every handler, so the socket lifecycle
  * (connect/reconnect/heartbeat) stays in router.ts while the event bodies live
- * here. Module-level helpers the handlers call (routeMessage, handleChannelCommand,
+ * here. Module-level helpers the handlers call (handleChannelCommand,
  * discordSend*, isConversationalBot, isAuthorizedForChannel) are imports, not
  * members — only per-instance/per-process state and wired closures belong here.
  */
 export type GatewayContext = {
   discordToken: string;
   applicationId: string;
-  agentTimeoutMs: number;
   runtime: RouterRuntime;
   instances: Map<string, InstanceConfig>;
-  inflight: Set<string>;
+  /** Per-channel queue that debounces, coalesces, and serializes inbound turns. */
+  channelQueue: ChannelQueue;
   /** Best-effort channel -> guild map, learned from message/interaction events. */
   channelGuild: Map<string, string>;
   /** Trusted bot id (OPENCLAW_MOCK_USER_BOT_ID) that may converse. */
@@ -56,7 +57,6 @@ export type GatewayContext = {
   unauthorizedNoticeEnabled: boolean;
   describeInstance: (channelId: string) => InstanceStatus | null;
   channelCommandDeps: ChannelCommandDeps;
-  runAgentCommand: RunAgentCommand;
   /** Tear an instance down through the same provisioning path as unregister. */
   cleanupDeletedChannel: (channelId: string, reason: string) => void;
 };
@@ -116,17 +116,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   const {
     discordToken,
     applicationId,
-    agentTimeoutMs,
     runtime,
     instances,
-    inflight,
+    channelQueue,
     channelGuild,
     allowedBotIds,
     ownerGatedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
-    runAgentCommand,
   } = ctx;
 
   const authorId = d.author?.id;
@@ -250,49 +248,30 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // not by a router-side state machine.
   const routeInstanceMessage = (): void => {
     const commandMatch = content.trim().match(/^\/\/?(\w+)(?:\s+(.*))?$/);
-    if (commandMatch) {
-      const cmdName = commandMatch[1].toLowerCase();
-      const cmdArg = commandMatch[2]?.trim().toLowerCase();
-      const messageId = d.id;
+    const cmdName = commandMatch?.[1].toLowerCase();
+    // Only a recognized text command goes down the async host-side path. An
+    // unrecognized `/word` is just a normal message and must enqueue
+    // synchronously, in arrival order: deciding that inside handleTextCommand's
+    // `.then` would run a microtask later, so a message dispatched right after it
+    // (which enqueues synchronously) could jump ahead and break FIFO.
+    if (commandMatch && cmdName && isKnownTextCommand(cmdName)) {
       void handleTextCommand({
         cmdName,
-        cmdArg,
+        cmdArg: commandMatch[2]?.trim().toLowerCase(),
         userId: authorId,
         channelId,
-        messageId,
+        messageId: d.id,
         instance,
         discordToken,
         runtime,
-      }).then((handled) => {
-        if (!handled) {
-          void routeMessage({
-            authorId,
-            channelId,
-            messageContent: content,
-            attachments: rawAttachments,
-            instance,
-            discordToken,
-            runtime,
-            agentTimeoutMs,
-            inflight,
-            runCommand: runAgentCommand,
-          });
-        }
       });
       return;
     }
 
-    void routeMessage({
+    channelQueue.enqueue(channelId, {
       authorId,
-      channelId,
       messageContent: content,
       attachments: rawAttachments,
-      instance,
-      discordToken,
-      runtime,
-      agentTimeoutMs,
-      inflight,
-      runCommand: runAgentCommand,
     });
   };
 

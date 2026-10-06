@@ -277,7 +277,8 @@ describe("discord router channel-delete cleanup", () => {
       content: "run the test",
       attachments: [],
     });
-    await vi.advanceTimersByTimeAsync(0);
+    // The queue debounces before running the turn, so advance past that window.
+    await vi.advanceTimersByTimeAsync(600);
 
     expect(logs.some((l) => l.includes("routing message from trusted-bot"))).toBe(true);
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);

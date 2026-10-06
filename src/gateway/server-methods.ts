@@ -80,6 +80,7 @@ const WRITE_METHODS = new Set([
   "send",
   "agent",
   "agent.wait",
+  "agent.steer",
   "wake",
   "talk.mode",
   "tts.enable",
