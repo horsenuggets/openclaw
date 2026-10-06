@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: log a reasoned drop when a message to a registered channel is filtered
+  out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
+  returned silently, so a driver bot getting no reply looked like a hang with nothing in
+  the logs between the `MESSAGE_CREATE` line and the absent `routing message` line. The
+  router now emits `[router] dropped message from <id> in channel <id> (<reason>)` for
+  registered channels (unregistered channels stay quiet to avoid log spam), matching the
+  existing owner-check `denied`/`skipping` log style.
 - Discord router: the health-monitor sidecar's channel lifecycle banners now carry a JSON
   diagnostics payload instead of the bare `Back online.` / `Shutting down...` text.
   Startup leads with `The agent is starting up...` and reports `reason` (`INITIAL_BOOT` /
