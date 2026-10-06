@@ -6,6 +6,16 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: the health-monitor sidecar's channel lifecycle banners now carry a JSON
+  diagnostics payload instead of the bare `Back online.` / `Shutting down...` text.
+  Startup leads with `The agent is starting up...` and reports `reason` (`INITIAL_BOOT` /
+  `ROUTER_RESTART`), `pid`, `downtime` (null on the initial boot), `discordApiPing`, and
+  `memory`; shutdown leads with `The agent is shutting down...` and reports `reason` (the
+  signal), `pid`, `uptime`, `discordApiPing`, and `memory`. `discordApiPing` is a timed
+  `GET /api/v10/gateway` round-trip (3s timeout, omitted if the probe fails). The crash-
+  recovery scan now matches banners by lead-phrase prefix (keeping the legacy exact
+  phrases for banners still in channel history) so the varying JSON cannot break recovery
+  (#91).
 - Deploy: reconcile each registered agent instance's proxy URLs on boot. `boot.sh` now
   runs `openclawctl reconcile <channelId>` (a new subcommand that re-asserts the model-
   and container-proxy URLs from the current agent-bridge env) before starting each box, so
