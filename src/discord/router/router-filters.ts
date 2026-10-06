@@ -8,11 +8,20 @@
  * re-runs the same failing message on every reconnect (an endless error loop).
  *
  * Banners are posted as Log-category embeds (no forced italics), so the phrase
- * lives verbatim in the embed description. The exact-phrase match is what keeps
- * error log embeds (which share the Log category but carry different text) from
- * being skipped.
+ * lives verbatim in the embed description. Current banners lead with a static
+ * phrase followed by a JSON diagnostics block, so they match by prefix; the
+ * legacy exact phrases are kept for banners still in channel history from older
+ * builds. Both forms are distinctive enough that error log embeds (which share
+ * the Log category but carry different text) are never skipped.
  */
 export const LIFECYCLE_BANNERS = ["Back online.", "Shutting down..."];
+
+/**
+ * Lead phrases for current diagnostics banners (see
+ * discord-health-monitor/lifecycle-message.ts LIFECYCLE_LEAD). The JSON payload
+ * that follows varies per event, so these are matched as prefixes.
+ */
+export const LIFECYCLE_BANNER_PREFIXES = ["The agent is starting up", "The agent is shutting down"];
 
 /** A fetched message, narrowed to the fields that can carry a lifecycle banner. */
 export type LifecycleBannerMessage = {
@@ -22,15 +31,20 @@ export type LifecycleBannerMessage = {
 
 /**
  * Match a banner phrase, tolerating the legacy italic content form
- * (`*Back online.*`) by stripping surrounding asterisks. New banners are plain
- * Log-embed descriptions; old ones in channel history may still be italic.
+ * (`*Back online.*`) by stripping surrounding asterisks. Current banners are
+ * plain Log-embed descriptions matched by lead-phrase prefix (the trailing JSON
+ * varies); legacy banners are matched exactly, and old italic ones in channel
+ * history still normalize via the asterisk strip.
  */
 function matchesBanner(text: string): boolean {
   const normalized = text
     .trim()
     .replace(/^\*+|\*+$/g, "")
     .trim();
-  return LIFECYCLE_BANNERS.includes(normalized);
+  if (LIFECYCLE_BANNERS.includes(normalized)) {
+    return true;
+  }
+  return LIFECYCLE_BANNER_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
 export function isLifecycleBanner(message: string | LifecycleBannerMessage | undefined): boolean {

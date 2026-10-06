@@ -9,7 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { sendEmbedMessage } from "../src/discord/router/discord-api.js";
+import { DISCORD_API, sendEmbedMessage } from "../src/discord/router/discord-api.js";
 import { buildLogEmbed } from "../src/discord/router/log-embed.js";
 import { readInstancePort } from "./ports.js";
 
@@ -100,17 +100,57 @@ function loadChannels(): ChannelConfig[] {
 // --- Discord REST API ---
 
 /**
- * Post a lifecycle banner ("Back online.", "Shutting down...") as a Log-category
- * embed to every opted-in channel, with a global timeout to prevent hangs. The
- * raw phrase is passed to `buildLogEmbed`, which italicizes it to the exact text
- * the router's recovery scan recognizes as a banner. The footer icon is uploaded
- * with the message (reused from the CDN cache after the first channel).
+ * Post a lifecycle banner (startup/shutdown) as a Log-category embed to every
+ * opted-in channel, with a global timeout to prevent hangs. The banner leads with
+ * a static phrase the router's recovery scan recognizes (see router-filters.ts)
+ * followed by a JSON diagnostics payload (reason, uptime, last ping, memory...),
+ * which `buildLogEmbed` pretty-prints into a fenced block. The live runtime values
+ * (uptime, memory, now) are gathered here; event-specific context is passed in.
+ * The footer icon is uploaded with the message (reused from the CDN cache after
+ * the first channel).
  */
-async function sendLifecycleMessage(token: string, phrase: string): Promise<void> {
+/**
+ * Measure Discord REST round-trip latency via the unauthenticated `/gateway`
+ * endpoint (a tiny JSON body), bounded by a short timeout. Returns ms, or null
+ * if the probe fails or times out so a flaky network never blocks the banner.
+ */
+async function measureDiscordApiPing(): Promise<number | null> {
+  const start = Date.now();
+  try {
+    const res = await fetch(`${DISCORD_API}/gateway`, {
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!res.ok) {
+      return null;
+    }
+    await res.arrayBuffer();
+    return Date.now() - start;
+  } catch {
+    return null;
+  }
+}
+
+async function sendLifecycleMessage(
+  token: string,
+  event: LifecycleEvent,
+  context: { reason: string; pid?: number | null; lastHealthyAt: number | null },
+): Promise<void> {
   const channels = loadChannels();
   if (channels.length === 0) {
     return;
   }
+  const mem = process.memoryUsage();
+  const discordApiPingMs = await measureDiscordApiPing();
+  const phrase = buildLifecycleMessage({
+    event,
+    reason: context.reason,
+    pid: context.pid,
+    uptimeSeconds: process.uptime(),
+    lastHealthyAt: context.lastHealthyAt,
+    now: Date.now(),
+    discordApiPingMs,
+    memory: { rss: mem.rss, heapUsed: mem.heapUsed },
+  });
   const log = buildLogEmbed(phrase);
   const sends = channels.map((ch) =>
     sendEmbedMessage(token, ch.channelId, {
@@ -177,13 +217,21 @@ function spawnRouter(): ChildProcess {
   child.on("spawn", () => {
     console.log(`[health] discord-router started (pid ${child.pid})`);
     supervisorState = "running";
+    // Capture the prior healthy time before overwriting it, so the startup
+    // banner can report how long the router was down across a restart.
+    const previousHealthyAt = lastHealthyAt;
+    const attempt = reconnectAttempts;
     lastHealthyAt = Date.now();
     try {
       fs.writeFileSync("/tmp/health-monitor.ok", String(Date.now()));
     } catch {}
 
-    // Send "Back online" now that router is confirmed running
-    void sendLifecycleMessage(discordToken, "Back online.");
+    // Announce startup now that the router is confirmed running.
+    void sendLifecycleMessage(discordToken, "startup", {
+      reason: attempt > 0 ? "ROUTER_RESTART" : "INITIAL_BOOT",
+      pid: child.pid,
+      lastHealthyAt: previousHealthyAt > 0 ? previousHealthyAt : null,
+    });
 
     // Reset backoff after 30s stable
     setTimeout(() => {
@@ -277,8 +325,11 @@ async function main() {
     shuttingDown = true;
     console.log(`[health] received ${signal}, shutting down`);
 
-    // Best-effort "Shutting down" with timeout (don't block shutdown)
-    await sendLifecycleMessage(discordToken, "Shutting down...");
+    // Best-effort shutdown banner with timeout (don't block shutdown).
+    await sendLifecycleMessage(discordToken, "shutdown", {
+      reason: signal,
+      lastHealthyAt: lastHealthyAt > 0 ? lastHealthyAt : null,
+    });
 
     // Stop router
     if (routerProcess) {

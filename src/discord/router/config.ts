@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export type UserPreferences = {
-  /** Show "Back online." / "Shutting down..." lifecycle messages. Default: false. */
+  /** Show agent startup/shutdown lifecycle banners. Default: false. */
   lifecycleMessages?: boolean;
 };
 

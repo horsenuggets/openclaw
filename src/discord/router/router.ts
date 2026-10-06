@@ -817,12 +817,13 @@ async function recoverUnansweredMessages(
       }
 
       // Walk newest-first. For a BOT message, skip ONLY genuine lifecycle banners
-      // (*Back online.*, *Shutting down...*), which are not replies to a user
-      // message; any other bot message — including an error reply — means the
+      // (the "agent is starting up/shutting down" diagnostics embeds, plus legacy
+      // "*Back online.*"/"*Shutting down...*" ones), which are not replies to a
+      // user message; any other bot message — including an error reply — means the
       // newest user message was already handled, so stop and do not re-run it.
       // (Previously all italic text was skipped, swallowing error replies and
       // re-attempting the same failing message on every reconnect.) Authorship is
-      // checked first so a user literally typing "*Back online.*" is not mistaken
+      // checked first so a user literally typing a banner phrase is not mistaken
       // for a banner.
       let lastUserMsg: (typeof messages)[0] | undefined;
       let lastUserMsgIsTrustedBot = false;

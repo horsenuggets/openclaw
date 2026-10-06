@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { buildLifecycleMessage } from "../../../discord-health-monitor/lifecycle-message.js";
 import { buildLogEmbed } from "./log-embed.js";
 import { classifyRouterError, isConversationalBot, isLifecycleBanner } from "./router-filters.js";
+
+/** A representative diagnostics banner string for each event. */
+function banner(event: "startup" | "shutdown"): string {
+  return buildLifecycleMessage({
+    event,
+    reason: event === "startup" ? "ROUTER_RESTART" : "SIGTERM",
+    pid: 4321,
+    uptimeSeconds: 3723,
+    lastHealthyAt: Date.parse("2026-10-05T00:00:00.000Z"),
+    now: Date.parse("2026-10-05T00:00:12.000Z"),
+    discordApiPingMs: 83,
+    memory: { rss: 89_214_976, heapUsed: 23_170_000 },
+  });
+}
 
 describe("isConversationalBot", () => {
   const allow = new Set(["111", "222"]);
@@ -114,10 +129,23 @@ describe("isLifecycleBanner", () => {
     ).toBe(false);
   });
 
-  it("matches the exact embed the sidecar sends (sender/matcher consistency)", () => {
-    // buildLogEmbed is what the health-monitor sidecar now uses for banners, so
-    // its output description must be what the recovery scan recognizes.
+  it("matches the legacy exact phrases still in channel history", () => {
+    // Older builds posted these verbatim; recovery must still skip them.
     expect(isLifecycleBanner({ embeds: [buildLogEmbed("Back online.").embed] })).toBe(true);
     expect(isLifecycleBanner({ embeds: [buildLogEmbed("Shutting down...").embed] })).toBe(true);
+  });
+
+  it("matches current diagnostics banners by lead phrase despite the JSON payload", () => {
+    // The trailing JSON varies per event, so matching keys off the static lead
+    // phrase only.
+    expect(isLifecycleBanner(banner("startup"))).toBe(true);
+    expect(isLifecycleBanner(banner("shutdown"))).toBe(true);
+  });
+
+  it("matches the exact diagnostics embed the sidecar sends (sender/matcher consistency)", () => {
+    // buildLifecycleMessage -> buildLogEmbed is the real sidecar path; its output
+    // description (lead phrase + fenced JSON) must be what recovery recognizes.
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed(banner("startup")).embed] })).toBe(true);
+    expect(isLifecycleBanner({ embeds: [buildLogEmbed(banner("shutdown")).embed] })).toBe(true);
   });
 });
