@@ -153,9 +153,26 @@ build_box_env() {
   mv "$tmp" "$BOX_ENV"
 }
 
+# A connected box (non-empty DISCORD_BOT_TOKEN) runs the router, which only lets the
+# OpenClawMockUser bot hold normal conversations when OPENCLAW_MOCK_USER_BOT_ID is set
+# (src/discord/router/router.ts). With it blank the router drops the mock user's chat as an
+# "untrusted bot" and keeps re-firing onboarding, so every live conversation test looks like
+# a hang. A copied/stale box.env that predates the id in .env.mirror is the usual cause.
+# Offline boxes run no router, so the id is moot there and this check is skipped.
+require_mock_user_bot_id() {
+  [ -f "$BOX_ENV" ] || return 0
+  local token mock
+  token=$(set -a; . "$BOX_ENV"; printf '%s' "${DISCORD_BOT_TOKEN:-}")
+  mock=$(set -a; . "$BOX_ENV"; printf '%s' "${OPENCLAW_MOCK_USER_BOT_ID:-}")
+  [ -z "$token" ] && return 0
+  [ -n "$mock" ] && return 0
+  die "box.env sets a Discord token but leaves OPENCLAW_MOCK_USER_BOT_ID blank, so the router would drop the OpenClawMockUser bot's chat as an untrusted bot and onboarding would re-fire forever. Add OPENCLAW_MOCK_USER_BOT_ID to \".env.mirror\" and re-run (a copied box.env can be stale and predate it)."
+}
+
 # $1: "build" to force a recompile, anything else to reuse existing binaries.
 run_deploy() {
   local force_build="${1:-}"
+  require_mock_user_bot_id
   local skip=()
   if [ "$force_build" != "build" ] &&
     [ -x "$ROOT_DIR/dist/openclaw-linux-$ARCH" ] &&
