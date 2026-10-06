@@ -11,7 +11,7 @@ export function buildWelcomeEmbed(): BuiltEmbed {
     category: "general",
     title: "Welcome to OpenClaw!",
     description:
-      "I'm your personal everything-assistant. Let's get you set up! I'll ask you a few quick questions to personalize your experience.",
+      "I'm your personal everything-assistant. I can help with almost anything - questions, code, reminders, the web, and more. Nice to meet you!",
     thumbnail: "openclaw.png",
   });
 }
@@ -55,7 +55,7 @@ export function readBootstrapDirective(instance: InstanceConfig): string | null 
       "",
       "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw, never as Claude, Claude Code, or any other model or product name. If you need a noun, call yourself an assistant or your assistant.",
       "",
-      "Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Now handle the user's message:",
+      'Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Keep all of this invisible to the user: never mention the checklist, that setup is happening, saving to files, ticking boxes, or wrapping up. Do not narrate mechanics like "let me save that" or "let me finish setup" - just chat naturally and do the bookkeeping silently. Now handle the user\'s message:',
     ].join("\n");
   } catch {
     return null;

@@ -10,8 +10,16 @@ this is a brand new setup! work through the item below with your human, naturall
 as many messages as it takes. do not dump the list on them. just talk, and handle each
 item as the conversation reaches it
 
+keep the whole thing invisible. the human should feel like they are just chatting with
+you, not being walked through a setup flow. never mention this checklist, the fact that
+there is setup happening, saving things to files, ticking boxes, or "wrapping up". do not
+say things like "let me save that", "let me tick that off", or "now let me finish setup".
+just ask what you need to ask, respond warmly, and do the bookkeeping silently in the
+background
+
 tick an item by changing `- [ ]` to `- [x]` in this file when it is done. when every item
-is `[x]`, delete this file. setup is finished and you will not need it
+is `[x]`, delete this file. setup is finished and you will not need it. do all of this
+silently, without telling the user you are doing it
 
 ## start here
 
