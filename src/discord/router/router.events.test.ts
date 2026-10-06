@@ -283,6 +283,132 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
   });
 
+  it("logs a reasoned drop for an untrusted bot in a registered channel", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // An untrusted bot (not the allowlisted mock-user bot) messaging a
+    // registered channel used to drop silently, which looked like a hang.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "bot-msg-untrusted",
+      author: { id: "untrusted-bot", bot: true },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "please reply",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      logs.some(
+        (l) =>
+          l.includes(`dropped message from untrusted-bot in channel ${CHANNEL}`) &&
+          l.includes("untrusted bot"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not log a drop for an untrusted bot in an unregistered channel", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // Unregistered channels are routine and high-volume; they must not spam
+    // the drop log.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "bot-msg-unreg",
+      author: { id: "untrusted-bot", bot: true },
+      guild_id: GUILD,
+      channel_id: "000000000000000000",
+      content: "please reply",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
+  });
+
+  it("does not log a drop for the router's own message in a registered channel", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // Discord echoes the bot's own replies as MESSAGE_CREATE, and
+    // isConversationalBot rejects authorId === applicationId, so without the
+    // self guard every normal response would log a bogus "untrusted bot" drop.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "self-msg",
+      author: { id: "app-123", bot: true },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "an agent reply",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
+  });
+
+  it("logs a reasoned drop for a message with no author id in a registered channel", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "no-author-msg",
+      author: {},
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "hello",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      logs.some((l) => l.includes(`in channel ${CHANNEL}`) && l.includes("missing author id")),
+    ).toBe(true);
+  });
+
+  it("logs a reasoned drop for a whitespace-only message in a registered channel", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "empty-msg",
+      author: { id: "555555555555555555", bot: false },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "   ",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      logs.some(
+        (l) =>
+          l.includes(`dropped message from 555555555555555555 in channel ${CHANNEL}`) &&
+          l.includes("empty message"),
+      ),
+    ).toBe(true);
+  });
+
   it("replies to an unauthorized user with a persistent notice embed and no delete", async () => {
     const posts: RequestInit[] = [];
     let deletes = 0;

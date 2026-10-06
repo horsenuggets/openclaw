@@ -198,6 +198,25 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // never the router's own bot (self-routing would loop).
   const botAllowed = isBot ? isConversationalBot(authorId, applicationId, allowedBotIds) : false;
   if (!authorId || (isBot && !botAllowed) || (!content.trim() && !hasAttachments)) {
+    // Silent drops here looked like hangs during a real incident: a driver
+    // bot's messages to a registered channel got no reply and no log line
+    // explained why. Surface the reason, but only for registered channels
+    // (unregistered channels are a routine, high-volume case and get their
+    // own handling below). Skip the router's own messages: Discord echoes the
+    // bot's replies as MESSAGE_CREATE and `isConversationalBot` rejects
+    // `authorId === applicationId`, so logging them would spam a bogus
+    // "untrusted bot" drop for every normal response. Match the
+    // `[router] ...` drop/skip log style.
+    if (channelId && authorId !== applicationId && instances.get(channelId)) {
+      const reason = !authorId
+        ? "missing author id"
+        : isBot && !botAllowed
+          ? "untrusted bot"
+          : "empty message";
+      runtime.log(
+        `[router] dropped message from ${authorId ?? "unknown"} in channel ${channelId} (${reason})`,
+      );
+    }
     return;
   }
 
