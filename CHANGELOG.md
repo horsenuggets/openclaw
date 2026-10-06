@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Web search: on `anthropic-messages` models, `web_search` now runs on Anthropic's native
+  server-side web search tool (billed through the account, no Brave/Perplexity key). The
+  embedded runner advertises `web_search` as an Anthropic server tool (via a patched pi-ai
+  `convertTools`) instead of the client Brave/Perplexity tool; the model runs the search
+  itself and cites results. Pin `tools.web.search.provider` to `brave` or `perplexity` to
+  keep the client provider, and tune searches per turn with `tools.web.search.maxUses`
+  (default 5). Non-Anthropic models are unchanged.
 - Discord router: log a reasoned drop when a message to a registered channel is filtered
   out instead of routed. Untrusted-bot, missing-author, and empty-message drops previously
   returned silently, so a driver bot getting no reply looked like a hang with nothing in

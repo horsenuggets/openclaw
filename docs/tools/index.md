@@ -244,8 +244,9 @@ Core parameters:
 
 Notes:
 
-- Requires a Brave API key (recommended: `openclaw configure --section web`, or set
-  `BRAVE_API_KEY`).
+- On `anthropic-messages` models, uses Anthropic's native server-side web search (no key).
+  On other models, requires a Brave API key (recommended:
+  `openclaw configure --section web`, or set `BRAVE_API_KEY`) or a Perplexity key.
 - Enable via `tools.web.search.enabled`.
 - Responses are cached (default 15 min).
 - See [Web tools](/tools/web) for setup.
