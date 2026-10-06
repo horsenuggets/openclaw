@@ -47,6 +47,15 @@ export function shouldRelayCommandResult(params: {
   );
 }
 
+/**
+ * The agent session key for a Discord channel. One session per channel, shared
+ * by every turn (and by mid-turn steer injections) so they all land in the same
+ * conversation.
+ */
+export function channelSessionKey(channelId: string): string {
+  return `agent:main:discord:default:channel:${channelId}`;
+}
+
 /** Returns true if the agent responded successfully. */
 export async function routeMessage(params: {
   authorId: string;
@@ -203,7 +212,7 @@ export async function routeMessage(params: {
             channel: "discord",
             deliver: false,
             idempotencyKey,
-            sessionKey: `agent:main:discord:default:channel:${channelId}`,
+            sessionKey: channelSessionKey(channelId),
             timeout: Math.floor(agentTimeoutMs / 1000),
             ...(attachmentsForCall.length > 0 ? { attachments: attachmentsForCall } : {}),
           },

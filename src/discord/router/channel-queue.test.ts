@@ -139,6 +139,271 @@ describe("ChannelQueue", () => {
     expect(runTurn.mock.calls[1][1].messageContent).toBe("second\n\nthird");
   });
 
+  describe("mid-turn steering", () => {
+    /** Start a turn and keep it running until the returned release() is called. */
+    function startHeldTurn() {
+      const timers = fakeTimers();
+      let release!: () => void;
+      const held = new Promise<void>((r) => {
+        release = r;
+      });
+      const runTurn = vi
+        .fn<(channelId: string, turn: ChannelTurn) => Promise<void>>()
+        .mockImplementationOnce(async () => held)
+        .mockImplementation(async () => {});
+      return { timers, runTurn, release, held };
+    }
+
+    it("injects a mid-turn message into the live run instead of buffering it", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+
+      // Arrives while the first turn is still running -> steered, not buffered.
+      queue.enqueue("c1", textTurn("u1", "also do X"));
+      await Promise.resolve();
+      expect(steer).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ messageContent: "also do X" }),
+      );
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      // No second turn: the steered message rode the active run.
+      expect(runTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps FIFO: once a mid-turn message buffers, later ones buffer too (no overtaking)", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      // Simulate the router's steer closure declining a message (e.g. it carries
+      // an attachment) by returning false for "att" and true otherwise.
+      const steer = vi.fn(async (_c: string, turn: ChannelTurn) => turn.messageContent !== "att");
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+
+      // "att" can't steer -> buffers; "text" arrives after and must NOT overtake it.
+      queue.enqueue("c1", textTurn("u1", "att"));
+      queue.enqueue("c1", textTurn("u1", "text"));
+      for (let i = 0; i < 6; i++) {
+        await Promise.resolve();
+      }
+      // Only "att" was offered to steer; "text" was forced to buffer behind it.
+      expect(steer).toHaveBeenCalledTimes(1);
+      expect(steer).toHaveBeenCalledWith("c1", expect.objectContaining({ messageContent: "att" }));
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      // The two buffered messages run together, in arrival order.
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1][1].messageContent).toBe("att\n\ntext");
+    });
+
+    it("falls back to a buffered next turn when the run does not accept the steer", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      const steer = vi.fn(async () => false);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+
+      queue.enqueue("c1", textTurn("u1", "late"));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(steer).toHaveBeenCalledTimes(1);
+
+      release();
+      await held;
+      await Promise.resolve();
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      // Rejected steer -> ran as the next turn.
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1][1].messageContent).toBe("late");
+    });
+
+    it("orders a later arrival behind an in-flight steer that outlived its run", async () => {
+      // Regression: arrivals first, A, B must stay first, A, B even when A's steer
+      // call is still pending after the run ends (previously cleanup could drop the
+      // state and let B run ahead, producing first, B, A).
+      const { timers, runTurn, release, held } = startHeldTurn();
+      let settleSteer!: (accepted: boolean) => void;
+      const steer = vi.fn(
+        () =>
+          new Promise<boolean>((r) => {
+            settleSteer = r;
+          }),
+      );
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "first"));
+      timers.flush();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+
+      // A arrives mid-turn; its steer call starts but does not resolve yet.
+      queue.enqueue("c1", textTurn("u1", "A"));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(steer).toHaveBeenCalledTimes(1);
+
+      // The first turn finishes while A's steer is still in flight.
+      release();
+      await held;
+      await Promise.resolve();
+      // The channel stays busy because a steer is outstanding.
+      expect(queue.isBusy("c1")).toBe(true);
+
+      // B arrives now — it must queue behind A, not run as an idle channel.
+      queue.enqueue("c1", textTurn("u1", "B"));
+      await Promise.resolve();
+
+      // A's steer finally resolves false (run had ended) -> A buffers, then B.
+      settleSteer(false);
+      for (let i = 0; i < 6; i++) {
+        await Promise.resolve();
+      }
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(runTurn).toHaveBeenCalledTimes(2);
+      expect(runTurn.mock.calls[1][1].messageContent).toBe("A\n\nB");
+    });
+
+    it("drops an in-flight steer's fallback when clear() changes the instance", async () => {
+      const { timers, runTurn, release, held } = startHeldTurn();
+      let settleSteer!: (accepted: boolean) => void;
+      const steer = vi.fn(
+        () =>
+          new Promise<boolean>((r) => {
+            settleSteer = r;
+          }),
+      );
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("owner-a", "first"));
+      timers.flush();
+      await Promise.resolve();
+
+      queue.enqueue("c1", textTurn("owner-a", "secret"));
+      await Promise.resolve();
+      await Promise.resolve();
+      release();
+      await held;
+      await Promise.resolve();
+
+      // Instance removed/replaced while the steer is in flight.
+      queue.clear("c1");
+
+      // The steer resolves false afterward -> must be dropped, not buffered.
+      settleSteer(false);
+      for (let i = 0; i < 6; i++) {
+        await Promise.resolve();
+      }
+      timers.flush();
+      await Promise.resolve();
+
+      // Only the first turn ever ran; the cleared message never became a turn.
+      expect(runTurn).toHaveBeenCalledTimes(1);
+      expect(queue.isBusy("c1")).toBe(false);
+    });
+
+    it("never steers while the channel is reserved for the onboarding kick", async () => {
+      const timers = fakeTimers();
+      const runTurn = vi.fn(async () => {});
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      expect(queue.reserve("c1")).toBe(true);
+      queue.enqueue("c1", textTurn("u1", "typed during onboarding"));
+      await Promise.resolve();
+      // Reserved hold: the message queues behind the kick rather than injecting.
+      expect(steer).not.toHaveBeenCalled();
+
+      queue.release("c1");
+      timers.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(runTurn).toHaveBeenCalledWith(
+        "c1",
+        expect.objectContaining({ messageContent: "typed during onboarding" }),
+      );
+    });
+
+    it("does not steer an idle channel (no active run)", async () => {
+      const timers = fakeTimers();
+      const runTurn = vi.fn(async () => {});
+      const steer = vi.fn(async () => true);
+      const queue = new ChannelQueue({
+        runTurn,
+        steer,
+        debounceMs: 0,
+        setTimer: timers.set,
+        clearTimer: timers.clear,
+      });
+
+      queue.enqueue("c1", textTurn("u1", "hello"));
+      timers.flush();
+      await Promise.resolve();
+      expect(steer).not.toHaveBeenCalled();
+      expect(runTurn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("processes channels independently", async () => {
     const timers = fakeTimers();
     const runTurn = vi.fn(async () => {});

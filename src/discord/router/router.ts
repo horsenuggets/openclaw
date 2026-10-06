@@ -12,7 +12,7 @@ import {
   type ProvisioningClient,
 } from "./channel-commands.js";
 import { ChannelQueue } from "./channel-queue.js";
-import { loadRouterConfig, resolveProxyBindHost } from "./config.js";
+import { loadRouterConfig, refreshToken, resolveProxyBindHost } from "./config.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
@@ -23,6 +23,7 @@ import {
 } from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
 import { initAppEmojis } from "./emojis.js";
+import { callGatewaySimple } from "./gateway-call.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -34,7 +35,7 @@ import {
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
-import { routeMessage } from "./route-message.js";
+import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
@@ -192,6 +193,40 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         runCommand: runAgentCommand,
         systemTurn: turn.systemTurn,
       });
+    },
+    // Mid-turn steering: inject a text message into the live run via the agent's
+    // `agent.steer` gateway method. Returns true when there was an actively
+    // streaming run that accepted it (its reply then carries the response through
+    // the turn already in flight), false to fall back to a normal queued turn.
+    steer: async (channelId, turn) => {
+      // Only plain text can be injected mid-run; a message carrying attachments
+      // (image/voice) needs routeMessage's full attachment pipeline, so buffer it.
+      if ((turn.attachments?.length ?? 0) > 0) {
+        return false;
+      }
+      const text = turn.messageContent.trim();
+      if (!text) {
+        return false;
+      }
+      const instance = instances.get(channelId);
+      if (!instance) {
+        return false;
+      }
+      try {
+        // agent.steer replies once with the payload directly (callGatewaySimple
+        // resolves to msg.payload), so `accepted` is top-level, not under result.
+        const result = await callGatewaySimple<{ accepted?: boolean }>({
+          url: `ws://127.0.0.1:${instance.port}`,
+          token: refreshToken(instance) || undefined,
+          method: "agent.steer",
+          params: { sessionKey: channelSessionKey(channelId), message: text },
+          timeoutMs: 10_000,
+        });
+        return result?.accepted === true;
+      } catch (err) {
+        runtime.log(`[router] steer failed for channel ${channelId}: ${String(err)}`);
+        return false;
+      }
     },
   });
   // Best-effort channel -> guild map, learned from message/interaction events.
