@@ -120,8 +120,8 @@ function buildTriagePrompt(params: {
       `web search, browser automation, and message sending. Never claim you ` +
       `cannot do something these tools can handle. If the request involves ` +
       `any of these capabilities, classify as ACK.\n\n` +
-      `Writing style: never use em-dashes or hyphens as grammatical punctuation. ` +
-      `Use commas, periods, or semicolons instead.\n\n` +
+      `Writing style: never use em-dashes, hyphens, or runs of hyphens (such as ` +
+      `"--") as grammatical punctuation. Use commas, periods, or semicolons instead.\n\n` +
       `User's message:\n${message}`,
   );
 
