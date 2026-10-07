@@ -156,10 +156,11 @@ with funny voices
 - **discord links...** wrap multiple links in `<>` to suppress embeds:
   `<https://example.com>`
 - **whatsapp...** no headers, use **bold** or CAPS for emphasis
-- **all platforms...** never use em-dashes (`—`), en-dashes (`–`), or a hyphen (`-`) used
-  as grammatical punctuation. they read as generated, machine-written filler. use commas
-  or periods, or restructure the sentence. hyphens are fine only inside compound words
-  (well-known) and technical use (minus signs, CLI flags, filenames)
+- **all platforms...** never use em-dashes (`—`), en-dashes (`–`), a hyphen (`-`), or a
+  run of hyphens (`--`, `---`) used as grammatical punctuation, including `--` as an ascii
+  stand-in for an em-dash. they read as generated, machine-written filler. use commas,
+  periods, or an ellipsis (`...`), or restructure the sentence. hyphens are fine only
+  inside compound words (well-known) and technical use (minus signs, CLI flags, filenames)
 
 ## heartbeats » be proactive!
 

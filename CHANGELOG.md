@@ -6,6 +6,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
+  double hyphen (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
+  and a single hyphen. The agent was routing around the ban by typing the ascii em-dash
+  substitute `--` (e.g. "quick note -- what would you like me to call you"); the rule now
+  names that case explicitly and points at an ellipsis or comma instead. The router's
+  smart-ack generation prompt gets the same clarification.
 - Block streaming: coalesce consecutive assistant text blocks so a reply is no longer
   fragmented into several messages (including a lone "."). Anthropic's native web search
   returns a cited answer as many small `text` blocks (one per cited span, with trailing
