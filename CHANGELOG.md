@@ -13,8 +13,9 @@ Docs: https://docs.openclaw.ai
   names that case explicitly and points at an ellipsis or comma instead. This updates the
   shipped default, so newly seeded agent workspaces get it; existing workspaces keep their
   own `SOUL.md`/`AGENTS.md` copies (seeded write-if-missing so user edits are never
-  clobbered) until re-seeded. The router's smart-ack generation prompt gets the same
-  clarification and, being injected at runtime, applies to every agent immediately.
+  clobbered) until re-seeded. The Discord smart-ack triage prompt gets the same
+  clarification; because it is built at runtime rather than read from the workspace, it
+  takes effect without a re-seed wherever smart-ack is enabled (`discord.smartAck`).
 - Block streaming: coalesce consecutive assistant text blocks so a reply is no longer
   fragmented into several messages (including a lone "."). Anthropic's native web search
   returns a cited answer as many small `text` blocks (one per cited span, with trailing

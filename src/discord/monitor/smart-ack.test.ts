@@ -138,6 +138,16 @@ describe("generateSmartAck triage behavior", () => {
     expect(prompt).toContain("Discord DM");
   });
 
+  it("instructs the triage model to avoid runs of hyphens as punctuation", async () => {
+    mockedRun.mockResolvedValue(cliJsonResult("FULL: Hi!"));
+    await generateSmartAck({ message: "hi", cfg: baseCfg });
+    const args = mockedRun.mock.calls[0]?.[0];
+    const promptIndex = args.indexOf("-p");
+    const prompt = args[promptIndex + 1] ?? "";
+    expect(prompt).toContain("runs of hyphens");
+    expect(prompt).toContain('"--"');
+  });
+
   it("includes conversation context in prompt", async () => {
     mockedRun.mockResolvedValue(cliJsonResult("FULL: Sure thing!"));
     await generateSmartAck({
