@@ -388,6 +388,20 @@ stop_container() {
 # templates next to the binary; the host deploy layout puts them elsewhere.
 # Idempotent: setup uses write-if-missing, so re-running on an existing instance
 # is a no-op.
+# Debug toggle (mirror rig only): when OPENCLAW_SKIP_BOOTSTRAP is truthy, drop just
+# the first-run BOOTSTRAP.md after seeding so the agent keeps its full persona
+# (SOUL.md et al.) but skips the first-run onboarding ritual the router drives off
+# BOOTSTRAP.md. This is deliberately narrower than agents.defaults.skipBootstrap,
+# which suppresses every workspace file and leaves the agent persona-less. Default
+# off so the onboarding path is exercised like prod; flip it in .env.mirror for a
+# quick functional test that should not pay the name-dance.
+skip_bootstrap_enabled() {
+  case "$(printf '%s' "${OPENCLAW_SKIP_BOOTSTRAP:-}" | tr '[:upper:]' '[:lower:]')" in
+    1 | true | yes | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 seed_workspace() {
   local channelId="$1"
   local container="agents.channel-$channelId"
@@ -395,6 +409,9 @@ seed_workspace() {
   for i in $(seq 1 10); do
     if docker exec "$container" sh -lc 'openclaw setup --workspace /workspace' \
       >/dev/null 2>&1; then
+      if skip_bootstrap_enabled; then
+        docker exec "$container" sh -lc 'rm -f /workspace/BOOTSTRAP.md' >/dev/null 2>&1 || true
+      fi
       return 0
     fi
     sleep 1
