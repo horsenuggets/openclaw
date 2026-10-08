@@ -426,15 +426,15 @@ seed_workspace() {
   fi
   rm -rf "$setup_home"
   if [ "$ok" -ne 1 ]; then
-    # Warn but do not abort the add: the box is already running and reachable, so
-    # it is better to register it (the operator can retry seeding or re-register)
-    # than to tear it down. Note the box itself cannot self-heal here: it ships no
-    # docs mount, so the agent's lazy ensureAgentWorkspace cannot resolve the
-    # templates in-box. Until this host-side seed succeeds the workspace stays
-    # empty, which means no first-run welcome card AND a stalled first turn, so an
-    # operator must re-run the add/seed. Callers surface the nonzero return.
-    echo "Warning: could not seed workspace for $channelId host-side; the box has" >&2
-    echo "  no docs mount, so re-run the add to seed it before the first message." >&2
+    # Warn but do not abort the add: the box is already running and reachable,
+    # and it can still self-heal. The hand-picked templates are mounted read-only
+    # at /bin/docs/reference/templates (see agent.yml), so the agent's lazy
+    # ensureAgentWorkspace seeds the workspace from there on its first turn. Only
+    # the proactive welcome-on-register is lost until that first message, because
+    # the router reads workspace/BOOTSTRAP.md at registration time (before any
+    # turn). Callers surface the nonzero return so the operator can retry the seed.
+    echo "Warning: could not seed workspace for $channelId host-side; the box will" >&2
+    echo "  seed it lazily on the first message (no proactive welcome until then)." >&2
     return 1
   fi
   if skip_bootstrap_enabled; then

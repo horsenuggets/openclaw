@@ -12,11 +12,12 @@ Docs: https://docs.openclaw.ai
   credentials (e.g. gog's `~/.config/gogcli`) plus tool caches persist across restarts and
   stay isolated per channel. The workspace is now seeded host-side
   (`openclaw setup --workspace <ws>` under a throwaway `HOME`/config path so it can't
-  mutate the host's global config) rather than via `docker exec`, then chowned to the box
-  uid; deploy stages only the 7 hand-picked workspace templates next to the binary (where
-  host-side setup resolves them) and no longer ships the full contributor docs tree. The
-  `/bin/docs` mount is dropped in favor of `~/deploy/skills:/bin/skills:ro` so skills are
-  discovered inside the box.
+  mutate the host's global config or state) rather than via `docker exec`, then chowned to
+  the box uid; deploy stages only the 7 hand-picked workspace templates next to the binary
+  (where both host-side setup and the box resolve them) and no longer ships the full
+  contributor docs tree. The full `/bin/docs` tree is gone; only the templates subdir
+  stays mounted read-only as a lazy-seed fallback, and `~/deploy/skills:/bin/skills:ro` is
+  added so skills are discovered inside the box.
 - Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
   run of hyphens (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
   and a single hyphen. The agent was routing around the ban by typing the ascii em-dash
