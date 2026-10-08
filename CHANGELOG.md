@@ -6,6 +6,15 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord: new `/secret` slash command hands the agent a sensitive value without it ever
+  appearing in the channel. The command opens a private modal (popup) that collects a
+  secret value plus an optional name; on submit the value is delivered out-of-band to that
+  channel's agent box over the existing agent JSON-RPC (new optional `secret` param) and
+  written to the box's own ephemeral `/tmp/secrets/<name>` (mode 0600) before the turn
+  runs, with a one-off `<system-reminder>` telling the agent where to read it. The value
+  never touches the channel, the message text, or logs. In guild channels the command is
+  owner-gated; the secret name is sanitized to `[a-z0-9]`, length-capped, with a hash
+  fallback, and the writer guards against path escapes.
 - Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
   run of hyphens (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
   and a single hyphen. The agent was routing around the ban by typing the ascii em-dash
