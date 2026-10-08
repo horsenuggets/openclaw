@@ -416,7 +416,9 @@ describe("writeAgentSecret sandbox delivery", () => {
       docker: { user: "1000:1000" },
     });
 
-    const name = `sbx${Math.random().toString(36).slice(2, 10)}`;
+    // A hyphen/underscore name must pass the gateway boundary and the delivery
+    // script unharmed (they carry no shell meaning and cannot escape the dir).
+    const name = "my-secret_1";
     const path = await writeAgentSecret({
       name,
       value: "super-secret",

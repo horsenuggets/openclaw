@@ -134,16 +134,18 @@ export function parseSecretModalSubmit(components: ModalSubmitComponents | undef
 
 /**
  * Sanitize a user-supplied secret name into a safe, stable filename token:
- * lowercase, keep only `[a-z0-9]` (everything else stripped), capped at
- * {@link MAX_SECRET_NAME_LENGTH}. When the result is empty (name omitted or
- * entirely non-alphanumeric), derive a deterministic fallback from the value:
- * `secret-<first 8 hex of sha256(value)>`. Two submissions with the same
- * resolved name target the same path, so re-submitting overwrites in place.
+ * lowercase, keep only `[a-z0-9]`, hyphen, and underscore (everything else
+ * stripped), capped at {@link MAX_SECRET_NAME_LENGTH}. Hyphen/underscore are
+ * filename- and path-safe (no shell metacharacters, no `/`, cannot form `..`).
+ * When the result is empty (name omitted or entirely stripped), derive a
+ * deterministic fallback from the value: `secret-<first 8 hex of sha256(value)>`.
+ * Two submissions with the same resolved name target the same path, so
+ * re-submitting overwrites in place.
  */
 export function sanitizeSecretName(raw: string, value: string): string {
   const cleaned = raw
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
+    .replace(/[^a-z0-9_-]/g, "")
     .slice(0, MAX_SECRET_NAME_LENGTH);
   if (cleaned) {
     return cleaned;

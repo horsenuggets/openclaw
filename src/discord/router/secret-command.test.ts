@@ -68,9 +68,11 @@ describe("parseSecretModalSubmit", () => {
 });
 
 describe("sanitizeSecretName", () => {
-  it("lowercases and strips everything but [a-z0-9]", () => {
+  it("lowercases and keeps [a-z0-9] + hyphen + underscore, stripping the rest", () => {
     expect(sanitizeSecretName("Google OAuth!", "v")).toBe("googleoauth");
-    expect(sanitizeSecretName("my-token_42", "v")).toBe("mytoken42");
+    // Hyphens and underscores are preserved; path/shell-unsafe chars are dropped.
+    expect(sanitizeSecretName("my-token_42", "v")).toBe("my-token_42");
+    expect(sanitizeSecretName("a/b c;d.e", "v")).toBe("abcde");
   });
 
   it("caps the length", () => {

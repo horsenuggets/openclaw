@@ -56,15 +56,17 @@ export const AGENT_SECRETS_DIR = "/tmp/secrets";
 
 /**
  * Enforce the secret-name grammar at the gateway trust boundary: lowercase
- * alphanumerics only, bounded length. The Discord router already sanitizes to
- * this shape, but the JSON-RPC schema accepts any non-empty string, so a direct
- * RPC caller could otherwise smuggle a name like `x;id` that both escapes the
- * secrets directory and (since the sandbox delivery interpolates the name into a
- * shell script) injects commands run as the sandbox user. Rejecting anything
- * outside `[a-z0-9]{1,64}` here closes that hole regardless of the caller.
+ * alphanumerics plus hyphen and underscore, bounded length. The Discord router
+ * already sanitizes to this shape, but the JSON-RPC schema accepts any non-empty
+ * string, so a direct RPC caller could otherwise smuggle a name like `x;id` that
+ * both escapes the secrets directory and (since the sandbox delivery interpolates
+ * the name into a shell script) injects commands run as the sandbox user. Hyphen
+ * and underscore carry no shell meaning and cannot form `/` or `..`, so they are
+ * safe to allow; rejecting anything outside `[a-z0-9_-]{1,64}` here closes the
+ * injection/traversal hole regardless of the caller.
  */
 function assertSafeSecretName(name: string): void {
-  if (!/^[a-z0-9]{1,64}$/.test(name)) {
+  if (!/^[a-z0-9_-]{1,64}$/.test(name)) {
     throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
   }
 }
