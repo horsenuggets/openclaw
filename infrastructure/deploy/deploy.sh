@@ -99,6 +99,9 @@ cp -r "$PROJECT_ROOT/assets/embeds" "$STAGING/deploy/embeds"
 # Docker compose files
 cp "$INFRA_DIR/docker/discord-router.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/agent.yml" "$STAGING/deploy/docker/"
+# The agent box image is built from this Dockerfile on the first `compose up`
+# (agent.yml build: stanza), so it must sit next to agent.yml on the box host.
+cp "$INFRA_DIR/docker/agent.Dockerfile" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/docker/whisper.yml" "$STAGING/deploy/docker/"
 cp "$INFRA_DIR/scripts/openclawctl" "$STAGING/deploy/bin/openclawctl"
 chmod +x "$STAGING/deploy/bin/openclawctl"
