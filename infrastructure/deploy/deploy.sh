@@ -73,10 +73,21 @@ if [ -d "$PROJECT_ROOT/dist/extensions" ]; then
   cp -r "$PROJECT_ROOT/dist/extensions" "$STAGING/deploy/"
 fi
 
-# Workspace templates
-if [ -d "$PROJECT_ROOT/dist/docs" ]; then
-  cp -r "$PROJECT_ROOT/dist/docs" "$STAGING/deploy/"
-fi
+# Workspace templates: only the hand-picked set `openclaw setup` seeds into a new
+# agent workspace, staged NEXT TO the binary so host-side seeding (openclawctl
+# seed_workspace) resolves them via <binary-dir>/docs/reference/templates. The box
+# mounts only the openclaw binary file, so these stay host-side — the box ships no
+# docs. (The full docs/ tree is contributor documentation and is not deployed.)
+mkdir -p "$STAGING/deploy/bin/docs/reference/templates"
+for t in AGENTS SOUL TOOLS IDENTITY USER HEARTBEAT BOOTSTRAP; do
+  cp "$PROJECT_ROOT/docs/reference/templates/$t.md" \
+    "$STAGING/deploy/bin/docs/reference/templates/$t.md"
+done
+
+# Skills: the SKILL.md tool definitions the agent box discovers at <binary-dir>/skills
+# (mounted at /bin/skills in agent.yml) so connected tools work — their instructions
+# reach the prompt and skills.entries tokens surface as env vars.
+cp -r "$PROJECT_ROOT/skills" "$STAGING/deploy/skills"
 
 # Discord embed icons. The router uploads these with each category embed; the
 # compiled binary runs in a bare image with no repo tree, so ship them next to

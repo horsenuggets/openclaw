@@ -50,11 +50,14 @@ services:
     volumes:
       - ~/deploy/bin/openclaw:/bin/openclaw:ro
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro
-      # Docs must sit next to the binary: openclaw resolves workspace templates as
-      # <binary-dir>/docs (resolveOpenClawDocsPath). The binary is /bin/openclaw,
-      # so docs mount at /bin/docs (not /usr/local/bin/docs) or `openclaw setup`
-      # fails with "Missing workspace template".
-      - ~/deploy/docs:/bin/docs:ro
+      # Skills sit next to the binary so discovery resolves them as
+      # <binary-dir>/skills (bundled-dir.ts). The binary is /bin/openclaw, so
+      # skills mount at /bin/skills. This lets the agent actually use connected
+      # tools (todoist, notion, gh, gog, ...): the SKILL.md instructions reach the
+      # prompt and skills.entries tokens surface as their env vars. Workspace
+      # templates are no longer mounted here; the provisioner seeds the hand-picked
+      # set into /workspace host-side (openclawctl seed_workspace).
+      - ~/deploy/skills:/bin/skills:ro
       # Config is read-only and lives outside /workspace, so the agent's
       # workspace-confined file tools cannot read it. The gateway process reads
       # it once at startup. It carries no provider keys (the model proxy injects
@@ -66,18 +69,27 @@ services:
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/openclaw.json:/etc/openclaw/openclaw.json:ro
       # The agent's work. Writable; the only mount the file tools can see.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/workspace:/workspace
-      # Runtime state: sessions, memory index, caches. Writable, not agent work.
+      # Runtime state: sessions, memory index. Writable, not agent work.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/state:/state
-      # NOTE: no auth-profiles.json mount, no ~/.claude mount, no credentials/
-      # mount. The box holds no external secrets by design.
+      # The agent's real home: a writable, persistent, per-channel dir so the box
+      # behaves like a normal shell. Tool config/caches (~/.config, ~/.cache) and
+      # connection creds that tools store under $HOME (e.g. gog's ~/.config/gogcli)
+      # live here and survive restarts, isolated per channel.
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/home:/home/openclaw
+      # NOTE: no shared auth-profiles.json / ~/.claude / credentials mount. The box
+      # holds only THIS channel's own connection secrets (under /home, and any
+      # skills.entries tokens in the read-only openclaw.json), never the
+      # model-provider tokens: the model proxy injects those. Session transcripts
+      # under /state already carry whatever flowed through the chat, so storing a
+      # channel's own creds here is the same trust boundary.
     environment:
       - OPENCLAW_SKIP_CHANNELS=1
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_STATE_DIR=/state
-      # Home points at the writable state mount so any stray home-relative write
-      # (node/npm caches, etc.) lands there instead of failing on the read-only
-      # rootfs.
-      - HOME=/state
+      # A real, writable home on its own mount so the agent operates like a normal
+      # shell: tool config/caches and $HOME-based creds (gog's ~/.config/gogcli)
+      # land here and persist, rather than being co-mingled with OpenClaw's state.
+      - HOME=/home/openclaw
     logging:
       driver: json-file
       options:
