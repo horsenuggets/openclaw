@@ -432,9 +432,11 @@ seed_workspace() {
     # ensureAgentWorkspace seeds the workspace from there on its first turn. Only
     # the proactive welcome-on-register is lost until that first message, because
     # the router reads workspace/BOOTSTRAP.md at registration time (before any
-    # turn). Callers surface the nonzero return so the operator can retry the seed.
+    # turn). To retry host-side seeding before use, remove and re-register the
+    # channel with its matching add command; remove preserves instance data.
     echo "Warning: could not seed workspace for $channelId host-side; the box will" >&2
     echo "  seed it lazily on the first message (no proactive welcome until then)." >&2
+    echo "  To retry host-side first, remove and re-register it with its matching add command." >&2
     return 1
   fi
   if skip_bootstrap_enabled; then
