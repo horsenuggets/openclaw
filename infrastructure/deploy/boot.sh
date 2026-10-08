@@ -195,14 +195,17 @@ else
     instance_state="$INSTANCES_DIR/$channelId/state"
     mkdir -p "$instance_home"
     # One-time migration for instances adopted when HOME was /state: any
-    # $HOME-relative tool creds/caches they wrote then live under state/.config,
-    # state/.cache, etc. Switching HOME to /home/openclaw would orphan them, so
-    # move each such dotdir into home/ before the first start under the new layout.
-    # Guarded: only when home/ does not already have that entry (never clobber a
-    # value the box wrote under the new HOME), and only for the known home-relative
-    # dirs (not openclaw's own state, which stays under /state and keeps its mount).
+    # $HOME-relative data they wrote then lives under state/.config, state/.cache,
+    # state/.openclaw (the canvas host resolves os.homedir()/.openclaw/canvas, so
+    # canvas data landed here), etc. Switching HOME to /home/openclaw would orphan
+    # them, so move each such dotdir into home/ before the first start under the new
+    # layout. This does NOT touch openclaw's own gateway state: that used
+    # OPENCLAW_STATE_DIR=/state (the /state root directly, e.g. state/agents,
+    # state/sessions), never state/.openclaw, which is purely HOME-relative. Guarded:
+    # only when home/ does not already have that entry (never clobber a value the box
+    # wrote under the new HOME).
     if [ -d "$instance_state" ]; then
-      for d in .config .cache .local .claude .gog gogcli; do
+      for d in .config .cache .local .claude .gog .openclaw gogcli; do
         if [ -e "$instance_state/$d" ] && [ ! -e "$instance_home/$d" ]; then
           mv "$instance_state/$d" "$instance_home/$d" 2>/dev/null \
             && echo "Migrated $channelId: state/$d -> home/$d" >&2 || true
