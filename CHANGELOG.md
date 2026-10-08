@@ -17,7 +17,10 @@ Docs: https://docs.openclaw.ai
   (where both host-side setup and the box resolve them) and no longer ships the full
   contributor docs tree. The full `/bin/docs` tree is gone; only the templates subdir
   stays mounted read-only as a lazy-seed fallback, and `~/deploy/skills:/bin/skills:ro` is
-  added so skills are discovered inside the box.
+  added so skills are discovered inside the box. On deploy, boot runs a one-time migration
+  that moves any `$HOME`-relative dirs an instance wrote while `HOME` was `/state` (tool
+  caches/creds and the canvas dir under `state/.openclaw`) into the new `home/` mount so
+  nothing is orphaned by the `HOME` switch.
 - Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
   run of hyphens (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
   and a single hyphen. The agent was routing around the ban by typing the ascii em-dash
