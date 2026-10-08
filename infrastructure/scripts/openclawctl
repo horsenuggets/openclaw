@@ -378,8 +378,8 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
-# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) inside
-# the freshly-started container. The onboarding wizard normally seeds these, but
+# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
+# HOST before the container starts. The onboarding wizard normally seeds these, but
 # the provisioning path bypasses the wizard, so the workspace would otherwise stay
 # empty until the agent's first turn seeds it lazily. That is too late for the
 # router: it reads workspace/BOOTSTRAP.md to drive the first-run welcome card on

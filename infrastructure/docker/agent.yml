@@ -1,10 +1,12 @@
 # Per-channel agent container (token-free box).
 #
-# The agent runs entirely in here and holds NO external secrets:
+# The agent holds NO shared/platform secrets:
 #   - model requests go to the router's model proxy (real OAuth injected there)
 #   - Discord sends go to the router's container proxy (bot token lives in the router)
-# Only /workspace and /state are writable; the config is read-only and outside the
-# agent's reach; nothing lives under the home directory.
+# Writable mounts are /workspace, /state, and /home/openclaw (the agent's real home);
+# the config is read-only and outside the agent's reach. The home mount is persistent
+# per channel and intentionally holds this channel's own connection creds + tool caches
+# (e.g. gog's ~/.config/gogcli), isolated from other channels and from the host.
 #
 # Networking: the box runs on the shared `oc-agents` bridge (created by openclawctl /
 # boot.sh with a fixed gateway IP and inter-container communication disabled), NOT
