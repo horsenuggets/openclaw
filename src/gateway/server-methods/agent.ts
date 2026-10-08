@@ -1,7 +1,10 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import type { GatewayRequestHandlers } from "./types.js";
 import { listAgentIds } from "../../agents/agent-scope.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
+import { resolveSandboxContext } from "../../agents/sandbox/context.js";
 import { agentCommand } from "../../commands/agent.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -43,6 +46,191 @@ import { loadSessionEntry } from "../session-utils.js";
 import { formatForLog } from "../ws-log.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
+
+/**
+ * Directory a secret is readable at *inside the agent box* (the path the agent
+ * is told to `cat`). In a Docker sandbox this is a path inside the container; in
+ * direct mode it is on the host, under the gateway user.
+ */
+export const AGENT_SECRETS_DIR = "/tmp/secrets";
+
+/**
+ * Enforce the secret-name grammar at the gateway trust boundary: lowercase
+ * alphanumerics only, bounded length. The Discord router already sanitizes to
+ * this shape, but the JSON-RPC schema accepts any non-empty string, so a direct
+ * RPC caller could otherwise smuggle a name like `x;id` that both escapes the
+ * secrets directory and (since the sandbox delivery interpolates the name into a
+ * shell script) injects commands run as the sandbox user. Rejecting anything
+ * outside `[a-z0-9]{1,64}` here closes that hole regardless of the caller.
+ */
+function assertSafeSecretName(name: string): void {
+  if (!/^[a-z0-9]{1,64}$/.test(name)) {
+    throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
+  }
+}
+
+/**
+ * Enforce the scope-token grammar at the gateway trust boundary. The router
+ * derives it as `ch<hex>`, but like the name it arrives over JSON-RPC and is
+ * interpolated into the sandbox shell path, so restrict it to `[a-z0-9]{1,80}`
+ * to keep it directory- and injection-safe regardless of the caller.
+ */
+function assertSafeSecretScope(scope: string): void {
+  if (!/^[a-z0-9]{1,80}$/.test(scope)) {
+    throw new Error(`invalid secret scope: ${JSON.stringify(scope)}`);
+  }
+}
+
+/**
+ * Write a secret to a host path with hardened, symlink-safe semantics: the
+ * containing dir must be a real directory (not a symlink) that we own and that
+ * is not group/world-writable, and the target is opened `O_NOFOLLOW` so a
+ * pre-planted symlink errors instead of redirecting the write/chmod. Returns the
+ * path written. Used for the direct-mode box path on the gateway host.
+ */
+function writeSecretFileHardened(dir: string, name: string, value: string): string {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // mkdir(recursive) is a no-op when the path already exists, so it neither
+  // catches a pre-planted symlink nor re-applies 0700 to an existing dir; lstat
+  // (does not follow the final component) lets us validate what is actually
+  // there. `/tmp` is world-writable, so a pre-existing `/tmp/secrets` could be an
+  // attacker-owned or world-writable real directory: its owner could then swap
+  // the target out after we write, making the agent read different content. Fail
+  // closed unless the dir is a plain directory we own with no group/other write.
+  const dirStat = fs.lstatSync(dir);
+  if (!dirStat.isDirectory()) {
+    throw new Error(`secrets dir is not a real directory: ${dir}`);
+  }
+  if (typeof process.getuid === "function" && dirStat.uid !== process.getuid()) {
+    throw new Error(`secrets dir is not owned by this process: ${dir}`);
+  }
+  if (dirStat.mode & 0o022) {
+    throw new Error(`secrets dir is group/world-writable: ${dir}`);
+  }
+  const target = `${dir}/${name}`;
+  // O_NOFOLLOW: a symlink at the target errors (ELOOP) rather than being
+  // followed. fchmod on the open fd enforces 0600 even when overwriting an
+  // existing regular file and can never be redirected by a swapped symlink.
+  const fd = fs.openSync(
+    target,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    fs.writeFileSync(fd, value);
+    fs.fchmodSync(fd, 0o600);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return target;
+}
+
+/**
+ * Run `docker exec` feeding `input` on stdin. Resolves with the exit code and
+ * stderr; rejects on spawn error or a non-zero exit. Used to deliver a secret
+ * into a sandbox without ever placing the value on the command line (so it never
+ * leaks via `ps`) and without a host staging file.
+ */
+function dockerExecStdin(args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args, { stdio: ["pipe", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if ((code ?? 0) !== 0) {
+        reject(new Error(stderr.trim() || `docker ${args[0]} exited ${code}`));
+        return;
+      }
+      resolve();
+    });
+    child.stdin?.end(input);
+  });
+}
+
+/**
+ * Deliver a secret into a running Docker sandbox at `/tmp/secrets/<scope>/<name>`
+ * (mode 0600). The value is piped over stdin into a `docker exec` running **as
+ * the sandbox's configured user** (so the file is owned by the agent, not root,
+ * and is readable by it), via a shell that `umask 177`s before writing so the
+ * file is created 0600 from the start. The value is never passed as a process
+ * argument (no `ps` leak) and never staged on the host. `name` and `scope` are
+ * both validated to `[a-z0-9]` before this point, so interpolating them into the
+ * shell script is injection-safe.
+ */
+async function writeAgentSecretToSandbox(
+  containerName: string,
+  user: string | undefined,
+  scope: string,
+  name: string,
+  value: string,
+): Promise<string> {
+  const dir = `${AGENT_SECRETS_DIR}/${scope}`;
+  const target = `${dir}/${name}`;
+  // Create the scoped dir (0700) and write the file via stdin under a 0600
+  // umask, then chmod defensively.
+  const script = `set -e; umask 177; mkdir -p -m 700 ${dir}; cat > ${target}; chmod 600 ${target}`;
+  const args = ["exec", "-i"];
+  if (user) {
+    args.push("--user", user);
+  }
+  args.push(containerName, "sh", "-c", script);
+  await dockerExecStdin(args, value);
+  return target;
+}
+
+/**
+ * Write an out-of-band secret so the channel's agent can read it at
+ * `/tmp/secrets/<scope>/<name>` (mode 0600). `name` and `scope` are re-validated
+ * to the strict `[a-z0-9]` grammar here at the gateway trust boundary (the
+ * Discord router sanitizes them, but a direct RPC caller could send anything).
+ * The `scope` is a per-channel token so two sessions that share a sandbox
+ * container (default `agent` scope) or the gateway host cannot read or overwrite
+ * each other's same-named secret. Re-writing the same name overwrites in place.
+ * The value is never logged.
+ *
+ * Delivery depends on how the target session runs:
+ * - **Sandboxed** (Docker): the agent's `/tmp` is a private tmpfs inside its
+ *   container, so a host write would be invisible. The secret is written into the
+ *   session's own container (resolved from `sessionKey`) as the sandbox user.
+ * - **Direct mode**: the agent shares the gateway user's filesystem, so the
+ *   secret is written to the host `/tmp/secrets/<scope>/<name>` with symlink-safe,
+ *   0600 semantics (and a self-owned, non-world-writable dir).
+ *
+ * `/tmp` is world-writable, so both paths defend against a hostile co-tenant
+ * pre-planting a symlink at the dir or target (see {@link writeSecretFileHardened}).
+ */
+export async function writeAgentSecret(params: {
+  name: string;
+  value: string;
+  scope: string;
+  sessionKey?: string;
+  cfg?: ReturnType<typeof loadConfig>;
+}): Promise<string> {
+  const { name, value, scope, sessionKey, cfg } = params;
+  assertSafeSecretName(name);
+  assertSafeSecretScope(scope);
+  // Sandboxed sessions get the secret inside their own container; a host write
+  // would land in the gateway's /tmp, which the container's tmpfs /tmp shadows.
+  // IMPORTANT: do not swallow errors here. resolveSandboxContext returns null
+  // only when the session is intentionally unsandboxed; once a sandbox is
+  // selected, container/setup failures throw. Letting those propagate makes
+  // delivery fail closed (the caller aborts the turn) rather than silently
+  // falling back to a host write that lands outside the isolation boundary.
+  const sandbox = sessionKey ? await resolveSandboxContext({ config: cfg, sessionKey }) : null;
+  if (sandbox?.containerName) {
+    return writeAgentSecretToSandbox(
+      sandbox.containerName,
+      sandbox.docker?.user,
+      scope,
+      name,
+      value,
+    );
+  }
+  return writeSecretFileHardened(`${AGENT_SECRETS_DIR}/${scope}`, name, value);
+}
 
 export const agentHandlers: GatewayRequestHandlers = {
   agent: async ({ params, respond, context, client }) => {
@@ -87,6 +275,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       timeout?: number;
       label?: string;
       spawnedBy?: string;
+      secret?: { name: string; value: string; scope: string };
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -347,6 +536,41 @@ export const agentHandlers: GatewayRequestHandlers = {
     }
 
     const deliver = request.deliver === true && resolvedChannel !== INTERNAL_MESSAGE_CHANNEL;
+
+    // Out-of-band secret delivery (/secret command): make the value readable at
+    // the agent box's /tmp/secrets/<name> (0600) BEFORE the turn runs, so the
+    // accompanying system-reminder can point the agent at a file that already
+    // exists. For sandboxed sessions this copies into the session's own
+    // container (a host write would be shadowed by the container's tmpfs /tmp);
+    // for direct sessions it writes the host path. Awaited (and done before the
+    // accepted ack) so the file is in place before agentCommand dispatches. The
+    // value is never logged. This FAILS CLOSED: if delivery fails we respond with
+    // an error and never dispatch the turn, because the reminder would otherwise
+    // point the agent at a missing file (or, worse, a stale same-named secret
+    // from a prior /secret), so the agent could consume the wrong material.
+    if (request.secret) {
+      try {
+        await writeAgentSecret({
+          name: request.secret.name,
+          value: request.secret.value,
+          scope: request.secret.scope,
+          sessionKey: requestedSessionKey,
+          cfg: cfgForAgent ?? cfg,
+        });
+      } catch (err) {
+        context.logGateway.warn(
+          `agent: failed to write secret "${request.secret.name}": ${String(err)}`,
+        );
+        // Fail closed before the accepted ack / dedupe entry is recorded, so a
+        // retry can re-attempt delivery rather than being deduped as in-flight.
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.UNAVAILABLE, "failed to deliver secret to the agent box"),
+        );
+        return;
+      }
+    }
 
     const accepted = {
       runId,

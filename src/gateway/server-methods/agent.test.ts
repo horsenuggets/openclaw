@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayRequestContext } from "./types.js";
-import { agentHandlers } from "./agent.js";
+import { AGENT_SECRETS_DIR, agentHandlers, writeAgentSecret } from "./agent.js";
 
 const mocks = vi.hoisted(() => ({
   loadSessionEntry: vi.fn(),
@@ -10,6 +12,51 @@ const mocks = vi.hoisted(() => ({
   queueEmbeddedPiMessage: vi.fn(),
   resolveSendPolicy: vi.fn(() => "allow"),
   loadConfigReturn: {} as Record<string, unknown>,
+  resolveSandboxContext: vi.fn(async () => null as unknown),
+  // Records every `docker` spawn (argv + stdin) and lets a test control the exit
+  // code, standing in for the real child_process.spawn used by the stdin exec.
+  spawnCalls: [] as Array<{ args: string[]; stdin: string }>,
+  spawnExitCode: 0,
+  spawnStderr: "",
+  spawn: vi.fn(),
+}));
+
+mocks.spawn.mockImplementation((_cmd: string, args: string[]) => {
+  const call = { args, stdin: "" };
+  mocks.spawnCalls.push(call);
+  const listeners: Record<string, Array<(...a: unknown[]) => void>> = {};
+  const child = {
+    stdin: {
+      end: (data: string) => {
+        call.stdin = data;
+        // Fire close on the next tick, mimicking an async process exit.
+        queueMicrotask(() => {
+          for (const fn of listeners.close ?? []) {
+            fn(mocks.spawnExitCode);
+          }
+        });
+      },
+    },
+    stderr: {
+      on: (event: string, fn: (...a: unknown[]) => void) => {
+        if (event === "data" && mocks.spawnStderr) {
+          fn(Buffer.from(mocks.spawnStderr));
+        }
+      },
+    },
+    on: (event: string, fn: (...a: unknown[]) => void) => {
+      (listeners[event] ??= []).push(fn);
+    },
+  };
+  return child as unknown as ReturnType<typeof import("node:child_process").spawn>;
+});
+
+vi.mock("node:child_process", () => ({
+  spawn: mocks.spawn,
+}));
+
+vi.mock("../../agents/sandbox/context.js", () => ({
+  resolveSandboxContext: mocks.resolveSandboxContext,
 }));
 
 vi.mock("../session-utils.js", () => ({
@@ -68,8 +115,18 @@ const makeContext = (): GatewayRequestContext =>
   ({
     dedupe: new Map(),
     addChatRun: vi.fn(),
-    logGateway: { info: vi.fn(), error: vi.fn() },
+    logGateway: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   }) as unknown as GatewayRequestContext;
+
+// Reset the shared docker-spawn mock state between every test so no test depends
+// on another's cleanup (the sandbox-failure tests mutate spawnExitCode/stderr).
+afterEach(() => {
+  mocks.spawnCalls.length = 0;
+  mocks.spawnExitCode = 0;
+  mocks.spawnStderr = "";
+  mocks.resolveSandboxContext.mockReset();
+  mocks.resolveSandboxContext.mockResolvedValue(null);
+});
 
 describe("gateway agent handler", () => {
   it("preserves cliSessionIds from existing session entry", async () => {
@@ -172,6 +229,45 @@ describe("gateway agent handler", () => {
 
     mocks.loadConfigReturn = {};
     vi.useRealTimers();
+  });
+
+  it("fails the turn closed when secret delivery fails (no agentCommand dispatch)", async () => {
+    mocks.agentCommand.mockClear();
+    mocks.loadSessionEntry.mockReturnValue({
+      cfg: {},
+      storePath: "/tmp/sessions.json",
+      entry: { sessionId: "existing-session-id", updatedAt: Date.now() },
+      canonicalKey: "agent:main:main",
+    });
+    mocks.updateSessionStore.mockResolvedValue(undefined);
+    // Sandbox delivery blows up (e.g. container gone) -> write throws.
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "sbx-fail" });
+    mocks.spawnExitCode = 1;
+    mocks.spawnStderr = "boom";
+
+    const respond = vi.fn();
+    await agentHandlers.agent({
+      params: {
+        message: "A secret is available...",
+        agentId: "main",
+        sessionKey: "agent:main:discord:default:channel:c1",
+        idempotencyKey: "test-secret-fail",
+        secret: { name: "tok", value: "super-secret", scope: "chfail" },
+      },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "sec-1", method: "agent" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    // Responded with an error and never dispatched the turn.
+    expect(respond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ code: expect.any(String) }),
+    );
+    expect(mocks.agentCommand).not.toHaveBeenCalled();
   });
 
   it("handles missing cliSessionIds gracefully", async () => {
@@ -310,5 +406,187 @@ describe("gateway agent.steer handler", () => {
 
     expect(mocks.queueEmbeddedPiMessage).not.toHaveBeenCalled();
     expect(respond).toHaveBeenCalledWith(true, { accepted: false });
+  });
+});
+
+describe("writeAgentSecret sandbox delivery", () => {
+  it("pipes the value into the session's container as the sandbox user via stdin", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({
+      containerName: "openclaw-sbx-c1",
+      docker: { user: "1000:1000" },
+    });
+
+    const name = `sbx${Math.random().toString(36).slice(2, 10)}`;
+    const path = await writeAgentSecret({
+      name,
+      value: "super-secret",
+      scope: "chabc123",
+      sessionKey: "agent:main:discord:default:channel:c1",
+    });
+
+    // Nested under the per-channel scope so sessions cannot collide.
+    expect(path).toBe(`${AGENT_SECRETS_DIR}/chabc123/${name}`);
+    expect(mocks.spawnCalls).toHaveLength(1);
+    const { args, stdin } = mocks.spawnCalls[0];
+    // docker exec -i --user 1000:1000 <container> sh -c '<script>'
+    expect(args[0]).toBe("exec");
+    expect(args).toContain("-i");
+    expect(args[args.indexOf("--user") + 1]).toBe("1000:1000");
+    expect(args).toContain("openclaw-sbx-c1");
+    expect(args[args.length - 2]).toBe("-c");
+    // The script creates the scoped dir, writes via cat (stdin), and chmods 0600.
+    expect(args[args.length - 1]).toContain(`mkdir -p -m 700 ${AGENT_SECRETS_DIR}/chabc123`);
+    expect(args[args.length - 1]).toContain(`cat > ${path}`);
+    expect(args[args.length - 1]).toContain(`chmod 600 ${path}`);
+    // The value travels on stdin, never as an argument (no ps leak).
+    expect(stdin).toBe("super-secret");
+    for (const arg of args) {
+      expect(arg).not.toContain("super-secret");
+    }
+    // No host staging file is created at all.
+    const leftovers = fs.readdirSync(os.tmpdir()).filter((d) => d.startsWith("openclaw-secret-"));
+    expect(leftovers).toEqual([]);
+  });
+
+  it("omits --user when the sandbox has no configured user", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c2" });
+    await writeAgentSecret({
+      name: "nouser",
+      value: "v",
+      scope: "chc2",
+      sessionKey: "agent:x:channel:c2",
+    });
+    expect(mocks.spawnCalls[0].args).not.toContain("--user");
+  });
+
+  it("fails (rejects) when delivery into the container errors", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c3" });
+    mocks.spawnExitCode = 1;
+    mocks.spawnStderr = "No such container";
+    await expect(
+      writeAgentSecret({
+        name: "boom",
+        value: "v",
+        scope: "chc3",
+        sessionKey: "agent:x:channel:c3",
+      }),
+    ).rejects.toThrow(/No such container/);
+  });
+
+  it("rejects an injection-bearing name or scope at the gateway boundary", async () => {
+    mocks.resolveSandboxContext.mockResolvedValue({ containerName: "openclaw-sbx-c5" });
+    await expect(
+      writeAgentSecret({
+        name: "x;id",
+        value: "v",
+        scope: "chok",
+        sessionKey: "agent:x:channel:c5",
+      }),
+    ).rejects.toThrow(/invalid secret name/);
+    await expect(
+      writeAgentSecret({
+        name: "ok",
+        value: "v",
+        scope: "../../etc",
+        sessionKey: "agent:x:channel:c5",
+      }),
+    ).rejects.toThrow(/invalid secret scope/);
+    // Nothing was ever executed in the container.
+    expect(mocks.spawnCalls).toHaveLength(0);
+  });
+
+  it("fails closed (rejects) when sandbox resolution throws, never falling back to the host", async () => {
+    const name = `sbxfail${Math.random().toString(36).slice(2, 8)}`;
+    const hostPath = `${AGENT_SECRETS_DIR}/chfail/${name}`;
+    mocks.resolveSandboxContext.mockRejectedValueOnce(new Error("container start failed"));
+    await expect(
+      writeAgentSecret({
+        name,
+        value: "v",
+        scope: "chfail",
+        sessionKey: "agent:main:discord:default:channel:c4",
+      }),
+    ).rejects.toThrow(/container start failed/);
+    // Must not silently fall back to a host write outside the isolation boundary.
+    expect(fs.existsSync(hostPath)).toBe(false);
+    expect(mocks.spawnCalls).toHaveLength(0);
+  });
+});
+
+describe("writeAgentSecret (direct mode / main session)", () => {
+  // These exercise the direct (non-sandboxed) host path. The main session key is
+  // never sandboxed (sandbox mode default is off and main is excluded from
+  // non-main mode), so no Docker container is resolved and the host path is used.
+  // Each test uses its own scope so the scoped dirs stay isolated.
+  const MAIN = "agent:main:main";
+  const SCOPE = "chmaintest";
+
+  it("writes the value to /tmp/secrets/<scope>/<name> with mode 0600 and overwrites in place", async () => {
+    const name = `test${Math.random().toString(36).slice(2, 10)}`;
+    const target = `${AGENT_SECRETS_DIR}/${SCOPE}/${name}`;
+    try {
+      const path = await writeAgentSecret({
+        name,
+        value: "first-value",
+        scope: SCOPE,
+        sessionKey: MAIN,
+      });
+      expect(path).toBe(target);
+      expect(fs.readFileSync(target, "utf-8")).toBe("first-value");
+      expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+      // Re-writing the same name overwrites in place and keeps 0600.
+      await writeAgentSecret({ name, value: "second-value", scope: SCOPE, sessionKey: MAIN });
+      expect(fs.readFileSync(target, "utf-8")).toBe("second-value");
+      expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+    } finally {
+      fs.rmSync(target, { force: true });
+    }
+  });
+
+  it("rejects names that could escape the secrets directory", async () => {
+    for (const bad of ["", "../escape", "a/b", "a\\b", "..", "x;id", "a b"]) {
+      await expect(
+        writeAgentSecret({ name: bad, value: "v", scope: SCOPE, sessionKey: MAIN }),
+      ).rejects.toThrow(/invalid secret name/);
+    }
+  });
+
+  it("fails closed when the existing scoped secrets dir is group/world-writable", async () => {
+    // `/tmp` is world-writable, so a pre-existing attacker-controlled scoped dir
+    // must be rejected rather than written into (its owner could swap the target
+    // out after the write).
+    const dir = `${AGENT_SECRETS_DIR}/${SCOPE}`;
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(dir, 0o777);
+    try {
+      await expect(
+        writeAgentSecret({ name: "x", value: "v", scope: SCOPE, sessionKey: MAIN }),
+      ).rejects.toThrow(/group\/world-writable/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to follow a pre-planted symlink at the target path (no redirect)", async () => {
+    const name = `sym${Math.random().toString(36).slice(2, 10)}`;
+    const dir = `${AGENT_SECRETS_DIR}/${SCOPE}`;
+    const target = `${dir}/${name}`;
+    const decoy = `/tmp/decoy-${Math.random().toString(36).slice(2, 10)}`;
+    // Make sure the scoped dir exists, then plant a symlink where the secret
+    // would be written, pointing at an attacker-controlled path outside it.
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(decoy, "untouched");
+    fs.symlinkSync(decoy, target);
+    try {
+      // O_NOFOLLOW makes the open fail rather than writing through the symlink.
+      await expect(
+        writeAgentSecret({ name, value: "attacker-controlled", scope: SCOPE, sessionKey: MAIN }),
+      ).rejects.toThrow();
+      // The decoy target was never overwritten.
+      expect(fs.readFileSync(decoy, "utf-8")).toBe("untouched");
+    } finally {
+      fs.rmSync(target, { force: true });
+      fs.rmSync(decoy, { force: true });
+    }
   });
 });

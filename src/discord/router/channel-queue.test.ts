@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelTurn } from "./channel-queue.js";
-import { ChannelQueue, coalesceTurns } from "./channel-queue.js";
+import { ChannelQueue, coalesceTurns, takeNextBatch } from "./channel-queue.js";
 
 /**
  * A controllable timer so debounce behaviour is deterministic: calling flush()
@@ -33,6 +33,15 @@ function fakeTimers() {
 
 function textTurn(authorId: string, messageContent: string): ChannelTurn {
   return { authorId, messageContent };
+}
+
+function secretTurn(name: string): ChannelTurn {
+  return {
+    authorId: "u1",
+    messageContent: `reminder:${name}`,
+    systemTurn: true,
+    secret: { name, value: `val-${name}`, scope: `ch-${name}` },
+  };
 }
 
 describe("coalesceTurns", () => {
@@ -71,6 +80,183 @@ describe("coalesceTurns", () => {
         { authorId: "u1", messageContent: "b" },
       ]).systemTurn,
     ).toBe(false);
+  });
+});
+
+describe("takeNextBatch", () => {
+  it("returns an empty batch for an empty queue", () => {
+    expect(takeNextBatch([])).toEqual([]);
+  });
+
+  it("takes a lone secret at the head by itself, leaving the rest", () => {
+    const pending = [secretTurn("a"), textTurn("u1", "hi")];
+    expect(takeNextBatch(pending)).toEqual([secretTurn("a")]);
+    expect(pending).toEqual([textTurn("u1", "hi")]);
+  });
+
+  it("takes leading non-secret turns, stopping before the first secret", () => {
+    const pending = [textTurn("u1", "one"), textTurn("u1", "two"), secretTurn("a")];
+    expect(takeNextBatch(pending)).toEqual([textTurn("u1", "one"), textTurn("u1", "two")]);
+    expect(pending).toEqual([secretTurn("a")]);
+  });
+
+  it("never coalesces two secrets together", () => {
+    const pending = [secretTurn("a"), secretTurn("b")];
+    expect(takeNextBatch(pending)).toEqual([secretTurn("a")]);
+    expect(pending).toEqual([secretTurn("b")]);
+  });
+});
+
+describe("ChannelQueue secret isolation", () => {
+  it("runs each secret as its own turn (never coalesced) and keeps a trailing user turn separate", async () => {
+    const timers = fakeTimers();
+    let release!: () => void;
+    const firstTurn = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runTurn = vi
+      .fn<(channelId: string, turn: ChannelTurn) => Promise<void>>()
+      .mockImplementationOnce(async () => firstTurn)
+      .mockImplementation(async () => {});
+    const queue = new ChannelQueue({
+      runTurn,
+      debounceMs: 0,
+      setTimer: timers.set,
+      clearTimer: timers.clear,
+    });
+
+    // First secret starts running and holds the channel open.
+    queue.enqueue("c1", secretTurn("a"));
+    timers.flush();
+    await Promise.resolve();
+    expect(runTurn).toHaveBeenCalledTimes(1);
+
+    // A second secret and a plain user message buffer behind it.
+    queue.enqueue("c1", secretTurn("b"));
+    queue.enqueue("c1", textTurn("u1", "hello"));
+    expect(runTurn).toHaveBeenCalledTimes(1);
+
+    release();
+    await firstTurn;
+    for (let i = 0; i < 4; i++) {
+      await Promise.resolve();
+      timers.flush();
+    }
+    for (let i = 0; i < 4; i++) {
+      await Promise.resolve();
+    }
+
+    // Three separate turns: secret a, secret b, then the user text — the two
+    // secrets are never merged with each other or with the user message, and
+    // each secret turn keeps its value and systemTurn flag.
+    expect(runTurn).toHaveBeenCalledTimes(3);
+    expect(runTurn.mock.calls[0][1].secret).toEqual({ name: "a", value: "val-a", scope: "ch-a" });
+    expect(runTurn.mock.calls[0][1].systemTurn).toBe(true);
+    expect(runTurn.mock.calls[1][1].secret).toEqual({ name: "b", value: "val-b", scope: "ch-b" });
+    expect(runTurn.mock.calls[1][1].messageContent).toBe("reminder:b");
+    expect(runTurn.mock.calls[2][1].secret).toBeUndefined();
+    expect(runTurn.mock.calls[2][1].messageContent).toBe("hello");
+  });
+
+  it("never steers a secret turn into a live run, even when a steer hook is set", async () => {
+    const timers = fakeTimers();
+    let release!: () => void;
+    const firstTurn = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runTurn = vi
+      .fn<(channelId: string, turn: ChannelTurn) => Promise<void>>()
+      .mockImplementationOnce(async () => firstTurn)
+      .mockImplementation(async () => {});
+    const steer = vi.fn(async () => true);
+    const queue = new ChannelQueue({
+      runTurn,
+      steer,
+      debounceMs: 0,
+      setTimer: timers.set,
+      clearTimer: timers.clear,
+    });
+
+    queue.enqueue("c1", textTurn("u1", "first"));
+    timers.flush();
+    await Promise.resolve();
+    expect(runTurn).toHaveBeenCalledTimes(1);
+
+    // Secret arrives mid-run: must buffer (not steer) so the value survives.
+    queue.enqueue("c1", secretTurn("a"));
+    for (let i = 0; i < 4; i++) {
+      await Promise.resolve();
+    }
+    expect(steer.mock.calls.some((c) => c[1].secret)).toBe(false);
+
+    release();
+    await firstTurn;
+    for (let i = 0; i < 4; i++) {
+      await Promise.resolve();
+      timers.flush();
+    }
+    for (let i = 0; i < 4; i++) {
+      await Promise.resolve();
+    }
+    const secretRun = runTurn.mock.calls.find((c) => c[1].secret);
+    expect(secretRun?.[1].secret).toEqual({ name: "a", value: "val-a", scope: "ch-a" });
+  });
+
+  it("acts as a FIFO barrier: an ordinary message after a secret cannot steer ahead of it", async () => {
+    const timers = fakeTimers();
+    let release!: () => void;
+    const firstTurn = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runTurn = vi
+      .fn<(channelId: string, turn: ChannelTurn) => Promise<void>>()
+      .mockImplementationOnce(async () => firstTurn)
+      .mockImplementation(async () => {});
+    const steer = vi.fn(async () => true);
+    const queue = new ChannelQueue({
+      runTurn,
+      steer,
+      debounceMs: 0,
+      setTimer: timers.set,
+      clearTimer: timers.clear,
+    });
+
+    // A turn is running and holds the channel open.
+    queue.enqueue("c1", textTurn("u1", "first"));
+    timers.flush();
+    await Promise.resolve();
+    expect(runTurn).toHaveBeenCalledTimes(1);
+
+    // A secret buffers mid-run; a later ordinary message must NOT steer (which
+    // would let it overtake the earlier secret) — it buffers behind the barrier.
+    queue.enqueue("c1", secretTurn("a"));
+    queue.enqueue("c1", textTurn("u1", "later"));
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+    // Neither the secret nor the later message was steered into the active run.
+    expect(steer).not.toHaveBeenCalled();
+
+    release();
+    await firstTurn;
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+      timers.flush();
+    }
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+
+    // Order preserved: the secret runs on its own first, then the later message.
+    const secretIdx = runTurn.mock.calls.findIndex((c) => c[1].secret);
+    const laterIdx = runTurn.mock.calls.findIndex((c) => c[1].messageContent === "later");
+    expect(secretIdx).toBeGreaterThan(0);
+    expect(laterIdx).toBeGreaterThan(secretIdx);
+    expect(runTurn.mock.calls[secretIdx][1].secret).toEqual({
+      name: "a",
+      value: "val-a",
+      scope: "ch-a",
+    });
   });
 });
 

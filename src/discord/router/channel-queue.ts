@@ -40,6 +40,13 @@ export type ChannelTurn = {
   attachments?: DiscordAttachment[];
   /** System-injected turn (onboarding kick, container `[System: ...]` note). */
   systemTurn?: boolean;
+  /**
+   * An out-of-band secret to hand the agent box with this turn (from the
+   * `/secret` command). Never coalesced into another turn's content: a turn
+   * carrying a secret bypasses the steer path (see enqueue), so it always runs
+   * on its own and the secret reaches routeMessage intact.
+   */
+  secret?: { name: string; value: string; scope: string };
 };
 
 export type ChannelQueueOptions = {
@@ -122,12 +129,40 @@ export function coalesceTurns(batch: ChannelTurn[]): ChannelTurn {
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
   const attachments = batch.flatMap((t) => t.attachments ?? []);
+  // A secret-bearing turn is always drained as its own single-item batch (see
+  // ChannelQueue.drain, which splits at secret boundaries), so this coalesce
+  // path should never see one. Preserve the first secret defensively so a
+  // coalesce can never silently drop it even if that invariant ever changes.
+  const secret = batch.find((t) => t.secret)?.secret;
   return {
     authorId: batch[batch.length - 1].authorId,
     messageContent,
     attachments: attachments.length > 0 ? attachments : undefined,
     systemTurn: batch.every((t) => t.systemTurn === true),
+    ...(secret ? { secret } : {}),
   };
+}
+
+/**
+ * Take the next batch to run as a single turn, splitting at secret boundaries so
+ * a secret-bearing turn is never coalesced with any other message. If the head
+ * of the queue carries a secret, that one turn is taken alone. Otherwise all
+ * leading non-secret turns are taken (stopping before the first secret), so each
+ * secret runs on its own turn with its reminder text and `systemTurn` flag
+ * intact and its value reaches routeMessage undiluted.
+ */
+export function takeNextBatch(pending: ChannelTurn[]): ChannelTurn[] {
+  if (pending.length === 0) {
+    return [];
+  }
+  if (pending[0].secret) {
+    return pending.splice(0, 1);
+  }
+  let count = 1;
+  while (count < pending.length && !pending[count].secret) {
+    count += 1;
+  }
+  return pending.splice(0, count);
 }
 
 export class ChannelQueue {
@@ -181,6 +216,23 @@ export class ChannelQueue {
    */
   enqueue(channelId: string, turn: ChannelTurn): void {
     const state = this.state(channelId);
+    // A secret-bearing turn must never be steered (steering injects it as plain
+    // text into a live run, which would drop the out-of-band secret and leak its
+    // intent into the transcript). It must also act as a FIFO barrier: once a
+    // secret is queued, every later arrival this run must buffer behind it rather
+    // than steer into the active run and overtake it. Set bufferRest so later
+    // non-secret arrivals buffer, and when a steer chain is active route the
+    // secret through it (as a forced buffer) so it stays ordered after any
+    // earlier in-flight steers instead of jumping ahead of them.
+    if (turn.secret) {
+      state.bufferRest = true;
+      if (!state.reserved && this.steer && (state.running || state.pendingSteers > 0)) {
+        this.chainForcedBuffer(channelId, turn);
+        return;
+      }
+      this.buffer(channelId, turn);
+      return;
+    }
     // Route through the steer chain while a turn is running OR an earlier steer
     // is still settling, so a later arrival can never run ahead of it.
     if (!state.reserved && this.steer && (state.running || state.pendingSteers > 0)) {
@@ -192,6 +244,29 @@ export class ChannelQueue {
       return;
     }
     this.buffer(channelId, turn);
+  }
+
+  /**
+   * Append a turn to the steer chain that is always buffered, never steered
+   * (used for secret barriers). It keeps its place in arrival order behind any
+   * earlier in-flight steers, honors a clear() via the generation check, and
+   * participates in the channel's busy lifecycle like a real steer attempt.
+   */
+  private chainForcedBuffer(channelId: string, turn: ChannelTurn): void {
+    const state = this.state(channelId);
+    state.pendingSteers += 1;
+    const generation = state.generation;
+    state.steerChain = state.steerChain.then(() => {
+      try {
+        if (state.generation !== generation) {
+          return;
+        }
+        this.buffer(channelId, turn);
+      } finally {
+        state.pendingSteers = Math.max(0, state.pendingSteers - 1);
+        this.cleanup(channelId);
+      }
+    });
   }
 
   /** Buffer a message and schedule a (debounced) drain. */
@@ -331,15 +406,18 @@ export class ChannelQueue {
     state.running = true;
     // Fresh run: mid-turn arrivals may steer again until one has to buffer.
     state.bufferRest = false;
-    // Take exactly one batch (everything buffered so far) and run it as a single
-    // coalesced turn. Messages that arrive mid-turn stay in `pending` and are NOT
-    // drained immediately in a loop: the `finally` reschedules them through the
-    // debounce instead, so a late arrival that lands just after this turn resolves
-    // still gets its settle window and coalesces with the next batch rather than
-    // becoming a lone turn (which could hit the agent's silence-bias). A failing
-    // turn is logged and swallowed (runTurn wraps routeMessage, which handles its
-    // own errors) so one bad turn never wedges the channel.
-    const batch = state.pending.splice(0, state.pending.length);
+    // Take one batch and run it as a single coalesced turn. takeNextBatch splits
+    // at secret boundaries so a secret-bearing turn always runs on its own (never
+    // coalesced with other messages, so its value and reminder reach routeMessage
+    // intact); any remaining pending turns (e.g. a second secret, or messages
+    // after one) are left behind and rescheduled by the `finally`. Messages that
+    // arrive mid-turn likewise stay in `pending` and are NOT drained in a loop:
+    // the reschedule runs them through the debounce so a late arrival still gets
+    // its settle window rather than becoming a lone turn (which could hit the
+    // agent's silence-bias). A failing turn is logged and swallowed (runTurn wraps
+    // routeMessage, which handles its own errors) so one bad turn never wedges the
+    // channel.
+    const batch = takeNextBatch(state.pending);
     try {
       await this.runTurn(channelId, coalesceTurns(batch));
     } catch (err) {
