@@ -495,6 +495,7 @@ public struct AgentParams: Codable, Sendable {
     public let idempotencykey: String
     public let label: String?
     public let spawnedby: String?
+    public let secret: [String: AnyCodable]?
 
     public init(
         message: String,
@@ -519,7 +520,8 @@ public struct AgentParams: Codable, Sendable {
         extrasystemprompt: String?,
         idempotencykey: String,
         label: String?,
-        spawnedby: String?
+        spawnedby: String?,
+        secret: [String: AnyCodable]?
     ) {
         self.message = message
         self.agentid = agentid
@@ -544,6 +546,7 @@ public struct AgentParams: Codable, Sendable {
         self.idempotencykey = idempotencykey
         self.label = label
         self.spawnedby = spawnedby
+        self.secret = secret
     }
     private enum CodingKeys: String, CodingKey {
         case message
@@ -569,6 +572,7 @@ public struct AgentParams: Codable, Sendable {
         case idempotencykey = "idempotencyKey"
         case label
         case spawnedby = "spawnedBy"
+        case secret
     }
 }
 
