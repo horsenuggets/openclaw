@@ -57,8 +57,10 @@ services:
       # skills mount at /bin/skills. This lets the agent actually use connected
       # tools (todoist, notion, gh, gog, ...): the SKILL.md instructions reach the
       # prompt and skills.entries tokens surface as their env vars. Workspace
-      # templates are no longer mounted here; the provisioner seeds the hand-picked
-      # set into /workspace host-side (openclawctl seed_workspace).
+      # templates are normally seeded into /workspace host-side (openclawctl
+      # seed_workspace). Keep them mounted read-only for lazy setup if host seeding
+      # fails.
+      - ~/deploy/bin/docs/reference/templates:/bin/docs/reference/templates:ro
       - ~/deploy/skills:/bin/skills:ro
       # Config is read-only and lives outside /workspace, so the agent's
       # workspace-confined file tools cannot read it. The gateway process reads

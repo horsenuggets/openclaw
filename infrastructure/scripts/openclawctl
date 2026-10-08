@@ -410,17 +410,17 @@ seed_workspace() {
   # Seed on the HOST, not via `docker exec`: the deploy binary ships the
   # hand-picked workspace templates next to itself (deploy.sh stages
   # docs/reference/templates into ~/deploy/bin/docs), so `openclaw setup` resolves
-  # them with no docs mount in the box at all. Host-side seeding also readies the
-  # workspace independently of the container, and keeps the box image docs-free.
+  # them on the host. The same hand-picked templates are mounted read-only in the box
+  # as a fallback if host-side seeding fails; the full docs tree is not deployed.
   # Idempotent: setup is write-if-missing.
-  # Run under a throwaway HOME/config: `openclaw setup` also updates
-  # agents.defaults.workspace and touches ~/.openclaw, which we must NOT let it do
-  # to the host's global config. Isolating HOME sends those incidental writes to a
-  # temp dir; only the --workspace seeding persists (templates resolve next to the
-  # binary, independent of HOME).
+  # Run under throwaway HOME/config/state paths: `openclaw setup` also updates
+  # agents.defaults.workspace and touches the state dir, which we must NOT let it do
+  # to the host's global config or state. Only --workspace seeding persists (templates
+  # resolve next to the binary, independent of these paths).
   local setup_home ok=0
   setup_home="$(mktemp -d)"
-  if HOME="$setup_home" OPENCLAW_CONFIG_PATH="$setup_home/openclaw.json" \
+  if HOME="$setup_home" OPENCLAW_STATE_DIR="$setup_home/.openclaw" \
+    OPENCLAW_CONFIG_PATH="$setup_home/openclaw.json" \
     "$OPENCLAW_BIN" setup --workspace "$ws" >/dev/null 2>&1; then
     ok=1
   fi
@@ -710,7 +710,10 @@ JSON
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
-  chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" "$base/home" 2>/dev/null || true
+  if ! chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" "$base/home" 2>/dev/null; then
+    echo "Error: could not make the writable mounts in $base accessible to the agent uid; not starting $channelId" >&2
+    return 1
+  fi
 
   # `openclaw config set` writes openclaw.json mode 600 (root-owned). The box
   # mounts it read-only and runs as AGENT_UID, so hand ownership to that uid or the
@@ -781,11 +784,12 @@ cmd_add_dm() {
     exit 1
   fi
 
+  seed_workspace "$channelId" || true
+
   # Start container (start_container runs prepare_instance_dirs for the token-free
   # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId" || true
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -828,11 +832,12 @@ cmd_add_channel() {
     exit 1
   fi
 
+  seed_workspace "$channelId" || true
+
   # Start container (start_container runs prepare_instance_dirs for the token-free
   # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId" || true
   echo "Done. Channel $channelId is now registered."
 }
 
