@@ -218,9 +218,18 @@ export class ChannelQueue {
     const state = this.state(channelId);
     // A secret-bearing turn must never be steered (steering injects it as plain
     // text into a live run, which would drop the out-of-band secret and leak its
-    // intent into the transcript). Buffer it so it runs as its own turn with the
-    // secret delivered to the box out-of-band.
+    // intent into the transcript). It must also act as a FIFO barrier: once a
+    // secret is queued, every later arrival this run must buffer behind it rather
+    // than steer into the active run and overtake it. Set bufferRest so later
+    // non-secret arrivals buffer, and when a steer chain is active route the
+    // secret through it (as a forced buffer) so it stays ordered after any
+    // earlier in-flight steers instead of jumping ahead of them.
     if (turn.secret) {
+      state.bufferRest = true;
+      if (!state.reserved && this.steer && (state.running || state.pendingSteers > 0)) {
+        this.chainForcedBuffer(channelId, turn);
+        return;
+      }
       this.buffer(channelId, turn);
       return;
     }
@@ -235,6 +244,29 @@ export class ChannelQueue {
       return;
     }
     this.buffer(channelId, turn);
+  }
+
+  /**
+   * Append a turn to the steer chain that is always buffered, never steered
+   * (used for secret barriers). It keeps its place in arrival order behind any
+   * earlier in-flight steers, honors a clear() via the generation check, and
+   * participates in the channel's busy lifecycle like a real steer attempt.
+   */
+  private chainForcedBuffer(channelId: string, turn: ChannelTurn): void {
+    const state = this.state(channelId);
+    state.pendingSteers += 1;
+    const generation = state.generation;
+    state.steerChain = state.steerChain.then(() => {
+      try {
+        if (state.generation !== generation) {
+          return;
+        }
+        this.buffer(channelId, turn);
+      } finally {
+        state.pendingSteers = Math.max(0, state.pendingSteers - 1);
+        this.cleanup(channelId);
+      }
+    });
   }
 
   /** Buffer a message and schedule a (debounced) drain. */

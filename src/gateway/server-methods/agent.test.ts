@@ -13,15 +13,50 @@ const mocks = vi.hoisted(() => ({
   resolveSendPolicy: vi.fn(() => "allow"),
   loadConfigReturn: {} as Record<string, unknown>,
   resolveSandboxContext: vi.fn(async () => null as unknown),
-  execDocker: vi.fn(async () => ({ stdout: "", stderr: "", code: 0 })),
+  // Records every `docker` spawn (argv + stdin) and lets a test control the exit
+  // code, standing in for the real child_process.spawn used by the stdin exec.
+  spawnCalls: [] as Array<{ args: string[]; stdin: string }>,
+  spawnExitCode: 0,
+  spawnStderr: "",
+  spawn: vi.fn(),
+}));
+
+mocks.spawn.mockImplementation((_cmd: string, args: string[]) => {
+  const call = { args, stdin: "" };
+  mocks.spawnCalls.push(call);
+  const listeners: Record<string, Array<(...a: unknown[]) => void>> = {};
+  const child = {
+    stdin: {
+      end: (data: string) => {
+        call.stdin = data;
+        // Fire close on the next tick, mimicking an async process exit.
+        queueMicrotask(() => {
+          for (const fn of listeners.close ?? []) {
+            fn(mocks.spawnExitCode);
+          }
+        });
+      },
+    },
+    stderr: {
+      on: (event: string, fn: (...a: unknown[]) => void) => {
+        if (event === "data" && mocks.spawnStderr) {
+          fn(Buffer.from(mocks.spawnStderr));
+        }
+      },
+    },
+    on: (event: string, fn: (...a: unknown[]) => void) => {
+      (listeners[event] ??= []).push(fn);
+    },
+  };
+  return child as unknown as ReturnType<typeof import("node:child_process").spawn>;
+});
+
+vi.mock("node:child_process", () => ({
+  spawn: mocks.spawn,
 }));
 
 vi.mock("../../agents/sandbox/context.js", () => ({
   resolveSandboxContext: mocks.resolveSandboxContext,
-}));
-
-vi.mock("../../agents/sandbox/docker.js", () => ({
-  execDocker: mocks.execDocker,
 }));
 
 vi.mock("../session-utils.js", () => ({
@@ -80,8 +115,18 @@ const makeContext = (): GatewayRequestContext =>
   ({
     dedupe: new Map(),
     addChatRun: vi.fn(),
-    logGateway: { info: vi.fn(), error: vi.fn() },
+    logGateway: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   }) as unknown as GatewayRequestContext;
+
+// Reset the shared docker-spawn mock state between every test so no test depends
+// on another's cleanup (the sandbox-failure tests mutate spawnExitCode/stderr).
+afterEach(() => {
+  mocks.spawnCalls.length = 0;
+  mocks.spawnExitCode = 0;
+  mocks.spawnStderr = "";
+  mocks.resolveSandboxContext.mockReset();
+  mocks.resolveSandboxContext.mockResolvedValue(null);
+});
 
 describe("gateway agent handler", () => {
   it("preserves cliSessionIds from existing session entry", async () => {
@@ -184,6 +229,45 @@ describe("gateway agent handler", () => {
 
     mocks.loadConfigReturn = {};
     vi.useRealTimers();
+  });
+
+  it("fails the turn closed when secret delivery fails (no agentCommand dispatch)", async () => {
+    mocks.agentCommand.mockClear();
+    mocks.loadSessionEntry.mockReturnValue({
+      cfg: {},
+      storePath: "/tmp/sessions.json",
+      entry: { sessionId: "existing-session-id", updatedAt: Date.now() },
+      canonicalKey: "agent:main:main",
+    });
+    mocks.updateSessionStore.mockResolvedValue(undefined);
+    // Sandbox delivery blows up (e.g. container gone) -> write throws.
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "sbx-fail" });
+    mocks.spawnExitCode = 1;
+    mocks.spawnStderr = "boom";
+
+    const respond = vi.fn();
+    await agentHandlers.agent({
+      params: {
+        message: "A secret is available...",
+        agentId: "main",
+        sessionKey: "agent:main:discord:default:channel:c1",
+        idempotencyKey: "test-secret-fail",
+        secret: { name: "tok", value: "super-secret" },
+      },
+      respond,
+      context: makeContext(),
+      req: { type: "req", id: "sec-1", method: "agent" },
+      client: null,
+      isWebchatConnect: () => false,
+    });
+
+    // Responded with an error and never dispatched the turn.
+    expect(respond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ code: expect.any(String) }),
+    );
+    expect(mocks.agentCommand).not.toHaveBeenCalled();
   });
 
   it("handles missing cliSessionIds gracefully", async () => {
@@ -326,12 +410,10 @@ describe("gateway agent.steer handler", () => {
 });
 
 describe("writeAgentSecret sandbox delivery", () => {
-  it("copies into the session's container (never via a process arg) when sandboxed", async () => {
-    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c1" });
-    const dockerCalls: string[][] = [];
-    mocks.execDocker.mockImplementation(async (args: string[]) => {
-      dockerCalls.push(args);
-      return { stdout: "", stderr: "", code: 0 };
+  it("pipes the value into the session's container as the sandbox user via stdin", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({
+      containerName: "openclaw-sbx-c1",
+      docker: { user: "1000:1000" },
     });
 
     const name = `sbx-${Math.random().toString(36).slice(2, 10)}`;
@@ -342,43 +424,52 @@ describe("writeAgentSecret sandbox delivery", () => {
     });
 
     expect(path).toBe(`${AGENT_SECRETS_DIR}/${name}`);
-    // The secrets dir is created, the file is docker cp-ed in, then chmod 0600.
-    expect(dockerCalls.some((a) => a[0] === "cp" && a[2] === `openclaw-sbx-c1:${path}`)).toBe(true);
-    expect(
-      dockerCalls.some((a) => a[0] === "exec" && a.includes("chmod") && a.includes("600")),
-    ).toBe(true);
-    // The secret value is never passed as a docker argument (would leak via ps).
-    for (const call of dockerCalls) {
-      expect(call).not.toContain("super-secret");
+    expect(mocks.spawnCalls).toHaveLength(1);
+    const { args, stdin } = mocks.spawnCalls[0];
+    // docker exec -i --user 1000:1000 <container> sh -c '<script>'
+    expect(args[0]).toBe("exec");
+    expect(args).toContain("-i");
+    expect(args[args.indexOf("--user") + 1]).toBe("1000:1000");
+    expect(args).toContain("openclaw-sbx-c1");
+    expect(args[args.length - 2]).toBe("-c");
+    // The script creates the dir, writes via cat (stdin), and chmods 0600.
+    expect(args[args.length - 1]).toContain(`cat > ${path}`);
+    expect(args[args.length - 1]).toContain(`chmod 600 ${path}`);
+    // The value travels on stdin, never as an argument (no ps leak).
+    expect(stdin).toBe("super-secret");
+    for (const arg of args) {
+      expect(arg).not.toContain("super-secret");
     }
-    // The host staging dir was cleaned up (no leftover openclaw-secret-* dirs
-    // that still contain the value).
+    // No host staging file is created at all.
     const leftovers = fs.readdirSync(os.tmpdir()).filter((d) => d.startsWith("openclaw-secret-"));
     expect(leftovers).toEqual([]);
   });
 
-  it("does not fall back to the host path when sandbox resolution fails", async () => {
-    const name = `sbx-fail-${Math.random().toString(36).slice(2, 10)}`;
-    const hostPath = `${AGENT_SECRETS_DIR}/${name}`;
-    mocks.resolveSandboxContext.mockRejectedValueOnce(new Error("sandbox resolution failed"));
-
-    await expect(
-      writeAgentSecret({
-        name,
-        value: "super-secret",
-        sessionKey: "agent:main:discord:default:channel:c1",
-      }),
-    ).rejects.toThrow("sandbox resolution failed");
-
-    expect(fs.existsSync(hostPath)).toBe(false);
-    expect(mocks.execDocker).not.toHaveBeenCalled();
+  it("omits --user when the sandbox has no configured user", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c2" });
+    await writeAgentSecret({ name: "nouser", value: "v", sessionKey: "agent:x:channel:c2" });
+    expect(mocks.spawnCalls[0].args).not.toContain("--user");
   });
 
-  afterEach(() => {
-    mocks.resolveSandboxContext.mockReset();
-    mocks.resolveSandboxContext.mockResolvedValue(null);
-    mocks.execDocker.mockReset();
-    mocks.execDocker.mockResolvedValue({ stdout: "", stderr: "", code: 0 });
+  it("fails (rejects) when delivery into the container errors", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c3" });
+    mocks.spawnExitCode = 1;
+    mocks.spawnStderr = "No such container";
+    await expect(
+      writeAgentSecret({ name: "boom", value: "v", sessionKey: "agent:x:channel:c3" }),
+    ).rejects.toThrow(/No such container/);
+  });
+
+  it("fails closed (rejects) when sandbox resolution throws, never falling back to the host", async () => {
+    const name = `sbx-fail-${Math.random().toString(36).slice(2, 10)}`;
+    const hostPath = `${AGENT_SECRETS_DIR}/${name}`;
+    mocks.resolveSandboxContext.mockRejectedValueOnce(new Error("container start failed"));
+    await expect(
+      writeAgentSecret({ name, value: "v", sessionKey: "agent:main:discord:default:channel:c4" }),
+    ).rejects.toThrow(/container start failed/);
+    // Must not silently fall back to a host write outside the isolation boundary.
+    expect(fs.existsSync(hostPath)).toBe(false);
+    expect(mocks.spawnCalls).toHaveLength(0);
   });
 });
 

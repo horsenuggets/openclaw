@@ -1,11 +1,10 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import type { GatewayRequestHandlers } from "./types.js";
 import { listAgentIds } from "../../agents/agent-scope.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
 import { resolveSandboxContext } from "../../agents/sandbox/context.js";
-import { execDocker } from "../../agents/sandbox/docker.js";
 import { agentCommand } from "../../commands/agent.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -95,30 +94,59 @@ function writeSecretFileHardened(dir: string, name: string, value: string): stri
 }
 
 /**
+ * Run `docker exec` feeding `input` on stdin. Resolves with the exit code and
+ * stderr; rejects on spawn error or a non-zero exit. Used to deliver a secret
+ * into a sandbox without ever placing the value on the command line (so it never
+ * leaks via `ps`) and without a host staging file.
+ */
+function dockerExecStdin(args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args, { stdio: ["pipe", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if ((code ?? 0) !== 0) {
+        reject(new Error(stderr.trim() || `docker ${args[0]} exited ${code}`));
+        return;
+      }
+      resolve();
+    });
+    child.stdin?.end(input);
+  });
+}
+
+/**
  * Deliver a secret into a running Docker sandbox at `/tmp/secrets/<name>`
- * (mode 0600). The value is staged in a 0600 host temp file and `docker cp`-ed
- * in (never passed as a process argument, so it does not leak via `ps`), then
- * the host staging file is removed. The in-container file is chmod 0600 after
- * copy. `docker cp` does not create intermediate dirs on a tmpfs root, so the
- * secrets dir is created first.
+ * (mode 0600). The value is piped over stdin into a `docker exec` running **as
+ * the sandbox's configured user** (so the file is owned by the agent, not root,
+ * and is readable by it), via a shell that `umask 177`s before writing so the
+ * file is created 0600 from the start. The value is never passed as a process
+ * argument (no `ps` leak) and never staged on the host. A no-dollar single-quoted
+ * shell script is used; the only interpolated value is the already-sanitized
+ * `[a-z0-9]` name.
  */
 async function writeAgentSecretToSandbox(
   containerName: string,
+  user: string | undefined,
   name: string,
   value: string,
 ): Promise<string> {
   const target = `${AGENT_SECRETS_DIR}/${name}`;
-  const staging = fs.mkdtempSync(`${os.tmpdir()}/openclaw-secret-`);
-  const stagingFile = `${staging}/${name}`;
-  try {
-    writeSecretFileHardened(staging, name, value);
-    await execDocker(["exec", containerName, "mkdir", "-p", "-m", "700", AGENT_SECRETS_DIR]);
-    await execDocker(["cp", stagingFile, `${containerName}:${target}`]);
-    await execDocker(["exec", containerName, "chmod", "600", target]);
-  } finally {
-    // Shred the host staging copy; the value must not linger on the host.
-    fs.rmSync(staging, { recursive: true, force: true });
+  // name is sanitized to [a-z0-9] upstream, so it is safe to interpolate into
+  // the single-quoted shell script below. Create the dir (0700) and write the
+  // file via stdin under a 0600 umask, then chmod defensively.
+  const script =
+    `set -e; umask 177; mkdir -p -m 700 ${AGENT_SECRETS_DIR}; ` +
+    `cat > ${target}; chmod 600 ${target}`;
+  const args = ["exec", "-i"];
+  if (user) {
+    args.push("--user", user);
   }
+  args.push(containerName, "sh", "-c", script);
+  await dockerExecStdin(args, value);
   return target;
 }
 
@@ -150,9 +178,14 @@ export async function writeAgentSecret(params: {
   assertSafeSecretName(name);
   // Sandboxed sessions get the secret inside their own container; a host write
   // would land in the gateway's /tmp, which the container's tmpfs /tmp shadows.
+  // IMPORTANT: do not swallow errors here. resolveSandboxContext returns null
+  // only when the session is intentionally unsandboxed; once a sandbox is
+  // selected, container/setup failures throw. Letting those propagate makes
+  // delivery fail closed (the caller aborts the turn) rather than silently
+  // falling back to a host write that lands outside the isolation boundary.
   const sandbox = sessionKey ? await resolveSandboxContext({ config: cfg, sessionKey }) : null;
   if (sandbox?.containerName) {
-    return writeAgentSecretToSandbox(sandbox.containerName, name, value);
+    return writeAgentSecretToSandbox(sandbox.containerName, sandbox.docker?.user, name, value);
   }
   return writeSecretFileHardened(AGENT_SECRETS_DIR, name, value);
 }
@@ -462,6 +495,40 @@ export const agentHandlers: GatewayRequestHandlers = {
 
     const deliver = request.deliver === true && resolvedChannel !== INTERNAL_MESSAGE_CHANNEL;
 
+    // Out-of-band secret delivery (/secret command): make the value readable at
+    // the agent box's /tmp/secrets/<name> (0600) BEFORE the turn runs, so the
+    // accompanying system-reminder can point the agent at a file that already
+    // exists. For sandboxed sessions this copies into the session's own
+    // container (a host write would be shadowed by the container's tmpfs /tmp);
+    // for direct sessions it writes the host path. Awaited (and done before the
+    // accepted ack) so the file is in place before agentCommand dispatches. The
+    // value is never logged. This FAILS CLOSED: if delivery fails we respond with
+    // an error and never dispatch the turn, because the reminder would otherwise
+    // point the agent at a missing file (or, worse, a stale same-named secret
+    // from a prior /secret), so the agent could consume the wrong material.
+    if (request.secret) {
+      try {
+        await writeAgentSecret({
+          name: request.secret.name,
+          value: request.secret.value,
+          sessionKey: requestedSessionKey,
+          cfg: cfgForAgent ?? cfg,
+        });
+      } catch (err) {
+        context.logGateway.warn(
+          `agent: failed to write secret "${request.secret.name}": ${String(err)}`,
+        );
+        // Fail closed before the accepted ack / dedupe entry is recorded, so a
+        // retry can re-attempt delivery rather than being deduped as in-flight.
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.UNAVAILABLE, "failed to deliver secret to the agent box"),
+        );
+        return;
+      }
+    }
+
     const accepted = {
       runId,
       status: "accepted" as const,
@@ -476,30 +543,6 @@ export const agentHandlers: GatewayRequestHandlers = {
     respond(true, accepted, undefined, { runId });
 
     const resolvedThreadId = explicitThreadId ?? deliveryPlan.resolvedThreadId;
-
-    // Out-of-band secret delivery (/secret command): make the value readable at
-    // the agent box's /tmp/secrets/<name> (0600) BEFORE the turn runs, so the
-    // accompanying system-reminder can point the agent at a file that already
-    // exists. For sandboxed sessions this copies into the session's own
-    // container (a host write would be shadowed by the container's tmpfs /tmp);
-    // for direct sessions it writes the host path. Awaited so the file is in
-    // place before agentCommand dispatches. The value is never logged. A failed
-    // write is logged and the turn still proceeds (the reminder will be
-    // inaccurate, but that degrades gracefully rather than wedging the run).
-    if (request.secret) {
-      try {
-        await writeAgentSecret({
-          name: request.secret.name,
-          value: request.secret.value,
-          sessionKey: requestedSessionKey,
-          cfg: cfgForAgent ?? cfg,
-        });
-      } catch (err) {
-        context.logGateway.warn(
-          `agent: failed to write secret "${request.secret.name}": ${String(err)}`,
-        );
-      }
-    }
 
     void agentCommand(
       {
