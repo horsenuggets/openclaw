@@ -6,6 +6,21 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Agent box layout: each per-channel agent container now gets a real `HOME`
+  (`/home/openclaw`) on its own writable mount (`~/.openclaw-instances/<id>/home`) instead
+  of pointing `HOME` at `/state`, so the box behaves like a normal shell and `$HOME`-based
+  credentials (e.g. gog's `~/.config/gogcli`) plus tool caches persist across restarts and
+  stay isolated per channel. The workspace is now seeded host-side
+  (`openclaw setup --workspace <ws>` under a throwaway `HOME`/config path so it can't
+  mutate the host's global config or state) rather than via `docker exec`, then chowned to
+  the box uid; deploy stages only the 7 hand-picked workspace templates next to the binary
+  (where both host-side setup and the box resolve them) and no longer ships the full
+  contributor docs tree. The full `/bin/docs` tree is gone; only the templates subdir
+  stays mounted read-only as a lazy-seed fallback, and `~/deploy/skills:/bin/skills:ro` is
+  added so skills are discovered inside the box. On deploy, boot runs a one-time migration
+  that moves any `$HOME`-relative dirs an instance wrote while `HOME` was `/state` (tool
+  caches/creds and the canvas dir under `state/.openclaw`) into the new `home/` mount so
+  nothing is orphaned by the `HOME` switch.
 - Discord: new `/secret` slash command hands the agent a sensitive value without it ever
   appearing in the channel. The command opens a private modal (popup) that collects a
   secret value plus an optional name; on submit the value is delivered out-of-band to that

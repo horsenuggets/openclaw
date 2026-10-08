@@ -378,14 +378,17 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
-# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) inside
-# the freshly-started container. The onboarding wizard normally seeds these, but
-# the provisioning path bypasses the wizard, so the workspace would otherwise stay
-# empty until the agent's first turn seeds it lazily. That is too late for the
-# router: it reads workspace/BOOTSTRAP.md to drive the first-run welcome card on
-# registration, so a missing file means no welcome and no onboarding. Run it in
-# the container (not on the host) because only the container image ships the
-# templates next to the binary; the host deploy layout puts them elsewhere.
+# Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
+# HOST using the deploy binary (deploy.sh stages the hand-picked templates next to
+# it at ~/deploy/bin/docs/reference/templates). The onboarding wizard normally seeds
+# these, but the provisioning path bypasses the wizard, so the workspace would
+# otherwise stay empty. Callers run this BEFORE start_container: it writes the
+# host-side bind dir directly (creating the workspace dir itself), so it needs no
+# container, and seeding first guarantees the files are in place before registration
+# returns. That matters for the router, which reads workspace/BOOTSTRAP.md to drive
+# the first-run welcome card on registration, so a missing file means no welcome and
+# no onboarding. (The same templates are also mounted read-only in the box so the
+# agent can lazily self-seed if this host-side pass fails; see the failure branch.)
 # Idempotent: setup uses write-if-missing, so re-running on an existing instance
 # is a no-op.
 # Debug toggle (mirror rig only): when OPENCLAW_SKIP_BOOTSTRAP is truthy, drop just
@@ -404,36 +407,52 @@ skip_bootstrap_enabled() {
 
 seed_workspace() {
   local channelId="$1"
-  local container="agents.channel-$channelId"
-  local i
-  for i in $(seq 1 10); do
-    if docker exec "$container" sh -lc 'openclaw setup --workspace /workspace' \
-      >/dev/null 2>&1; then
-      if skip_bootstrap_enabled; then
-        # Remove the first-run ritual file so onboarding does not fire. If the
-        # removal fails or the file somehow survives, do NOT report success: the
-        # router would still launch onboarding despite the toggle. Treat it as a
-        # failed seed so this attempt retries, and an exhausted loop falls through
-        # to the warning below rather than silently claiming the skip took effect.
-        if ! docker exec "$container" sh -lc \
-          'rm -f /workspace/BOOTSTRAP.md && ! test -e /workspace/BOOTSTRAP.md' \
-          >/dev/null 2>&1; then
-          sleep 1
-          continue
-        fi
-      fi
-      return 0
+  local ws="$INSTANCES_DIR/$channelId/workspace"
+  # Seed on the HOST, not via `docker exec`: the deploy binary ships the
+  # hand-picked workspace templates next to itself (deploy.sh stages
+  # docs/reference/templates into ~/deploy/bin/docs), so `openclaw setup` resolves
+  # them on the host. The same hand-picked templates are mounted read-only in the box
+  # as a fallback if host-side seeding fails; the full docs tree is not deployed.
+  # Idempotent: setup is write-if-missing.
+  # Run under throwaway HOME/config/state paths: `openclaw setup` also updates
+  # agents.defaults.workspace and touches the state dir, which we must NOT let it do
+  # to the host's global config or state. Only --workspace seeding persists (templates
+  # resolve next to the binary, independent of these paths).
+  local setup_home ok=0
+  setup_home="$(mktemp -d)"
+  if HOME="$setup_home" OPENCLAW_STATE_DIR="$setup_home/.openclaw" \
+    OPENCLAW_CONFIG_PATH="$setup_home/openclaw.json" \
+    "$OPENCLAW_BIN" setup --workspace "$ws" >/dev/null 2>&1; then
+    ok=1
+  fi
+  rm -rf "$setup_home"
+  if [ "$ok" -ne 1 ]; then
+    # Warn but do not abort the add: the caller still goes on to start the box,
+    # which can self-heal. The hand-picked templates are mounted read-only at
+    # /bin/docs/reference/templates (see agent.yml), so once started the agent's
+    # lazy ensureAgentWorkspace seeds the workspace from there on its first turn.
+    # Only the proactive welcome-on-register is lost until that first message,
+    # because the router reads workspace/BOOTSTRAP.md at registration time (before
+    # any turn). To retry host-side seeding before use, remove and re-register the
+    # channel with its matching add command; remove preserves instance data.
+    echo "Warning: could not seed workspace for $channelId host-side; the box will" >&2
+    echo "  seed it lazily on the first message (no proactive welcome until then)." >&2
+    echo "  To retry host-side first, remove and re-register it with its matching add command." >&2
+    return 1
+  fi
+  if skip_bootstrap_enabled; then
+    # Drop the first-run ritual file so onboarding does not fire (mirror rig only).
+    # If it cannot be removed, do NOT claim success: the router would still launch
+    # onboarding despite the toggle.
+    if ! rm -f "$ws/BOOTSTRAP.md" 2>/dev/null || [ -e "$ws/BOOTSTRAP.md" ]; then
+      echo "Warning: could not drop BOOTSTRAP.md for $channelId despite OPENCLAW_SKIP_BOOTSTRAP" >&2
+      return 1
     fi
-    sleep 1
-  done
-  # Explicitly fail (not the exit status of the echo above) so the caller can
-  # report the degraded state. This is not fatal to registration: the channel is
-  # already provisioned and the agent seeds the workspace lazily on the first
-  # user turn, so onboarding still runs then — only the proactive welcome-on-
-  # register is lost until that first message.
-  echo "Warning: could not seed workspace for $channelId; first-run welcome will" >&2
-  echo "  be deferred to the first user message." >&2
-  return 1
+  fi
+  # setup ran as the host user, so hand the workspace (including the .git repo it
+  # creates) to the box uid or the read-only-rootfs box cannot write it.
+  chown -R "$AGENT_UID:$AGENT_GID" "$ws" 2>/dev/null || true
+  return 0
 }
 
 # Agent boxes run on the oc-agents bridge (see agent.yml), so they reach the
@@ -651,7 +670,10 @@ prepare_instance_dirs() {
   local channelId="$1"
   local base="$INSTANCES_DIR/$channelId"
   local agent_dir="$base/state/agents/main/agent"
-  mkdir -p "$base/workspace" "$agent_dir"
+  # `home` is the box's real HOME mount (see agent.yml): a writable, persistent,
+  # per-channel home so the agent behaves like a normal shell and $HOME-based tool
+  # creds (e.g. gog's ~/.config/gogcli) persist here instead of in /state.
+  mkdir -p "$base/workspace" "$base/home" "$agent_dir"
 
   # Seed the placeholder OAuth profile under the canonical profile id so a config
   # referencing it resolves. The box runs token-free: it needs *a* bearer so pi-ai
@@ -691,7 +713,10 @@ JSON
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
-  chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" 2>/dev/null || true
+  if ! chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" "$base/home" 2>/dev/null; then
+    echo "Error: could not make the writable mounts in $base accessible to the agent uid; not starting $channelId" >&2
+    return 1
+  fi
 
   # `openclaw config set` writes openclaw.json mode 600 (root-owned). The box
   # mounts it read-only and runs as AGENT_UID, so hand ownership to that uid or the
@@ -762,11 +787,12 @@ cmd_add_dm() {
     exit 1
   fi
 
+  seed_workspace "$channelId" || true
+
   # Start container (start_container runs prepare_instance_dirs for the token-free
   # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId" || true
   echo "Done. User $userId can now DM the bot."
 }
 
@@ -809,11 +835,12 @@ cmd_add_channel() {
     exit 1
   fi
 
+  seed_workspace "$channelId" || true
+
   # Start container (start_container runs prepare_instance_dirs for the token-free
   # layout: writable mounts, placeholder auth, config sanitization, ownership).
   echo "Starting container agents.channel-$channelId on port $port..."
   start_container "$channelId" "$port"
-  seed_workspace "$channelId" || true
   echo "Done. Channel $channelId is now registered."
 }
 

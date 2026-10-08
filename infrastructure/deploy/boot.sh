@@ -186,6 +186,40 @@ else
       echo "  (would start with unreachable model/container proxies)." >&2
       continue
     fi
+    # Ensure the box's real HOME mount exists and is owned by the container uid
+    # before Compose starts. reconcile does not run prepare_instance_dirs, so an
+    # instance adopted before the home-mount layout has no ~/.openclaw-instances/
+    # <id>/home; Docker would then create the bind source as root and uid 1000
+    # could not write $HOME. Idempotent; AGENT_UID/GID match agent.yml (1000:1000).
+    instance_home="$INSTANCES_DIR/$channelId/home"
+    instance_state="$INSTANCES_DIR/$channelId/state"
+    mkdir -p "$instance_home"
+    # One-time migration for instances adopted when HOME was /state: any
+    # $HOME-relative data they wrote then lives under state/.config, state/.cache,
+    # state/.openclaw (the canvas host resolves os.homedir()/.openclaw/canvas, so
+    # canvas data landed here), etc. Switching HOME to /home/openclaw would orphan
+    # them, so move each such dotdir into home/ before the first start under the new
+    # layout. This does NOT touch openclaw's own gateway state: that used
+    # OPENCLAW_STATE_DIR=/state (the /state root directly, e.g. state/agents,
+    # state/sessions), never state/.openclaw, which is purely HOME-relative. Guarded:
+    # only when home/ does not already have that entry (never clobber a value the box
+    # wrote under the new HOME).
+    if [ -d "$instance_state" ]; then
+      for d in .config .cache .local .claude .gog .openclaw gogcli; do
+        if [ -e "$instance_state/$d" ] && [ ! -e "$instance_home/$d" ]; then
+          mv "$instance_state/$d" "$instance_home/$d" 2>/dev/null \
+            && echo "Migrated $channelId: state/$d -> home/$d" >&2 || true
+        fi
+      done
+    fi
+    # Hand the home mount to the container uid. If this fails the box would start
+    # with an unwritable $HOME (the exact root-owned/UID-mismatch case this repairs),
+    # so skip the instance rather than launch a broken box; others still boot.
+    if ! chown -R 1000:1000 "$instance_home" 2>/dev/null; then
+      echo "Skipping channel $channelId: could not chown its home mount to the agent uid" >&2
+      echo "  (would start with an unwritable \$HOME)." >&2
+      continue
+    fi
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"
