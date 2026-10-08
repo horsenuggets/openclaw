@@ -186,6 +186,13 @@ else
       echo "  (would start with unreachable model/container proxies)." >&2
       continue
     fi
+    # Ensure the box's real HOME mount exists and is owned by the container uid
+    # before Compose starts. reconcile does not run prepare_instance_dirs, so an
+    # instance adopted before the home-mount layout has no ~/.openclaw-instances/
+    # <id>/home; Docker would then create the bind source as root and uid 1000
+    # could not write $HOME. Idempotent; AGENT_UID/GID match agent.yml (1000:1000).
+    mkdir -p "$INSTANCES_DIR/$channelId/home"
+    chown -R 1000:1000 "$INSTANCES_DIR/$channelId/home" 2>/dev/null || true
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"
