@@ -1,6 +1,7 @@
+import fs from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayRequestContext } from "./types.js";
-import { agentHandlers } from "./agent.js";
+import { AGENT_SECRETS_DIR, agentHandlers, writeAgentSecret } from "./agent.js";
 
 const mocks = vi.hoisted(() => ({
   loadSessionEntry: vi.fn(),
@@ -310,5 +311,30 @@ describe("gateway agent.steer handler", () => {
 
     expect(mocks.queueEmbeddedPiMessage).not.toHaveBeenCalled();
     expect(respond).toHaveBeenCalledWith(true, { accepted: false });
+  });
+});
+
+describe("writeAgentSecret", () => {
+  it("writes the value to /tmp/secrets/<name> with mode 0600 and overwrites in place", () => {
+    const name = `test-${Math.random().toString(36).slice(2, 10)}`;
+    const target = `${AGENT_SECRETS_DIR}/${name}`;
+    try {
+      const path = writeAgentSecret(name, "first-value");
+      expect(path).toBe(target);
+      expect(fs.readFileSync(target, "utf-8")).toBe("first-value");
+      expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+      // Re-writing the same name overwrites in place and keeps 0600.
+      writeAgentSecret(name, "second-value");
+      expect(fs.readFileSync(target, "utf-8")).toBe("second-value");
+      expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+    } finally {
+      fs.rmSync(target, { force: true });
+    }
+  });
+
+  it("rejects names that could escape the secrets directory", () => {
+    for (const bad of ["", "../escape", "a/b", "a\\b", ".."]) {
+      expect(() => writeAgentSecret(bad, "v")).toThrow(/invalid secret name/);
+    }
   });
 });

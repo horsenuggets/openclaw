@@ -67,6 +67,20 @@ export const AgentParamsSchema = Type.Object(
     idempotencyKey: NonEmptyString,
     label: Type.Optional(SessionLabelString),
     spawnedBy: Type.Optional(Type.String()),
+    /**
+     * Out-of-band secret delivery (from the `/secret` Discord command): the
+     * value is written to the box's own `/tmp/secrets/<name>` (0600) before the
+     * turn runs, so it never rides in the message text or any transcript.
+     */
+    secret: Type.Optional(
+      Type.Object(
+        {
+          name: NonEmptyString,
+          value: NonEmptyString,
+        },
+        { additionalProperties: false },
+      ),
+    ),
   },
   { additionalProperties: false },
 );

@@ -75,6 +75,13 @@ export async function routeMessage(params: {
    * onboarding kick, which has no real user message behind it.
    */
   systemTurn?: boolean;
+  /**
+   * A secret to hand the agent box out-of-band (never in the message text or
+   * logs). The box writes it to `/tmp/secrets/<name>` (0600) before the turn
+   * runs; the accompanying system-reminder message tells the agent where to
+   * read it. Used by the `/secret` command.
+   */
+  secret?: { name: string; value: string };
 }): Promise<boolean> {
   const { authorId, channelId, attachments, instance, discordToken, runtime, agentTimeoutMs } =
     params;
@@ -215,6 +222,10 @@ export async function routeMessage(params: {
             sessionKey: channelSessionKey(channelId),
             timeout: Math.floor(agentTimeoutMs / 1000),
             ...(attachmentsForCall.length > 0 ? { attachments: attachmentsForCall } : {}),
+            // The secret travels out-of-band on the first turn only: the box
+            // writes it to /tmp/secrets before running the agent. Dropped from
+            // command-result relays below (it only belongs to the initial call).
+            ...(params.secret && commandDepth === 0 ? { secret: params.secret } : {}),
           },
           expectFinal: true,
           timeoutMs: agentTimeoutMs + 30_000,

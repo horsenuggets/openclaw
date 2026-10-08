@@ -40,6 +40,13 @@ export type ChannelTurn = {
   attachments?: DiscordAttachment[];
   /** System-injected turn (onboarding kick, container `[System: ...]` note). */
   systemTurn?: boolean;
+  /**
+   * An out-of-band secret to hand the agent box with this turn (from the
+   * `/secret` command). Never coalesced into another turn's content: a turn
+   * carrying a secret bypasses the steer path (see enqueue), so it always runs
+   * on its own and the secret reaches routeMessage intact.
+   */
+  secret?: { name: string; value: string };
 };
 
 export type ChannelQueueOptions = {
@@ -122,11 +129,16 @@ export function coalesceTurns(batch: ChannelTurn[]): ChannelTurn {
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
   const attachments = batch.flatMap((t) => t.attachments ?? []);
+  // A secret-bearing turn is enqueued on its own (enqueue never steers it, and a
+  // secret turn is not batched with others), but preserve the first secret
+  // defensively so a coalesce can never silently drop it.
+  const secret = batch.find((t) => t.secret)?.secret;
   return {
     authorId: batch[batch.length - 1].authorId,
     messageContent,
     attachments: attachments.length > 0 ? attachments : undefined,
     systemTurn: batch.every((t) => t.systemTurn === true),
+    ...(secret ? { secret } : {}),
   };
 }
 
@@ -181,6 +193,14 @@ export class ChannelQueue {
    */
   enqueue(channelId: string, turn: ChannelTurn): void {
     const state = this.state(channelId);
+    // A secret-bearing turn must never be steered (steering injects it as plain
+    // text into a live run, which would drop the out-of-band secret and leak its
+    // intent into the transcript). Buffer it so it runs as its own turn with the
+    // secret delivered to the box out-of-band.
+    if (turn.secret) {
+      this.buffer(channelId, turn);
+      return;
+    }
     // Route through the steer chain while a turn is running OR an earlier steer
     // is still settling, so a later arrival can never run ahead of it.
     if (!state.reserved && this.steer && (state.running || state.pendingSteers > 0)) {

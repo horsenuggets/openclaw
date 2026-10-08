@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import type { GatewayRequestHandlers } from "./types.js";
 import { listAgentIds } from "../../agents/agent-scope.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
@@ -44,6 +45,29 @@ import { formatForLog } from "../ws-log.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 
+/** Directory inside the agent box that holds out-of-band secrets. */
+export const AGENT_SECRETS_DIR = "/tmp/secrets";
+
+/**
+ * Write an out-of-band secret to the box's own `/tmp/secrets/<name>` with mode
+ * 0600 (dir 0700). The name is already sanitized router-side, but a final guard
+ * rejects anything with a path separator so a malformed value can never escape
+ * the directory. Re-writing the same name overwrites in place. The value is
+ * never logged.
+ */
+export function writeAgentSecret(name: string, value: string): string {
+  if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
+    throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
+  }
+  fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
+  const target = `${AGENT_SECRETS_DIR}/${name}`;
+  // Mode on the open flags only applies when the file is created; chmod after
+  // the write enforces 0600 even when overwriting a pre-existing file.
+  fs.writeFileSync(target, value, { mode: 0o600 });
+  fs.chmodSync(target, 0o600);
+  return target;
+}
+
 export const agentHandlers: GatewayRequestHandlers = {
   agent: async ({ params, respond, context, client }) => {
     const p = params;
@@ -87,6 +111,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       timeout?: number;
       label?: string;
       spawnedBy?: string;
+      secret?: { name: string; value: string };
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -362,6 +387,22 @@ export const agentHandlers: GatewayRequestHandlers = {
     respond(true, accepted, undefined, { runId });
 
     const resolvedThreadId = explicitThreadId ?? deliveryPlan.resolvedThreadId;
+
+    // Out-of-band secret delivery (/secret command): write the value to this
+    // box's own ephemeral /tmp/secrets/<name> (0600, dir 0700) BEFORE the agent
+    // turn runs, so the accompanying system-reminder message can point the agent
+    // at a file that already exists. The value is never logged. A failed write
+    // is logged and the turn still proceeds (the reminder will be inaccurate,
+    // but that degrades gracefully rather than wedging the run).
+    if (request.secret) {
+      try {
+        writeAgentSecret(request.secret.name, request.secret.value);
+      } catch (err) {
+        context.logGateway.warn(
+          `agent: failed to write secret "${request.secret.name}": ${String(err)}`,
+        );
+      }
+    }
 
     void agentCommand(
       {

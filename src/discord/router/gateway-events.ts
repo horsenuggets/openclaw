@@ -23,6 +23,13 @@ import { buildLogEmbed } from "./log-embed.js";
 import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
+import {
+  SECRET_MODAL_CUSTOM_ID,
+  buildSecretModal,
+  parseSecretModalSubmit,
+  sanitizeSecretName,
+  secretReminderMessage,
+} from "./secret-command.js";
 
 /**
  * The closed-over router state a gateway DISPATCH handler needs. Assembled once
@@ -96,6 +103,20 @@ type ComponentInteractionData = {
   channel_id?: string;
   guild_id?: string;
   data?: { custom_id?: string };
+  member?: { user?: { id?: string } };
+  user?: { id?: string };
+};
+
+/** INTERACTION_CREATE (type 5, modal submit) dispatch payload fields. */
+type ModalSubmitData = {
+  id: string;
+  token: string;
+  channel_id?: string;
+  guild_id?: string;
+  data?: {
+    custom_id?: string;
+    components?: Array<{ components?: Array<{ custom_id?: string; value?: string }> }>;
+  };
   member?: { user?: { id?: string } };
   user?: { id?: string };
 };
@@ -370,6 +391,24 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       .catch((err) => runtime.error(`[router] interaction response failed: ${String(err)}`));
   };
 
+  // The /secret command opens a modal (popup) so the secret value is entered
+  // privately and never appears in the channel. The submission arrives later as
+  // a separate MODAL_SUBMIT interaction, handled by handleModalSubmit.
+  if (interactionData?.name === "secret") {
+    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 9, data: buildSecretModal() }),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          runtime.error(`[router] secret modal open failed (${resp.status})`);
+        }
+      })
+      .catch((err) => runtime.error(`[router] secret modal open failed: ${String(err)}`));
+    return;
+  }
+
   if (interactionData?.name === "lifecycle" && interactionChannelId) {
     const instance = instances.get(interactionChannelId);
     if (!instance) {
@@ -502,6 +541,79 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       );
     }
   }
+}
+
+/**
+ * Handle a modal submission (interaction type 5). Currently only the `/secret`
+ * popup: parse the private value + optional name, then hand it to the channel's
+ * agent out-of-band as its own buffered turn (never steered) whose
+ * system-reminder points the agent at `/tmp/secrets/<name>`. The value never
+ * touches the channel, a log line, or the turn's message text. Owner-gated in
+ * guild channels, since it injects a turn into someone's agent.
+ */
+export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void {
+  const { runtime, instances, channelQueue, channelGuild, describeInstance } = ctx;
+  const interactionId = d.id;
+  const interactionToken = d.token;
+  const channelId = d.channel_id;
+  if (d.channel_id && d.guild_id) {
+    channelGuild.set(d.channel_id, d.guild_id);
+  }
+
+  const ack = (content: string) => {
+    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 4, data: { content, flags: 64 } }),
+    }).catch((err) => runtime.error(`[router] secret ack failed: ${String(err)}`));
+  };
+
+  if (d.data?.custom_id !== SECRET_MODAL_CUSTOM_ID || !channelId) {
+    return;
+  }
+  const { value, name: rawName } = parseSecretModalSubmit(d.data?.components);
+  if (!value) {
+    ack("No secret value was provided.");
+    return;
+  }
+  if (!instances.get(channelId)) {
+    ack("This channel is not registered, so there is no agent to receive a secret.");
+    return;
+  }
+  const userId = d.member?.user?.id ?? d.user?.id;
+  if (!userId) {
+    return;
+  }
+  const name = sanitizeSecretName(rawName, value);
+
+  const deliver = () => {
+    // Buffered (never steered) so the out-of-band secret reaches routeMessage
+    // intact and its intent never leaks into a live run's transcript.
+    channelQueue.enqueue(channelId, {
+      authorId: userId,
+      messageContent: secretReminderMessage(name),
+      systemTurn: true,
+      secret: { name, value },
+    });
+    ack(`Secret \`${name}\` received and handed to this channel's agent (temporary).`);
+    runtime.log(`[router] secret "${name}" delivered to channel ${channelId}`);
+  };
+
+  // Owner-gate in guild channels (a DM is inherently 1:1 with the owner).
+  if (d.guild_id) {
+    const status = describeInstance(channelId);
+    void isAuthorizedForChannel(channelId, userId, { describeInstance: () => status }).then(
+      (allowed) => {
+        if (!allowed) {
+          ack("You are not authorized to hand this channel's agent a secret.");
+          return;
+        }
+        deliver();
+      },
+    );
+    return;
+  }
+  deliver();
 }
 
 /**
