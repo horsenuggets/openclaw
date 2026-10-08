@@ -13,7 +13,7 @@
 
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import type { ConnectionStatus, StoredConnection } from "./connections-store.js";
-import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
+import { type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
@@ -99,9 +99,28 @@ export type ConnectCommandDeps = {
    * while the router wires the real registry (with live token validation).
    */
   registry: ConnectorRegistry;
+  /**
+   * Status glyphs for the list table. Injected so the sender's own custom
+   * application emoji (resolved per bot) can be used; falls back to unicode.
+   */
+  emoji?: ConnectionEmoji;
   /** Current time, injectable for deterministic tests. */
   now?: () => Date;
   log: (message: string) => void;
+};
+
+/** Status glyphs for the `/connections list` table. */
+export type ConnectionEmoji = {
+  connected: string;
+  notConnected: string;
+  needsAuth: string;
+};
+
+/** Unicode fallbacks used when the bot's custom app emoji are unavailable. */
+export const DEFAULT_CONNECTION_EMOJI: ConnectionEmoji = {
+  connected: "✅",
+  notConnected: "❌",
+  needsAuth: "⚠️",
 };
 
 export type ConnectCommandContext = {
@@ -163,32 +182,32 @@ export function connectTextCommandHasToken(parsed: {
 }
 
 /**
- * The Status-column cell for a connector: a glyph plus a short label, and the
- * linked account when known. Mirrors the glyph-led cells of the `/channel status`
- * table (see channel-commands.ts).
+ * The Status-column cell for a connector: a glyph plus a short label. Mirrors the
+ * glyph-led cells of the `/channel status` table (see channel-commands.ts).
  */
-function statusCell(connector: Connector, connection: StoredConnection | null): string {
-  if (!connector.available) {
-    return "🚧 Coming soon";
-  }
-  const account = connection?.accountLabel ? ` (${connection.accountLabel})` : "";
+function statusCell(connection: StoredConnection | null, emoji: ConnectionEmoji): string {
   const status: ConnectionStatus = connection?.status ?? "not_linked";
   if (status === "linked") {
-    return `✅ Linked${account}`;
+    return `${emoji.connected} Connected`;
   }
   if (status === "needs_reauth") {
-    return `♻️ Needs reauth${account}`;
+    return `${emoji.needsAuth} Needs authentication`;
   }
-  return "⚪ Not linked";
+  return `${emoji.notConnected} Not connected`;
 }
 
+const LIST_DESCRIPTION =
+  "Below are the services you can link to this channel's agent and their current status. " +
+  "Use `/connections add <service>` to link one, or `/connections remove <service>` to unlink.";
+
 /**
- * Build the `/connections list` status embed as a Service/Value table, matching
- * the Property/Value layout of `/channel status`.
+ * Build the `/connections list` status embed as a Service Name/Status table,
+ * matching the Property/Value layout of `/channel status`.
  */
 function listReply(
   registry: ConnectorRegistry,
   connections: StoredConnection[],
+  emoji: ConnectionEmoji,
 ): {
   embeds: DiscordEmbed[];
   attachments: string[];
@@ -197,17 +216,20 @@ function listReply(
   const services: string[] = [];
   const statuses: string[] = [];
   for (const connector of registry.all()) {
-    services.push(`**${connector.label}**`);
-    statuses.push(statusCell(connector, byId.get(connector.id) ?? null));
+    services.push(connector.label);
+    statuses.push(statusCell(byId.get(connector.id) ?? null, emoji));
   }
+  return connectionsReply("Your Connections", LIST_DESCRIPTION, [
+    { name: "Service Name", value: services.join("\n"), inline: true },
+    { name: "Status", value: statuses.join("\n"), inline: true },
+  ]);
+}
+
+/** The `/connections list` reply when the channel is registered but nothing is linked. */
+function emptyListReply(): { embeds: DiscordEmbed[]; attachments: string[] } {
   return connectionsReply(
-    "Your connections",
-    "Below are the services you can link to this channel's agent and their current status. " +
-      "Use `/connections add <service>` to link one, or `/connections remove <service>` to unlink.",
-    [
-      { name: "Service", value: services.join("\n"), inline: true },
-      { name: "Status", value: statuses.join("\n"), inline: true },
-    ],
+    "Your Connections",
+    `${LIST_DESCRIPTION}\n\n*You have no services linked yet!*`,
   );
 }
 
@@ -224,10 +246,15 @@ export async function handleConnectCommand(
   if (sub === "list") {
     const connections = deps.store.list(ctx.channelId);
     if (connections === null) {
-      await ctx.reply(connectionsReply("Your connections", NOT_REGISTERED), { ephemeral: true });
+      await ctx.reply(connectionsReply("Your Connections", NOT_REGISTERED), { ephemeral: true });
       return;
     }
-    await ctx.reply(listReply(deps.registry, connections), { ephemeral: true });
+    if (connections.length === 0) {
+      await ctx.reply(emptyListReply(), { ephemeral: true });
+      return;
+    }
+    const emoji = deps.emoji ?? DEFAULT_CONNECTION_EMOJI;
+    await ctx.reply(listReply(deps.registry, connections, emoji), { ephemeral: true });
     return;
   }
 

@@ -181,20 +181,56 @@ describe("handleConnectCommand list", () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
     const fields = embedOf(replies[0].payload).fields ?? [];
-    const services = fields.find((f) => f.name === "Service")?.value ?? "";
+    const services = fields.find((f) => f.name === "Service Name")?.value ?? "";
     const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
-    expect(services).toContain("**Todoist**");
-    expect(services).toContain("**Notion**");
-    expect(services).toContain("**Google**");
-    expect(statuses).toContain("✅ Linked (chris)"); // linked with account label
-    expect(statuses).toContain("⚪ Not linked"); // Notion not linked
-    expect(statuses).toContain("🚧 Coming soon"); // Google not yet available
+    expect(services).toContain("Todoist");
+    expect(services).toContain("Notion");
+    expect(services).toContain("Google");
+    expect(statuses).toContain("✅ Connected"); // linked, no account label
+    expect(statuses).not.toContain("(chris)"); // account label is not shown
+    expect(statuses).toContain("❌ Not connected"); // Notion/Google not linked
+    expect(statuses).not.toContain("Coming soon"); // unavailable connectors are just "Not connected"
+  });
+
+  it("uses injected custom emoji for the status glyphs", async () => {
+    const seed: StoredConnection[] = [
+      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(
+      ctx,
+      makeDeps({
+        store: makeStore(true, seed).store,
+        emoji: {
+          connected: "<:greencheckfilled:1>",
+          notConnected: "<:redxfilled:2>",
+          needsAuth: "⚠️",
+        },
+      }),
+    );
+    const statuses = (embedOf(replies[0].payload).fields ?? []).find(
+      (f) => f.name === "Status",
+    )?.value;
+    expect(statuses).toContain("<:greencheckfilled:1> Connected");
+    expect(statuses).toContain("<:redxfilled:2> Not connected");
+  });
+
+  it("shows the empty-state message when registered with nothing linked", async () => {
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Your Connections");
+    expect(embed.description).toContain("You have no services linked yet!");
+    expect(embed.fields).toBeUndefined();
   });
 
   it("defaults a null subcommand to list", async () => {
+    const seed: StoredConnection[] = [
+      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
     const { ctx, replies } = makeCtx(null);
-    await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).title).toBe("Your connections");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
+    expect(embedOf(replies[0].payload).title).toBe("Your Connections");
   });
 });
 

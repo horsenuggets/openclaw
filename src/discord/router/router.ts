@@ -5,6 +5,7 @@ import type { RouterConfig, InstanceConfig } from "./config.js";
 import type { RouterRuntime, RunAgentCommand } from "./types.js";
 import { parseBooleanValue } from "../../utils/boolean.js";
 import { runAgentCommandDispatch } from "./agent-command-dispatch.js";
+import { connectionEmojiFromMap, fetchAppEmojiMap } from "./app-emojis.js";
 import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
@@ -500,9 +501,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       return inst ? removeConnection(inst.instanceDir, connectorId) : false;
     },
   };
+  // Resolve this bot's own custom application emoji (connected/not-connected
+  // glyphs) by name, so the /connections list table renders them. Falls back to
+  // unicode when the emoji are not present on the app.
+  const connectionEmoji = connectionEmojiFromMap(await fetchAppEmojiMap(discordToken));
   const connectCommandDeps: ConnectCommandDeps = {
     store: connectionStore,
     registry: connectorRegistry,
+    emoji: connectionEmoji,
     log: (message) => runtime.log(message),
   };
 

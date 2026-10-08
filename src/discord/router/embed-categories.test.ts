@@ -36,7 +36,7 @@ describe("EMBED_CATEGORIES", () => {
     expect(EMBED_CATEGORIES.connections).toEqual({
       footerText: "Connections",
       icon: "connections.png",
-      color: 0xa080ff,
+      color: 0xc080ff,
     });
   });
 });
