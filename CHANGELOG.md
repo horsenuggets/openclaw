@@ -6,6 +6,17 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Agent box layout: each per-channel agent container now gets a real `HOME`
+  (`/home/openclaw`) on its own writable mount (`~/.openclaw-instances/<id>/home`) instead
+  of pointing `HOME` at `/state`, so the box behaves like a normal shell and `$HOME`-based
+  credentials (e.g. gog's `~/.config/gogcli`) plus tool caches persist across restarts and
+  stay isolated per channel. The workspace is now seeded host-side
+  (`openclaw setup --workspace <ws>` under a throwaway `HOME`/config path so it can't
+  mutate the host's global config) rather than via `docker exec`, then chowned to the box
+  uid; deploy stages only the 7 hand-picked workspace templates next to the binary (where
+  host-side setup resolves them) and no longer ships the full contributor docs tree. The
+  `/bin/docs` mount is dropped in favor of `~/deploy/skills:/bin/skills:ro` so skills are
+  discovered inside the box.
 - Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
   run of hyphens (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
   and a single hyphen. The agent was routing around the ban by typing the ascii em-dash
