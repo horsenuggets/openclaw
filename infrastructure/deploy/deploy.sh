@@ -75,9 +75,11 @@ fi
 
 # Workspace templates: only the hand-picked set `openclaw setup` seeds into a new
 # agent workspace, staged NEXT TO the binary so host-side seeding (openclawctl
-# seed_workspace) resolves them via <binary-dir>/docs/reference/templates. The box
-# mounts only the openclaw binary file, so these stay host-side — the box ships no
-# docs. (The full docs/ tree is contributor documentation and is not deployed.)
+# seed_workspace) resolves them via <binary-dir>/docs/reference/templates. This same
+# templates subdir is also bind-mounted read-only into the box (agent.yml) as the
+# lazy-seed fallback, so the box can self-seed if host-side seeding fails. Only the
+# full docs/ tree (contributor documentation) is omitted from the deploy; do not
+# remove the templates staging under the impression the box receives no docs.
 mkdir -p "$STAGING/deploy/bin/docs/reference/templates"
 for t in AGENTS SOUL TOOLS IDENTITY USER HEARTBEAT BOOTSTRAP; do
   cp "$PROJECT_ROOT/docs/reference/templates/$t.md" \
