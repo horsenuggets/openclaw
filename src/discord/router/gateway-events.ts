@@ -113,6 +113,8 @@ type ModalSubmitData = {
   token: string;
   channel_id?: string;
   guild_id?: string;
+  /** The interaction's channel object; `type` 1 = DM, 3 = group DM. */
+  channel?: { type?: number };
   data?: {
     custom_id?: string;
     components?: Array<{ components?: Array<{ custom_id?: string; value?: string }> }>;
@@ -120,6 +122,9 @@ type ModalSubmitData = {
   member?: { user?: { id?: string } };
   user?: { id?: string };
 };
+
+/** Discord channel type for a multi-participant group DM (no owner to gate on). */
+const GROUP_DM_CHANNEL_TYPE = 3;
 
 /** CHANNEL_DELETE / THREAD_DELETE dispatch payload fields. */
 type ChannelDeleteData = { id?: string };
@@ -582,6 +587,14 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
   }
   const userId = d.member?.user?.id ?? d.user?.id;
   if (!userId) {
+    return;
+  }
+  // A group DM has multiple participants but no guild_id to owner-gate on, so
+  // the DM-is-1:1 assumption below would let any member hand the agent a secret.
+  // The command spec already excludes group DMs (contexts [0, 1]); reject here
+  // too as defense-in-depth in case a stale registration still dispatches one.
+  if (!d.guild_id && d.channel?.type === GROUP_DM_CHANNEL_TYPE) {
+    ack("The /secret command is not available in group DMs.");
     return;
   }
   const name = sanitizeSecretName(rawName, value);

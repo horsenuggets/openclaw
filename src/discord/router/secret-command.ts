@@ -21,8 +21,10 @@ export const SECRET_COMMAND_SPEC = {
   name: "secret",
   description: "Privately hand this channel's agent a sensitive value (collected via a popup)",
   type: 1, // CHAT_INPUT
-  // Allow use in guilds (0), bot DMs (1), and group DMs (2).
-  contexts: [0, 1, 2],
+  // Allow use in guilds (0) and one-to-one bot DMs (1) only. Group DMs (2) are
+  // deliberately excluded: they have no `guild_id` to owner-gate on yet carry
+  // multiple participants, so any member could otherwise hand the agent a secret.
+  contexts: [0, 1],
 };
 
 /** custom_id of the `/secret` modal (and the dispatch key for its submission). */

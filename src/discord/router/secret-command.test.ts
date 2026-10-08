@@ -14,10 +14,12 @@ import {
 } from "./secret-command.js";
 
 describe("SECRET_COMMAND_SPEC", () => {
-  it("is a CHAT_INPUT command usable in guilds and DMs", () => {
+  it("is a CHAT_INPUT command usable in guilds and 1:1 DMs but not group DMs", () => {
     expect(SECRET_COMMAND_SPEC.name).toBe("secret");
     expect(SECRET_COMMAND_SPEC.type).toBe(1);
-    expect(SECRET_COMMAND_SPEC.contexts).toEqual([0, 1, 2]);
+    // Group DMs (context 2) are excluded: no guild_id to owner-gate on, multiple
+    // participants, so any member could otherwise hand the agent a secret.
+    expect(SECRET_COMMAND_SPEC.contexts).toEqual([0, 1]);
   });
 });
 

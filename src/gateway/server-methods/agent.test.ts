@@ -337,4 +337,24 @@ describe("writeAgentSecret", () => {
       expect(() => writeAgentSecret(bad, "v")).toThrow(/invalid secret name/);
     }
   });
+
+  it("refuses to follow a pre-planted symlink at the target path (no redirect)", () => {
+    const name = `sym-${Math.random().toString(36).slice(2, 10)}`;
+    const target = `${AGENT_SECRETS_DIR}/${name}`;
+    const decoy = `/tmp/decoy-${Math.random().toString(36).slice(2, 10)}`;
+    // Make sure the secrets dir exists, then plant a symlink where the secret
+    // would be written, pointing at an attacker-controlled path outside it.
+    fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(decoy, "untouched");
+    fs.symlinkSync(decoy, target);
+    try {
+      // O_NOFOLLOW makes the open fail rather than writing through the symlink.
+      expect(() => writeAgentSecret(name, "attacker-controlled")).toThrow();
+      // The decoy target was never overwritten.
+      expect(fs.readFileSync(decoy, "utf-8")).toBe("untouched");
+    } finally {
+      fs.rmSync(target, { force: true });
+      fs.rmSync(decoy, { force: true });
+    }
+  });
 });

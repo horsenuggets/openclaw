@@ -129,9 +129,10 @@ export function coalesceTurns(batch: ChannelTurn[]): ChannelTurn {
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
   const attachments = batch.flatMap((t) => t.attachments ?? []);
-  // A secret-bearing turn is enqueued on its own (enqueue never steers it, and a
-  // secret turn is not batched with others), but preserve the first secret
-  // defensively so a coalesce can never silently drop it.
+  // A secret-bearing turn is always drained as its own single-item batch (see
+  // ChannelQueue.drain, which splits at secret boundaries), so this coalesce
+  // path should never see one. Preserve the first secret defensively so a
+  // coalesce can never silently drop it even if that invariant ever changes.
   const secret = batch.find((t) => t.secret)?.secret;
   return {
     authorId: batch[batch.length - 1].authorId,
@@ -140,6 +141,28 @@ export function coalesceTurns(batch: ChannelTurn[]): ChannelTurn {
     systemTurn: batch.every((t) => t.systemTurn === true),
     ...(secret ? { secret } : {}),
   };
+}
+
+/**
+ * Take the next batch to run as a single turn, splitting at secret boundaries so
+ * a secret-bearing turn is never coalesced with any other message. If the head
+ * of the queue carries a secret, that one turn is taken alone. Otherwise all
+ * leading non-secret turns are taken (stopping before the first secret), so each
+ * secret runs on its own turn with its reminder text and `systemTurn` flag
+ * intact and its value reaches routeMessage undiluted.
+ */
+export function takeNextBatch(pending: ChannelTurn[]): ChannelTurn[] {
+  if (pending.length === 0) {
+    return [];
+  }
+  if (pending[0].secret) {
+    return pending.splice(0, 1);
+  }
+  let count = 1;
+  while (count < pending.length && !pending[count].secret) {
+    count += 1;
+  }
+  return pending.splice(0, count);
 }
 
 export class ChannelQueue {
@@ -351,15 +374,18 @@ export class ChannelQueue {
     state.running = true;
     // Fresh run: mid-turn arrivals may steer again until one has to buffer.
     state.bufferRest = false;
-    // Take exactly one batch (everything buffered so far) and run it as a single
-    // coalesced turn. Messages that arrive mid-turn stay in `pending` and are NOT
-    // drained immediately in a loop: the `finally` reschedules them through the
-    // debounce instead, so a late arrival that lands just after this turn resolves
-    // still gets its settle window and coalesces with the next batch rather than
-    // becoming a lone turn (which could hit the agent's silence-bias). A failing
-    // turn is logged and swallowed (runTurn wraps routeMessage, which handles its
-    // own errors) so one bad turn never wedges the channel.
-    const batch = state.pending.splice(0, state.pending.length);
+    // Take one batch and run it as a single coalesced turn. takeNextBatch splits
+    // at secret boundaries so a secret-bearing turn always runs on its own (never
+    // coalesced with other messages, so its value and reminder reach routeMessage
+    // intact); any remaining pending turns (e.g. a second secret, or messages
+    // after one) are left behind and rescheduled by the `finally`. Messages that
+    // arrive mid-turn likewise stay in `pending` and are NOT drained in a loop:
+    // the reschedule runs them through the debounce so a late arrival still gets
+    // its settle window rather than becoming a lone turn (which could hit the
+    // agent's silence-bias). A failing turn is logged and swallowed (runTurn wraps
+    // routeMessage, which handles its own errors) so one bad turn never wedges the
+    // channel.
+    const batch = takeNextBatch(state.pending);
     try {
       await this.runTurn(channelId, coalesceTurns(batch));
     } catch (err) {

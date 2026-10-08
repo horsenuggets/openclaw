@@ -54,17 +54,42 @@ export const AGENT_SECRETS_DIR = "/tmp/secrets";
  * rejects anything with a path separator so a malformed value can never escape
  * the directory. Re-writing the same name overwrites in place. The value is
  * never logged.
+ *
+ * `/tmp` is world-writable, so a hostile co-tenant could pre-plant a symlink at
+ * `/tmp/secrets` or `/tmp/secrets/<name>` to redirect the write (and the 0600
+ * chmod) onto an arbitrary path. We defend against that: the secrets dir must be
+ * a real directory (not a symlink), and the target file is opened with
+ * `O_NOFOLLOW` so a symlinked target errors out instead of being followed.
  */
 export function writeAgentSecret(name: string, value: string): string {
   if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
     throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
   }
   fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
+  // Reject a symlinked (or otherwise non-directory) secrets dir: mkdir with
+  // recursive:true is a no-op when the path already exists, so it would not
+  // catch a pre-planted symlink. lstat does not follow the final component.
+  const dirStat = fs.lstatSync(AGENT_SECRETS_DIR);
+  if (!dirStat.isDirectory()) {
+    throw new Error(`secrets dir is not a real directory: ${AGENT_SECRETS_DIR}`);
+  }
   const target = `${AGENT_SECRETS_DIR}/${name}`;
-  // Mode on the open flags only applies when the file is created; chmod after
-  // the write enforces 0600 even when overwriting a pre-existing file.
-  fs.writeFileSync(target, value, { mode: 0o600 });
-  fs.chmodSync(target, 0o600);
+  // Open with O_NOFOLLOW so a pre-existing symlink at the target errors (ELOOP)
+  // rather than being followed; O_CREAT|O_WRONLY|O_TRUNC gives create-or-truncate
+  // semantics, and mode 0600 applies on creation. fchmod on the open descriptor
+  // then enforces 0600 even when overwriting a pre-existing regular file, and
+  // (unlike path-based chmod) can never be redirected by a swapped symlink.
+  const fd = fs.openSync(
+    target,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    fs.writeFileSync(fd, value);
+    fs.fchmodSync(fd, 0o600);
+  } finally {
+    fs.closeSync(fd);
+  }
   return target;
 }
 
