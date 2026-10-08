@@ -252,7 +252,7 @@ describe("gateway agent handler", () => {
         agentId: "main",
         sessionKey: "agent:main:discord:default:channel:c1",
         idempotencyKey: "test-secret-fail",
-        secret: { name: "tok", value: "super-secret" },
+        secret: { name: "tok", value: "super-secret", scope: "chfail" },
       },
       respond,
       context: makeContext(),
@@ -416,14 +416,16 @@ describe("writeAgentSecret sandbox delivery", () => {
       docker: { user: "1000:1000" },
     });
 
-    const name = `sbx-${Math.random().toString(36).slice(2, 10)}`;
+    const name = `sbx${Math.random().toString(36).slice(2, 10)}`;
     const path = await writeAgentSecret({
       name,
       value: "super-secret",
+      scope: "chabc123",
       sessionKey: "agent:main:discord:default:channel:c1",
     });
 
-    expect(path).toBe(`${AGENT_SECRETS_DIR}/${name}`);
+    // Nested under the per-channel scope so sessions cannot collide.
+    expect(path).toBe(`${AGENT_SECRETS_DIR}/chabc123/${name}`);
     expect(mocks.spawnCalls).toHaveLength(1);
     const { args, stdin } = mocks.spawnCalls[0];
     // docker exec -i --user 1000:1000 <container> sh -c '<script>'
@@ -432,7 +434,8 @@ describe("writeAgentSecret sandbox delivery", () => {
     expect(args[args.indexOf("--user") + 1]).toBe("1000:1000");
     expect(args).toContain("openclaw-sbx-c1");
     expect(args[args.length - 2]).toBe("-c");
-    // The script creates the dir, writes via cat (stdin), and chmods 0600.
+    // The script creates the scoped dir, writes via cat (stdin), and chmods 0600.
+    expect(args[args.length - 1]).toContain(`mkdir -p -m 700 ${AGENT_SECRETS_DIR}/chabc123`);
     expect(args[args.length - 1]).toContain(`cat > ${path}`);
     expect(args[args.length - 1]).toContain(`chmod 600 ${path}`);
     // The value travels on stdin, never as an argument (no ps leak).
@@ -447,7 +450,12 @@ describe("writeAgentSecret sandbox delivery", () => {
 
   it("omits --user when the sandbox has no configured user", async () => {
     mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c2" });
-    await writeAgentSecret({ name: "nouser", value: "v", sessionKey: "agent:x:channel:c2" });
+    await writeAgentSecret({
+      name: "nouser",
+      value: "v",
+      scope: "chc2",
+      sessionKey: "agent:x:channel:c2",
+    });
     expect(mocks.spawnCalls[0].args).not.toContain("--user");
   });
 
@@ -456,16 +464,48 @@ describe("writeAgentSecret sandbox delivery", () => {
     mocks.spawnExitCode = 1;
     mocks.spawnStderr = "No such container";
     await expect(
-      writeAgentSecret({ name: "boom", value: "v", sessionKey: "agent:x:channel:c3" }),
+      writeAgentSecret({
+        name: "boom",
+        value: "v",
+        scope: "chc3",
+        sessionKey: "agent:x:channel:c3",
+      }),
     ).rejects.toThrow(/No such container/);
   });
 
+  it("rejects an injection-bearing name or scope at the gateway boundary", async () => {
+    mocks.resolveSandboxContext.mockResolvedValue({ containerName: "openclaw-sbx-c5" });
+    await expect(
+      writeAgentSecret({
+        name: "x;id",
+        value: "v",
+        scope: "chok",
+        sessionKey: "agent:x:channel:c5",
+      }),
+    ).rejects.toThrow(/invalid secret name/);
+    await expect(
+      writeAgentSecret({
+        name: "ok",
+        value: "v",
+        scope: "../../etc",
+        sessionKey: "agent:x:channel:c5",
+      }),
+    ).rejects.toThrow(/invalid secret scope/);
+    // Nothing was ever executed in the container.
+    expect(mocks.spawnCalls).toHaveLength(0);
+  });
+
   it("fails closed (rejects) when sandbox resolution throws, never falling back to the host", async () => {
-    const name = `sbx-fail-${Math.random().toString(36).slice(2, 10)}`;
-    const hostPath = `${AGENT_SECRETS_DIR}/${name}`;
+    const name = `sbxfail${Math.random().toString(36).slice(2, 8)}`;
+    const hostPath = `${AGENT_SECRETS_DIR}/chfail/${name}`;
     mocks.resolveSandboxContext.mockRejectedValueOnce(new Error("container start failed"));
     await expect(
-      writeAgentSecret({ name, value: "v", sessionKey: "agent:main:discord:default:channel:c4" }),
+      writeAgentSecret({
+        name,
+        value: "v",
+        scope: "chfail",
+        sessionKey: "agent:main:discord:default:channel:c4",
+      }),
     ).rejects.toThrow(/container start failed/);
     // Must not silently fall back to a host write outside the isolation boundary.
     expect(fs.existsSync(hostPath)).toBe(false);
@@ -477,18 +517,25 @@ describe("writeAgentSecret (direct mode / main session)", () => {
   // These exercise the direct (non-sandboxed) host path. The main session key is
   // never sandboxed (sandbox mode default is off and main is excluded from
   // non-main mode), so no Docker container is resolved and the host path is used.
+  // Each test uses its own scope so the scoped dirs stay isolated.
   const MAIN = "agent:main:main";
+  const SCOPE = "chmaintest";
 
-  it("writes the value to /tmp/secrets/<name> with mode 0600 and overwrites in place", async () => {
-    const name = `test-${Math.random().toString(36).slice(2, 10)}`;
-    const target = `${AGENT_SECRETS_DIR}/${name}`;
+  it("writes the value to /tmp/secrets/<scope>/<name> with mode 0600 and overwrites in place", async () => {
+    const name = `test${Math.random().toString(36).slice(2, 10)}`;
+    const target = `${AGENT_SECRETS_DIR}/${SCOPE}/${name}`;
     try {
-      const path = await writeAgentSecret({ name, value: "first-value", sessionKey: MAIN });
+      const path = await writeAgentSecret({
+        name,
+        value: "first-value",
+        scope: SCOPE,
+        sessionKey: MAIN,
+      });
       expect(path).toBe(target);
       expect(fs.readFileSync(target, "utf-8")).toBe("first-value");
       expect(fs.statSync(target).mode & 0o777).toBe(0o600);
       // Re-writing the same name overwrites in place and keeps 0600.
-      await writeAgentSecret({ name, value: "second-value", sessionKey: MAIN });
+      await writeAgentSecret({ name, value: "second-value", scope: SCOPE, sessionKey: MAIN });
       expect(fs.readFileSync(target, "utf-8")).toBe("second-value");
       expect(fs.statSync(target).mode & 0o777).toBe(0o600);
     } finally {
@@ -497,42 +544,43 @@ describe("writeAgentSecret (direct mode / main session)", () => {
   });
 
   it("rejects names that could escape the secrets directory", async () => {
-    for (const bad of ["", "../escape", "a/b", "a\\b", ".."]) {
-      await expect(writeAgentSecret({ name: bad, value: "v", sessionKey: MAIN })).rejects.toThrow(
-        /invalid secret name/,
-      );
+    for (const bad of ["", "../escape", "a/b", "a\\b", "..", "x;id", "a b"]) {
+      await expect(
+        writeAgentSecret({ name: bad, value: "v", scope: SCOPE, sessionKey: MAIN }),
+      ).rejects.toThrow(/invalid secret name/);
     }
   });
 
-  it("fails closed when the existing secrets dir is group/world-writable", async () => {
-    // `/tmp` is world-writable, so a pre-existing attacker-controlled
-    // /tmp/secrets must be rejected rather than written into (its owner could
-    // swap the target out after the write).
-    fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
-    const original = fs.statSync(AGENT_SECRETS_DIR).mode & 0o777;
-    fs.chmodSync(AGENT_SECRETS_DIR, 0o777);
+  it("fails closed when the existing scoped secrets dir is group/world-writable", async () => {
+    // `/tmp` is world-writable, so a pre-existing attacker-controlled scoped dir
+    // must be rejected rather than written into (its owner could swap the target
+    // out after the write).
+    const dir = `${AGENT_SECRETS_DIR}/${SCOPE}`;
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(dir, 0o777);
     try {
-      await expect(writeAgentSecret({ name: "x", value: "v", sessionKey: MAIN })).rejects.toThrow(
-        /group\/world-writable/,
-      );
+      await expect(
+        writeAgentSecret({ name: "x", value: "v", scope: SCOPE, sessionKey: MAIN }),
+      ).rejects.toThrow(/group\/world-writable/);
     } finally {
-      fs.chmodSync(AGENT_SECRETS_DIR, original);
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it("refuses to follow a pre-planted symlink at the target path (no redirect)", async () => {
-    const name = `sym-${Math.random().toString(36).slice(2, 10)}`;
-    const target = `${AGENT_SECRETS_DIR}/${name}`;
+    const name = `sym${Math.random().toString(36).slice(2, 10)}`;
+    const dir = `${AGENT_SECRETS_DIR}/${SCOPE}`;
+    const target = `${dir}/${name}`;
     const decoy = `/tmp/decoy-${Math.random().toString(36).slice(2, 10)}`;
-    // Make sure the secrets dir exists, then plant a symlink where the secret
+    // Make sure the scoped dir exists, then plant a symlink where the secret
     // would be written, pointing at an attacker-controlled path outside it.
-    fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     fs.writeFileSync(decoy, "untouched");
     fs.symlinkSync(decoy, target);
     try {
       // O_NOFOLLOW makes the open fail rather than writing through the symlink.
       await expect(
-        writeAgentSecret({ name, value: "attacker-controlled", sessionKey: MAIN }),
+        writeAgentSecret({ name, value: "attacker-controlled", scope: SCOPE, sessionKey: MAIN }),
       ).rejects.toThrow();
       // The decoy target was never overwritten.
       expect(fs.readFileSync(decoy, "utf-8")).toBe("untouched");

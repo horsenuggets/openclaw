@@ -69,14 +69,19 @@ export const AgentParamsSchema = Type.Object(
     spawnedBy: Type.Optional(Type.String()),
     /**
      * Out-of-band secret delivery (from the `/secret` Discord command): the
-     * value is written to the box's own `/tmp/secrets/<name>` (0600) before the
-     * turn runs, so it never rides in the message text or any transcript.
+     * value is written to the box's own `/tmp/secrets/<scope>/<name>` (0600)
+     * before the turn runs, so it never rides in the message text. `name` and
+     * `scope` are validated again gateway-side (strict `[a-z0-9]`) before being
+     * interpolated into the sandbox write, so a malformed value cannot escape
+     * the directory or inject a shell command. `scope` nests secrets per channel
+     * so sessions sharing a sandbox/host cannot read each other's.
      */
     secret: Type.Optional(
       Type.Object(
         {
           name: NonEmptyString,
           value: NonEmptyString,
+          scope: NonEmptyString,
         },
         { additionalProperties: false },
       ),

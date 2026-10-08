@@ -46,7 +46,7 @@ export type ChannelTurn = {
    * carrying a secret bypasses the steer path (see enqueue), so it always runs
    * on its own and the secret reaches routeMessage intact.
    */
-  secret?: { name: string; value: string };
+  secret?: { name: string; value: string; scope: string };
 };
 
 export type ChannelQueueOptions = {

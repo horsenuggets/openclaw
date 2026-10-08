@@ -29,6 +29,7 @@ import {
   parseSecretModalSubmit,
   sanitizeSecretName,
   secretReminderMessage,
+  secretScopeToken,
 } from "./secret-command.js";
 
 /**
@@ -598,15 +599,19 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
     return;
   }
   const name = sanitizeSecretName(rawName, value);
+  // Nest under a per-channel scope so sessions that happen to share a sandbox
+  // container (default `agent` scope) or the direct-mode host cannot read or
+  // overwrite each other's same-named secret.
+  const scope = secretScopeToken(channelId);
 
   const deliver = () => {
     // Buffered (never steered) so the out-of-band secret reaches routeMessage
     // intact and its intent never leaks into a live run's transcript.
     channelQueue.enqueue(channelId, {
       authorId: userId,
-      messageContent: secretReminderMessage(name),
+      messageContent: secretReminderMessage(name, scope),
       systemTurn: true,
-      secret: { name, value },
+      secret: { name, value, scope },
     });
     ack(`Secret \`${name}\` received and handed to this channel's agent (temporary).`);
     runtime.log(`[router] secret "${name}" delivered to channel ${channelId}`);

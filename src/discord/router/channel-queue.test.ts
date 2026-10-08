@@ -40,7 +40,7 @@ function secretTurn(name: string): ChannelTurn {
     authorId: "u1",
     messageContent: `reminder:${name}`,
     systemTurn: true,
-    secret: { name, value: `val-${name}` },
+    secret: { name, value: `val-${name}`, scope: `ch-${name}` },
   };
 }
 
@@ -150,9 +150,9 @@ describe("ChannelQueue secret isolation", () => {
     // secrets are never merged with each other or with the user message, and
     // each secret turn keeps its value and systemTurn flag.
     expect(runTurn).toHaveBeenCalledTimes(3);
-    expect(runTurn.mock.calls[0][1].secret).toEqual({ name: "a", value: "val-a" });
+    expect(runTurn.mock.calls[0][1].secret).toEqual({ name: "a", value: "val-a", scope: "ch-a" });
     expect(runTurn.mock.calls[0][1].systemTurn).toBe(true);
-    expect(runTurn.mock.calls[1][1].secret).toEqual({ name: "b", value: "val-b" });
+    expect(runTurn.mock.calls[1][1].secret).toEqual({ name: "b", value: "val-b", scope: "ch-b" });
     expect(runTurn.mock.calls[1][1].messageContent).toBe("reminder:b");
     expect(runTurn.mock.calls[2][1].secret).toBeUndefined();
     expect(runTurn.mock.calls[2][1].messageContent).toBe("hello");
@@ -199,7 +199,7 @@ describe("ChannelQueue secret isolation", () => {
       await Promise.resolve();
     }
     const secretRun = runTurn.mock.calls.find((c) => c[1].secret);
-    expect(secretRun?.[1].secret).toEqual({ name: "a", value: "val-a" });
+    expect(secretRun?.[1].secret).toEqual({ name: "a", value: "val-a", scope: "ch-a" });
   });
 
   it("acts as a FIFO barrier: an ordinary message after a secret cannot steer ahead of it", async () => {
@@ -252,7 +252,11 @@ describe("ChannelQueue secret isolation", () => {
     const laterIdx = runTurn.mock.calls.findIndex((c) => c[1].messageContent === "later");
     expect(secretIdx).toBeGreaterThan(0);
     expect(laterIdx).toBeGreaterThan(secretIdx);
-    expect(runTurn.mock.calls[secretIdx][1].secret).toEqual({ name: "a", value: "val-a" });
+    expect(runTurn.mock.calls[secretIdx][1].secret).toEqual({
+      name: "a",
+      value: "val-a",
+      scope: "ch-a",
+    });
   });
 });
 

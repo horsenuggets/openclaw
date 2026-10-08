@@ -11,6 +11,7 @@ import {
   sanitizeSecretName,
   secretPath,
   secretReminderMessage,
+  secretScopeToken,
 } from "./secret-command.js";
 
 describe("SECRET_COMMAND_SPEC", () => {
@@ -91,22 +92,32 @@ describe("sanitizeSecretName", () => {
   });
 });
 
+describe("secretScopeToken", () => {
+  it("is a stable, injection-safe [a-z0-9] token derived from the channel id", () => {
+    const token = secretScopeToken("123456789");
+    expect(token).toMatch(/^ch[a-z0-9]+$/);
+    // Deterministic for the same channel, distinct across channels.
+    expect(secretScopeToken("123456789")).toBe(token);
+    expect(secretScopeToken("987654321")).not.toBe(token);
+  });
+});
+
 describe("secretPath / secretReminderMessage", () => {
-  it("points at the box's ephemeral /tmp/secrets path", () => {
-    expect(secretPath("foo")).toBe("/tmp/secrets/foo");
+  it("nests the secret under the per-channel scope token", () => {
+    expect(secretPath("foo", "chabc")).toBe("/tmp/secrets/chabc/foo");
   });
 
   it("names the file, flags it temporary, and never includes the value", () => {
-    const msg = secretReminderMessage("redirect");
-    expect(msg).toContain("/tmp/secrets/redirect");
+    const msg = secretReminderMessage("redirect", "chabc");
+    expect(msg).toContain("/tmp/secrets/chabc/redirect");
     expect(msg).toContain('"redirect"');
     expect(msg.toLowerCase()).toContain("temporary");
     // The reminder is value-free by construction (it takes only the name).
-    expect(secretReminderMessage("redirect")).not.toContain("code=");
+    expect(secretReminderMessage("redirect", "chabc")).not.toContain("code=");
   });
 
   it("warns that tool output is persisted and steers the agent to use the path, not cat it", () => {
-    const msg = secretReminderMessage("redirect").toLowerCase();
+    const msg = secretReminderMessage("redirect", "chabc").toLowerCase();
     // Must not over-claim that the value never persists; instead it warns the
     // agent that printing it would land in the transcript and to use it by path.
     expect(msg).toContain("transcript");

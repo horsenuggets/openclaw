@@ -152,9 +152,22 @@ export function sanitizeSecretName(raw: string, value: string): string {
   return `secret-${hash}`;
 }
 
+/**
+ * A per-channel scope token used to nest secrets under their own subdirectory so
+ * two sessions cannot read or overwrite each other's same-named secret. Sandbox
+ * scope defaults to `agent`, which maps every `agent:main:...` channel to one
+ * shared container; direct mode shares the gateway host. Nesting by this token
+ * (a stable `[a-z0-9]` hash of the channel id) keeps each channel's secrets
+ * isolated in both cases. The token is `[a-z0-9]` so it is injection-safe when
+ * interpolated into the sandbox shell script.
+ */
+export function secretScopeToken(channelId: string): string {
+  return `ch${createHash("sha256").update(channelId).digest("hex").slice(0, 16)}`;
+}
+
 /** Absolute path a secret named `name` is written to inside the agent box. */
-export function secretPath(name: string): string {
-  return `/tmp/secrets/${name}`;
+export function secretPath(name: string, scopeToken: string): string {
+  return `/tmp/secrets/${scopeToken}/${name}`;
 }
 
 /**
@@ -169,8 +182,8 @@ export function secretPath(name: string): string {
  * `cat`-ing it would copy the value into the transcript. That keeps the secret
  * off the wire and out of the transcript in the normal case.
  */
-export function secretReminderMessage(name: string): string {
-  const path = secretPath(name);
+export function secretReminderMessage(name: string, scopeToken: string): string {
+  const path = secretPath(name, scopeToken);
   return (
     `A secret named "${name}" has been made available to you at ${path}. ` +
     `It was provided privately by the user and is not shown in the chat. ` +
