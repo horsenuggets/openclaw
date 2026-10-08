@@ -357,6 +357,23 @@ describe("writeAgentSecret sandbox delivery", () => {
     expect(leftovers).toEqual([]);
   });
 
+  it("does not fall back to the host path when sandbox resolution fails", async () => {
+    const name = `sbx-fail-${Math.random().toString(36).slice(2, 10)}`;
+    const hostPath = `${AGENT_SECRETS_DIR}/${name}`;
+    mocks.resolveSandboxContext.mockRejectedValueOnce(new Error("sandbox resolution failed"));
+
+    await expect(
+      writeAgentSecret({
+        name,
+        value: "super-secret",
+        sessionKey: "agent:main:discord:default:channel:c1",
+      }),
+    ).rejects.toThrow("sandbox resolution failed");
+
+    expect(fs.existsSync(hostPath)).toBe(false);
+    expect(mocks.execDocker).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     mocks.resolveSandboxContext.mockReset();
     mocks.resolveSandboxContext.mockResolvedValue(null);

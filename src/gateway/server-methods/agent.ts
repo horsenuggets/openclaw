@@ -150,9 +150,7 @@ export async function writeAgentSecret(params: {
   assertSafeSecretName(name);
   // Sandboxed sessions get the secret inside their own container; a host write
   // would land in the gateway's /tmp, which the container's tmpfs /tmp shadows.
-  const sandbox = sessionKey
-    ? await resolveSandboxContext({ config: cfg, sessionKey }).catch(() => null)
-    : null;
+  const sandbox = sessionKey ? await resolveSandboxContext({ config: cfg, sessionKey }) : null;
   if (sandbox?.containerName) {
     return writeAgentSecretToSandbox(sandbox.containerName, name, value);
   }
