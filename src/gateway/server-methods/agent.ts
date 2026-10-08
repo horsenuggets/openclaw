@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import type { GatewayRequestHandlers } from "./types.js";
 import { listAgentIds } from "../../agents/agent-scope.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
+import { resolveSandboxContext } from "../../agents/sandbox/context.js";
+import { execDocker } from "../../agents/sandbox/docker.js";
 import { agentCommand } from "../../commands/agent.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -45,40 +48,38 @@ import { formatForLog } from "../ws-log.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 
-/** Directory inside the agent box that holds out-of-band secrets. */
+/**
+ * Directory a secret is readable at *inside the agent box* (the path the agent
+ * is told to `cat`). In a Docker sandbox this is a path inside the container; in
+ * direct mode it is on the host, under the gateway user.
+ */
 export const AGENT_SECRETS_DIR = "/tmp/secrets";
 
-/**
- * Write an out-of-band secret to the box's own `/tmp/secrets/<name>` with mode
- * 0600 (dir 0700). The name is already sanitized router-side, but a final guard
- * rejects anything with a path separator so a malformed value can never escape
- * the directory. Re-writing the same name overwrites in place. The value is
- * never logged.
- *
- * `/tmp` is world-writable, so a hostile co-tenant could pre-plant a symlink at
- * `/tmp/secrets` or `/tmp/secrets/<name>` to redirect the write (and the 0600
- * chmod) onto an arbitrary path. We defend against that: the secrets dir must be
- * a real directory (not a symlink), and the target file is opened with
- * `O_NOFOLLOW` so a symlinked target errors out instead of being followed.
- */
-export function writeAgentSecret(name: string, value: string): string {
+/** Validate a sanitized secret name can never escape the secrets directory. */
+function assertSafeSecretName(name: string): void {
   if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
     throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
   }
-  fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
-  // Reject a symlinked (or otherwise non-directory) secrets dir: mkdir with
-  // recursive:true is a no-op when the path already exists, so it would not
-  // catch a pre-planted symlink. lstat does not follow the final component.
-  const dirStat = fs.lstatSync(AGENT_SECRETS_DIR);
-  if (!dirStat.isDirectory()) {
-    throw new Error(`secrets dir is not a real directory: ${AGENT_SECRETS_DIR}`);
+}
+
+/**
+ * Write a secret to a host path with hardened, symlink-safe semantics: the
+ * containing dir must be a real directory (not a symlink), and the target is
+ * opened `O_NOFOLLOW` so a pre-planted symlink errors instead of redirecting the
+ * write/chmod. Returns the path written. Used for both the direct-mode box path
+ * and the transient host staging file that is `docker cp`-ed into a sandbox.
+ */
+function writeSecretFileHardened(dir: string, name: string, value: string): string {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // mkdir(recursive) is a no-op when the path already exists, so it cannot catch
+  // a pre-planted symlink; lstat (does not follow the final component) does.
+  if (!fs.lstatSync(dir).isDirectory()) {
+    throw new Error(`secrets dir is not a real directory: ${dir}`);
   }
-  const target = `${AGENT_SECRETS_DIR}/${name}`;
-  // Open with O_NOFOLLOW so a pre-existing symlink at the target errors (ELOOP)
-  // rather than being followed; O_CREAT|O_WRONLY|O_TRUNC gives create-or-truncate
-  // semantics, and mode 0600 applies on creation. fchmod on the open descriptor
-  // then enforces 0600 even when overwriting a pre-existing regular file, and
-  // (unlike path-based chmod) can never be redirected by a swapped symlink.
+  const target = `${dir}/${name}`;
+  // O_NOFOLLOW: a symlink at the target errors (ELOOP) rather than being
+  // followed. fchmod on the open fd enforces 0600 even when overwriting an
+  // existing regular file and can never be redirected by a swapped symlink.
   const fd = fs.openSync(
     target,
     fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW,
@@ -91,6 +92,71 @@ export function writeAgentSecret(name: string, value: string): string {
     fs.closeSync(fd);
   }
   return target;
+}
+
+/**
+ * Deliver a secret into a running Docker sandbox at `/tmp/secrets/<name>`
+ * (mode 0600). The value is staged in a 0600 host temp file and `docker cp`-ed
+ * in (never passed as a process argument, so it does not leak via `ps`), then
+ * the host staging file is removed. The in-container file is chmod 0600 after
+ * copy. `docker cp` does not create intermediate dirs on a tmpfs root, so the
+ * secrets dir is created first.
+ */
+async function writeAgentSecretToSandbox(
+  containerName: string,
+  name: string,
+  value: string,
+): Promise<string> {
+  const target = `${AGENT_SECRETS_DIR}/${name}`;
+  const staging = fs.mkdtempSync(`${os.tmpdir()}/openclaw-secret-`);
+  const stagingFile = `${staging}/${name}`;
+  try {
+    writeSecretFileHardened(staging, name, value);
+    await execDocker(["exec", containerName, "mkdir", "-p", "-m", "700", AGENT_SECRETS_DIR]);
+    await execDocker(["cp", stagingFile, `${containerName}:${target}`]);
+    await execDocker(["exec", containerName, "chmod", "600", target]);
+  } finally {
+    // Shred the host staging copy; the value must not linger on the host.
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+  return target;
+}
+
+/**
+ * Write an out-of-band secret so the channel's agent can read it at
+ * `/tmp/secrets/<name>` (mode 0600). The name is already sanitized router-side;
+ * a final guard rejects anything with a path separator. Re-writing the same name
+ * overwrites in place. The value is never logged.
+ *
+ * Delivery depends on how the target session runs:
+ * - **Sandboxed** (Docker): the agent's `/tmp` is a private tmpfs inside its
+ *   container, so a host write would be invisible. The secret is copied into the
+ *   session's own container (resolved from `sessionKey`), keeping it scoped to
+ *   that agent and visible at the path the reminder names.
+ * - **Direct mode**: the agent shares the gateway user's filesystem, so the
+ *   secret is written to the host `/tmp/secrets/<name>` with symlink-safe,
+ *   0600 semantics.
+ *
+ * `/tmp` is world-writable, so both paths defend against a hostile co-tenant
+ * pre-planting a symlink at the dir or target (see {@link writeSecretFileHardened}).
+ */
+export async function writeAgentSecret(params: {
+  name: string;
+  value: string;
+  sessionKey?: string;
+  cfg?: ReturnType<typeof loadConfig>;
+}): Promise<string> {
+  const { name, value, sessionKey, cfg } = params;
+  assertSafeSecretName(name);
+  // Sandboxed sessions get the secret inside their own container; a host write
+  // would land in the gateway's /tmp, which the container's tmpfs /tmp shadows.
+  const sandbox = sessionKey
+    ? await resolveSandboxContext({ config: cfg, sessionKey }).catch(() => null)
+    : null;
+  if (sandbox?.containerName) {
+    return writeAgentSecretToSandbox(sandbox.containerName, name, value);
+  }
+  return writeSecretFileHardened(AGENT_SECRETS_DIR, name, value);
 }
 
 export const agentHandlers: GatewayRequestHandlers = {
@@ -413,15 +479,23 @@ export const agentHandlers: GatewayRequestHandlers = {
 
     const resolvedThreadId = explicitThreadId ?? deliveryPlan.resolvedThreadId;
 
-    // Out-of-band secret delivery (/secret command): write the value to this
-    // box's own ephemeral /tmp/secrets/<name> (0600, dir 0700) BEFORE the agent
-    // turn runs, so the accompanying system-reminder message can point the agent
-    // at a file that already exists. The value is never logged. A failed write
-    // is logged and the turn still proceeds (the reminder will be inaccurate,
-    // but that degrades gracefully rather than wedging the run).
+    // Out-of-band secret delivery (/secret command): make the value readable at
+    // the agent box's /tmp/secrets/<name> (0600) BEFORE the turn runs, so the
+    // accompanying system-reminder can point the agent at a file that already
+    // exists. For sandboxed sessions this copies into the session's own
+    // container (a host write would be shadowed by the container's tmpfs /tmp);
+    // for direct sessions it writes the host path. Awaited so the file is in
+    // place before agentCommand dispatches. The value is never logged. A failed
+    // write is logged and the turn still proceeds (the reminder will be
+    // inaccurate, but that degrades gracefully rather than wedging the run).
     if (request.secret) {
       try {
-        writeAgentSecret(request.secret.name, request.secret.value);
+        await writeAgentSecret({
+          name: request.secret.name,
+          value: request.secret.value,
+          sessionKey: requestedSessionKey,
+          cfg: cfgForAgent ?? cfg,
+        });
       } catch (err) {
         context.logGateway.warn(
           `agent: failed to write secret "${request.secret.name}": ${String(err)}`,

@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import os from "node:os";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayRequestContext } from "./types.js";
 import { AGENT_SECRETS_DIR, agentHandlers, writeAgentSecret } from "./agent.js";
 
@@ -11,6 +12,16 @@ const mocks = vi.hoisted(() => ({
   queueEmbeddedPiMessage: vi.fn(),
   resolveSendPolicy: vi.fn(() => "allow"),
   loadConfigReturn: {} as Record<string, unknown>,
+  resolveSandboxContext: vi.fn(async () => null as unknown),
+  execDocker: vi.fn(async () => ({ stdout: "", stderr: "", code: 0 })),
+}));
+
+vi.mock("../../agents/sandbox/context.js", () => ({
+  resolveSandboxContext: mocks.resolveSandboxContext,
+}));
+
+vi.mock("../../agents/sandbox/docker.js", () => ({
+  execDocker: mocks.execDocker,
 }));
 
 vi.mock("../session-utils.js", () => ({
@@ -314,17 +325,62 @@ describe("gateway agent.steer handler", () => {
   });
 });
 
-describe("writeAgentSecret", () => {
-  it("writes the value to /tmp/secrets/<name> with mode 0600 and overwrites in place", () => {
+describe("writeAgentSecret sandbox delivery", () => {
+  it("copies into the session's container (never via a process arg) when sandboxed", async () => {
+    mocks.resolveSandboxContext.mockResolvedValueOnce({ containerName: "openclaw-sbx-c1" });
+    const dockerCalls: string[][] = [];
+    mocks.execDocker.mockImplementation(async (args: string[]) => {
+      dockerCalls.push(args);
+      return { stdout: "", stderr: "", code: 0 };
+    });
+
+    const name = `sbx-${Math.random().toString(36).slice(2, 10)}`;
+    const path = await writeAgentSecret({
+      name,
+      value: "super-secret",
+      sessionKey: "agent:main:discord:default:channel:c1",
+    });
+
+    expect(path).toBe(`${AGENT_SECRETS_DIR}/${name}`);
+    // The secrets dir is created, the file is docker cp-ed in, then chmod 0600.
+    expect(dockerCalls.some((a) => a[0] === "cp" && a[2] === `openclaw-sbx-c1:${path}`)).toBe(true);
+    expect(
+      dockerCalls.some((a) => a[0] === "exec" && a.includes("chmod") && a.includes("600")),
+    ).toBe(true);
+    // The secret value is never passed as a docker argument (would leak via ps).
+    for (const call of dockerCalls) {
+      expect(call).not.toContain("super-secret");
+    }
+    // The host staging dir was cleaned up (no leftover openclaw-secret-* dirs
+    // that still contain the value).
+    const leftovers = fs.readdirSync(os.tmpdir()).filter((d) => d.startsWith("openclaw-secret-"));
+    expect(leftovers).toEqual([]);
+  });
+
+  afterEach(() => {
+    mocks.resolveSandboxContext.mockReset();
+    mocks.resolveSandboxContext.mockResolvedValue(null);
+    mocks.execDocker.mockReset();
+    mocks.execDocker.mockResolvedValue({ stdout: "", stderr: "", code: 0 });
+  });
+});
+
+describe("writeAgentSecret (direct mode / main session)", () => {
+  // These exercise the direct (non-sandboxed) host path. The main session key is
+  // never sandboxed (sandbox mode default is off and main is excluded from
+  // non-main mode), so no Docker container is resolved and the host path is used.
+  const MAIN = "agent:main:main";
+
+  it("writes the value to /tmp/secrets/<name> with mode 0600 and overwrites in place", async () => {
     const name = `test-${Math.random().toString(36).slice(2, 10)}`;
     const target = `${AGENT_SECRETS_DIR}/${name}`;
     try {
-      const path = writeAgentSecret(name, "first-value");
+      const path = await writeAgentSecret({ name, value: "first-value", sessionKey: MAIN });
       expect(path).toBe(target);
       expect(fs.readFileSync(target, "utf-8")).toBe("first-value");
       expect(fs.statSync(target).mode & 0o777).toBe(0o600);
       // Re-writing the same name overwrites in place and keeps 0600.
-      writeAgentSecret(name, "second-value");
+      await writeAgentSecret({ name, value: "second-value", sessionKey: MAIN });
       expect(fs.readFileSync(target, "utf-8")).toBe("second-value");
       expect(fs.statSync(target).mode & 0o777).toBe(0o600);
     } finally {
@@ -332,13 +388,15 @@ describe("writeAgentSecret", () => {
     }
   });
 
-  it("rejects names that could escape the secrets directory", () => {
+  it("rejects names that could escape the secrets directory", async () => {
     for (const bad of ["", "../escape", "a/b", "a\\b", ".."]) {
-      expect(() => writeAgentSecret(bad, "v")).toThrow(/invalid secret name/);
+      await expect(writeAgentSecret({ name: bad, value: "v", sessionKey: MAIN })).rejects.toThrow(
+        /invalid secret name/,
+      );
     }
   });
 
-  it("refuses to follow a pre-planted symlink at the target path (no redirect)", () => {
+  it("refuses to follow a pre-planted symlink at the target path (no redirect)", async () => {
     const name = `sym-${Math.random().toString(36).slice(2, 10)}`;
     const target = `${AGENT_SECRETS_DIR}/${name}`;
     const decoy = `/tmp/decoy-${Math.random().toString(36).slice(2, 10)}`;
@@ -349,7 +407,9 @@ describe("writeAgentSecret", () => {
     fs.symlinkSync(decoy, target);
     try {
       // O_NOFOLLOW makes the open fail rather than writing through the symlink.
-      expect(() => writeAgentSecret(name, "attacker-controlled")).toThrow();
+      await expect(
+        writeAgentSecret({ name, value: "attacker-controlled", sessionKey: MAIN }),
+      ).rejects.toThrow();
       // The decoy target was never overwritten.
       expect(fs.readFileSync(decoy, "utf-8")).toBe("untouched");
     } finally {
