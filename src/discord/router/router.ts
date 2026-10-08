@@ -30,6 +30,7 @@ import {
   handleComponentInteraction,
   handleGuildDelete,
   handleMessageCreate,
+  handleModalSubmit,
   handleSlashInteraction,
 } from "./gateway-events.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
@@ -37,6 +38,7 @@ import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
+import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
 /**
@@ -106,6 +108,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     body: JSON.stringify(CHANNEL_COMMAND_SPEC),
   }).catch((err) => runtime.error(`[router] failed to register /channel command: ${String(err)}`));
+
+  // Register the /secret command: hand the channel's agent a sensitive value
+  // privately (collected via a modal, never shown in the channel).
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(SECRET_COMMAND_SPEC),
+  }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -192,6 +205,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         agentTimeoutMs,
         runCommand: runAgentCommand,
         systemTurn: turn.systemTurn,
+        secret: turn.secret,
       });
     },
     // Mid-turn steering: inject a text message into the live run via the agent's
@@ -649,6 +663,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           // Message-component interactions (buttons): /channel unregister confirm.
           if (t === "INTERACTION_CREATE" && d.type === 3) {
             handleComponentInteraction(gatewayCtx, d);
+          }
+
+          // Modal submissions (type 5): the /secret popup.
+          if (t === "INTERACTION_CREATE" && d.type === 5) {
+            handleModalSubmit(gatewayCtx, d);
           }
 
           // A guild channel (or thread) was deleted; tear down any registered
