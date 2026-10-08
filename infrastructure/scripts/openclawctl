@@ -380,14 +380,15 @@ stop_container() {
 
 # Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
 # HOST using the deploy binary (deploy.sh stages the hand-picked templates next to
-# it at ~/deploy/bin/docs/reference/templates), so the box needs no docs mount. The
-# onboarding wizard normally seeds these, but the provisioning path bypasses the
-# wizard, so the workspace would otherwise stay empty. Callers run this right after
-# start_container (so the mount dirs exist), but because it writes the host-side
-# bind dir directly it does not depend on the container: the files are in place
-# before registration returns. That matters for the router, which reads
-# workspace/BOOTSTRAP.md to drive the first-run welcome card on registration, so a
-# missing file means no welcome and no onboarding.
+# it at ~/deploy/bin/docs/reference/templates). The onboarding wizard normally seeds
+# these, but the provisioning path bypasses the wizard, so the workspace would
+# otherwise stay empty. Callers run this BEFORE start_container: it writes the
+# host-side bind dir directly (creating the workspace dir itself), so it needs no
+# container, and seeding first guarantees the files are in place before registration
+# returns. That matters for the router, which reads workspace/BOOTSTRAP.md to drive
+# the first-run welcome card on registration, so a missing file means no welcome and
+# no onboarding. (The same templates are also mounted read-only in the box so the
+# agent can lazily self-seed if this host-side pass fails; see the failure branch.)
 # Idempotent: setup uses write-if-missing, so re-running on an existing instance
 # is a no-op.
 # Debug toggle (mirror rig only): when OPENCLAW_SKIP_BOOTSTRAP is truthy, drop just
@@ -426,13 +427,13 @@ seed_workspace() {
   fi
   rm -rf "$setup_home"
   if [ "$ok" -ne 1 ]; then
-    # Warn but do not abort the add: the box is already running and reachable,
-    # and it can still self-heal. The hand-picked templates are mounted read-only
-    # at /bin/docs/reference/templates (see agent.yml), so the agent's lazy
-    # ensureAgentWorkspace seeds the workspace from there on its first turn. Only
-    # the proactive welcome-on-register is lost until that first message, because
-    # the router reads workspace/BOOTSTRAP.md at registration time (before any
-    # turn). To retry host-side seeding before use, remove and re-register the
+    # Warn but do not abort the add: the caller still goes on to start the box,
+    # which can self-heal. The hand-picked templates are mounted read-only at
+    # /bin/docs/reference/templates (see agent.yml), so once started the agent's
+    # lazy ensureAgentWorkspace seeds the workspace from there on its first turn.
+    # Only the proactive welcome-on-register is lost until that first message,
+    # because the router reads workspace/BOOTSTRAP.md at registration time (before
+    # any turn). To retry host-side seeding before use, remove and re-register the
     # channel with its matching add command; remove preserves instance data.
     echo "Warning: could not seed workspace for $channelId host-side; the box will" >&2
     echo "  seed it lazily on the first message (no proactive welcome until then)." >&2

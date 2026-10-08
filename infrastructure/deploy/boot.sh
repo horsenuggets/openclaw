@@ -191,8 +191,32 @@ else
     # instance adopted before the home-mount layout has no ~/.openclaw-instances/
     # <id>/home; Docker would then create the bind source as root and uid 1000
     # could not write $HOME. Idempotent; AGENT_UID/GID match agent.yml (1000:1000).
-    mkdir -p "$INSTANCES_DIR/$channelId/home"
-    chown -R 1000:1000 "$INSTANCES_DIR/$channelId/home" 2>/dev/null || true
+    instance_home="$INSTANCES_DIR/$channelId/home"
+    instance_state="$INSTANCES_DIR/$channelId/state"
+    mkdir -p "$instance_home"
+    # One-time migration for instances adopted when HOME was /state: any
+    # $HOME-relative tool creds/caches they wrote then live under state/.config,
+    # state/.cache, etc. Switching HOME to /home/openclaw would orphan them, so
+    # move each such dotdir into home/ before the first start under the new layout.
+    # Guarded: only when home/ does not already have that entry (never clobber a
+    # value the box wrote under the new HOME), and only for the known home-relative
+    # dirs (not openclaw's own state, which stays under /state and keeps its mount).
+    if [ -d "$instance_state" ]; then
+      for d in .config .cache .local .claude .gog gogcli; do
+        if [ -e "$instance_state/$d" ] && [ ! -e "$instance_home/$d" ]; then
+          mv "$instance_state/$d" "$instance_home/$d" 2>/dev/null \
+            && echo "Migrated $channelId: state/$d -> home/$d" >&2 || true
+        fi
+      done
+    fi
+    # Hand the home mount to the container uid. If this fails the box would start
+    # with an unwritable $HOME (the exact root-owned/UID-mismatch case this repairs),
+    # so skip the instance rather than launch a broken box; others still boot.
+    if ! chown -R 1000:1000 "$instance_home" 2>/dev/null; then
+      echo "Skipping channel $channelId: could not chown its home mount to the agent uid" >&2
+      echo "  (would start with an unwritable \$HOME)." >&2
+      continue
+    fi
     OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
       docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
   done <<< "$ASSIGNMENTS"
