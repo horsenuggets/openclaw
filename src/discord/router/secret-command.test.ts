@@ -104,4 +104,12 @@ describe("secretPath / secretReminderMessage", () => {
     // The reminder is value-free by construction (it takes only the name).
     expect(secretReminderMessage("redirect")).not.toContain("code=");
   });
+
+  it("warns that tool output is persisted and steers the agent to use the path, not cat it", () => {
+    const msg = secretReminderMessage("redirect").toLowerCase();
+    // Must not over-claim that the value never persists; instead it warns the
+    // agent that printing it would land in the transcript and to use it by path.
+    expect(msg).toContain("transcript");
+    expect(msg).toContain("path");
+  });
 });

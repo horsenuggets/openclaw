@@ -159,16 +159,26 @@ export function secretPath(name: string): string {
 
 /**
  * The one-off instruction (to be wrapped in a `<system-reminder>` by the
- * routing layer) telling the agent a secret is available on disk. Never
- * includes the secret value.
+ * routing layer) telling the agent a secret is available on disk. Never includes
+ * the secret value.
+ *
+ * IMPORTANT framing: the delivery keeps the value out of the chat/message text,
+ * but a shell/exec tool result IS persisted to the session transcript. So the
+ * reminder steers the agent to CONSUME the file BY PATH (pass the path to the
+ * command that needs it) rather than printing its contents, and warns that
+ * `cat`-ing it would copy the value into the transcript. That keeps the secret
+ * off the wire and out of the transcript in the normal case.
  */
 export function secretReminderMessage(name: string): string {
   const path = secretPath(name);
   return (
     `A secret named "${name}" has been made available to you at ${path}. ` +
-    `It was provided privately by the user and is NOT visible in the chat. ` +
+    `It was provided privately by the user and is not shown in the chat. ` +
     `This file is temporary and may not persist across restarts. ` +
-    `Read it with your shell/exec tool (e.g. \`cat ${path}\`) only when you need it, ` +
-    `and never echo its contents back into the channel.`
+    `Use it by passing the file PATH to whatever needs it (for example ` +
+    `\`curl --data @${path} ...\` or reading it inside a single command), ` +
+    `rather than printing or \`cat\`-ing it: your tool output is saved to the ` +
+    `conversation transcript, so echoing the value would copy it there. ` +
+    `Never send its contents back into the channel.`
   );
 }

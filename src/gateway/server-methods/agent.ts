@@ -63,17 +63,29 @@ function assertSafeSecretName(name: string): void {
 
 /**
  * Write a secret to a host path with hardened, symlink-safe semantics: the
- * containing dir must be a real directory (not a symlink), and the target is
- * opened `O_NOFOLLOW` so a pre-planted symlink errors instead of redirecting the
- * write/chmod. Returns the path written. Used for both the direct-mode box path
- * and the transient host staging file that is `docker cp`-ed into a sandbox.
+ * containing dir must be a real directory (not a symlink) that we own and that
+ * is not group/world-writable, and the target is opened `O_NOFOLLOW` so a
+ * pre-planted symlink errors instead of redirecting the write/chmod. Returns the
+ * path written. Used for the direct-mode box path on the gateway host.
  */
 function writeSecretFileHardened(dir: string, name: string, value: string): string {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  // mkdir(recursive) is a no-op when the path already exists, so it cannot catch
-  // a pre-planted symlink; lstat (does not follow the final component) does.
-  if (!fs.lstatSync(dir).isDirectory()) {
+  // mkdir(recursive) is a no-op when the path already exists, so it neither
+  // catches a pre-planted symlink nor re-applies 0700 to an existing dir; lstat
+  // (does not follow the final component) lets us validate what is actually
+  // there. `/tmp` is world-writable, so a pre-existing `/tmp/secrets` could be an
+  // attacker-owned or world-writable real directory: its owner could then swap
+  // the target out after we write, making the agent read different content. Fail
+  // closed unless the dir is a plain directory we own with no group/other write.
+  const dirStat = fs.lstatSync(dir);
+  if (!dirStat.isDirectory()) {
     throw new Error(`secrets dir is not a real directory: ${dir}`);
+  }
+  if (typeof process.getuid === "function" && dirStat.uid !== process.getuid()) {
+    throw new Error(`secrets dir is not owned by this process: ${dir}`);
+  }
+  if (dirStat.mode & 0o022) {
+    throw new Error(`secrets dir is group/world-writable: ${dir}`);
   }
   const target = `${dir}/${name}`;
   // O_NOFOLLOW: a symlink at the target errors (ELOOP) rather than being

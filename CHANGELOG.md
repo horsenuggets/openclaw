@@ -14,15 +14,18 @@ Docs: https://docs.openclaw.ai
   runs, with a one-off `<system-reminder>` telling the agent where to read it. Delivery is
   sandbox-aware: for a sandboxed (Docker) session the value is piped over stdin into that
   session's own container as the sandbox's configured user (a host write would be shadowed
-  by the container's tmpfs `/tmp`); for a direct session it is written to the host path.
-  The value never touches the channel, the message text, or logs, and is never passed as a
-  process argument. Delivery fails closed: if the secret cannot be placed, the turn is
-  rejected rather than dispatched, so the agent is never pointed at a missing or stale
-  file. The command is owner-gated (group DMs are excluded outright, since they have no
-  owner to gate on); the secret name is sanitized to `[a-z0-9]`, length-capped, with a
-  hash fallback; the writer rejects path escapes and refuses to follow symlinks; and a
-  secret-bearing turn always runs on its own (never coalesced with or overtaken by other
-  messages).
+  by the container's tmpfs `/tmp`); for a direct session it is written to a host path
+  owned by the gateway user (the writer fails closed if that directory is not a plain,
+  self-owned, non-world-writable directory). The value never touches the channel, the
+  message text, or logs, and is never passed as a process argument; the accompanying
+  reminder steers the agent to consume the file by path (rather than printing it) because
+  tool output is saved to the session transcript. Delivery fails closed: if the secret
+  cannot be placed, the turn is rejected rather than dispatched, so the agent is never
+  pointed at a missing or stale file. The command is owner-gated (group DMs are excluded
+  outright, since they have no owner to gate on); the secret name is sanitized to
+  `[a-z0-9]`, length-capped, with a hash fallback; the writer rejects path escapes and
+  refuses to follow symlinks; and a secret-bearing turn always runs on its own (never
+  coalesced with or overtaken by other messages).
 - Persona writing style: the default `SOUL.md`/`AGENTS.md` dash rule now also forbids a
   run of hyphens (`--`, `---`) used as grammatical punctuation, not just real em/en dashes
   and a single hyphen. The agent was routing around the ban by typing the ascii em-dash

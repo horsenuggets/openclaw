@@ -504,6 +504,22 @@ describe("writeAgentSecret (direct mode / main session)", () => {
     }
   });
 
+  it("fails closed when the existing secrets dir is group/world-writable", async () => {
+    // `/tmp` is world-writable, so a pre-existing attacker-controlled
+    // /tmp/secrets must be rejected rather than written into (its owner could
+    // swap the target out after the write).
+    fs.mkdirSync(AGENT_SECRETS_DIR, { recursive: true, mode: 0o700 });
+    const original = fs.statSync(AGENT_SECRETS_DIR).mode & 0o777;
+    fs.chmodSync(AGENT_SECRETS_DIR, 0o777);
+    try {
+      await expect(writeAgentSecret({ name: "x", value: "v", sessionKey: MAIN })).rejects.toThrow(
+        /group\/world-writable/,
+      );
+    } finally {
+      fs.chmodSync(AGENT_SECRETS_DIR, original);
+    }
+  });
+
   it("refuses to follow a pre-planted symlink at the target path (no redirect)", async () => {
     const name = `sym-${Math.random().toString(36).slice(2, 10)}`;
     const target = `${AGENT_SECRETS_DIR}/${name}`;
