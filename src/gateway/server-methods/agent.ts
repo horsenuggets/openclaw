@@ -72,18 +72,6 @@ function assertSafeSecretName(name: string): void {
 }
 
 /**
- * Enforce the scope-token grammar at the gateway trust boundary. The router
- * derives it as `ch<hex>`, but like the name it arrives over JSON-RPC and is
- * interpolated into the sandbox shell path, so restrict it to `[a-z0-9]{1,80}`
- * to keep it directory- and injection-safe regardless of the caller.
- */
-function assertSafeSecretScope(scope: string): void {
-  if (!/^[a-z0-9]{1,80}$/.test(scope)) {
-    throw new Error(`invalid secret scope: ${JSON.stringify(scope)}`);
-  }
-}
-
-/**
  * Write a secret to a host path with hardened, symlink-safe semantics: the
  * containing dir must be a real directory (not a symlink) that we own and that
  * is not group/world-writable, and the target is opened `O_NOFOLLOW` so a
@@ -153,25 +141,24 @@ function dockerExecStdin(args: string[], input: string): Promise<void> {
 }
 
 /**
- * Deliver a secret into a running Docker sandbox at `/tmp/secrets/<scope>/<name>`
- * (mode 0600). The value is piped over stdin into a `docker exec` running **as
- * the sandbox's configured user** (so the file is owned by the agent, not root,
- * and is readable by it), via a shell that `umask 177`s before writing so the
- * file is created 0600 from the start. The value is never passed as a process
- * argument (no `ps` leak) and never staged on the host. `name` and `scope` are
- * both validated to `[a-z0-9]` before this point, so interpolating them into the
- * shell script is injection-safe.
+ * Deliver a secret into a running Docker sandbox at `/tmp/secrets/<name>` (mode
+ * 0600). The value is piped over stdin into a `docker exec` running **as the
+ * sandbox's configured user** (so the file is owned by the agent, not root, and
+ * is readable by it), via a shell that `umask 177`s before writing so the file is
+ * created 0600 from the start. The value is never passed as a process argument
+ * (no `ps` leak) and never staged on the host. `name` is validated to
+ * `[a-z0-9_-]` before this point, so interpolating it into the shell script is
+ * injection-safe.
  */
 async function writeAgentSecretToSandbox(
   containerName: string,
   user: string | undefined,
-  scope: string,
   name: string,
   value: string,
 ): Promise<string> {
-  const dir = `${AGENT_SECRETS_DIR}/${scope}`;
+  const dir = AGENT_SECRETS_DIR;
   const target = `${dir}/${name}`;
-  // Create the scoped dir (0700) and write the file via stdin under a 0600
+  // Create the secrets dir (0700) and write the file via stdin under a 0600
   // umask, then chmod defensively.
   const script = `set -e; umask 177; mkdir -p -m 700 ${dir}; cat > ${target}; chmod 600 ${target}`;
   const args = ["exec", "-i"];
@@ -185,21 +172,20 @@ async function writeAgentSecretToSandbox(
 
 /**
  * Write an out-of-band secret so the channel's agent can read it at
- * `/tmp/secrets/<scope>/<name>` (mode 0600). `name` and `scope` are re-validated
- * to the strict `[a-z0-9]` grammar here at the gateway trust boundary (the
- * Discord router sanitizes them, but a direct RPC caller could send anything).
- * The `scope` is a per-channel token so two sessions that share a sandbox
- * container (default `agent` scope) or the gateway host cannot read or overwrite
- * each other's same-named secret. Re-writing the same name overwrites in place.
- * The value is never logged.
+ * `/tmp/secrets/<name>` (mode 0600). `name` is re-validated to the strict
+ * `[a-z0-9_-]` grammar here at the gateway trust boundary (the Discord router
+ * sanitizes it, but a direct RPC caller could send anything). No per-channel
+ * nesting is needed: a channel maps 1:1 to its own container, so the box only
+ * ever holds this channel's secrets. Re-writing the same name overwrites in
+ * place. The value is never logged.
  *
  * Delivery depends on how the target session runs:
  * - **Sandboxed** (Docker): the agent's `/tmp` is a private tmpfs inside its
  *   container, so a host write would be invisible. The secret is written into the
  *   session's own container (resolved from `sessionKey`) as the sandbox user.
  * - **Direct mode**: the agent shares the gateway user's filesystem, so the
- *   secret is written to the host `/tmp/secrets/<scope>/<name>` with symlink-safe,
- *   0600 semantics (and a self-owned, non-world-writable dir).
+ *   secret is written to the host `/tmp/secrets/<name>` with symlink-safe, 0600
+ *   semantics (and a self-owned, non-world-writable dir).
  *
  * `/tmp` is world-writable, so both paths defend against a hostile co-tenant
  * pre-planting a symlink at the dir or target (see {@link writeSecretFileHardened}).
@@ -207,13 +193,11 @@ async function writeAgentSecretToSandbox(
 export async function writeAgentSecret(params: {
   name: string;
   value: string;
-  scope: string;
   sessionKey?: string;
   cfg?: ReturnType<typeof loadConfig>;
 }): Promise<string> {
-  const { name, value, scope, sessionKey, cfg } = params;
+  const { name, value, sessionKey, cfg } = params;
   assertSafeSecretName(name);
-  assertSafeSecretScope(scope);
   // Sandboxed sessions get the secret inside their own container; a host write
   // would land in the gateway's /tmp, which the container's tmpfs /tmp shadows.
   // IMPORTANT: do not swallow errors here. resolveSandboxContext returns null
@@ -223,15 +207,9 @@ export async function writeAgentSecret(params: {
   // falling back to a host write that lands outside the isolation boundary.
   const sandbox = sessionKey ? await resolveSandboxContext({ config: cfg, sessionKey }) : null;
   if (sandbox?.containerName) {
-    return writeAgentSecretToSandbox(
-      sandbox.containerName,
-      sandbox.docker?.user,
-      scope,
-      name,
-      value,
-    );
+    return writeAgentSecretToSandbox(sandbox.containerName, sandbox.docker?.user, name, value);
   }
-  return writeSecretFileHardened(`${AGENT_SECRETS_DIR}/${scope}`, name, value);
+  return writeSecretFileHardened(AGENT_SECRETS_DIR, name, value);
 }
 
 export const agentHandlers: GatewayRequestHandlers = {
@@ -277,7 +255,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       timeout?: number;
       label?: string;
       spawnedBy?: string;
-      secret?: { name: string; value: string; scope: string };
+      secret?: { name: string; value: string };
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -555,7 +533,6 @@ export const agentHandlers: GatewayRequestHandlers = {
         await writeAgentSecret({
           name: request.secret.name,
           value: request.secret.value,
-          scope: request.secret.scope,
           sessionKey: requestedSessionKey,
           cfg: cfgForAgent ?? cfg,
         });
