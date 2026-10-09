@@ -75,6 +75,7 @@ overview, see [Onboarding Wizard](/start/wizard).
     - [WhatsApp](/channels/whatsapp): optional QR login.
     - [Telegram](/channels/telegram): bot token.
     - [Discord](/channels/discord): bot token.
+    - [Slack](/channels/slack): bot and app tokens.
     - [Signal](/channels/signal): optional `signal-cli` install + account config.
     - [iMessage](/channels/imessage): legacy `imsg` CLI path + DB access.
     - DM security: default is pairing. First DM sends a code; approve via `openclaw pairing approve <channel> <code>` or use allowlists.
@@ -243,7 +244,7 @@ Typical fields in `~/.openclaw/openclaw.json`:
 - `gateway.*` (mode, bind, auth, tailscale)
 - `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`,
   `channels.imessage.*`
-- Channel allowlists (Slack/Discord/Matrix/Microsoft Teams) when you opt in during the
+- Channel allowlists (Slack/Discord) when you opt in during the
   prompts (names resolve to IDs when possible).
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`

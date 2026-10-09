@@ -4,10 +4,6 @@
           - "src/discord/**"
           - "extensions/discord/**"
           - "docs/channels/discord.md"
-"channel: feishu":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "src/feishu/**"
 "channel: imessage":
   - changed-files:
       - any-glob-to-any-file:

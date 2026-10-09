@@ -33,6 +33,17 @@ openclaw directory peers list --channel slack --query "U0"
 openclaw message send --channel slack --target user:U012ABCDEF --message "hello"
 ```
 
+## Commands
+
+Directory adapters vary by channel. Use these commands with a channel that supports the
+requested lookup:
+
+```bash
+openclaw directory self --channel <channel>
+openclaw directory peers list --channel <channel>
+openclaw directory groups list --channel <channel>
+```
+
 ## ID formats (by channel)
 
 - WhatsApp: `+15551234567` (DM), `1234567890-1234567890@g.us` (group)
