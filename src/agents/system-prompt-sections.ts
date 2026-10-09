@@ -122,8 +122,15 @@ export function parseSystemPromptSections(markdown: string): ParsedSystemPrompt 
         current = undefined;
         continue;
       }
+      const key = sectionKey(text);
+      if (sections.has(key)) {
+        // Sections are keyed by normalized heading text, so a duplicate would
+        // silently drop the earlier block (and could still satisfy the builder's
+        // required-section check). Fail loud instead.
+        throw new Error(`SYSTEM.md has a duplicate "${text}" heading`);
+      }
       current = { heading: `${headingMatch[1]} ${text}`, physical: [] };
-      sections.set(sectionKey(text), current);
+      sections.set(key, current);
       continue;
     }
     if (current) {

@@ -66,6 +66,11 @@ describe("parseSystemPromptSections", () => {
       "- pass `channel` (${messageChannelOptions})",
     );
   });
+
+  it("rejects duplicate headings instead of silently overwriting", () => {
+    const dup = "# title\n\nintro\n\n## safety\n\nreal\n\n## safety\n\nshadow\n";
+    expect(() => parseSystemPromptSections(dup)).toThrow(/duplicate "safety" heading/);
+  });
 });
 
 describe("applyPromptTokens", () => {
