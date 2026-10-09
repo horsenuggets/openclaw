@@ -207,7 +207,11 @@ const LIST_DESCRIPTION =
 
 /**
  * Build the `/connections list` status embed as a Service Name/Status table,
- * matching the Property/Value layout of `/channel status`.
+ * matching the Property/Value layout of `/channel status`. The table is always
+ * rendered, even when nothing is linked yet: a freshly registered channel is
+ * exactly when the user needs to discover what they can link, so every connector
+ * shows (as "Not connected" or "Coming soon"). When nothing is linked a friendly
+ * note is appended under the description.
  */
 function listReply(
   registry: ConnectorRegistry,
@@ -229,18 +233,14 @@ function listReply(
       connector.available ? statusCell(byId.get(connector.id) ?? null, emoji) : "Coming soon",
     );
   }
-  return connectionsReply("Your Connections", LIST_DESCRIPTION, [
+  const description =
+    connections.length === 0
+      ? `${LIST_DESCRIPTION}\n\n*You have no services linked yet!*`
+      : LIST_DESCRIPTION;
+  return connectionsReply("Your Connections", description, [
     { name: "Service Name", value: services.join("\n"), inline: true },
     { name: "Status", value: statuses.join("\n"), inline: true },
   ]);
-}
-
-/** The `/connections list` reply when the channel is registered but nothing is linked. */
-function emptyListReply(): { embeds: DiscordEmbed[]; attachments: string[] } {
-  return connectionsReply(
-    "Your Connections",
-    `${LIST_DESCRIPTION}\n\n*You have no services linked yet!*`,
-  );
 }
 
 const NOT_REGISTERED =
@@ -257,10 +257,6 @@ export async function handleConnectCommand(
     const connections = deps.store.list(ctx.channelId);
     if (connections === null) {
       await ctx.reply(connectionsReply("Your Connections", NOT_REGISTERED), { ephemeral: true });
-      return;
-    }
-    if (connections.length === 0) {
-      await ctx.reply(emptyListReply(), { ephemeral: true });
       return;
     }
     const emoji = deps.emoji ?? DEFAULT_CONNECTION_EMOJI;

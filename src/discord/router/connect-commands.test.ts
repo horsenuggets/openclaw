@@ -229,13 +229,16 @@ describe("handleConnectCommand list", () => {
     expect(statuses).toContain("<:redxfilled:2> Not connected");
   });
 
-  it("shows the empty-state message when registered with nothing linked", async () => {
+  it("still renders the service table plus a friendly note when nothing is linked", async () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
     const embed = embedOf(replies[0].payload);
     expect(embed.title).toBe("Your Connections");
     expect(embed.description).toContain("You have no services linked yet!");
-    expect(embed.fields).toBeUndefined();
+    // The discoverability table is always present, even on a fresh channel.
+    const services = embed.fields?.find((f) => f.name === "Service Name")?.value ?? "";
+    expect(services).toContain("Todoist");
+    expect(services).toContain("Google");
   });
 
   it("defaults a null subcommand to list", async () => {
