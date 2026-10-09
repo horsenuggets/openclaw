@@ -244,8 +244,8 @@ Typical fields in `~/.openclaw/openclaw.json`:
 - `gateway.*` (mode, bind, auth, tailscale)
 - `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`,
   `channels.imessage.*`
-- Channel allowlists (Slack/Discord) when you opt in during the
-  prompts (names resolve to IDs when possible).
+- Channel allowlists (Slack/Discord) when you opt in during the prompts (names resolve to
+  IDs when possible).
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`
 - `wizard.lastRunVersion`
