@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChannelReplyPayload } from "./channel-commands.js";
 import type { StoredConnection } from "./connections-store.js";
 import {
+  CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
   type ConnectCommandDeps,
   type ConnectionStore,
@@ -49,6 +50,17 @@ describe("parseConnectTextCommand", () => {
     expect(parseConnectTextCommand("connections todoist")).toBeNull();
     expect(parseConnectTextCommand("/connect list")).toBeNull();
     expect(parseConnectTextCommand("/connected")).toBeNull();
+  });
+});
+
+describe("CONNECTIONS_COMMAND_SPECS", () => {
+  it("registers /connections plus the /conn alias, usable in guilds and 1:1 DMs only", () => {
+    expect(CONNECTIONS_COMMAND_SPECS.map((s) => s.name)).toEqual(["connections", "conn"]);
+    for (const spec of CONNECTIONS_COMMAND_SPECS) {
+      expect(spec.type).toBe(1); // CHAT_INPUT
+      // Group DMs (context 2) are excluded, like /secret: no owner to gate on.
+      expect(spec.contexts).toEqual([0, 1]);
+    }
   });
 });
 

@@ -282,15 +282,27 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
       const status = describeInstance(channelId);
       void isAuthorizedForChannel(channelId, authorId, {
         describeInstance: () => status,
-      }).then((allowed) => {
+      }).then(async (allowed) => {
         if (!allowed) {
           runtime.log(
             `[router] denied /connections from ${authorId} in channel ${channelId} (not the channel owner)`,
           );
           // Scrub a pasted token even on denial so an unauthorized paste does not
-          // linger in channel history.
+          // linger in channel history. If the delete fails the token is still
+          // visible, so always warn the sender to remove it by hand, regardless of
+          // whether the (owner-facing) unauthorized notice is enabled.
           if (hasToken) {
-            void discordDeleteMessage(discordToken, channelId, commandMessageId);
+            const scrubbed = await discordDeleteMessage(discordToken, channelId, commandMessageId);
+            if (!scrubbed) {
+              void discordSendReply(
+                discordToken,
+                channelId,
+                commandMessageId,
+                "I could not delete your message containing the token. Please delete it " +
+                  "manually so it does not stay in chat.",
+                { parse: [], replied_user: false },
+              );
+            }
           }
           if (unauthorizedNoticeEnabled) {
             const embed = buildLogEmbed(buildUnauthorizedNoticeText(channelId, status?.ownerId));

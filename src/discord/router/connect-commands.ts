@@ -26,7 +26,10 @@ export const CONNECTIONS_COMMAND_SPEC = {
   name: "connections",
   description: "Link your accounts (Google, Todoist, Notion, GitHub) to this agent",
   type: 1, // CHAT_INPUT
-  contexts: [0, 1, 2], // guild, bot DM, group DM
+  // Guild + 1:1 DM only. Group DMs (context 2) are excluded, matching /secret: a
+  // group DM has several participants and no owner to gate on, so any member could
+  // otherwise read or change the channel owner's stored credentials.
+  contexts: [0, 1],
   options: [
     { name: "list", description: "Show your linked accounts and their status", type: 1 },
     {
