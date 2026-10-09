@@ -114,11 +114,14 @@ export async function initSessionState(params: {
     config: cfg,
   });
   const groupResolution = resolveGroupSessionKey(sessionCtxForState) ?? undefined;
-  // A slash trigger ("/new") is the matching command, so it follows the command policy.
-  // Triggers without a leading slash are user-defined phrases and are left alone.
+  // Only the built-in "/new" and "/reset" triggers are the matching commands and follow the
+  // command policy. Any other configured trigger is a user-defined phrase and is kept.
   const resetTriggers = (
     sessionCfg?.resetTriggers?.length ? sessionCfg.resetTriggers : DEFAULT_RESET_TRIGGERS
-  ).filter((trigger) => !trigger.startsWith("/") || isCommandKeyEnabled(trigger.slice(1)));
+  ).filter((trigger) => {
+    const builtIn = trigger.match(/^\/(new|reset)$/i)?.[1]?.toLowerCase();
+    return !builtIn || isCommandKeyEnabled(builtIn);
+  });
   const sessionScope = sessionCfg?.scope ?? "per-sender";
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
 

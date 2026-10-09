@@ -1,9 +1,9 @@
 /**
  * In-box command policy.
  *
- * This fork keeps only commands it owns. Those (`/lifecycle`, `/channel`, `/secret`,
- * `/connections`) are handled host-side by the Discord router and never enter the
- * auto-reply pipeline, so the in-box pipeline enables nothing by default.
+ * This fork keeps only commands it owns. Those (`/lifecycle`, `/channel`, `/secret`) are
+ * handled host-side by the Discord router and never enter the auto-reply pipeline, so the
+ * in-box pipeline enables nothing by default.
  *
  * A command that is not enabled here must behave exactly like an unknown `/word`: it is
  * not registered natively, not recognized as a text command, not parsed as an inline
