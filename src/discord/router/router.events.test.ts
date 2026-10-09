@@ -284,6 +284,29 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
   });
 
+  it("redacts a pasted /connections token from the MESSAGE_CREATE log", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "connect-msg-1",
+      author: { id: "444444444444444444" },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/connections add github ghp_SUPERSECRETVALUE",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The generic MESSAGE_CREATE log must never carry the token; logs persist.
+    expect(logs.some((l) => l.includes("ghp_SUPERSECRETVALUE"))).toBe(false);
+    expect(logs.some((l) => l.includes("content=/connections add github <redacted>"))).toBe(true);
+  });
+
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
     // OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS lets an E2E driver bot exercise the
     // unauthorized-access denial: unlike a trusted conversational bot it does not

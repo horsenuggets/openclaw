@@ -490,11 +490,17 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       const inst = instances.get(channelId);
       return inst ? getConnection(inst.instanceDir, connectorId) : null;
     },
-    save: (channelId, connection) => {
+    // The instance dir is the stable identity: it changes (or disappears) when a
+    // channel is unregistered or re-registered, which is exactly what the save
+    // guard below needs to detect across a slow token validation.
+    instanceKey: (channelId) => instances.get(channelId)?.instanceDir ?? null,
+    save: (channelId, connection, expectedKey) => {
       const inst = instances.get(channelId);
-      if (inst) {
-        saveConnection(inst.instanceDir, connection);
+      if (!inst || inst.instanceDir !== expectedKey) {
+        return false;
       }
+      saveConnection(inst.instanceDir, connection);
+      return true;
     },
     remove: (channelId, connectorId) => {
       const inst = instances.get(channelId);

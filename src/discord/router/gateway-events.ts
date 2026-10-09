@@ -195,8 +195,19 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     }
   }
 
+  // Redact a pasted token before it reaches the logs. `/connections add <svc>
+  // <token>` carries a secret in the message body; the message is scrubbed from
+  // Discord moments later, but router logs persist, so the token must never be
+  // written here. Any other content is truncated as before.
+  const loggableContent = (() => {
+    const parsed = parseConnectTextCommand(content);
+    if (parsed && connectTextCommandHasToken(parsed)) {
+      return `/connections add ${parsed.args[0]} <redacted>`;
+    }
+    return content.slice(0, 60);
+  })();
   runtime.log(
-    `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${content.slice(0, 60)}`,
+    `[router] MESSAGE_CREATE: author=${authorId} guild=${guildId ?? "dm"} reply=${!!ref} attachments=${rawAttachments.length} content=${loggableContent}`,
   );
 
   // `/channel` management commands must work even when the channel is

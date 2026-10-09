@@ -78,14 +78,21 @@ describe("connectTextCommandHasToken", () => {
 const CHANNEL = "123456789012345678";
 const USER = "111111111111111111";
 
+const INSTANCE_KEY = "instance-dir-key";
+
 /** In-memory store. `registered: false` makes every method behave as "no instance". */
 function makeStore(registered = true, seed: StoredConnection[] = []) {
   const map = new Map<string, StoredConnection>(seed.map((c) => [c.connectorId, c]));
   const store: ConnectionStore = {
     list: () => (registered ? [...map.values()] : null),
     get: (_c, id) => (registered ? (map.get(id) ?? null) : null),
-    save: (_c, connection) => {
+    instanceKey: () => (registered ? INSTANCE_KEY : null),
+    save: (_c, connection, expectedKey) => {
+      if (!registered || expectedKey !== INSTANCE_KEY) {
+        return false;
+      }
       map.set(connection.connectorId, connection);
+      return true;
     },
     remove: (_c, id) => map.delete(id),
   };
@@ -352,6 +359,27 @@ describe("handleConnectCommand add", () => {
     const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], { scrubCommandMessage });
     await handleConnectCommand(ctx, makeDeps({ registry: makeRegistry(validate) }));
     expect(embedOf(replies[0].payload).description).not.toContain("delete it manually");
+  });
+
+  it("does not report success if the instance changes during validation", async () => {
+    // Simulate the channel being unregistered/re-registered while the token was
+    // being validated: the snapshotted key no longer matches, so `save` refuses.
+    const map = new Map<string, StoredConnection>();
+    const store: ConnectionStore = {
+      list: () => [...map.values()],
+      get: (_c, id) => map.get(id) ?? null,
+      instanceKey: () => "key-at-snapshot",
+      // Always reject: stands in for the instance key having moved on.
+      save: () => false,
+      remove: (_c, id) => map.delete(id),
+    };
+    const validate = vi.fn(async (): Promise<AuthResult> => ({ ok: true }));
+    const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"]);
+    await handleConnectCommand(ctx, makeDeps({ store, registry: makeRegistry(validate) }));
+    expect(map.size).toBe(0); // nothing persisted
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).not.toBe("Connected!");
+    expect(embed.description).toContain("registration changed");
   });
 
   it("stores the token when the connector's auth confirms it", async () => {

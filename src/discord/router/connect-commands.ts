@@ -91,7 +91,21 @@ export type ConnectionStore = {
   /** All connections for the channel, or null when the channel is not registered. */
   list: (channelId: string) => StoredConnection[] | null;
   get: (channelId: string, connectorId: string) => StoredConnection | null;
-  save: (channelId: string, connection: StoredConnection) => void;
+  /**
+   * A stable identity for the channel's current instance (e.g. its instance dir),
+   * or null when the channel is not registered. Snapshotted before a slow token
+   * validation so {@link ConnectionStore.save} can detect the channel being
+   * unregistered or re-registered to a different instance in the meantime.
+   */
+  instanceKey: (channelId: string) => string | null;
+  /**
+   * Persist a connection, but only if the channel still maps to the instance
+   * identified by `expectedKey`. Returns false (writing nothing) when the channel
+   * is no longer registered or now points at a different instance, so the caller
+   * never reports success after silently dropping the token or writing it into a
+   * different owner's instance.
+   */
+  save: (channelId: string, connection: StoredConnection, expectedKey: string) => boolean;
   remove: (channelId: string, connectorId: string) => boolean;
 };
 
@@ -306,7 +320,12 @@ export async function handleConnectCommand(
       );
       return;
     }
-    if (deps.store.list(ctx.channelId) === null) {
+    // Snapshot the channel's instance identity now, before the (possibly slow)
+    // token validation. `save` below requires it to still match, so a channel
+    // unregistered or re-registered to a different instance during validation
+    // fails instead of silently dropping the token or writing it elsewhere.
+    const instanceKey = deps.store.instanceKey(ctx.channelId);
+    if (instanceKey === null) {
       await ctx.reply(connectionsReply("Connect", withScrubNote(NOT_REGISTERED)), {
         ephemeral: true,
       });
@@ -347,7 +366,28 @@ export async function handleConnectCommand(
       deps.log(`[connect] ${connector.id} validation failed for ${ctx.userId}`);
       return;
     }
-    saveLinked(deps, ctx.channelId, connector.id, result.token ?? token, result.accountLabel);
+    const saved = saveLinked(
+      deps,
+      ctx.channelId,
+      connector.id,
+      result.token ?? token,
+      result.accountLabel,
+      instanceKey,
+    );
+    if (!saved) {
+      await ctx.reply(
+        connectionsReply(
+          `Link ${connector.label}`,
+          withScrubNote(
+            "This channel's registration changed while I was verifying the token, so I did not " +
+              `store it. Please run \`/connections add ${connector.id} <token>\` again.`,
+          ),
+        ),
+        { ephemeral: true },
+      );
+      deps.log(`[connect] ${connector.id} save skipped for ${ctx.userId} (instance changed)`);
+      return;
+    }
     await ctx.reply(
       connectionsReply(
         "Connected!",
@@ -403,19 +443,24 @@ export async function handleConnectCommand(
   );
 }
 
-/** Persist a successful link. */
+/** Persist a successful link; returns false if the instance changed under us. */
 function saveLinked(
   deps: ConnectCommandDeps,
   channelId: string,
   connectorId: string,
   token: string,
-  accountLabel?: string,
-): void {
-  deps.store.save(channelId, {
-    connectorId,
-    status: "linked",
-    token,
-    ...(accountLabel ? { accountLabel } : {}),
-    linkedAt: (deps.now?.() ?? new Date()).toISOString(),
-  });
+  accountLabel: string | undefined,
+  expectedKey: string,
+): boolean {
+  return deps.store.save(
+    channelId,
+    {
+      connectorId,
+      status: "linked",
+      token,
+      ...(accountLabel ? { accountLabel } : {}),
+      linkedAt: (deps.now?.() ?? new Date()).toISOString(),
+    },
+    expectedKey,
+  );
 }
