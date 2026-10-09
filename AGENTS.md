@@ -305,8 +305,6 @@
   integrate latest changes (never discard other agents' work). When the user says
   "commit", scope to your changes only. When the user says "commit all", commit everything
   in grouped chunks.
-- **Multi-agent safety:** do **not** create/remove/modify `git worktree` checkouts (or
-  edit `.worktrees/*`) unless explicitly requested.
 - **Multi-agent safety:** do **not** switch branches / check out a different branch unless
   explicitly requested.
 - **Multi-agent safety:** running multiple agents is OK as long as each agent has its own

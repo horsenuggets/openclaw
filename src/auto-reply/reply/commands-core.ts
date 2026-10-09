@@ -6,6 +6,7 @@ import type {
 import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { shouldHandleTextCommands } from "../commands-registry.js";
 import { handleAllowlistCommand } from "./commands-allowlist.js";
 import { handleApproveCommand } from "./commands-approve.js";
@@ -34,38 +35,54 @@ import { handleSubagentsCommand } from "./commands-subagents.js";
 import { handleTtsCommands } from "./commands-tts.js";
 import { routeReply } from "./route-reply.js";
 
-let HANDLERS: CommandHandler[] | null = null;
+/**
+ * Built-in handlers paired with the command keys they implement. A handler runs only if
+ * the command policy enables at least one of its keys; plugin commands (no key) always
+ * run. Keeping the pairing here means a handler cannot stay live after its command is
+ * disabled.
+ */
+// Built lazily: some handler modules import back into this one, so reading them at module
+// load would see undefined bindings.
+function listHandlerEntries(): Array<{ keys: string[]; handler: CommandHandler }> {
+  return [
+    // Plugin commands are processed first, before built-in commands
+    { keys: [], handler: handlePluginCommand },
+    { keys: ["bash"], handler: handleBashCommand },
+    { keys: ["toolfeedback"], handler: handleToolFeedbackCommand },
+    { keys: ["activation"], handler: handleActivationCommand },
+    { keys: ["send"], handler: handleSendPolicyCommand },
+    { keys: ["usage"], handler: handleUsageCommand },
+    { keys: ["restart"], handler: handleRestartCommand },
+    { keys: ["tts"], handler: handleTtsCommands },
+    { keys: ["help"], handler: handleHelpCommand },
+    { keys: ["commands"], handler: handleCommandsListCommand },
+    { keys: ["status"], handler: handleStatusCommand },
+    { keys: ["allowlist"], handler: handleAllowlistCommand },
+    { keys: ["approve"], handler: handleApproveCommand },
+    { keys: ["context"], handler: handleContextCommand },
+    { keys: ["whoami"], handler: handleWhoamiCommand },
+    { keys: ["subagents"], handler: handleSubagentsCommand },
+    { keys: ["config"], handler: handleConfigCommand },
+    { keys: ["debug"], handler: handleDebugCommand },
+    { keys: ["models"], handler: handleModelsCommand },
+    { keys: ["stop"], handler: handleStopCommand },
+    { keys: ["compact"], handler: handleCompactCommand },
+    { keys: ["stop"], handler: handleAbortTrigger },
+  ];
+}
+
+export function listEnabledCommandHandlers(): CommandHandler[] {
+  return listHandlerEntries()
+    .filter(
+      ({ keys, handler }) =>
+        handler === handlePluginCommand || keys.some((key) => isCommandKeyEnabled(key)),
+    )
+    .map(({ handler }) => handler);
+}
 
 export async function handleCommands(params: HandleCommandsParams): Promise<CommandHandlerResult> {
-  if (HANDLERS === null) {
-    HANDLERS = [
-      // Plugin commands are processed first, before built-in commands
-      handlePluginCommand,
-      handleBashCommand,
-      handleToolFeedbackCommand,
-      handleActivationCommand,
-      handleSendPolicyCommand,
-      handleUsageCommand,
-      handleRestartCommand,
-      handleTtsCommands,
-      handleHelpCommand,
-      handleCommandsListCommand,
-      handleStatusCommand,
-      handleAllowlistCommand,
-      handleApproveCommand,
-      handleContextCommand,
-      handleWhoamiCommand,
-      handleSubagentsCommand,
-      handleConfigCommand,
-      handleDebugCommand,
-      handleModelsCommand,
-      handleStopCommand,
-      handleCompactCommand,
-      handleAbortTrigger,
-    ];
-  }
   const resetMatch = params.command.commandBodyNormalized.match(/^\/(new|reset)(?:\s|$)/);
-  const resetRequested = Boolean(resetMatch);
+  const resetRequested = Boolean(resetMatch) && isCommandKeyEnabled(resetMatch?.[1] ?? "");
   if (resetRequested && !params.command.isAuthorizedSender) {
     logVerbose(
       `Ignoring /reset from unauthorized sender: ${params.command.senderId || "<unknown>"}`,
@@ -114,7 +131,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
     commandSource: params.ctx.CommandSource,
   });
 
-  for (const handler of HANDLERS) {
+  for (const handler of listEnabledCommandHandlers()) {
     const result = await handler(params, allowTextCommands);
     if (result) {
       return result;

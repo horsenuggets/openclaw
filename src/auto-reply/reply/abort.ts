@@ -16,6 +16,7 @@ import {
 import { logVerbose } from "../../globals.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { resolveCommandAuthorization } from "../command-auth.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { normalizeCommandBody } from "../commands-registry.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { clearSessionQueues } from "./queue.js";
@@ -24,7 +25,8 @@ const ABORT_TRIGGERS = new Set(["stop", "esc", "abort", "wait", "exit", "interru
 const ABORT_MEMORY = new Map<string, boolean>();
 
 export function isAbortTrigger(text?: string): boolean {
-  if (!text) {
+  // Bare-word triggers ("stop", "esc", ...) are the "stop" command in plain language.
+  if (!text || !isCommandKeyEnabled("stop")) {
     return false;
   }
   const normalized = text.trim().toLowerCase();
@@ -147,7 +149,8 @@ export async function tryFastAbortFromMessage(params: {
   const isGroup = ctx.ChatType?.trim().toLowerCase() === "group";
   const stripped = isGroup ? stripMentions(raw, ctx, cfg, agentId) : raw;
   const normalized = normalizeCommandBody(stripped);
-  const abortRequested = normalized === "/stop" || isAbortTrigger(stripped);
+  const abortRequested =
+    (normalized === "/stop" && isCommandKeyEnabled("stop")) || isAbortTrigger(stripped);
   if (!abortRequested) {
     return { handled: false, aborted: false };
   }

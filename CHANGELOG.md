@@ -12,6 +12,17 @@ Docs: https://docs.openclaw.ai
   memory-lancedb) along with their docs, skills, labeler entries, and lockfile packages.
   Discord, memory-core, the other built-in channel plugins, and the provider auth plugins
   stay.
+- Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
+  non-owner gets the same "not authorized to use this channel's agent" notice a plain
+  message earns, delivered as an ephemeral reply only they can see (the notice wording
+  lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
+  check. `/channel` keeps its own admin/owner rules.
+- In-box command policy: the auto-reply pipeline now enables no slash commands by default
+  (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
+  `/word` and reaches the model as plain text across every surface: native registration,
+  text commands, inline directives (`/think`, `/model`, `/queue`, ...), bare-word abort
+  triggers (`stop`, `esc`, ...), `/new` and `/reset` triggers, and per-skill commands. The
+  host-side `/lifecycle`, `/channel`, and `/secret` commands are unaffected.
 - Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
 - System prompt: the agent prompt's prose now comes from a single Markdown source,
   `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a
@@ -45,6 +56,19 @@ Docs: https://docs.openclaw.ai
   that moves any `$HOME`-relative dirs an instance wrote while `HOME` was `/state` (tool
   caches/creds and the canvas dir under `state/.openclaw`) into the new `home/` mount so
   nothing is orphaned by the `HOME` switch.
+- Agent box image: the per-channel agent container is now built from a thin
+  `agent.Dockerfile` (`ubuntu:24.04` plus `git` and `ca-certificates`) instead of raw
+  `ubuntu:24.04`, so the agent's workspace is a real git repo it can commit to. A generic
+  system git identity (`OpenClaw Agent <agent@openclaw.local>`) is baked in so commits
+  work without per-box configuration. `agent.yml` carries a `build:` stanza (so a local
+  `compose up` can build it), but deploy pre-builds and tags the image in `setup.sh`
+  before it tears down the running stack, so a network-dependent build flake aborts with
+  the old router and agents still up instead of taking them offline; deploy also ships
+  `agent.Dockerfile` next to `agent.yml`. The prod-mirror image likewise gains `git`,
+  since host-side `openclaw setup` `git init`s the workspace. `ensureAgentWorkspace` now
+  backfills a `.git` into any existing workspace that is not already a repo (not just
+  brand-new ones), so channels seeded before git was available become committable on their
+  next turn; `git init` is non-destructive and never touches the existing files.
 - Discord: new `/secret` slash command hands the agent a sensitive value without it ever
   appearing in the channel. The command opens a private modal (popup) that collects a
   secret value plus an optional name; on submit the value is delivered out-of-band to that

@@ -15,10 +15,12 @@ FROM ubuntu:24.04
 
 # Ubuntu + Docker Engine (dockerd + compose plugin) to match the prod host, plus
 # python3 (boot.sh/openclawctl use it), openssh-server (deploy.sh ships over ssh
-# and the mint tunnel terminates here), and iproute2 for host-net tooling.
+# and the mint tunnel terminates here), iproute2 for host-net tooling, and git
+# (openclawctl seed_workspace runs `openclaw setup` host-side, which `git init`s
+# the agent workspace — a real prod host likewise needs git available).
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg python3 openssh-server iproute2 \
+    ca-certificates curl gnupg python3 openssh-server iproute2 git \
   && install -m 0755 -d /etc/apt/keyrings \
   && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
   && chmod a+r /etc/apt/keyrings/docker.asc \

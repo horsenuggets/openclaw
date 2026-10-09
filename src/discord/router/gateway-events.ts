@@ -30,6 +30,7 @@ import {
   sanitizeSecretName,
   secretReminderMessage,
 } from "./secret-command.js";
+import { buildUnauthorizedNoticeText, replyUnauthorizedEphemeral } from "./unauthorized-notice.js";
 
 /**
  * The closed-over router state a gateway DISPATCH handler needs. Assembled once
@@ -91,6 +92,8 @@ type SlashInteractionData = {
   channel_id: string;
   token: string;
   guild_id?: string;
+  /** The interaction's channel object; `type` 1 = DM, 3 = group DM. */
+  channel?: { type?: number };
   data?: { name?: string; options?: unknown };
   member?: { user?: { id?: string } };
   user?: { id?: string };
@@ -122,6 +125,9 @@ type ModalSubmitData = {
   member?: { user?: { id?: string } };
   user?: { id?: string };
 };
+
+/** Discord channel type for a 1:1 DM. */
+const DM_CHANNEL_TYPE = 1;
 
 /** Discord channel type for a multi-participant group DM (no owner to gate on). */
 const GROUP_DM_CHANNEL_TYPE = 3;
@@ -321,11 +327,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
         if (unauthorizedNoticeEnabled) {
-          const ownerId = status?.ownerId;
-          const notice = ownerId
-            ? `Sorry, but this channel (<#${channelId}>) is registered under user <@${ownerId}>. Unfortunately, you are not authorized to use this channel's agent.`
-            : `Sorry, but you are not authorized to use this channel's agent (<#${channelId}>).`;
-          const embed = buildLogEmbed(notice);
+          const embed = buildLogEmbed(buildUnauthorizedNoticeText(channelId, status?.ownerId));
           // A plain user message carries no interaction token, so a true
           // ephemeral reply is impossible. Post a persistent Log embed threaded
           // under the offending message instead. Suppress all mentions so the
@@ -354,7 +356,8 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
  * ~3s window, then edits the deferred reply with the result.
  */
 export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionData): void {
-  const { applicationId, runtime, instances, channelGuild, channelCommandDeps } = ctx;
+  const { applicationId, runtime, instances, channelGuild, channelCommandDeps, describeInstance } =
+    ctx;
 
   const interactionData = d.data;
   const interactionChannelId = d.channel_id;
@@ -396,21 +399,65 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       .catch((err) => runtime.error(`[router] interaction response failed: ${String(err)}`));
   };
 
+  // Owner gate for the commands that act on a channel's agent (/lifecycle, /secret).
+  // In a guild channel only the registered owner may proceed; anyone else gets the
+  // standard unauthorized notice as an ephemeral reply, the same wording a plain
+  // message earns. A 1:1 DM is inherently with its owner, so it passes untouched.
+  // (/channel is exempt: it manages registration itself and has its own admin and
+  // owner rules, and it must work on channels that have no owner yet.)
+  const runForOwner = (channelId: string, proceed: () => void) => {
+    // Fail closed: only an explicit 1:1 DM skips the gate. A group DM has several
+    // participants and no guild id, and a payload without channel metadata is
+    // never trusted to be a 1:1 DM.
+    if (!d.guild_id && d.channel?.type === DM_CHANNEL_TYPE) {
+      proceed();
+      return;
+    }
+    const userId = d.member?.user?.id ?? d.user?.id ?? "";
+    const status = describeInstance(channelId);
+    void isAuthorizedForChannel(channelId, userId, { describeInstance: () => status }).then(
+      (allowed) => {
+        if (allowed) {
+          proceed();
+          return;
+        }
+        runtime.log(
+          `[router] denied /${interactionData?.name} from ${userId} in channel ${channelId} (not the channel owner)`,
+        );
+        void replyUnauthorizedEphemeral({
+          applicationId,
+          interactionId,
+          interactionToken,
+          channelId,
+          ownerId: status?.ownerId,
+          runtime,
+        });
+      },
+    );
+  };
+
   // The /secret command opens a modal (popup) so the secret value is entered
   // privately and never appears in the channel. The submission arrives later as
   // a separate MODAL_SUBMIT interaction, handled by handleModalSubmit.
   if (interactionData?.name === "secret") {
-    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: 9, data: buildSecretModal() }),
-    })
-      .then((resp) => {
-        if (!resp.ok) {
-          runtime.error(`[router] secret modal open failed (${resp.status})`);
-        }
+    const openModal = () =>
+      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: 9, data: buildSecretModal() }),
       })
-      .catch((err) => runtime.error(`[router] secret modal open failed: ${String(err)}`));
+        .then((resp) => {
+          if (!resp.ok) {
+            runtime.error(`[router] secret modal open failed (${resp.status})`);
+          }
+        })
+        .catch((err) => runtime.error(`[router] secret modal open failed: ${String(err)}`));
+    // An unregistered channel has no owner to gate on; the modal submit reports it.
+    if (interactionChannelId && instances.get(interactionChannelId)) {
+      runForOwner(interactionChannelId, openModal);
+    } else {
+      openModal();
+    }
     return;
   }
 
@@ -421,48 +468,50 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       return;
     }
 
-    const current = instance.preferences.lifecycleMessages ?? false;
-    const setting = (
-      interactionData.options as Array<{ name: string; value: string }> | undefined
-    )?.find((o: { name: string }) => o.name === "setting")?.value;
+    runForOwner(interactionChannelId, () => {
+      const current = instance.preferences.lifecycleMessages ?? false;
+      const setting = (
+        interactionData.options as Array<{ name: string; value: string }> | undefined
+      )?.find((o: { name: string }) => o.name === "setting")?.value;
 
-    const result = resolveLifecycleCommand(current, setting);
-    if (result.newValue !== undefined) {
-      setUserPreference(instance, "lifecycleMessages", result.newValue);
-    }
-    const built = buildCommandResultEmbed(result.description, result.state);
-    // Defer ephemerally, then edit with the uploaded footer icon (the command
-    // result embed needs the attachment-aware editor, like the /channel flow).
-    // The edit must wait for the defer to land, or the @original PATCH can race
-    // ahead of the response being created and fail.
-    void (async () => {
-      try {
-        const deferResp = await fetch(
-          `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: 5, data: { flags: 64 } }),
-          },
-        );
-        if (!deferResp.ok) {
-          runtime.error(`[router] lifecycle defer failed (${deferResp.status})`);
-          return;
-        }
-        const res = await editInteractionEmbedReply(applicationId, interactionToken, {
-          embeds: [built.embed],
-          attachments: built.attachments,
-        });
-        if (!res.ok) {
-          runtime.error(`[router] lifecycle command result failed (${res.status})`);
-        }
-      } catch (err) {
-        runtime.error(`[router] lifecycle command result failed: ${String(err)}`);
+      const result = resolveLifecycleCommand(current, setting);
+      if (result.newValue !== undefined) {
+        setUserPreference(instance, "lifecycleMessages", result.newValue);
       }
-    })();
-    runtime.log(
-      `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${result.state}`,
-    );
+      const built = buildCommandResultEmbed(result.description, result.state);
+      // Defer ephemerally, then edit with the uploaded footer icon (the command
+      // result embed needs the attachment-aware editor, like the /channel flow).
+      // The edit must wait for the defer to land, or the @original PATCH can race
+      // ahead of the response being created and fail.
+      void (async () => {
+        try {
+          const deferResp = await fetch(
+            `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+            },
+          );
+          if (!deferResp.ok) {
+            runtime.error(`[router] lifecycle defer failed (${deferResp.status})`);
+            return;
+          }
+          const res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: [built.embed],
+            attachments: built.attachments,
+          });
+          if (!res.ok) {
+            runtime.error(`[router] lifecycle command result failed (${res.status})`);
+          }
+        } catch (err) {
+          runtime.error(`[router] lifecycle command result failed: ${String(err)}`);
+        }
+      })();
+      runtime.log(
+        `[router] lifecycle for channel ${interactionChannelId}: setting=${setting ?? "status"} result=${result.state}`,
+      );
+    });
   }
 
   if (interactionData?.name === "channel" && interactionChannelId) {
@@ -557,7 +606,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
  * guild channels, since it injects a turn into someone's agent.
  */
 export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void {
-  const { runtime, instances, channelQueue, channelGuild, describeInstance } = ctx;
+  const { applicationId, runtime, instances, channelQueue, channelGuild, describeInstance } = ctx;
   const interactionId = d.id;
   const interactionToken = d.token;
   const channelId = d.channel_id;
@@ -618,7 +667,17 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
     void isAuthorizedForChannel(channelId, userId, { describeInstance: () => status }).then(
       (allowed) => {
         if (!allowed) {
-          ack("You are not authorized to hand this channel's agent a secret.");
+          runtime.log(
+            `[router] denied /secret from ${userId} in channel ${channelId} (not the channel owner)`,
+          );
+          void replyUnauthorizedEphemeral({
+            applicationId,
+            interactionId,
+            interactionToken,
+            channelId,
+            ownerId: status?.ownerId,
+            runtime,
+          });
           return;
         }
         deliver();

@@ -8,6 +8,7 @@ import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "..
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import type { TypingController } from "./typing.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { listChatCommands, shouldHandleTextCommands } from "../commands-registry.js";
 import { listSkillCommandsForWorkspace } from "../skill-commands.js";
 import { resolveBlockStreamingChunking } from "./block-streaming.js";
@@ -300,7 +301,7 @@ export async function resolveReplyDirectives(params: {
     return `${head}${cleanedTail}`;
   })();
 
-  if (allowStatusDirective) {
+  if (allowStatusDirective && isCommandKeyEnabled("status")) {
     cleanedBody = stripInlineStatus(cleanedBody).cleaned;
   }
 
