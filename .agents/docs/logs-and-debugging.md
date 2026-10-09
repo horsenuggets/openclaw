@@ -9,8 +9,10 @@ identifiers (channel ids, host) from the running environment; none are hardcoded
 Each agent writes a JSONL transcript per session under
 `~/.openclaw/agents/<agentId>/sessions/<sessionId>.jsonl` (session paths are rooted at
 `OPENCLAW_STATE_DIR`, which `agent.yml` sets to `/state` in deployed boxes, separate from
-`HOME`). Each line is a JSON entry; assistant content blocks are `thinking`, `text`, or
-`tool_use`. Useful fields » `stopReason` (`stop` normal, `error` killed or crashed,
+`HOME`). Each line is a JSON entry; assistant content blocks are normalized Pi blocks
+(reasoning/`thinking`, `text`, and tool-call entries such as `toolCall`), not Anthropic's
+wire-level `tool_use`. Useful fields » `stopReason` (`stop` normal; `error` for any failed
+turn, including killed or crashed processes and provider, auth, or rate-limit failures;
 `max_tokens`) and `errorMessage` (for example "CLI exited with code 143" is a SIGTERM).
 Sort by mtime for the most recent session. Note that a heartbeat turn does not reliably
 get its own session » The current runner resolves an unset `heartbeat.session` to the main
