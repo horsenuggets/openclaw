@@ -266,8 +266,8 @@ operational notes. Read it before making changes.
 - Never edit `node_modules/`, including global, Homebrew, npm, and git installs, because
   updates overwrite it; put skill notes in `tools.md` or `AGENTS.md` instead.
 - Signal "update fly" means running
-  `fly ssh console -a flawd-bot -C "bash -lc 'cd /data/clawd/openclaw && git pull --rebase origin main'"`
-  and then `fly machines restart e825232f34d058 -a flawd-bot`.
+  `fly ssh console -a <fly-app> -C "bash -lc 'cd <deploy-path> && git pull --rebase origin main'"`
+  and then `fly machines restart <machine-id> -a <fly-app>`.
 - When working on a GitHub issue or PR, print the full URL at the end of the task.
 - When answering questions, give high-confidence answers only » Verify in code and do not
   guess.
