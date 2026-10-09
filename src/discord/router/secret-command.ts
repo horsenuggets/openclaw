@@ -195,16 +195,20 @@ export function secretReminderMessage(name: string): string {
 /**
  * Build the "secret received" success embed (Secrets category). The name is a
  * sanitized label, never the value, so it is safe to show. Rendered when a
- * submission is accepted and handed to the channel's agent.
+ * submission is accepted and queued for the channel's agent. The wording says
+ * "queued for delivery" rather than "delivered" because the ack is sent as soon
+ * as the turn is enqueued; the actual write into the agent box happens when that
+ * turn runs and can still fail, so claiming completed delivery here would be a
+ * false guarantee.
  */
 export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
   return buildEmbed({
     category: "secrets",
     title: "Secret Received!",
     description:
-      `The secret \`${name}\` was successfully received and securely handed to ` +
-      `this channel's OpenClaw agent. Keep in mind that secrets are temporary and ` +
-      `they can be overwritten.`,
+      `The secret \`${name}\` was received and queued for delivery to this ` +
+      `channel's OpenClaw agent. Keep in mind that secrets are temporary and they ` +
+      `can be overwritten.`,
   });
 }
 
