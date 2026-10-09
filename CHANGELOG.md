@@ -39,6 +39,13 @@ Docs: https://docs.openclaw.ai
   that moves any `$HOME`-relative dirs an instance wrote while `HOME` was `/state` (tool
   caches/creds and the canvas dir under `state/.openclaw`) into the new `home/` mount so
   nothing is orphaned by the `HOME` switch.
+- Agent box image: the per-channel agent container is now built from a thin
+  `agent.Dockerfile` (`ubuntu:24.04` plus `git` and `ca-certificates`) instead of raw
+  `ubuntu:24.04`, so the agent's workspace is a real git repo it can commit to. A generic
+  system git identity (`OpenClaw Agent <agent@openclaw.local>`) is baked in so commits
+  work without per-box configuration. `agent.yml` builds the image on first `up` (compose
+  caches it) and deploy now ships `agent.Dockerfile` next to `agent.yml`; the prod-mirror
+  image also gains `git` since host-side `openclaw setup` `git init`s the workspace.
 - Discord: new `/secret` slash command hands the agent a sensitive value without it ever
   appearing in the channel. The command opens a private modal (popup) that collects a
   secret value plus an optional name; on submit the value is delivered out-of-band to that
