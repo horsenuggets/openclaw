@@ -126,6 +126,9 @@ type ModalSubmitData = {
   user?: { id?: string };
 };
 
+/** Discord channel type for a 1:1 DM. */
+const DM_CHANNEL_TYPE = 1;
+
 /** Discord channel type for a multi-participant group DM (no owner to gate on). */
 const GROUP_DM_CHANNEL_TYPE = 3;
 
@@ -403,8 +406,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
   // (/channel is exempt: it manages registration itself and has its own admin and
   // owner rules, and it must work on channels that have no owner yet.)
   const runForOwner = (channelId: string, proceed: () => void) => {
-    // A group DM has several participants but no guild id, so it is gated like a guild.
-    if (!d.guild_id && d.channel?.type !== GROUP_DM_CHANNEL_TYPE) {
+    // Fail closed: only an explicit 1:1 DM skips the gate. A group DM has several
+    // participants and no guild id, and a payload without channel metadata is
+    // never trusted to be a 1:1 DM.
+    if (!d.guild_id && d.channel?.type === DM_CHANNEL_TYPE) {
       proceed();
       return;
     }

@@ -1129,7 +1129,7 @@ describe("discord router channel-delete cleanup", () => {
       command: "lifecycle" | "secret";
       userId: string;
       guild: boolean;
-      groupDm?: boolean;
+      dmType?: number | null;
       ownerKnown: boolean;
     }) => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
@@ -1166,7 +1166,10 @@ describe("discord router channel-delete cleanup", () => {
           channel_id: CHANNEL,
           ...(params.guild ? { guild_id: GUILD, member: { user: { id: params.userId } } } : {}),
           ...(params.guild ? {} : { user: { id: params.userId } }),
-          ...(params.groupDm ? { channel: { type: 3 } } : {}),
+          // A 1:1 DM by default; null drops the channel object entirely.
+          ...(params.guild || params.dmType === null
+            ? {}
+            : { channel: { type: params.dmType ?? 1 } }),
           data: { name: params.command },
         });
         for (let i = 0; i < 5; i++) {
@@ -1225,7 +1228,19 @@ describe("discord router channel-delete cleanup", () => {
           command,
           userId: STRANGER,
           guild: false,
-          groupDm: true,
+          dmType: 3,
+          ownerKnown: true,
+        });
+        expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
+        expect(patches[0]?.embeds?.[0]?.description).toContain("not authorized");
+      });
+
+      it(`denies a stranger running ${command} when the channel metadata is missing`, async () => {
+        const { callbacks, patches } = await runInteraction({
+          command,
+          userId: STRANGER,
+          guild: false,
+          dmType: null,
           ownerKnown: true,
         });
         expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
