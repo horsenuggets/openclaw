@@ -30,7 +30,7 @@ Gateway-owned pairing.
 
 ### Prerequisites
 
-- You can run the Gateway on the “master” machine.
+- You can run the Gateway on the "master" machine.
 - Android device/emulator can reach the gateway WebSocket:
   - Same LAN with mDNS/NSD, **or**
   - Same Tailscale tailnet using Wide-Area Bonjour / unicast DNS-SD (see below), **or**

@@ -175,7 +175,7 @@ Debugging:
 - Use `openclaw sandbox explain` to inspect effective sandbox mode, tool policy, and
   fix-it config keys.
 - See [Sandbox vs Tool Policy vs Elevated](/gateway/sandbox-vs-tool-policy-vs-elevated)
-  for the “why is this blocked?” mental model. Keep it locked down.
+  for the "why is this blocked?" mental model. Keep it locked down.
 
 ## Multi-agent overrides
 

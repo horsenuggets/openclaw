@@ -160,7 +160,7 @@ Low-level (raw RPC):
 openclaw nodes invoke --node <idOrNameOrIp> --command canvas.eval --params '{"javaScript":"location.href"}'
 ```
 
-Higher-level helpers exist for the common “give the agent a MEDIA attachment” workflows.
+Higher-level helpers exist for the common "give the agent a MEDIA attachment" workflows.
 
 ## Screenshots (canvas snapshots)
 
@@ -258,7 +258,7 @@ openclaw nodes location get --node <idOrNameOrIp> --accuracy precise --max-age 1
 Notes:
 
 - Location is **off by default**.
-- “Always” requires system permission; background fetch is best-effort.
+- "Always" requires system permission; background fetch is best-effort.
 - The response includes lat/lon, accuracy (meters), and timestamp.
 
 ## SMS (Android nodes)

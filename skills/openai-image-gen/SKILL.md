@@ -27,7 +27,7 @@ metadata:
 
 # OpenAI Image Gen
 
-Generate a handful of “random but structured” prompts and render them via the OpenAI
+Generate a handful of "random but structured" prompts and render them via the OpenAI
 Images API.
 
 ## Run

@@ -226,7 +226,7 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
         "- /context detail (per-file + per-tool + per-skill + system prompt size)",
         "- /context json   (same, machine-readable)",
         "",
-        "Inline shortcut = a command token inside a normal message (e.g. “hey /status”). It runs immediately (allowlisted senders only) and is stripped before the model sees the remaining text.",
+        'Inline shortcut = a command token inside a normal message (e.g. "hey /status"). It runs immediately (allowlisted senders only) and is stripped before the model sees the remaining text.',
       ].join("\n"),
     };
   }
@@ -337,7 +337,7 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
         "",
         totalsLine,
         "",
-        "Inline shortcut: a command token inside normal text (e.g. “hey /status”) that runs immediately (allowlisted senders only) and is stripped before the model sees the remaining message.",
+        'Inline shortcut: a command token inside normal text (e.g. "hey /status") that runs immediately (allowlisted senders only) and is stripped before the model sees the remaining message.',
       ]
         .filter(Boolean)
         .join("\n"),
@@ -363,7 +363,7 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
       "",
       totalsLine,
       "",
-      "Inline shortcut: a command token inside normal text (e.g. “hey /status”) that runs immediately (allowlisted senders only) and is stripped before the model sees the remaining message.",
+      'Inline shortcut: a command token inside normal text (e.g. "hey /status") that runs immediately (allowlisted senders only) and is stripped before the model sees the remaining message.',
     ].join("\n"),
   };
 }

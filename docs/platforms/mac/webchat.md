@@ -17,7 +17,7 @@ switcher for other sessions).
 
 ## Launch & debugging
 
-- Manual: Lobster menu → “Open Chat”.
+- Manual: Lobster menu → "Open Chat".
 - Auto‑open for testing:
   ```bash
   dist/OpenClaw.app/Contents/MacOS/OpenClaw --webchat

@@ -123,7 +123,7 @@ To target a specific Gateway or agent:
 }
 ```
 
-In Zed, open the Agent panel and select “OpenClaw ACP” to start a thread.
+In Zed, open the Agent panel and select "OpenClaw ACP" to start a thread.
 
 ## Session mapping
 

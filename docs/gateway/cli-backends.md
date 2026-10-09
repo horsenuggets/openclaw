@@ -18,7 +18,7 @@ down, rate-limited, or temporarily misbehaving. This is intentionally conservati
 - **Images can be passed through** if the CLI accepts image paths.
 
 This is designed as a **safety net** rather than a primary path. Use it when you want
-“always works” text responses without relying on external APIs.
+"always works" text responses without relying on external APIs.
 
 ## Beginner-friendly quick start
 

@@ -29,7 +29,7 @@ MiniMax highlights these improvements in M2.1:
 
 ## MiniMax M2.1 vs MiniMax M2.1 Lightning
 
-- **Speed:** Lightning is the “fast” variant in MiniMax's pricing docs.
+- **Speed:** Lightning is the "fast" variant in MiniMax's pricing docs.
 - **Cost:** Pricing shows the same input cost, but Lightning has higher output cost.
 - **Coding plan routing:** The Lightning back-end isn't directly available on the MiniMax
   coding plan. MiniMax auto-routes most requests to Lightning, but falls back to the
@@ -193,7 +193,7 @@ Use the interactive config wizard to set MiniMax without editing JSON:
 
 ## Troubleshooting
 
-### “Unknown model: minimax/MiniMax-M2.1”
+### "Unknown model: minimax/MiniMax-M2.1"
 
 This usually means the **MiniMax provider isn't configured** (no provider entry and no
 MiniMax auth profile/env key found). A fix for this detection is in **2026.1.12**

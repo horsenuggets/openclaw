@@ -46,7 +46,7 @@ Minimal config:
 - DMs share the agent's main session; groups are isolated
   (`agent:<agentId>:imessage:group:<chat_id>`).
 - If a multi-participant thread arrives with `is_group=false`, you can still isolate it by
-  `chat_id` using `channels.imessage.groups` (see “Group-ish threads” below).
+  `chat_id` using `channels.imessage.groups` (see "Group-ish threads" below).
 
 ## Config writes
 
@@ -251,7 +251,7 @@ Some iMessage threads can have multiple participants but still arrive with
 `is_group=false` depending on how Messages stores the chat identifier.
 
 If you explicitly configure a `chat_id` under `channels.imessage.groups`, OpenClaw treats
-that thread as a “group” for:
+that thread as a "group" for:
 
 - session isolation (separate `agent:<agentId>:imessage:group:<chat_id>` session key)
 - group allowlisting / mention gating behavior

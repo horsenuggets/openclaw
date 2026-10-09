@@ -65,13 +65,13 @@ are presenting selectable choices.
 
 If you must ask, use non-technical prompts:
 
-- “Are you using a Mac, Windows PC, or Linux?”
-- “Are you logged in directly on the machine, or connecting from another computer?”
-- “Is this machine reachable from the public internet, or only on your home/network?”
-- “Do you have backups enabled (e.g., Time Machine), and are they current?”
-- “Is disk encryption turned on (FileVault/BitLocker/LUKS)?”
-- “Are automatic security updates enabled?”
-- “How do you use this machine?” Examples:
+- "Are you using a Mac, Windows PC, or Linux?"
+- "Are you logged in directly on the machine, or connecting from another computer?"
+- "Is this machine reachable from the public internet, or only on your home/network?"
+- "Do you have backups enabled (e.g., Time Machine), and are they current?"
+- "Is disk encryption turned on (FileVault/BitLocker/LUKS)?"
+- "Are automatic security updates enabled?"
+- "How do you use this machine?" Examples:
   - Personal machine shared with the assistant
   - Dedicated local machine for the assistant
   - Dedicated remote machine/server accessed remotely (always on)
@@ -213,8 +213,8 @@ issues can be fixed.
 After any audit or hardening pass, explicitly offer scheduling and require a direct
 response. Use a short prompt like (numbered):
 
-1. “Do you want me to schedule periodic audits (e.g., daily/weekly) via
-   `openclaw cron add`?”
+1. "Do you want me to schedule periodic audits (e.g., daily/weekly) via
+   `openclaw cron add`?"
 
 If the user says yes, ask for:
 

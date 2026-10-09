@@ -13,7 +13,7 @@ tagging/publishing.
 
 ## Operator trigger
 
-When the operator says “release”, immediately do this preflight (no extra questions unless
+When the operator says "release", immediately do this preflight (no extra questions unless
 blocked):
 
 - Read this doc and `docs/platforms/mac/release.md`.

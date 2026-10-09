@@ -18,7 +18,7 @@ There are two related systems:
 - **Directives**: `/think`, `/verbose`, `/reasoning`, `/elevated`, `/exec`, `/model`,
   `/queue`.
   - Directives are stripped from the message before the model sees it.
-  - In normal chat messages (not directive-only), they are treated as “inline hints” and
+  - In normal chat messages (not directive-only), they are treated as "inline hints" and
     do **not** persist session settings.
   - In directive-only messages (the message contains only directives), they persist to the
     session and reply with an acknowledgement.
@@ -84,7 +84,7 @@ Text + native (when enabled):
   provider when available)
 - `/allowlist` (list/add/remove allowlist entries)
 - `/approve <id> allow-once|allow-always|deny` (resolve exec approval prompts)
-- `/context [list|detail|json]` (explain “context”; `detail` shows per-file + per-tool +
+- `/context [list|detail|json]` (explain "context"; `detail` shows per-file + per-tool +
   per-skill + system prompt size)
 - `/whoami` (show your sender id; alias: `/id`)
 - `/subagents list|stop|log|info|send` (inspect, stop, log, or message sub-agent runs for
@@ -170,7 +170,7 @@ Notes:
 
 ## Usage surfaces (what shows where)
 
-- **Provider usage/quota** (example: “Claude 80% left”) shows up in `/status` for the
+- **Provider usage/quota** (example: "Claude 80% left") shows up in `/status` for the
   current model provider when usage tracking is enabled.
 - **Per-response tokens/cost** is controlled by `/usage off|tokens|full` (appended to
   normal replies).

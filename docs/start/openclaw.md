@@ -54,8 +54,8 @@ Your Phone (personal)          Second Phone (assistant)
                               └─────────────────┘
 ```
 
-If you link your personal WhatsApp to OpenClaw, every message to you becomes “agent
-input”. That's rarely what you want.
+If you link your personal WhatsApp to OpenClaw, every message to you becomes "agent
+input". That's rarely what you want.
 
 ## 5-minute quick start
 
@@ -86,14 +86,14 @@ tokenized link. To reopen later: `openclaw dashboard`.
 
 ## Give the agent a workspace (AGENTS)
 
-OpenClaw reads operating instructions and “memory” from its workspace directory.
+OpenClaw reads operating instructions and "memory" from its workspace directory.
 
 By default, OpenClaw uses `~/.openclaw/workspace` as the agent workspace, and will create
 it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`)
 automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace
 is brand new (it should not come back after you delete it).
 
-Tip: treat this folder like OpenClaw's “memory” and make it a git repo (ideally private)
+Tip: treat this folder like OpenClaw's "memory" and make it a git repo (ideally private)
 so your `AGENTS.md` + memory files are backed up. If git is installed, brand-new
 workspaces are auto-initialized.
 
@@ -125,7 +125,7 @@ creation entirely:
 }
 ```
 
-## The config that turns it into “an assistant”
+## The config that turns it into "an assistant"
 
 OpenClaw defaults to a good assistant setup, but you'll usually want to tune:
 

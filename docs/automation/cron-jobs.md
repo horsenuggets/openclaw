@@ -15,7 +15,7 @@ title: "Cron Jobs"
 Cron is the Gateway's built-in scheduler. It persists jobs, wakes the agent at the right
 time, and can optionally deliver output back to a chat.
 
-If you want *“run this every morning”* or *“poke the agent in 20 minutes”*, cron is the
+If you want *"run this every morning"* or *"poke the agent in 20 minutes"*, cron is the
 mechanism.
 
 ## TL;DR
@@ -26,7 +26,7 @@ mechanism.
   - **Main session**: enqueue a system event, then run on the next heartbeat.
   - **Isolated**: run a dedicated agent turn in `cron:<jobId>`, with delivery (announce by
     default or none).
-- Wakeups are first-class: a job can request “wake now” vs “next heartbeat”.
+- Wakeups are first-class: a job can request "wake now" vs "next heartbeat".
 
 ## Quick start (actionable)
 
@@ -228,7 +228,7 @@ Isolated jobs can deliver output to a channel via the top-level `delivery` confi
 Delivery config is only valid for isolated jobs (`sessionTarget: "isolated"`).
 
 If `delivery.channel` or `delivery.to` is omitted, cron can fall back to the main
-session's “last route” (the last place the agent replied).
+session's "last route" (the last place the agent replied).
 
 Target format reminders:
 
@@ -466,7 +466,7 @@ openclaw system event --mode now --text "Next heartbeat: check battery."
 
 ## Troubleshooting
 
-### “Nothing runs”
+### "Nothing runs"
 
 - Check cron is enabled: `cron.enabled` and `OPENCLAW_SKIP_CRON`.
 - Check the Gateway is running continuously (cron runs inside the Gateway process).
@@ -475,5 +475,5 @@ openclaw system event --mode now --text "Next heartbeat: check battery."
 ### Telegram delivers to the wrong place
 
 - For forum topics, use `-100…:topic:<id>` so it's explicit and unambiguous.
-- If you see `telegram:...` prefixes in logs or stored “last route” targets, that's
+- If you see `telegram:...` prefixes in logs or stored "last route" targets, that's
   normal; cron delivery accepts them and still parses topic IDs correctly.

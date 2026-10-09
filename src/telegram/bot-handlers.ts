@@ -774,7 +774,7 @@ export const registerTelegramHandlers = ({
       }
 
       // Text fragment handling - Telegram splits long pastes into multiple inbound messages (~4096 chars).
-      // We buffer “near-limit” messages and append immediately-following parts.
+      // We buffer "near-limit" messages and append immediately-following parts.
       const text = typeof msg.text === "string" ? msg.text : undefined;
       const isCommandLike = (text ?? "").trim().startsWith("/");
       if (text && !isCommandLike) {

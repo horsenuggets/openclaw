@@ -93,7 +93,7 @@ Example: switch to Perplexity Sonar (direct API):
 ## Getting a Brave API key
 
 1. Create a Brave Search API account at https://brave.com/search/api/
-2. In the dashboard, choose the **Data for Search** plan (not “Data for AI”) and generate
+2. In the dashboard, choose the **Data for Search** plan (not "Data for AI") and generate
    an API key.
 3. Run `openclaw configure --section web` to store the key in config (recommended), or set
    `BRAVE_API_KEY` in your environment.

@@ -671,7 +671,7 @@ extension OnboardingView {
                         Text(
                             "Tip: edit AGENTS.md in this folder to shape the assistant's behavior. " +
                                 "For backup, make the workspace a private git repo so your agent's " +
-                                "“memory” is versioned.")
+                                "\"memory\" is versioned.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)

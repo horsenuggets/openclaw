@@ -170,7 +170,7 @@ Doctor checks:
   persist history and avoid `ENOENT` crashes.
 - **Transcript mismatch**: warns when recent session entries have missing transcript
   files.
-- **Main session “1-line JSONL”**: flags when the main transcript has only one line
+- **Main session "1-line JSONL"**: flags when the main transcript has only one line
   (history is not accumulating).
 - **Multiple state dirs**: warns when multiple `~/.openclaw` folders exist across home
   directories or when `OPENCLAW_STATE_DIR` points elsewhere (history can split between

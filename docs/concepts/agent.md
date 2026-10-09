@@ -27,7 +27,7 @@ per-session workspaces under `agents.defaults.sandbox.workspaceRoot` (see
 
 Inside `agents.defaults.workspace`, OpenClaw expects these user-editable files:
 
-- `AGENTS.md` — operating instructions + “memory”
+- `AGENTS.md` — operating instructions + "memory"
 - `SOUL.md` — persona, boundaries, tone
 - `TOOLS.md` — user-maintained tool notes (e.g. `imsg`, `sag`, conventions)
 - `BOOTSTRAP.md` — one-time first-run ritual (deleted after completion)
@@ -44,7 +44,7 @@ re-enable injecting it (see [Configuration](/gateway/configuration)).
 Blank files are skipped. Large files are trimmed and truncated with a marker so prompts
 stay lean (read the file for full content).
 
-If a file is missing, OpenClaw injects a single “missing file” marker line (and
+If a file is missing, OpenClaw injects a single "missing file" marker line (and
 `openclaw setup` will create a safe default template).
 
 `BOOTSTRAP.md` is only created for a **brand new workspace** (no other bootstrap files

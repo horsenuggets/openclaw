@@ -2,7 +2,7 @@
 summary: "Troubleshooting hub: symptoms → checks → fixes"
 read_when:
   - You see an error and want the fix path
-  - The installer says “success” but the CLI doesn't work
+  - The installer says "success" but the CLI doesn't work
 title: "Troubleshooting"
 ---
 
@@ -26,7 +26,7 @@ If the gateway is reachable, deep probes:
 openclaw status --deep
 ```
 
-## Common “it broke” cases
+## Common "it broke" cases
 
 ### `openclaw: command not found`
 
@@ -50,7 +50,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash -s -- --beta --verbose
 
 You can also set `OPENCLAW_VERBOSE=1` instead of the flag.
 
-### Gateway “unauthorized”, can't connect, or keeps reconnecting
+### Gateway "unauthorized", can't connect, or keeps reconnecting
 
 - [Gateway troubleshooting](/gateway/troubleshooting)
 - [Gateway authentication](/gateway/authentication)
@@ -74,7 +74,7 @@ Disable Advanced Security or add `docs.openclaw.ai` to the allowlist, then retry
 - [Gateway troubleshooting](/gateway/troubleshooting)
 - [Background process / service](/gateway/background-process)
 
-### Model/auth failures (rate limit, billing, “all models failed”)
+### Model/auth failures (rate limit, billing, "all models failed")
 
 - [Models](/cli/models)
 - [OAuth / auth concepts](/concepts/oauth)

@@ -29,7 +29,7 @@ cd apps/android
 
 ## Connect / Pair
 
-1. Start the gateway (on your “master” machine):
+1. Start the gateway (on your "master" machine):
 
 ```bash
 pnpm openclaw gateway --port 18789 --verbose

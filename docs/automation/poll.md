@@ -69,6 +69,6 @@ Params:
 Use the `message` tool with `poll` action (`to`, `pollQuestion`, `pollOption`, optional
 `pollMulti`, `pollDurationHours`, `channel`).
 
-Note: Discord has no “pick exactly N” mode; `pollMulti` maps to multi-select. Teams polls
+Note: Discord has no "pick exactly N" mode; `pollMulti` maps to multi-select. Teams polls
 are rendered as Adaptive Cards and require the gateway to stay online to record votes in
 `~/.openclaw/msteams-polls.json`.

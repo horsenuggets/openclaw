@@ -134,7 +134,7 @@ like `react`, `readMessages`, `editMessage` use `channelId` directly. **Note:**
 - Post a quick poll for release decisions or meeting times.
 - Send celebratory stickers after successful deploys.
 - Upload new emojis/stickers for release moments.
-- Run weekly “priority check” polls in team channels.
+- Run weekly "priority check" polls in team channels.
 - DM stickers as acknowledgements when a user's request is completed.
 
 ## Action gating

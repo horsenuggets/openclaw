@@ -8,7 +8,7 @@ struct GatewayDiscoveryDebugLogView: View {
     var body: some View {
         List {
             if !self.debugLogsEnabled {
-                Text("Enable “Discovery Debug Logs” to start collecting events.")
+                Text("Enable \"Discovery Debug Logs\" to start collecting events.")
                     .foregroundStyle(.secondary)
             }
 

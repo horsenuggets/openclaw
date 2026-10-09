@@ -128,7 +128,7 @@ On the **new** machine:
 openclaw doctor
 ```
 
-Doctor is the “safe boring” command. It repairs services, applies config migrations, and
+Doctor is the "safe boring" command. It repairs services, applies config migrations, and
 warns about mismatches.
 
 Then:

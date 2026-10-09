@@ -97,7 +97,7 @@ openclaw browser extension install
 openclaw browser extension path
 ```
 
-Then Chrome → `chrome://extensions` → enable “Developer mode” → “Load unpacked” → select
+Then Chrome → `chrome://extensions` → enable "Developer mode" → "Load unpacked" → select
 the printed folder.
 
 Full guide: [Chrome extension](/tools/chrome-extension)

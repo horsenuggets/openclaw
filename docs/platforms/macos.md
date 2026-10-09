@@ -107,7 +107,7 @@ Example:
 Notes:
 
 - `allowlist` entries are glob patterns for resolved binary paths.
-- Choosing “Always Allow” in the prompt adds that command to the allowlist.
+- Choosing "Always Allow" in the prompt adds that command to the allowlist.
 - `system.run` environment overrides are filtered (drops `PATH`, `DYLD_*`, `LD_*`,
   `NODE_OPTIONS`, `PYTHON*`, `PERL*`, `RUBYOPT`) and then merged with the app's
   environment.
@@ -172,7 +172,7 @@ Connect options:
 
 Discovery options:
 
-- `--include-local`: include gateways that would be filtered as “local”
+- `--include-local`: include gateways that would be filtered as "local"
 - `--timeout <ms>`: overall discovery window (default: `2000`)
 - `--json`: structured output for diffing
 

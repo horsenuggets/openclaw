@@ -25,7 +25,7 @@ the actual grant.
   can request upgrade, but OS may require Settings.
 - Android: background location is a separate permission; on Android 10+ it often requires
   a Settings flow.
-- Precise location is a separate grant (iOS 14+ “Precise”, Android “fine” vs “coarse”).
+- Precise location is a separate grant (iOS 14+ "Precise", Android "fine" vs "coarse").
 
 Selector in UI drives our requested mode; actual grant lives in OS settings.
 
@@ -114,7 +114,7 @@ Notes:
 
 ## UX copy (suggested)
 
-- Off: “Location sharing is disabled.”
-- While Using: “Only when OpenClaw is open.”
-- Always: “Allow background location. Requires system permission.”
-- Precise: “Use precise GPS location. Toggle off to share approximate location.”
+- Off: "Location sharing is disabled."
+- While Using: "Only when OpenClaw is open."
+- Always: "Allow background location. Requires system permission."
+- Precise: "Use precise GPS location. Toggle off to share approximate location."

@@ -3,7 +3,7 @@ summary:
   "Deep dive: session store + transcripts, lifecycle, and (auto)compaction internals"
 read_when:
   - You need to debug session ids, transcript JSONL, or sessions.json fields
-  - You are changing auto-compaction behavior or adding “pre-compaction” housekeeping
+  - You are changing auto-compaction behavior or adding "pre-compaction" housekeeping
   - You want to implement memory flushes or silent system turns
 title: "Session Management Deep Dive"
 ---
@@ -35,7 +35,7 @@ OpenClaw is designed around a single **Gateway process** that owns session state
 
 - UIs (macOS app, web Control UI, TUI) should query the Gateway for session lists and
   token counts.
-- In remote mode, session files are on the remote host; “checking your local Mac files”
+- In remote mode, session files are on the remote host; "checking your local Mac files"
   won't reflect what the Gateway is using.
 
 ---
@@ -153,7 +153,7 @@ Notable entry types:
 - `compaction`: persisted compaction summary with `firstKeptEntryId` and `tokensBefore`
 - `branch_summary`: persisted summary when navigating a tree branch
 
-OpenClaw intentionally does **not** “fix up” transcripts; the Gateway uses
+OpenClaw intentionally does **not** "fix up" transcripts; the Gateway uses
 `SessionManager` to read/write them.
 
 ---
@@ -231,7 +231,7 @@ OpenClaw also enforces a safety floor for embedded runs:
 - Set `agents.defaults.compaction.reserveTokensFloor: 0` to disable the floor.
 - If it's already higher, OpenClaw leaves it alone.
 
-Why: leave enough headroom for multi-turn “housekeeping” (like memory writes) before
+Why: leave enough headroom for multi-turn "housekeeping" (like memory writes) before
 compaction becomes unavoidable.
 
 Implementation: `ensurePiCompactionReserveTokens()` in `src/agents/pi-settings.ts` (called
@@ -252,13 +252,13 @@ You can observe compaction and session state via:
 
 ## Silent housekeeping (silent-reply token)
 
-OpenClaw supports “silent” turns for background tasks where the user should not see
+OpenClaw supports "silent" turns for background tasks where the user should not see
 intermediate output.
 
 Convention:
 
-- The assistant starts its output with `⁘ return` to indicate “do not deliver a reply to
-  the user”.
+- The assistant starts its output with `⁘ return` to indicate "do not deliver a reply to
+  the user".
 - OpenClaw strips/suppresses this in the delivery layer.
 
 As of `2026.1.10`, OpenClaw also suppresses **draft/typing streaming** when a partial
@@ -266,7 +266,7 @@ chunk begins with `⁘ return`, so silent operations don't leak partial output m
 
 ---
 
-## Pre-compaction “memory flush” (implemented)
+## Pre-compaction "memory flush" (implemented)
 
 Goal: before auto-compaction happens, run a silent agentic turn that writes durable state
 to disk (e.g. `memory/YYYY-MM-DD.md` in the agent workspace) so compaction can't erase
@@ -275,8 +275,8 @@ critical context.
 OpenClaw uses the **pre-threshold flush** approach:
 
 1. Monitor session context usage.
-2. When it crosses a “soft threshold” (below Pi's compaction threshold), run a silent
-   “write memory now” directive to the agent.
+2. When it crosses a "soft threshold" (below Pi's compaction threshold), run a silent
+   "write memory now" directive to the agent.
 3. Use `⁘ return` so the user sees nothing.
 
 Config (`agents.defaults.compaction.memoryFlush`):

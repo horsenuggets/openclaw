@@ -23,10 +23,10 @@ Quick triage commands (in order):
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | `openclaw status`                  | Local summary: OS + update, gateway reachability/mode, service, agents/sessions, provider config state | First check, quick overview                       |
 | `openclaw status --all`            | Full local diagnosis (read-only, pasteable, safe-ish) incl. log tail                                   | When you need to share a debug report             |
-| `openclaw status --deep`           | Runs gateway health checks (incl. provider probes; requires reachable gateway)                         | When “configured” doesn't mean “working”          |
+| `openclaw status --deep`           | Runs gateway health checks (incl. provider probes; requires reachable gateway)                         | When "configured" doesn't mean "working"          |
 | `openclaw gateway probe`           | Gateway discovery + reachability (local + remote targets)                                              | When you suspect you're probing the wrong gateway |
 | `openclaw channels status --probe` | Asks the running gateway for channel status (and optionally probes)                                    | When gateway is reachable but channels misbehave  |
-| `openclaw gateway status`          | Supervisor state (launchd/systemd/schtasks), runtime PID/exit, last gateway error                      | When the service “looks loaded” but nothing runs  |
+| `openclaw gateway status`          | Supervisor state (launchd/systemd/schtasks), runtime PID/exit, last gateway error                      | When the service "looks loaded" but nothing runs  |
 | `openclaw logs --follow`           | Live logs (best signal for runtime issues)                                                             | When you need the actual failure reason           |
 
 **Sharing output:** prefer `openclaw status --all` (it redacts tokens). If you paste
@@ -101,7 +101,7 @@ This means `detect-secrets` found new candidates not yet in the baseline. Follow
 ### Service Installed but Nothing is Running
 
 If the gateway service is installed but the process exits immediately, the service can
-appear “loaded” while nothing is running.
+appear "loaded" while nothing is running.
 
 **Check:**
 
@@ -210,7 +210,7 @@ Gateway likely refused to bind.
   is alive.
 - `RPC probe` means the CLI could actually connect to the gateway WebSocket and call
   `status`.
-- Always trust `Probe target:` + `Config (service):` as the “what did we actually try?”
+- Always trust `Probe target:` + `Config (service):` as the "what did we actually try?"
   lines.
 
 **Check:**
@@ -241,7 +241,7 @@ Gateway likely refused to bind.
 - Fix: run `openclaw doctor` to update it (or `openclaw gateway install --force` for a
   full rewrite).
 
-**If `Last gateway error:` mentions “refusing to bind … without auth”**
+**If `Last gateway error:` mentions "refusing to bind … without auth"**
 
 - You set `gateway.bind` to a non-loopback mode (`lan`/`tailnet`/`custom`, or `auto` when
   loopback is unavailable) but didn't configure auth.
@@ -485,7 +485,7 @@ OpenClaw keeps conversation history in memory.
 
 ## Common troubleshooting
 
-### “Gateway won't start — configuration invalid”
+### "Gateway won't start — configuration invalid"
 
 OpenClaw now refuses to start when the config contains unknown keys, malformed values, or
 invalid types. This is intentional for safety.
@@ -505,7 +505,7 @@ Notes:
   `openclaw gateway status`, and `openclaw gateway probe` still run even if the config is
   invalid.
 
-### “All models failed” — what should I check first?
+### "All models failed" — what should I check first?
 
 - **Credentials** present for the provider(s) being tried (auth profiles + env vars).
 - **Model routing**: confirm `agents.defaults.model.primary` and fallbacks are models you

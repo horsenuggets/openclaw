@@ -22,7 +22,7 @@ title: "Usage Tracking"
 - CLI: `openclaw status --usage` prints a full per-provider breakdown.
 - CLI: `openclaw channels list` prints the same usage snapshot alongside provider config
   (use `--no-usage` to skip).
-- macOS menu bar: “Usage” section under Context (only if available).
+- macOS menu bar: "Usage" section under Context (only if available).
 
 ## Providers + credentials
 

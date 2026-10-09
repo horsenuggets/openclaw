@@ -9,7 +9,7 @@ title: "Streaming and Chunking"
 
 # Streaming + chunking
 
-OpenClaw has two separate “streaming” layers:
+OpenClaw has two separate "streaming" layers:
 
 - **Block streaming (channels):** emit completed **blocks** as the assistant writes. These
   are normal channel messages (not token deltas).
@@ -78,7 +78,7 @@ caps.
 ## Coalescing (merge streamed blocks)
 
 When block streaming is enabled, OpenClaw can **merge consecutive block chunks** before
-sending them out. This reduces “single-line spam” while still providing progressive
+sending them out. This reduces "single-line spam" while still providing progressive
 output.
 
 - Coalescing waits for **idle gaps** (`idleMs`) before flushing.
@@ -102,7 +102,7 @@ When block streaming is enabled, you can add a **randomized pause** between bloc
 - Modes: `off` (default), `natural` (800–2500ms), `custom` (`minMs`/`maxMs`).
 - Applies only to **block replies**, not final replies or tool summaries.
 
-## “Stream chunks or everything”
+## "Stream chunks or everything"
 
 This maps to:
 

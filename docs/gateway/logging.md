@@ -10,7 +10,7 @@ title: "Logging"
 
 For a user-facing overview (CLI + Control UI + config), see [/logging](/logging).
 
-OpenClaw has two log “surfaces”:
+OpenClaw has two log "surfaces":
 
 - **Console output** (what you see in the terminal / Debug UI).
 - **File logs** (JSON lines) written by the gateway logger.
@@ -67,7 +67,7 @@ console stream. This is **tools-only** and does not alter file logs.
 
 The gateway prints WebSocket protocol logs in two modes:
 
-- **Normal mode (no `--verbose`)**: only “interesting” RPC results are printed:
+- **Normal mode (no `--verbose`)**: only "interesting" RPC results are printed:
   - errors (`ok=false`)
   - slow calls (default threshold: `>= 50ms`)
   - parse errors

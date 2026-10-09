@@ -82,7 +82,7 @@ Shared options (where supported):
 - `--token <token>`: Gateway token.
 - `--password <password>`: Gateway password.
 - `--timeout <ms>`: timeout/budget (varies per command).
-- `--expect-final`: wait for a “final” response (agent calls).
+- `--expect-final`: wait for a "final" response (agent calls).
 
 Note: when you set `--url`, the CLI does not fall back to config or environment
 credentials. Pass `--token` or `--password` explicitly. Missing explicit credentials is an
@@ -115,7 +115,7 @@ Options:
 
 ### `gateway probe`
 
-`gateway probe` is the “debug everything” command. It always probes:
+`gateway probe` is the "debug everything" command. It always probes:
 
 - your configured remote gateway (if set), and
 - localhost (loopback) **even if remote is configured**.
@@ -131,7 +131,7 @@ openclaw gateway probe --json
 
 #### Remote over SSH (Mac app parity)
 
-The macOS app “Remote over SSH” mode uses a local port-forward so the remote gateway
+The macOS app "Remote over SSH" mode uses a local port-forward so the remote gateway
 (which may be bound to loopback only) becomes reachable at `ws://127.0.0.1:<port>`.
 
 CLI equivalent:

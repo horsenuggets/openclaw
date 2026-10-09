@@ -60,7 +60,7 @@ Model refs are normalized to lowercase. Provider aliases like `z.ai/*` normalize
 Provider configuration examples (including OpenCode Zen) live in
 [/gateway/configuration](/gateway/configuration#opencode-zen-multi-model-proxy).
 
-## “Model is not allowed” (and why replies stop)
+## "Model is not allowed" (and why replies stop)
 
 If `agents.defaults.models` is set, it becomes the **allowlist** for `/model` and for
 session overrides. When a user selects a model that isn't in that allowlist, OpenClaw
@@ -71,7 +71,7 @@ Model "provider/model" is not allowed. Use /model to list available models.
 ```
 
 This happens **before** a normal reply is generated, so the message can feel like it
-“didn't respond.” The fix is to either:
+"didn't respond." The fix is to either:
 
 - Add the model to `agents.defaults.models`, or
 - Clear the allowlist (remove `agents.defaults.models`), or

@@ -96,7 +96,7 @@ Notes:
 - `metadata` should be a **single-line JSON object**.
 - Use `{baseDir}` in instructions to reference the skill folder path.
 - Optional frontmatter keys:
-  - `homepage` — URL surfaced as “Website” in the macOS Skills UI (also supported via
+  - `homepage` — URL surfaced as "Website" in the macOS Skills UI (also supported via
     `metadata.openclaw.homepage`).
   - `user-invocable` — `true|false` (default: `true`). When `true`, the skill is exposed
     as a user slash command.
@@ -135,7 +135,7 @@ Fields under `metadata.openclaw`:
 
 - `always: true` — always include the skill (skip other gates).
 - `emoji` — optional emoji used by the macOS Skills UI.
-- `homepage` — optional URL shown as “Website” in the macOS Skills UI.
+- `homepage` — optional URL shown as "Website" in the macOS Skills UI.
 - `os` — optional list of platforms (`darwin`, `linux`, `win32`). If set, the skill is
   only eligible on those OSes.
 - `requires.bins` — list; each must exist on `PATH`.

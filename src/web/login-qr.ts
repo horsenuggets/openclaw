@@ -122,7 +122,7 @@ export async function startWebLoginWithQr(
   if (hasWeb && !opts.force) {
     const who = selfId.e164 ?? selfId.jid ?? "unknown";
     return {
-      message: `WhatsApp is already linked (${who}). Say “relink” if you want a fresh QR.`,
+      message: `WhatsApp is already linked (${who}). Say "relink" if you want a fresh QR.`,
     };
   }
 
@@ -243,7 +243,7 @@ export async function waitForWebLogin(
     if (remaining <= 0) {
       return {
         connected: false,
-        message: "Still waiting for the QR scan. Let me know when you’ve scanned it.",
+        message: "Still waiting for the QR scan. Let me know when you've scanned it.",
       };
     }
     const timeout = new Promise<"timeout">((resolve) =>
@@ -254,7 +254,7 @@ export async function waitForWebLogin(
     if (result === "timeout") {
       return {
         connected: false,
-        message: "Still waiting for the QR scan. Let me know when you’ve scanned it.",
+        message: "Still waiting for the QR scan. Let me know when you've scanned it.",
       };
     }
 

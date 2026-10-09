@@ -64,7 +64,7 @@ Minimal config:
 7. Direct chats: secure by default via `channels.discord.dm.policy` (default:
    `"pairing"`). Unknown senders get a pairing code (expires after 1 hour); approve via
    `openclaw pairing approve discord <code>`.
-   - To keep old “open to anyone” behavior: set `channels.discord.dm.policy="open"` and
+   - To keep old "open to anyone" behavior: set `channels.discord.dm.policy="open"` and
      `channels.discord.dm.allowFrom=["*"]`.
    - To hard-allowlist: set `channels.discord.dm.policy="allowlist"` and list senders in
      `channels.discord.dm.allowFrom`.
@@ -111,7 +111,7 @@ Disable with:
 
 ## How to create your own bot
 
-This is the “Discord Developer Portal” setup for running OpenClaw in a server (guild)
+This is the "Discord Developer Portal" setup for running OpenClaw in a server (guild)
 channel like `#help`.
 
 ### 1) Create the Discord app + bot user
@@ -123,12 +123,12 @@ channel like `#help`.
 
 ### 2) Enable the gateway intents OpenClaw needs
 
-Discord blocks “privileged intents” unless you explicitly enable them.
+Discord blocks "privileged intents" unless you explicitly enable them.
 
 In **Bot** → **Privileged Gateway Intents**, enable:
 
 - **Message Content Intent** (required to read message text in most guilds; without it
-  you'll see “Used disallowed intents” or the bot will connect but not react to messages)
+  you'll see "Used disallowed intents" or the bot will connect but not react to messages)
 - **Server Members Intent** (recommended; required for some member/user lookups and
   allowlist matching in guilds)
 
@@ -197,7 +197,7 @@ for the shared pattern.
 
 #### Allowlist + channel routing
 
-Example “single server, only allow me, only allow #help”:
+Example "single server, only allow me, only allow #help":
 
 ```json5
 {
@@ -258,7 +258,7 @@ Notes:
 
 - First: run `openclaw doctor` and `openclaw channels status --probe` (actionable
   warnings + quick audits).
-- **“Used disallowed intents”**: enable **Message Content Intent** (and likely **Server
+- **"Used disallowed intents"**: enable **Message Content Intent** (and likely **Server
   Members Intent**) in the Developer Portal, then restart the gateway.
 - **Bot connects but never replies in a guild channel**:
   - Missing **Message Content Intent**, or
@@ -544,7 +544,7 @@ Native command notes:
 - Native commands honor the same allowlists as DMs/guild messages
   (`channels.discord.dm.allowFrom`, `channels.discord.guilds`, per-channel rules).
 - Slash commands may still be visible in Discord UI to users who aren't allowlisted;
-  OpenClaw enforces allowlists on execution and replies “not authorized”.
+  OpenClaw enforces allowlists on execution and replies "not authorized".
 
 ## Tool actions
 

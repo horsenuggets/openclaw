@@ -58,7 +58,7 @@ longer retention, re‑capture from the client.
 
 ## Troubleshooting
 
-- If `peekaboo` reports “bridge client is not authorized”, ensure the client is properly
+- If `peekaboo` reports "bridge client is not authorized", ensure the client is properly
   signed or run the host with `PEEKABOO_ALLOW_UNSIGNED_SOCKET_CLIENTS=1` in **debug** mode
   only.
 - If no hosts are found, open one of the host apps (Peekaboo.app or OpenClaw.app) and

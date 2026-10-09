@@ -16,7 +16,7 @@ Author: steipete · Updated: 2025-12-06 · Scope: macOS app (`apps/macos`)
   `earBoostActive=true` while the utterance is captured. Ears scale up (1.9x), get
   circular ear holes for readability, then drop via `stopVoiceEars()` after 1s of silence.
   Only fired from the in-app voice pipeline.
-- **Working (agent running):** `AppState.isWorking=true` drives a “tail/leg scurry”
+- **Working (agent running):** `AppState.isWorking=true` drives a "tail/leg scurry"
   micro-motion: faster leg wiggle and slight offset while work is in-flight. Currently
   toggled around WebChat agent runs; add the same toggle around other long tasks when you
   wire them.

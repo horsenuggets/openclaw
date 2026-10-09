@@ -1024,7 +1024,7 @@ extension MenuSessionsInjector {
         Task { @MainActor in
             guard SessionActions.confirmDestructiveAction(
                 title: "Reset session?",
-                message: "Starts a new session id for “\(key)”.",
+                message: "Starts a new session id for \"\(key)\".",
                 action: "Reset")
             else { return }
 
@@ -1062,7 +1062,7 @@ extension MenuSessionsInjector {
         Task { @MainActor in
             guard SessionActions.confirmDestructiveAction(
                 title: "Delete session?",
-                message: "Deletes the “\(key)” entry and archives its transcript.",
+                message: "Deletes the \"\(key)\" entry and archives its transcript.",
                 action: "Delete")
             else { return }
 

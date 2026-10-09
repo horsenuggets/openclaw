@@ -36,7 +36,7 @@ LLM call. It does **not** rewrite the on-disk session history (`*.jsonl`).
 - **Why the TTL reset matters:** once pruning runs, the cache window resets, so follow‑up
   requests can reuse the freshly cached prompt instead of re-caching the full history
   again.
-- **What it does not do:** pruning doesn't add tokens or “double” costs; it only changes
+- **What it does not do:** pruning doesn't add tokens or "double" costs; it only changes
   what gets cached on that first post‑TTL request.
 
 ## What can be pruned

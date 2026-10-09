@@ -14,7 +14,7 @@ Slack, Signal, iMessage, Microsoft Teams.
 
 ## Beginner intro (2 minutes)
 
-OpenClaw “lives” on your own messaging accounts. There is no separate WhatsApp bot user.
+OpenClaw "lives" on your own messaging accounts. There is no separate WhatsApp bot user.
 If **you** are in a group, OpenClaw can see that group and respond there.
 
 Default behavior:
@@ -63,7 +63,7 @@ If you want...
 
 ## Pattern: personal DMs + public groups (single agent)
 
-Yes — this works well if your “personal” traffic is **DMs** and your “public” traffic is
+Yes — this works well if your "personal" traffic is **DMs** and your "public" traffic is
 **groups**.
 
 Why: in single-agent mode, DMs typically land in the **main** session key
@@ -71,12 +71,12 @@ Why: in single-agent mode, DMs typically land in the **main** session key
 (`agent:main:<channel>:group:<id>`). If you enable sandboxing with `mode: "non-main"`,
 those group sessions run in Docker while your main DM session stays on-host.
 
-This gives you one agent “brain” (shared workspace + memory), but two execution postures:
+This gives you one agent "brain" (shared workspace + memory), but two execution postures:
 
 - **DMs**: full tools (host)
 - **Groups**: sandbox + restricted tools (Docker)
 
-> If you need truly separate workspaces/personas (“personal” and “public” must never mix),
+> If you need truly separate workspaces/personas ("personal" and "public" must never mix),
 > use a second agent + bindings. See [Multi-Agent Routing](/concepts/multi-agent).
 
 Example (DMs on host, groups sandboxed + messaging-only tools):
@@ -104,7 +104,7 @@ Example (DMs on host, groups sandboxed + messaging-only tools):
 }
 ```
 
-Want “groups can only see folder X” instead of “no host access”? Keep
+Want "groups can only see folder X" instead of "no host access"? Keep
 `workspaceAccess: "none"` and mount only allowlisted paths into the sandbox:
 
 ```json5

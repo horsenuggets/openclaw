@@ -57,7 +57,7 @@ The Gateway machine must have the `zca` binary available in `PATH`.
 
 - Uses `zca listen` to receive inbound messages.
 - Uses `zca msg ...` to send replies (text/media/link).
-- Designed for “personal account” use cases where Zalo Bot API is not available.
+- Designed for "personal account" use cases where Zalo Bot API is not available.
 
 ## Naming
 

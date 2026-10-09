@@ -47,7 +47,7 @@
 - README (GitHub): keep absolute docs URLs (`https://docs.openclaw.ai/...`) so links work
   on GitHub.
 - Docs content must be generic: no personal device names/hostnames/paths; use placeholders
-  like `user@gateway-host` and “gateway host”.
+  like `user@gateway-host` and "gateway host".
 
 ## Docs i18n (zh-CN)
 
@@ -96,7 +96,7 @@
 - Language: TypeScript (ESM). Prefer strict typing; avoid `any`.
 - Formatting/linting via Oxlint and Oxfmt; run `pnpm check` before commits.
 - Add brief code comments for tricky or non-obvious logic.
-- Keep files concise; extract helpers instead of “V2” copies. Use existing patterns for
+- Keep files concise; extract helpers instead of "V2" copies. Use existing patterns for
   CLI options and dependency injection via `createDefaultDeps`.
 - Aim to keep files under ~700 LOC; guideline only (not a hard guardrail). Split/refactor
   when it improves clarity or testability.
@@ -202,8 +202,8 @@
 - When working on an issue: reference the issue in the changelog entry.
 - When merging a PR: leave a PR comment that explains exactly what we did and include the
   SHA hashes.
-- When merging a PR from a new contributor: add their avatar to the README “Thanks to all
-  clawtributors” thumbnail list.
+- When merging a PR from a new contributor: add their avatar to the README "Thanks to all
+  clawtributors" thumbnail list.
 - After merging a PR: run `bun scripts/update-clawtributors.ts` if the contributor is
   missing, then commit the regenerated README.
 
@@ -285,7 +285,7 @@
   (CFBundleShortVersionString/CFBundleVersion), `docs/install/updating.md` (pinned npm
   version), `docs/platforms/mac/release.md` (APP_VERSION/APP_BUILD examples), Peekaboo
   Xcode projects/Info.plists (MARKETING_VERSION/CURRENT_PROJECT_VERSION).
-- **Restart apps:** “restart iOS/Android apps” means rebuild (recompile/install) and
+- **Restart apps:** "restart iOS/Android apps" means rebuild (recompile/install) and
   relaunch, not just kill/launch.
 - **Device checks:** before testing, verify connected real devices (iOS/Android) before
   reaching for simulators/emulators.
@@ -323,7 +323,7 @@
   colors); apply palette to onboarding/config prompts and other TTY UI output as needed.
 - **Multi-agent safety:** focus reports on your edits; avoid guard-rail disclaimers unless
   truly blocked; when multiple agents touch the same file, continue if safe; end with a
-  brief “other files present” note only if relevant.
+  brief "other files present" note only if relevant.
 - Bug investigations: read source code of relevant npm dependencies and all related local
   code before concluding; aim for high-confidence root cause.
 - Code style: add brief comments for tricky logic; keep files under ~500 LOC when feasible
@@ -334,7 +334,7 @@
   schema as `type: "object"` with `properties`.
 - Tool schema guardrails: avoid raw `format` property names in tool schemas; some
   validators treat `format` as a reserved keyword and reject the schema.
-- When asked to open a “session” file, open the Pi session logs under
+- When asked to open a "session" file, open the Pi session logs under
   `~/.openclaw/agents/<agentId>/sessions/*.jsonl` (use the `agent` value in the Runtime
   JSON block of the system prompt; newest unless a specific ID is given), not the default
   `sessions.json`. If logs are needed from another machine, SSH via Tailscale and read the

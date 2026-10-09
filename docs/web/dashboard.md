@@ -38,7 +38,7 @@ localhost, Tailscale Serve, or an SSH tunnel.
 
 ## Token basics (local vs remote)
 
-- **Localhost**: open `http://127.0.0.1:18789/`. If you see “unauthorized,” run
+- **Localhost**: open `http://127.0.0.1:18789/`. If you see "unauthorized," run
   `openclaw dashboard` and use the tokenized link (`?token=...`).
 - **Token source**: `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`); the UI stores it
   after first load.
@@ -46,7 +46,7 @@ localhost, Tailscale Serve, or an SSH tunnel.
   `gateway.auth.allowTailscale: true`), tailnet bind with a token, or an SSH tunnel. See
   [Web surfaces](/web).
 
-## If you see “unauthorized” / 1008
+## If you see "unauthorized" / 1008
 
 - Run `openclaw dashboard` to get a fresh tokenized link.
 - Ensure the gateway is reachable (local: `openclaw status`; remote: SSH tunnel
