@@ -1,10 +1,10 @@
-# sandbox and permissions
+# Sandbox and Permissions
 
 What the per-channel agent box can and cannot do, why its exec tool runs unattended, and
 how connection and secret values reach it. The box itself is described in
 [architecture.md](architecture.md).
 
-## The exec tool runs unattended in the box
+## The Exec Tool Runs Unattended in the Box
 
 This is the important, non-obvious fact. The deployed agent box
 (`infrastructure/docker/agent.yml`) runs with a box `openclaw.json` that has no
@@ -13,17 +13,17 @@ This is the important, non-obvious fact. The deployed agent box
 
 Despite `security = "deny"`, the exec tool still runs commands with no approval prompt. In
 `src/agents/bash-tools.exec.ts` the hard deny throw only fires in the `host === "node"`
-and `host === "gateway"` branches. The `host === "sandbox"` path has no deny gate: it
+and `host === "gateway"` branches. The `host === "sandbox"` path has no deny gate » It
 flows straight to running the command in the sandbox. So inside the box the agent can
 `cat` files, run pipes, and invoke CLIs unattended; the deny semantics only ever applied
 to node and gateway execution, which the box never uses.
 
-Implication: an agent inside the box can read its own delivered secrets (for example the
+Implication » An agent inside the box can read its own delivered secrets (for example the
 `/secret` command's delivery target) and can drive external CLIs. Treat the box boundary
-(the hardened container: read-only root, dropped capabilities, no new privileges, non-root
-user) as the real security boundary, not the `security = "deny"` string.
+(the hardened container » Read-only root, dropped capabilities, no new privileges,
+non-root user) as the real security boundary, not the `security = "deny"` string.
 
-## In-box command policy
+## In-Box Command Policy
 
 `src/auto-reply/command-policy.ts` gates in-session `/word` commands inside the box.
 `ENABLED_COMMAND_KEYS` is intentionally empty, because this fork owns `/channel`,

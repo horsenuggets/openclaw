@@ -1,31 +1,32 @@
-# testing
+# Testing
 
 The testing layers for this fork, from fastest to most realistic. Prefer the cheapest
 layer that can actually catch the bug. The repo-wide testing kit is in `docs/testing.md`;
 this doc covers the fork-specific layers and their gotchas.
 
-## Layer 1: unit tests and build
+## Layer 1 » Unit Tests and Build
 
 Most changes are verifiable with `npx vitest run <file>` and `pnpm build`. Do not start
 the full gateway, a watchdog, or a Discord connection unless you actually need live
 behavior; use mocks for Discord API calls, CLI invocations, and external services. Extract
 decision logic into pure helpers and test those, mocking only the boundaries.
 
-One trap: `discord-health-monitor/` is outside `tsconfig.json`'s `include`, so `pnpm tsgo`
-and `pnpm build` never typecheck it (it is compiled separately as a bun binary). A missing
-import there sails through the whole CI gate and only fails at runtime. When editing
-anything under `discord-health-monitor/`, verify it resolves with a bun bundle:
+One trap » `discord-health-monitor/` is outside `tsconfig.json`'s `include`, so
+`pnpm tsgo` and `pnpm build` never typecheck it (it is compiled separately as a bun
+binary). A missing import there sails through the whole CI gate and only fails at runtime.
+When editing anything under `discord-health-monitor/`, verify it resolves with a bun
+bundle:
 `bun build discord-health-monitor/entry.ts --bundle --target=node --outfile /tmp/hm.js`.
 
-## Layer 2: isolated gateway
+## Layer 2 » Isolated Gateway
 
 `openclaw gateway run --isolated` creates a throwaway environment (temp state dir,
 auto-picked port, no channels, loopback-only). Use `--port <N>` for a specific port, and
 send test messages with `openclaw agent --message "..." --port <port>`. Multiple isolated
-instances can run at once. Always stop any gateway you start: `pnpm gateway:killall` (and
+instances can run at once. Always stop any gateway you start » `pnpm gateway:killall` (and
 `pnpm gateway:ps` to see what is running). Never leave gateway processes running.
 
-## Layer 3: the local prod-mirror rig
+## Layer 3 » The Local Prod-Mirror Rig
 
 `scripts/prod-mirror.sh` boots one privileged docker-in-docker box on your machine and
 runs the real deploy pipeline inside it, so the router, provisioner, and per-channel agent
@@ -41,17 +42,17 @@ to the dedicated lab server. Read the lab guild and bot ids from the gitignored
 `.env.mirror` and `.prod-mirror/box.env` at runtime; never hardcode them, and never test
 with the production bot or a real server.
 
-## Layer 4: the Discord E2E suite
+## Layer 4 » The Discord E2E Suite
 
-`src/discord/e2e/*.e2e.test.ts` hit real Discord and need two bots: a driver (test) bot
+`src/discord/e2e/*.e2e.test.ts` hit real Discord and need two bots » A driver (test) bot
 and the bot under test running as a gateway. These can run against the rig's
-bot-under-test. Key operational notes:
+bot-under-test. Key operational notes...
 
 - The rig is a single box, so registered-channel agent containers accumulate and can
   OOM-kill it. Stop and prune stale `agents.channel-*` containers and restart the router
   before a run, and run the suite serially (`--maxWorkers=1`) for a clean tally; parallel
   runs on one box cause contention failures that are not real bugs.
-- Some tests cannot pass against the containerized rig by nature: the ones that write a
+- Some tests cannot pass against the containerized rig by nature » The ones that write a
   probe file to the host tmpdir and ask the box to read an absolute host path (the box
   shares no filesystem with the host), and `voice-transcription` (manual, and whisper is
   not built for linux-arm64).

@@ -1,4 +1,4 @@
-# embed system
+# Embed System
 
 How the Discord router builds, styles, and delivers rich embeds for command responses and
 notifications. All of this is under `src/discord/router/`.
@@ -9,20 +9,20 @@ notifications. All of this is under `src/discord/router/`.
 the category is the single source of truth for the footer text, default icon filename, and
 accent color. The categories are `commandResult`, `connections`, `general`, `log`,
 `registration`, `secrets`, and `system` (`EMBED_CATEGORIES`). There is no automatic
-classifier: each builder passes its `category` explicitly to `buildEmbed`, which returns
+classifier » Each builder passes its `category` explicitly to `buildEmbed`, which returns
 `{ embed, attachments }`, where `attachments` are the icon filenames referenced via
 `attachment://`. Command-result embeds additionally pick a state icon (`default` /
 `disabled` / `enabled`) via `buildCommandResultEmbed`.
 
-Specific builders: `buildWelcomeEmbed` (`onboarding.ts`), `buildLogEmbed`
+Specific builders » `buildWelcomeEmbed` (`onboarding.ts`), `buildLogEmbed`
 (`log-embed.ts`), the `/secret` embeds (`secret-command.ts`), the `/connections` embeds
 (`connect-commands.ts`), and the registration and command-result embeds
 (`channel-commands.ts`, `gateway-events.ts`).
 
-## Icon assets
+## Icon Assets
 
 `embed-assets.ts` locates the icon directory with `resolveEmbedAssetsDir()`, probing in
-order:
+order...
 
 1. the `OPENCLAW_EMBED_ASSETS_DIR` env override,
 2. `assets/embeds` or `embeds` next to the executable (the compiled-binary case, where
@@ -33,7 +33,7 @@ The result is memoized. `readEmbedAsset` reads bytes and guards against path tra
 the container, icons must be mounted and found through `OPENCLAW_EMBED_ASSETS_DIR`,
 because the router is a compiled binary in a bare image with no source tree.
 
-## Sending and CDN caching
+## Sending and CDN Caching
 
 `sendEmbedMessage` posts to a channel and `editInteractionEmbedReply` patches an
 interaction's original reply; both wrap `dispatchEmbed` in `discord-api.ts`. For each icon
@@ -44,7 +44,7 @@ with an expiry. Because an icon used via `attachment://` is consumed by the embe
 resulting message's `attachments` array is empty from the outside; the icon lives in the
 embed footer or thumbnail, which is expected, not a failure.
 
-## Application emojis
+## Application Emojis
 
 `app-emojis.ts` resolves the bot's own application emojis by name at runtime rather than
 hardcoding ids. `fetchAppEmojiMap(token)` first resolves the concrete application id via
@@ -58,11 +58,11 @@ is in, but the same emoji has a different id per application. So an embed posted
 bot must use that bot's ids. Hardcoding ids would render as literal `:name:` text when a
 different bot posts. Never hardcode emoji ids in these docs or in code; resolve by name.
 
-## Delivery paths and chunking
+## Delivery Paths and Chunking
 
 Both delivery paths share the chunker `chunkDiscordTextWithMode` (`src/discord/chunk.ts`),
 which keeps fenced code blocks balanced and rebalances inline markers. The difference is
-the mode: the router path (`route-message.ts`) hardcodes `chunkMode: "newline"` with a
+the mode » The router path (`route-message.ts`) hardcodes `chunkMode: "newline"` with a
 2000-char limit and splits on paragraph boundaries, then `discordSend` paces against the
 Discord rate limit, returning only on a 2xx and honoring `retry-after`. The monitor path
 (`monitor/reply-delivery.ts`) takes `chunkMode` from params (default `length`). So a
@@ -72,11 +72,11 @@ config `chunkMode` affects only the monitor path; the real bots run the router p
 
 - App-emoji ids differ per bot; always resolve by name. When a named emoji is missing the
   code falls back to unicode.
-- Icon resolution degrades silently: a missing or unreadable icon is dropped, so a missing
-  assets directory yields embeds with no icons rather than an error. Verify
+- Icon resolution degrades silently » A missing or unreadable icon is dropped, so a
+  missing assets directory yields embeds with no icons rather than an error. Verify
   `OPENCLAW_EMBED_ASSETS_DIR` and the mount on prod.
 - Only `buildLogEmbed` truncates to Discord's 4096-char description limit; other builders
   do not, so overly long descriptions can 400.
-- Long link-button URLs: Discord caps link-button (style 5) URLs at 512 chars (for example
-  a Google OAuth URL with many scopes can exceed it). This is a Discord constraint, not
-  enforced in our code; prefer an in-embed markdown link for long URLs.
+- Long link-button URLs » Discord caps link-button (style 5) URLs at 512 chars (for
+  example a Google OAuth URL with many scopes can exceed it). This is a Discord
+  constraint, not enforced in our code; prefer an in-embed markdown link for long URLs.

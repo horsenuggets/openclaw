@@ -1,11 +1,11 @@
-# command system
+# Command System
 
 How the Discord router handles slash and text commands, gates them, and tracks registered
 channels. The command system lives almost entirely under `src/discord/router/`; it is the
 multi-tenant router, separate from the generic `src/discord/monitor/` provider. (The
 `src/commands/` directory is unrelated CLI commands.)
 
-## The commands
+## The Commands
 
 - `/channel` (`channel-commands.ts`, `CHANNEL_COMMAND_SPEC`) - register, show status for,
   or unregister a per-channel agent instance.
@@ -17,9 +17,9 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   external accounts (Todoist, Notion, GitHub by pasted token; Google is coming soon) for
   the channel's agent. See [sandbox-and-permissions.md](sandbox-and-permissions.md).
 
-## Slash versus text dispatch
+## Slash versus Text Dispatch
 
-Both funnel through the raw Discord gateway handlers in `gateway-events.ts`:
+Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
 
 - Slash, modal, and button interactions go through `handleSlashInteraction`,
   `handleModalSubmit`, and `handleComponentInteraction`.
@@ -31,7 +31,7 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`:
   only entry there; `/secret` and `/connections` text handling is in `gateway-events.ts`
   instead. This split is a known inconsistency worth keeping in mind.
 
-## Gating and authorization
+## Gating and Authorization
 
 - Register and unregister use a whitelist checker (`whitelist.ts`,
   `createWhitelistChecker`) driven by env (`OPENCLAW_AUTH_GUILD_ID`,
@@ -39,27 +39,27 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`:
   role cache. `OPENCLAW_ADMIN_OVERRIDE_IDS` grants admin unconditionally (used by lab
   rigs).
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
-  by `isAuthorizedForChannel` (`router.ts`): only the registered channel owner (from
+  by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
   `.onboarding.json`) may use them. Denials go through the shared unauthorized notice
   (`unauthorized-notice.ts`), which is an ephemeral reply for interactions and a threaded
   log embed for plain messages.
-- Channel-registration gating: the router only converses in channels present in its
+- Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.
-- Bot env knobs: `OPENCLAW_MOCK_USER_BOT_ID` marks a bot that is allowed to hold normal
+- Bot env knobs » `OPENCLAW_MOCK_USER_BOT_ID` marks a bot that is allowed to hold normal
   conversations (without it, the router filters the bot's chat and keeps re-firing
   onboarding, so only commands work). `OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS` forces a test
   bot through the human owner gate. `OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE` toggles the
   notice versus a silent deny.
 
-## In-box command policy
+## In-Box Command Policy
 
 Inside each agent box, `src/auto-reply/command-policy.ts` gates in-session `/word`
-commands. `ENABLED_COMMAND_KEYS` is intentionally empty: this fork owns `/channel`,
+commands. `ENABLED_COMMAND_KEYS` is intentionally empty » This fork owns `/channel`,
 `/lifecycle`, and `/secret` host-side in the router, so inside the box no in-session
 command is enabled and any such text reaches the model as plain content.
 
-## Registration flow
+## Registration Flow
 
 `/channel register` runs `handleChannelCommand`, which checks the whitelist, admin, and
 owner gates, then calls the injected `ProvisioningClient.register`. Real provisioning is
@@ -78,11 +78,11 @@ directory and reading each `.port` dotfile.
 - Two reply paths exist (see [architecture.md](architecture.md)). Bots cannot send true
   ephemerals, so `/channel` denials fall back to threaded real replies or persistent log
   embeds, not ephemerals.
-- Defer-before-edit races: `/lifecycle`, `/connections`, and the secret acks must await
+- Defer-before-edit races » `/lifecycle`, `/connections`, and the secret acks must await
   the interaction defer before editing the original reply, or the follow-up fails.
-- Token redaction: `/connections add <token>` text is scrubbed from the channel and logs,
+- Token redaction » `/connections add <token>` text is scrubbed from the channel and logs,
   including reply-echo cases, and the pasted token is deleted even when auth is denied.
-- The control-command relay: agent output can carry `⁘` control commands, dispatched in
+- The control-command relay » Agent output can carry `⁘` control commands, dispatched in
   `agent-command-dispatch.ts`. Only `return`, `send_hook_embed`, and `log` are
   implemented. The dispatcher unwraps code fences so that commands echoed inside docs
   still execute rather than leaking into chat, and the relay loop has a depth cap.

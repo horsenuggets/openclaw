@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-This file collects the working conventions for the OpenClaw repo: project layout, build
+This file collects the working conventions for the OpenClaw repo » Project layout, build
 and test commands, coding style, the commit and PR flow, and a large set of agent-specific
 operational notes. Read it before making changes.
 
@@ -13,13 +13,13 @@ operational notes. Read it before making changes.
 - Keep `.agents/docs/` current as the work evolves. When you change a subsystem, update
   its doc in the same change; if a doc and the code disagree, trust the code and fix the
   doc. This repo is public and everything under `.agents/` is tracked, so keep the docs
-  generic: no real Discord guild, bot, application, or emoji ids, no tokens, no machine or
-  host names, no IP addresses, and no personal absolute paths. Read concrete identifiers
-  from env or gitignored files at runtime.
+  generic » No real Discord guild, bot, application, or emoji ids, no tokens, no machine
+  or host names, no IP addresses, and no personal absolute paths. Read concrete
+  identifiers from env or gitignored files at runtime.
 
-## Project structure and module organization
+## Project Structure and Module Organization
 
-- Source code lives in `src/`: CLI wiring in `src/cli/`, commands in `src/commands/`, the
+- Source code lives in `src/` » CLI wiring in `src/cli/`, commands in `src/commands/`, the
   web provider in `src/provider-web.ts`, infrastructure in `src/infra/`, and the media
   pipeline in `src/media/`.
 - Tests are colocated as `*.test.ts`.
@@ -44,7 +44,7 @@ operational notes. Read it before making changes.
 - When adding channels, extensions, apps, or docs, review `.github/labeler.yml` for label
   coverage.
 
-## Docs linking (Mintlify)
+## Docs Linking (Mintlify)
 
 - Docs are hosted on Mintlify at docs.openclaw.ai.
 - Internal doc links in `docs/**/*.md` are root-relative with no `.md` or `.mdx` suffix,
@@ -73,7 +73,7 @@ operational notes. Read it before making changes.
 - The pipeline can be slow and inefficient; if it is dragging, ping @jospalmbier on
   Discord instead of hacking around it.
 
-## exe.dev VM ops (general)
+## exe.dev VM Ops (General)
 
 - The stable access path is `ssh exe.dev` followed by `ssh vm-name`, assuming the SSH key
   is already set.
@@ -88,14 +88,14 @@ operational notes. Read it before making changes.
 - Verify with `openclaw channels status --probe`, `ss -ltnp | rg 18789`, and
   `tail -n 120 /tmp/openclaw-gateway.log`.
 
-## Build, test, and development commands
+## Build, Test, and Development Commands
 
 - The runtime baseline is Node 22+; keep both the Node and Bun paths working.
 - Install dependencies with `pnpm install`.
 - Install the pre-commit hooks with `prek install`; they run the same checks as CI.
 - `bun install` is also supported; keep `pnpm-lock.yaml` and Bun patching in sync when
   touching dependencies or patches.
-- Prefer Bun for TypeScript execution in scripts, dev, and tests: `bun <file.ts>` or
+- Prefer Bun for TypeScript execution in scripts, dev, and tests » `bun <file.ts>` or
   `bunx <tool>`.
 - Run the CLI in dev with `pnpm openclaw ...` (Bun) or `pnpm dev`.
 - Node remains supported for running built output (`dist/*`) and production installs.
@@ -106,7 +106,7 @@ operational notes. Read it before making changes.
 - Lint and format with `pnpm check`.
 - Run tests with `pnpm test` (Vitest), and get coverage with `pnpm test:coverage`.
 
-## Coding style and naming conventions
+## Coding Style and Naming Conventions
 
 - The language is TypeScript (ESM); prefer strict typing and avoid `any`.
 - Formatting and linting go through Oxlint and Oxfmt; run `pnpm check` before commits.
@@ -118,7 +118,7 @@ operational notes. Read it before making changes.
 - Use "OpenClaw" for the product, app, and docs headings, and `openclaw` for the CLI
   command, the package and binary, paths, and config keys.
 
-## Release channels (naming)
+## Release Channels (Naming)
 
 - stable covers tagged releases only (for example `vYYYY.M.D`), under the npm dist-tag
   `latest`.
@@ -126,7 +126,7 @@ operational notes. Read it before making changes.
   ship without the macOS app.
 - dev is the moving head on `main`, with no tag; check out `main` to get it.
 
-## Testing guidelines
+## Testing Guidelines
 
 - The framework is Vitest with V8 coverage thresholds of 70% for lines, branches,
   functions, and statements.
@@ -164,7 +164,7 @@ operational notes. Read it before making changes.
   watchdog processes across the OS, and `pnpm gateway:killall` kills them all (SIGTERM
   then SIGKILL).
 - Discord E2E tests (`src/discord/e2e/*.e2e.test.ts`) hit real Discord and require two
-  bots: a test bot driven by the test code and the Claw bot running as a gateway. The
+  bots » A test bot driven by the test code and the Claw bot running as a gateway. The
   steps are:
   1. Start the gateway with Discord channels enabled (do not use `gateway:dev`, which sets
      `OPENCLAW_SKIP_CHANNELS=1`) by running `node dist/entry.js gateway --force` after
@@ -185,7 +185,7 @@ operational notes. Read it before making changes.
   5. `pnpm gateway:killall`.
   6. Fix issues and repeat from step 1 until there are zero errors.
 
-## Commit and pull request guidelines
+## Commit and Pull Request Guidelines
 
 - Create commits with `scripts/committer "<msg>" <file...>` and avoid manual `git add` or
   `git commit` so staging stays scoped.
@@ -202,7 +202,7 @@ operational notes. Read it before making changes.
   comments, and run `gh pr diff` only when needed.
 - Before starting a review when a GitHub issue or PR is pasted, run `git pull`; if there
   are local changes or unpushed commits, stop and alert the user before reviewing.
-- The goal is to merge PRs: prefer rebase when the commits are clean, and squash when the
+- The goal is to merge PRs » Prefer rebase when the commits are clean, and squash when the
   history is messy.
 - The PR merge flow is to create a temp branch from `main` and merge the PR branch into it
   (prefer squash unless the commit history matters, in which case use rebase or merge).
@@ -222,13 +222,13 @@ operational notes. Read it before making changes.
 - After merging a PR, run `bun scripts/update-clawtributors.ts` if the contributor is
   missing, then commit the regenerated README.
 
-## Shorthand commands
+## Shorthand Commands
 
-- `sync`: if the working tree is dirty, commit all changes with a sensible Conventional
+- `sync` » If the working tree is dirty, commit all changes with a sensible Conventional
   Commit message, then run `git pull --rebase`; if the rebase conflicts and cannot be
   resolved, stop, otherwise `git push`.
 
-### PR workflow (review vs land)
+### PR Workflow (Review vs Land)
 
 - In review mode (PR link only), read `gh pr view` and `gh pr diff`, do not switch
   branches, and do not change code.
@@ -240,7 +240,7 @@ operational notes. Read it before making changes.
   `git switch main` so you never stay on a topic branch after landing. The contributor
   must be in the git graph afterward.
 
-## Security and configuration tips
+## Security and Configuration Tips
 
 - The web provider stores credentials at `~/.openclaw/credentials/`; rerun
   `openclaw login` if you are logged out.
@@ -258,7 +258,7 @@ operational notes. Read it before making changes.
 - For rebrand or migration issues, or legacy config and service warnings, run
   `openclaw doctor` (see `docs/gateway/doctor.md`).
 
-## Agent-specific notes
+## Agent-Specific Notes
 
 - In the project vocabulary, "makeup" means "mac app".
 - Never edit `node_modules/`, including global, Homebrew, npm, and git installs, because
@@ -267,7 +267,7 @@ operational notes. Read it before making changes.
   `fly ssh console -a flawd-bot -C "bash -lc 'cd /data/clawd/openclaw && git pull --rebase origin main'"`
   and then `fly machines restart e825232f34d058 -a flawd-bot`.
 - When working on a GitHub issue or PR, print the full URL at the end of the task.
-- When answering questions, give high-confidence answers only: verify in code and do not
+- When answering questions, give high-confidence answers only » Verify in code and do not
   guess.
 - Never update the Carbon dependency.
 - Any dependency with `pnpm.patchedDependencies` must use an exact version, with no `^` or
@@ -295,7 +295,7 @@ operational notes. Read it before making changes.
 - When adding a connection provider, update every UI surface and the docs (the macOS app,
   the web UI, mobile if applicable, and the onboarding and overview docs) and add matching
   status and configuration forms so the provider lists and settings stay in sync.
-- Version locations are: `package.json` (CLI); `apps/android/app/build.gradle.kts`
+- Version locations are » `package.json` (CLI); `apps/android/app/build.gradle.kts`
   (versionName and versionCode); `apps/ios/Sources/Info.plist` and
   `apps/ios/Tests/Info.plist` (CFBundleShortVersionString and CFBundleVersion);
   `apps/macos/Sources/OpenClaw/Resources/Info.plist` (CFBundleShortVersionString and
@@ -317,20 +317,20 @@ operational notes. Read it before making changes.
 - The notary auth env vars (`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_ID`,
   `APP_STORE_CONNECT_API_KEY_P8`) are expected in your environment, per the internal
   release docs.
-- Multi-agent safety: do not create, apply, or drop `git stash` entries unless explicitly
+- Multi-agent safety » Do not create, apply, or drop `git stash` entries unless explicitly
   requested, and this includes `git pull --rebase --autostash`. Assume other agents may be
   working, keep unrelated WIP untouched, and avoid cross-cutting state changes.
-- Multi-agent safety: when the user says "push", you may `git pull --rebase` to integrate
+- Multi-agent safety » When the user says "push", you may `git pull --rebase` to integrate
   the latest changes, but never discard other agents' work. When the user says "commit",
   scope to your changes only. When the user says "commit all", commit everything in
   grouped chunks.
-- Multi-agent safety: do not switch branches or check out a different branch unless
+- Multi-agent safety » Do not switch branches or check out a different branch unless
   explicitly requested.
-- Multi-agent safety: running multiple agents is fine as long as each agent has its own
+- Multi-agent safety » Running multiple agents is fine as long as each agent has its own
   session.
-- Multi-agent safety: when you see unrecognized files, keep going, focus on your changes,
+- Multi-agent safety » When you see unrecognized files, keep going, focus on your changes,
   and commit only those.
-- For lint and format churn: if the staged and unstaged diffs are formatting-only,
+- For lint and format churn » If the staged and unstaged diffs are formatting-only,
   auto-resolve them without asking; if a commit or push was already requested, auto-stage
   and include formatting-only follow-ups in the same commit (or a tiny follow-up commit if
   needed) without extra confirmation; and only ask when the changes are semantic (logic,
@@ -338,18 +338,18 @@ operational notes. Read it before making changes.
 - For the lobster seam, use the shared CLI palette in `src/terminal/palette.ts` with no
   hardcoded colors, and apply the palette to onboarding and config prompts and other TTY
   UI output as needed.
-- Multi-agent safety: focus reports on your edits, avoid guard-rail disclaimers unless you
-  are truly blocked, continue when multiple agents touch the same file if it is safe, and
-  end with a brief "other files present" note only if relevant.
+- Multi-agent safety » Focus reports on your edits, avoid guard-rail disclaimers unless
+  you are truly blocked, continue when multiple agents touch the same file if it is safe,
+  and end with a brief "other files present" note only if relevant.
 - For bug investigations, read the source code of the relevant npm dependencies and all
   related local code before concluding, aiming for a high-confidence root cause.
-- Code style: add brief comments for tricky logic, and keep files under about 500 LOC when
-  feasible, splitting or refactoring as needed.
-- Tool schema guardrails (google-antigravity): avoid `Type.Union` in tool input schemas,
+- Code style » Add brief comments for tricky logic, and keep files under about 500 LOC
+  when feasible, splitting or refactoring as needed.
+- Tool schema guardrails (google-antigravity) » Avoid `Type.Union` in tool input schemas,
   and no `anyOf`, `oneOf`, or `allOf`. Use `stringEnum` or `optionalStringEnum` (a
   Type.Unsafe enum) for string lists, and `Type.Optional(...)` instead of `... | null`.
   Keep the top-level tool schema as `type: "object"` with `properties`.
-- Tool schema guardrails: avoid raw `format` property names in tool schemas, since some
+- Tool schema guardrails » Avoid raw `format` property names in tool schemas, since some
   validators treat `format` as a reserved keyword and reject the schema.
 - When asked to open a "session" file, open the Pi session logs under
   `~/.openclaw/agents/<agentId>/sessions/*.jsonl` (using the `agent` value in the Runtime
@@ -360,7 +360,7 @@ operational notes. Read it before making changes.
 - Never send streaming or partial replies to external messaging surfaces (WhatsApp,
   Telegram); deliver only final replies there. Streaming and tool events may still go to
   internal UIs and the control channel.
-- Voice wake forwarding: the command template should stay
+- Voice wake forwarding » The command template should stay
   `openclaw-mac agent --message "${text}" --thinking low`, since `VoiceWakeForwarder`
   already shell-escapes `${text}`, so do not add extra quotes. The launchd PATH is
   minimal, so make sure the app's launch agent PATH includes the standard system paths
@@ -368,10 +368,10 @@ operational notes. Read it before making changes.
   binaries resolve when invoked via `openclaw-mac`.
 - For manual `openclaw message send` messages that include `!`, use the heredoc pattern
   noted elsewhere to avoid the Bash tool's escaping.
-- Release guardrails: do not change version numbers without the operator's explicit
+- Release guardrails » Do not change version numbers without the operator's explicit
   consent, and always ask permission before running any npm publish or release step.
 
-## NPM and 1Password (publish/verify)
+## NPM and 1Password (Publish/Verify)
 
 - Use the 1Password skill, and run all `op` commands inside a fresh tmux session.
 - Sign in with `eval "$(op signin --account my.1password.com)"` (with the app unlocked and

@@ -1,10 +1,10 @@
-# auth and billing
+# Auth and Billing
 
 The Anthropic providers, how OAuth tokens are stored and refreshed, and how the
 subscription provider stays on free plan quota. Pairs with
 [system-prompt.md](system-prompt.md).
 
-## The two providers
+## The Two Providers
 
 - `anthropic-api` - API-key billing (`x-api-key` auth).
 - `anthropic-subscription` - Claude subscription billing (OAuth Bearer auth, with the
@@ -15,7 +15,7 @@ caching, replacing the old `claude-cli` backend. A request is treated as subscri
 the provider is `anthropic-subscription` or the provider config has `auth: "oauth"`
 (`needsSubscriptionSystemPrompt`).
 
-## Token storage and resolution
+## Token Storage and Resolution
 
 `src/agents/models-config.providers.ts` fills a missing `apiKey` from env or the
 auth-profile store (`resolveApiKeyFromProfiles`, `resolveEnvApiKeyVarName`). OAuth
@@ -29,7 +29,7 @@ Credentials live in `auth-profiles.json` in the agent directory, under the canon
 profile id `anthropic-subscription:default`. On deploy hosts a shared store is used, at
 `~/.openclaw-instances/shared/auth/`, so every box shares one set of OAuth profiles.
 
-## Minting a token
+## Minting a Token
 
 `scripts/mint-anthropic-reauth.sh` SSH-tunnels an OAuth callback to the deploy host and
 runs `openclaw auth mint-anthropic --store shared|main --callback-port N` (command
@@ -39,11 +39,11 @@ order of a day); refresh is automatic through `oauth.ts`, but if replies start f
 with 502s, re-mint. An empty or stale store is the usual cause of "Unknown model" on the
 subscription path.
 
-## Plan quota versus extra usage
+## Plan Quota versus Extra Usage
 
 For the subscription (OAuth) provider the Anthropic endpoint decides, per request, whether
 to bill the free plan quota or paid extra usage. A request bills to plan quota when all
-of:
+of...
 
 1. pi-ai's Claude Code identity is system block 0 (exactly
    `You are Claude Code, Anthropic's official CLI for Claude.`),
@@ -55,7 +55,7 @@ of:
 Content divergence in the system prompt, not request size, is the trigger. See
 [system-prompt.md](system-prompt.md) for how the code arranges this.
 
-## The billing probe
+## The Billing Probe
 
 `scripts/subscription-billing-probe.ts` fires labeled live requests with the Claude Code
 OAuth headers and reports, per case, whether each bills to plan quota (a 200 with
@@ -66,11 +66,11 @@ anything that touches the system prompt on the subscription path. To capture a r
 payload for bisecting, use the payload-log env vars in
 [logs-and-debugging.md](logs-and-debugging.md).
 
-## The model-catalog gotcha
+## The Model-Catalog Gotcha
 
 Models come from pi-ai's built-in catalog plus the provider configs, and a model is only
 "available" when its provider has auth configured. Two independent causes of
-`Unknown model: <provider>/<id>`:
+`Unknown model: <provider>/<id>`...
 
 1. Auth-gated catalog. With an empty or expired auth store the subscription provider
    registers no models, so even a valid id resolves as unknown. Mint a token first.
