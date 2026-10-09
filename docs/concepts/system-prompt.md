@@ -14,12 +14,17 @@ OpenClaw builds a custom system prompt for every agent run. The prompt is
 The prompt is assembled by OpenClaw and injected into each agent run.
 
 The prose for each shared section comes from a single Markdown source,
-`docs/reference/templates/SYSTEM.md`. `src/agents/system-prompt-sections.ts` parses that
-file into header-keyed sections at runtime (cached), and `src/agents/system-prompt.ts`
-assembles the live prompt from them. The builder owns all wiring: interpolation tokens
-(`${workspaceDir}`, the generated tool list, etc.), conditional guards, section ordering,
-and the builder-only sections that `SYSTEM.md` does not describe. To change wording, edit
-`SYSTEM.md`; there is no separate port step.
+`docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`, wired into
+`pnpm build`) bakes that file into a committed generated module
+(`src/agents/system-prompt-source.generated.ts`); `src/agents/system-prompt-sections.ts`
+parses the embedded contents into header-keyed sections and `src/agents/system-prompt.ts`
+assembles the live prompt from them. Embedding means there is no runtime file dependency,
+so the prompt resolves identically in dev, npm, `bun --compile`, and Node SEA binaries.
+The builder owns all wiring: interpolation tokens (`${workspaceDir}`, the generated tool
+list, etc.), conditional guards, section ordering, and the builder-only sections that
+`SYSTEM.md` does not describe. To change wording, edit `SYSTEM.md` and run
+`pnpm prompt:gen` (CI's `prompt:check` fails if the generated module is stale); there is
+no separate port step.
 
 ## Structure
 

@@ -76,7 +76,7 @@
     "prepack": "pnpm build && pnpm ui:build",
     "prepare": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",
     "prompt:check": "pnpm prompt:gen && git diff --exit-code -- src/agents/system-prompt-source.generated.ts",
-    "prompt:gen": "node --import tsx scripts/gen-system-prompt.ts",
+    "prompt:gen": "node --import tsx scripts/gen-system-prompt.ts && oxfmt --write src/agents/system-prompt-source.generated.ts",
     "protocol:check": "pnpm protocol:gen && pnpm protocol:gen:swift && git diff --exit-code -- dist/protocol.schema.json apps/macos/Sources/OpenClawProtocol/GatewayModels.swift",
     "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
     "protocol:gen:swift": "node --import tsx scripts/protocol-gen-swift.ts",

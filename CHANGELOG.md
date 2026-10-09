@@ -10,14 +10,14 @@ Docs: https://docs.openclaw.ai
 - System prompt: the agent prompt's prose now comes from a single Markdown source,
   `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a
   committed generated module that `src/agents/system-prompt-sections.ts` parses and
-  `src/agents/system-prompt.ts` assembles. The builder still owns all wiring (interpolation
-  tokens, conditional guards, section ordering, the generated tool list, and builder-only
-  sections). This removes the hand-maintained "port SYSTEM.md into the builder" step: the
-  old `SYSTEM.port.md` guide is deleted, and editing wording means editing `SYSTEM.md` and
-  running `pnpm prompt:gen`. First-run onboarding prose also moved out of the Discord
-  router: `readBootstrapDirective` now passes `BOOTSTRAP.md` through verbatim, and the
-  general "work through a BOOTSTRAP.md checklist" plus "do not narrate internal mechanics"
-  guidance lives in the shared prompt.
+  `src/agents/system-prompt.ts` assembles. The builder still owns all wiring
+  (interpolation tokens, conditional guards, section ordering, the generated tool list,
+  and builder-only sections). This removes the hand-maintained "port SYSTEM.md into the
+  builder" step: the old `SYSTEM.port.md` guide is deleted, and editing wording means
+  editing `SYSTEM.md` and running `pnpm prompt:gen`. First-run onboarding prose also moved
+  out of the Discord router: `readBootstrapDirective` now passes `BOOTSTRAP.md` through
+  verbatim, and the general "work through a BOOTSTRAP.md checklist" plus "do not narrate
+  internal mechanics" guidance lives in the shared prompt.
 - `/secret`: allow hyphens and underscores in the secret name (previously stripped to
   `[a-z0-9]`), so names like `my-token_1` are preserved. They carry no shell meaning and
   cannot escape the secrets directory, so the gateway boundary accepts `[a-z0-9_-]`.

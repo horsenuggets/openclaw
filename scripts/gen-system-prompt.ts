@@ -9,11 +9,12 @@
  * identically in dev, npm, bun --compile, and Node SEA binaries, regardless of
  * the working directory or how a deployment stages its files.
  *
- * Run via `pnpm prompt:gen`. `pnpm prompt:check` regenerates and diffs to catch a
- * SYSTEM.md edit that was not re-baked. Wired into `pnpm build` before tsdown.
+ * Run via `pnpm prompt:gen`, which also runs oxfmt on the output so it matches the
+ * format gate (oxfmt is invoked from the npm script, not here, so it resolves the
+ * platform shim cross-platform). `pnpm prompt:check` regenerates and diffs to catch
+ * a SYSTEM.md edit that was not re-baked. Wired into `pnpm build` before tsdown.
  */
 
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,15 +34,8 @@ function generate() {
     "",
   ].join("\n");
   fs.writeFileSync(outputPath, body);
-  // Canonicalize with oxfmt so the committed artifact matches the format gate and
-  // `pnpm prompt:check` stays deterministic.
-  const oxfmtBin = path.join(
-    projectRoot,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "oxfmt.cmd" : "oxfmt",
-  );
-  execFileSync(oxfmtBin, ["--write", outputPath], { cwd: projectRoot, stdio: "ignore" });
+  // The `prompt:gen` npm script runs oxfmt on this file afterwards to canonicalize
+  // it; keeping oxfmt out of this script avoids spawning a platform-specific shim.
   console.log(`[gen-system-prompt] Wrote ${path.relative(projectRoot, outputPath)}`);
 }
 

@@ -1,6 +1,7 @@
 ---
 summary:
-  "Single source of truth for the OpenClaw agent system prompt. Parsed at runtime by
+  "Editable source of truth for the OpenClaw agent system prompt. Baked into
+  src/agents/system-prompt-source.generated.ts by `pnpm prompt:gen`, then parsed by
   src/agents/system-prompt-sections.ts and assembled by src/agents/system-prompt.ts."
 read_when:
   - "Read this when editing the agent system prompt wording."
@@ -8,8 +9,12 @@ read_when:
 
 <!--
   This is not a workspace file. It is the editable source of the OpenClaw system
-  prompt. src/agents/system-prompt-sections.ts parses this into header-keyed
-  sections and src/agents/system-prompt.ts assembles the live prompt from them.
+  prompt. It is baked into src/agents/system-prompt-source.generated.ts at build
+  time by `pnpm prompt:gen` (wired into `pnpm build`); then
+  src/agents/system-prompt-sections.ts parses that generated module and
+  src/agents/system-prompt.ts assembles the live prompt. After editing this file you
+  MUST run `pnpm prompt:gen` so dev/test runs and the shipped build pick up the
+  change (CI's `prompt:check` fails otherwise).
 
   Edit the prose here; the builder owns the wiring. `${...}` tokens are filled by
   the builder at runtime (do not replace them with literal values). Literal
