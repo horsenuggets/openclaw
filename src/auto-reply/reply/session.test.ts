@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import { saveSessionStore } from "../../config/sessions.js";
+import { setCommandPolicyForTest } from "../command-policy.js";
 import { initSessionState } from "./session.js";
 
 describe("initSessionState thread forking", () => {
@@ -175,6 +176,32 @@ describe("initSessionState RawBody", () => {
     expect(result.isNewSession).toBe(true);
     expect(result.bodyStripped).toBe("KeepThisCase");
     expect(result.triggerBodyNormalized).toBe("/NEW KeepThisCase");
+  });
+
+  it("gates only the built-in /new and /reset triggers with the command policy", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-reset-policy-"));
+    const storePath = path.join(root, "sessions.json");
+    const cfg = {
+      session: { store: storePath, resetTriggers: ["/new", "/reset", "/fresh", "wipe"] },
+    } as OpenClawConfig;
+    const run = async (body: string) =>
+      (
+        await initSessionState({
+          ctx: { RawBody: body, ChatType: "direct", SessionKey: "agent:main:discord:dm:s1" },
+          cfg,
+          commandAuthorized: true,
+        })
+      ).resetTriggered;
+
+    setCommandPolicyForTest(new Set());
+    expect(await run("/new")).toBe(false);
+    expect(await run("/reset")).toBe(false);
+    expect(await run("/fresh")).toBe(true);
+    expect(await run("wipe")).toBe(true);
+
+    setCommandPolicyForTest(new Set(["new"]));
+    expect(await run("/new")).toBe(true);
+    expect(await run("/reset")).toBe(false);
   });
 
   it("falls back to Body when RawBody is undefined", async () => {

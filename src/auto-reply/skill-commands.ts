@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { listAgentIds, resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import { buildWorkspaceSkillCommandSpecs, type SkillCommandSpec } from "../agents/skills.js";
 import { getRemoteSkillEligibility } from "../infra/skills-remote.js";
+import { isCommandKeyEnabled } from "./command-policy.js";
 import { listChatCommands } from "./commands-registry.js";
 
 function resolveReservedCommandNames(): Set<string> {
@@ -27,6 +28,10 @@ export function listSkillCommandsForWorkspace(params: {
   cfg: OpenClawConfig;
   skillFilter?: string[];
 }): SkillCommandSpec[] {
+  // Per-skill `/<name>` commands are governed by the "skill" command key.
+  if (!isCommandKeyEnabled("skill")) {
+    return [];
+  }
   return buildWorkspaceSkillCommandSpecs(params.workspaceDir, {
     config: params.cfg,
     skillFilter: params.skillFilter,
@@ -39,6 +44,9 @@ export function listSkillCommandsForAgents(params: {
   cfg: OpenClawConfig;
   agentIds?: string[];
 }): SkillCommandSpec[] {
+  if (!isCommandKeyEnabled("skill")) {
+    return [];
+  }
   const used = resolveReservedCommandNames();
   const entries: SkillCommandSpec[] = [];
   const agentIds = params.agentIds ?? listAgentIds(params.cfg);

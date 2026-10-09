@@ -105,10 +105,13 @@ async function isGitAvailable(): Promise<boolean> {
   }
 }
 
-async function ensureGitRepo(dir: string, isBrandNewWorkspace: boolean) {
-  if (!isBrandNewWorkspace) {
-    return;
-  }
+// Make the workspace a git repo so the agent can commit its work. We initialize
+// any workspace that is not already a repo, not just brand-new ones: boxes seeded
+// before git was available (or before this ran) have starter files but no `.git`,
+// and they would otherwise never become committable. `git init` is non-destructive
+// (it never touches existing files) and no-ops when a repo is already present, so
+// running it on an existing workspace only backfills the missing `.git`.
+async function ensureGitRepo(dir: string) {
   if (await hasGitRepo(dir)) {
     return;
   }
@@ -183,7 +186,7 @@ export async function ensureAgentWorkspace(params?: {
   if (isBrandNewWorkspace) {
     await writeFileIfMissing(bootstrapPath, bootstrapTemplate);
   }
-  await ensureGitRepo(dir, isBrandNewWorkspace);
+  await ensureGitRepo(dir);
 
   return {
     dir,

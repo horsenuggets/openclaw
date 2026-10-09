@@ -10,6 +10,7 @@ import type {
 } from "../src/channels/plugins/types.js";
 import type { OpenClawConfig } from "../src/config/config.js";
 import type { OutboundSendDeps } from "../src/infra/outbound/deliver.js";
+import { setCommandPolicyForTest } from "../src/auto-reply/command-policy.js";
 import { installProcessWarningFilter } from "../src/infra/warnings.js";
 import { setActivePluginRegistry } from "../src/plugins/runtime.js";
 import { createTestRegistry } from "../src/test-utils/channel-plugins.js";
@@ -155,12 +156,16 @@ const createDefaultRegistry = () =>
     },
   ]);
 
+// The shipped policy enables no in-box commands. Most suites exercise the command pipeline
+// itself, so they run with every command enabled; the policy suites override this.
 beforeEach(() => {
   setActivePluginRegistry(createDefaultRegistry());
+  setCommandPolicyForTest("all");
 });
 
 afterEach(() => {
   setActivePluginRegistry(createDefaultRegistry());
+  setCommandPolicyForTest(null);
   // Guard against leaked fake timers across test files/workers.
   vi.useRealTimers();
 });
