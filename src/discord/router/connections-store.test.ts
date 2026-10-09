@@ -71,4 +71,19 @@ describe("connections-store", () => {
     saveConnection(dir, conn());
     expect(getConnection(dir, "todoist")?.token).toBe("tok_123");
   });
+
+  it("writes the token file owner-only (0600) with a trailing newline", () => {
+    saveConnection(dir, conn());
+    const file = path.join(dir, CONNECTIONS_FILENAME);
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    expect(fs.readFileSync(file, "utf-8").endsWith("}\n")).toBe(true);
+  });
+
+  it("tightens an existing world-readable file to 0600 on the next write", () => {
+    const file = path.join(dir, CONNECTIONS_FILENAME);
+    fs.writeFileSync(file, JSON.stringify({ connections: {} }), { mode: 0o644 });
+    fs.chmodSync(file, 0o644); // force the loose mode regardless of umask
+    saveConnection(dir, conn());
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  });
 });

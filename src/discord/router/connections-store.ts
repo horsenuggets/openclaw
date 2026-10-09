@@ -31,6 +31,19 @@ function filePath(instanceDir: string): string {
   return path.join(instanceDir, CONNECTIONS_FILENAME);
 }
 
+/**
+ * Persist the file. Tokens live here, so match the credential-file convention in
+ * `src/infra/json-file.ts`: a trailing newline and owner-only (0600) permissions.
+ * The chmod runs on every write (not just creation, which is all a writeFileSync
+ * `mode` option would cover) so an existing file left world-readable by a prior
+ * umask is tightened too.
+ */
+function writeConnectionsFile(instanceDir: string, file: ConnectionsFile): void {
+  const pathname = filePath(instanceDir);
+  fs.writeFileSync(pathname, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  fs.chmodSync(pathname, 0o600);
+}
+
 /** Read the connections file, tolerating a missing or malformed file. */
 export function readConnectionsFile(instanceDir: string): ConnectionsFile {
   try {
@@ -59,7 +72,7 @@ export function getConnection(instanceDir: string, connectorId: string): StoredC
 export function saveConnection(instanceDir: string, connection: StoredConnection): void {
   const file = readConnectionsFile(instanceDir);
   file.connections[connection.connectorId] = connection;
-  fs.writeFileSync(filePath(instanceDir), JSON.stringify(file, null, 2));
+  writeConnectionsFile(instanceDir, file);
 }
 
 /** Remove a connection. Returns true when one was removed, false when absent. */
@@ -69,6 +82,6 @@ export function removeConnection(instanceDir: string, connectorId: string): bool
     return false;
   }
   delete file.connections[connectorId];
-  fs.writeFileSync(filePath(instanceDir), JSON.stringify(file, null, 2));
+  writeConnectionsFile(instanceDir, file);
   return true;
 }

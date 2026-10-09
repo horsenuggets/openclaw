@@ -24,7 +24,9 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 
 export async function validateTodoist(token: string): Promise<AuthResult> {
   // Todoist has no cheap identity endpoint; a projects fetch confirms the token.
-  const resp = await fetchWithTimeout("https://api.todoist.com/rest/v2/projects", {
+  // Uses the unified v1 API (`/api/v1/projects`); the older `/rest/v2/projects`
+  // has been sunset, so a valid token would otherwise fail validation here.
+  const resp = await fetchWithTimeout("https://api.todoist.com/api/v1/projects", {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) {
