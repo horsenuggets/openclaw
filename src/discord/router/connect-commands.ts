@@ -132,10 +132,12 @@ export type ConnectCommandContext = {
   reply: ChannelReply;
   /**
    * Delete the originating message when a token was pasted in a visible text
-   * command, so the secret does not linger in channel history. No-op for slash
-   * commands (their option values are never posted as a message).
+   * command, so the secret does not linger in channel history. Resolves true when
+   * the delete is confirmed and false when it was attempted but failed (so the
+   * handler can warn the user). Omitted for slash commands (their option values
+   * are never posted as a message) and for text commands without a token.
    */
-  scrubCommandMessage?: () => void | Promise<void>;
+  scrubCommandMessage?: () => Promise<boolean>;
 };
 
 /** Build a Connections-category embed reply. */
@@ -217,7 +219,12 @@ function listReply(
   const statuses: string[] = [];
   for (const connector of registry.all()) {
     services.push(connector.label);
-    statuses.push(statusCell(byId.get(connector.id) ?? null, emoji));
+    // A not-yet-available connector (e.g. Google) can never be linked yet, so
+    // show "Coming soon" rather than the "Not connected" cell, which would imply
+    // the user could connect it right now.
+    statuses.push(
+      connector.available ? statusCell(byId.get(connector.id) ?? null, emoji) : "Coming soon",
+    );
   }
   return connectionsReply("Your Connections", LIST_DESCRIPTION, [
     { name: "Service Name", value: services.join("\n"), inline: true },
@@ -259,12 +266,30 @@ export async function handleConnectCommand(
   }
 
   if (sub === "add") {
+    // Scrub the pasted token FIRST, before any early return. The gateway only
+    // wires scrubCommandMessage when the command actually carried a token, so a
+    // no-token `add` is a no-op here; but when a token is present it must be
+    // deleted even if the service is unknown/unavailable or the channel is
+    // unregistered, or the secret would linger in channel history on those paths.
+    const scrubResult = await ctx.scrubCommandMessage?.();
+    // scrubResult is undefined when there was nothing to scrub (slash command, or
+    // no token). Only an explicit `false` means the delete was attempted and
+    // failed, in which case every reply below warns the user to delete it by hand.
+    const scrubFailed = scrubResult === false;
+    const withScrubNote = (body: string): string =>
+      scrubFailed
+        ? `${body}\n\nI could not delete your message containing the token. Please delete it ` +
+          `manually so it does not stay in chat.`
+        : body;
+
     const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
       await ctx.reply(
         connectionsReply(
           "Connect",
-          `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
+          withScrubNote(
+            `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
+          ),
         ),
         { ephemeral: true },
       );
@@ -274,14 +299,18 @@ export async function handleConnectCommand(
       await ctx.reply(
         connectionsReply(
           "Connect",
-          `${connector.label} linking is coming soon. For now you can link: ${deps.registry.availableIds()}.`,
+          withScrubNote(
+            `${connector.label} linking is coming soon. For now you can link: ${deps.registry.availableIds()}.`,
+          ),
         ),
         { ephemeral: true },
       );
       return;
     }
     if (deps.store.list(ctx.channelId) === null) {
-      await ctx.reply(connectionsReply("Connect", NOT_REGISTERED), { ephemeral: true });
+      await ctx.reply(connectionsReply("Connect", withScrubNote(NOT_REGISTERED)), {
+        ephemeral: true,
+      });
       return;
     }
 
@@ -304,17 +333,15 @@ export async function handleConnectCommand(
       return;
     }
 
-    // A token was provided. Scrub the visible message first (best-effort) so the
-    // secret does not linger, then verify and store via the connector's auth flow.
-    await ctx.scrubCommandMessage?.();
-
     const result = await connector.auth.complete(token);
     if (!result.ok) {
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
-          `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
-            `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
+          withScrubNote(
+            `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
+              `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
+          ),
         ),
         { ephemeral: true },
       );
@@ -325,8 +352,10 @@ export async function handleConnectCommand(
     await ctx.reply(
       connectionsReply(
         "Connected!",
-        `${connector.label}${result.accountLabel ? ` (${result.accountLabel})` : ""} is now linked. ` +
-          `Unlocks: ${connector.services.join(", ")}.`,
+        withScrubNote(
+          `${connector.label}${result.accountLabel ? ` (${result.accountLabel})` : ""} is now linked. ` +
+            `Unlocks: ${connector.services.join(", ")}.`,
+        ),
       ),
       { ephemeral: true },
     );

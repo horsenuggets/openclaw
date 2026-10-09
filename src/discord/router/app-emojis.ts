@@ -26,8 +26,13 @@ export async function fetchAppEmojiMap(
 ): Promise<Record<string, string>> {
   try {
     const headers = { Authorization: `Bot ${token}` };
+    // `startRouter` awaits this before connecting to the gateway, so bound both
+    // calls: a stalled emoji endpoint must not keep the router from ever coming
+    // up. On timeout the fetch rejects and the catch below returns the unicode
+    // fallback map, exactly as for any other failure.
     const appResp = await fetchImpl("https://discord.com/api/v10/oauth2/applications/@me", {
       headers,
+      signal: AbortSignal.timeout(10_000),
     });
     if (!appResp.ok) {
       return {};
@@ -38,6 +43,7 @@ export async function fetchAppEmojiMap(
     }
     const resp = await fetchImpl(`https://discord.com/api/v10/applications/${appId}/emojis`, {
       headers,
+      signal: AbortSignal.timeout(10_000),
     });
     if (!resp.ok) {
       return {};

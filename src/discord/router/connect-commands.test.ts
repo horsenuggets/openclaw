@@ -188,8 +188,10 @@ describe("handleConnectCommand list", () => {
     expect(services).toContain("Google");
     expect(statuses).toContain("✅ Connected"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
-    expect(statuses).toContain("❌ Not connected"); // Notion/Google not linked
-    expect(statuses).not.toContain("Coming soon"); // unavailable connectors are just "Not connected"
+    expect(statuses).toContain("❌ Not connected"); // Notion (available) not linked
+    // Google is not yet available, so it reads "Coming soon" rather than implying
+    // it could be connected right now.
+    expect(statuses).toContain("Coming soon");
   });
 
   it("uses injected custom emoji for the status glyphs", async () => {
@@ -301,6 +303,40 @@ describe("handleConnectCommand add", () => {
     expect(map.get("github")).toBeUndefined(); // not stored
     expect(embedOf(replies[0].payload).description).toContain("did not work");
     expect(embedOf(replies[0].payload).description).toContain("401");
+  });
+
+  it("scrubs a pasted token before the unknown-service early return", async () => {
+    // A token aimed at a typo'd service name must still be deleted, even though
+    // the command errors out before any validation.
+    const scrubCommandMessage = vi.fn(async () => true);
+    const { ctx, replies } = makeCtx("add", ["slakc", "tok_secret"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps());
+    expect(scrubCommandMessage).toHaveBeenCalledOnce();
+    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+  });
+
+  it("scrubs a pasted token before the unavailable-service early return", async () => {
+    const scrubCommandMessage = vi.fn(async () => true);
+    const { ctx, replies } = makeCtx("add", ["google", "tok_secret"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps());
+    expect(scrubCommandMessage).toHaveBeenCalledOnce();
+    expect(embedOf(replies[0].payload).description).toContain("coming soon");
+  });
+
+  it("warns the user to delete manually when the scrub fails", async () => {
+    const scrubCommandMessage = vi.fn(async () => false); // delete attempted but failed
+    const validate = vi.fn(async (): Promise<AuthResult> => ({ ok: true }));
+    const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps({ registry: makeRegistry(validate) }));
+    expect(embedOf(replies[0].payload).description).toContain("delete it");
+  });
+
+  it("does not warn about scrubbing when the delete succeeds", async () => {
+    const scrubCommandMessage = vi.fn(async () => true);
+    const validate = vi.fn(async (): Promise<AuthResult> => ({ ok: true }));
+    const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps({ registry: makeRegistry(validate) }));
+    expect(embedOf(replies[0].payload).description).not.toContain("delete it manually");
   });
 
   it("stores the token when the connector's auth confirms it", async () => {

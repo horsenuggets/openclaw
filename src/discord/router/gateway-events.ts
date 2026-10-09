@@ -239,37 +239,76 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     return;
   }
 
-  // `/connect` management commands, handled before the bot filter (so a tester
-  // bot can drive them) but gated on registration inside the handler. When the
-  // command carried a pasted token, scrub the originating message so the secret
-  // does not linger in channel history.
+  // `/connections` management commands, handled before the bot filter (so a
+  // tester bot that is the channel owner can drive them). When the command
+  // carried a pasted token, scrub the originating message so the secret does not
+  // linger in channel history.
   const connectCmd = authorId ? parseConnectTextCommand(content) : null;
   if (connectCmd && authorId) {
     const commandMessageId = d.id;
     const hasToken = connectTextCommandHasToken(connectCmd);
-    void handleConnectCommand(
-      {
-        subcommand: connectCmd.subcommand,
-        args: connectCmd.args,
-        channelId,
-        userId: authorId,
-        isDM: !guildId,
-        reply: (payload, opts) =>
-          opts?.ephemeral && typeof payload === "string"
-            ? discordSendEphemeral(discordToken, channelId, payload)
-            : discordSendReply(discordToken, channelId, commandMessageId, payload),
-        ...(hasToken
-          ? {
-              scrubCommandMessage: () =>
-                discordDeleteMessage(discordToken, channelId, commandMessageId),
-            }
-          : {}),
-      },
-      connectCommandDeps,
-    );
-    runtime.log(
-      `[router] /connect ${connectCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId}, token=${hasToken})`,
-    );
+    const dispatchConnect = () => {
+      void handleConnectCommand(
+        {
+          subcommand: connectCmd.subcommand,
+          args: connectCmd.args,
+          channelId,
+          userId: authorId,
+          isDM: !guildId,
+          reply: (payload, opts) =>
+            opts?.ephemeral && typeof payload === "string"
+              ? discordSendEphemeral(discordToken, channelId, payload)
+              : discordSendReply(discordToken, channelId, commandMessageId, payload),
+          ...(hasToken
+            ? {
+                scrubCommandMessage: () =>
+                  discordDeleteMessage(discordToken, channelId, commandMessageId),
+              }
+            : {}),
+        },
+        connectCommandDeps,
+      );
+      runtime.log(
+        `[router] /connections ${connectCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId}, token=${hasToken})`,
+      );
+    };
+    // Owner-gate on a registered channel: /connections reads and writes the
+    // channel's stored credentials, so only its owner may drive it (the slash
+    // path gates via runForOwner; this is the text-command equivalent, and it
+    // fails closed for a group DM since a non-owner participant is not the owner).
+    // An unregistered channel has no owner or stored connections, so the handler's
+    // own not-registered reply is safe to reach ungated.
+    if (instances.get(channelId)) {
+      const status = describeInstance(channelId);
+      void isAuthorizedForChannel(channelId, authorId, {
+        describeInstance: () => status,
+      }).then((allowed) => {
+        if (!allowed) {
+          runtime.log(
+            `[router] denied /connections from ${authorId} in channel ${channelId} (not the channel owner)`,
+          );
+          // Scrub a pasted token even on denial so an unauthorized paste does not
+          // linger in channel history.
+          if (hasToken) {
+            void discordDeleteMessage(discordToken, channelId, commandMessageId);
+          }
+          if (unauthorizedNoticeEnabled) {
+            const embed = buildLogEmbed(buildUnauthorizedNoticeText(channelId, status?.ownerId));
+            void discordSendReply(
+              discordToken,
+              channelId,
+              commandMessageId,
+              { embeds: [embed.embed], attachments: embed.attachments },
+              { parse: [], replied_user: false },
+            );
+          }
+          return;
+        }
+        dispatchConnect();
+      });
+      return;
+    }
+    dispatchConnect();
     return;
   }
 
@@ -673,13 +712,6 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
     const userId = d.member?.user?.id ?? d.user?.id;
     if (userId) {
-      // Defer (ephemeral): add validates a token over the network and can exceed
-      // Discord's ~3s window. Deliver the result by editing the deferred reply.
-      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: 5, data: { flags: 64 } }),
-      }).catch((err) => runtime.error(`[router] connect defer failed: ${String(err)}`));
       const editReply = (payload: ChannelReplyPayload) => {
         if (typeof payload === "string") {
           void fetch(
@@ -704,19 +736,54 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           })
           .catch((err) => runtime.error(`[router] connect followup failed: ${String(err)}`));
       };
-      // Slash option values are never posted as a visible message, so there is no
-      // token to scrub (scrubCommandMessage is omitted).
-      void handleConnectCommand(
-        {
-          subcommand: subOpt?.name ?? null,
-          args,
-          channelId: interactionChannelId,
-          userId,
-          isDM: !d.guild_id,
-          reply: (payload) => editReply(payload),
-        },
-        connectCommandDeps,
-      );
+      // Defer (ephemeral): add validates a token over the network and can exceed
+      // Discord's ~3s window. Deliver the result by editing the deferred reply.
+      // Wait for the defer to land before dispatching: a fast path (list, remove,
+      // a validation error) can otherwise edit `@original` before Discord has
+      // created the deferred response, so the follow-up fails and the interaction
+      // is left unanswered (same race the /lifecycle path guards against).
+      const dispatch = () => {
+        void (async () => {
+          try {
+            const deferResp = await fetch(
+              `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+              },
+            );
+            if (!deferResp.ok) {
+              runtime.error(`[router] connect defer failed (${deferResp.status})`);
+              return;
+            }
+            // Slash option values are never posted as a visible message, so there
+            // is no token to scrub (scrubCommandMessage is omitted).
+            await handleConnectCommand(
+              {
+                subcommand: subOpt?.name ?? null,
+                args,
+                channelId: interactionChannelId,
+                userId,
+                isDM: !d.guild_id,
+                reply: (payload) => editReply(payload),
+              },
+              connectCommandDeps,
+            );
+          } catch (err) {
+            runtime.error(`[router] connect dispatch failed: ${String(err)}`);
+          }
+        })();
+      };
+      // Owner-gate on a registered channel, reusing the /secret and /lifecycle
+      // gate: /connections reads and writes the channel's stored credentials, so
+      // only its owner may drive it, and group DMs are rejected (runForOwner fails
+      // closed). An unregistered channel has no owner; the handler reports that.
+      if (instances.get(interactionChannelId)) {
+        runForOwner(interactionChannelId, dispatch);
+      } else {
+        dispatch();
+      }
     }
   }
 }

@@ -1126,7 +1126,7 @@ describe("discord router channel-delete cleanup", () => {
 
     // Drive one interaction through the router and return what the user saw.
     const runInteraction = async (params: {
-      command: "lifecycle" | "secret";
+      command: "lifecycle" | "secret" | "connections";
       userId: string;
       guild: boolean;
       dmType?: number | null;
@@ -1182,7 +1182,7 @@ describe("discord router channel-delete cleanup", () => {
     };
 
     // Truth table over command x caller x surface x whether the owner is recorded.
-    const cases = (["lifecycle", "secret"] as const).flatMap((command) =>
+    const cases = (["lifecycle", "secret", "connections"] as const).flatMap((command) =>
       [true, false].flatMap((guild) =>
         [OWNER, STRANGER].flatMap((userId) =>
           [true, false].map((ownerKnown) => ({ command, guild, userId, ownerKnown })),
@@ -1222,7 +1222,7 @@ describe("discord router channel-delete cleanup", () => {
       });
     }
 
-    for (const command of ["lifecycle", "secret"] as const) {
+    for (const command of ["lifecycle", "secret", "connections"] as const) {
       it(`denies a stranger running ${command} in a group DM`, async () => {
         const { callbacks, patches } = await runInteraction({
           command,

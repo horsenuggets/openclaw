@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { discordSend } from "./discord-api.js";
+import { discordDeleteMessage, discordSend } from "./discord-api.js";
 
 function response(status: number, opts?: { retryAfterHeader?: string; retryAfterBody?: number }) {
   return {
@@ -65,5 +65,22 @@ describe("discordSend rate-limit handling", () => {
 
     await expect(discordSend("tok", "c1", "hello")).rejects.toThrow(/rate limited/);
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe("discordDeleteMessage", () => {
+  it("returns true when Discord confirms the delete", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(204)));
+    expect(await discordDeleteMessage("tok", "c1", "m1")).toBe(true);
+  });
+
+  it("returns false on an error response so the caller can warn the user", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(403)));
+    expect(await discordDeleteMessage("tok", "c1", "m1")).toBe(false);
+  });
+
+  it("returns false when the request throws", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    expect(await discordDeleteMessage("tok", "c1", "m1")).toBe(false);
   });
 });
