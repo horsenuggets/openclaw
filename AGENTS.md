@@ -7,7 +7,15 @@ operational notes. Read it before making changes.
 - Repo → https://github.com/horsenuggets/openclaw
 - For extra context, read whatever is in `.agents/` (also reachable via the `.claude/`
   symlink). Its contents change over time, so browse it directly rather than relying on a
-  list here.
+  list here. `.agents/docs/` holds subsystem references (architecture, commands, embeds,
+  deployment, logs, heartbeats, system prompt, auth and billing, sandbox, testing); start
+  at `.agents/docs/README.md`.
+- Keep `.agents/docs/` current as the work evolves. When you change a subsystem, update
+  its doc in the same change; if a doc and the code disagree, trust the code and fix the
+  doc. This repo is public and everything under `.agents/` is tracked, so keep the docs
+  generic: no real Discord guild, bot, application, or emoji ids, no tokens, no machine or
+  host names, no IP addresses, and no personal absolute paths. Read concrete identifiers
+  from env or gitignored files at runtime.
 
 ## Project structure and module organization
 
