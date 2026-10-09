@@ -43,9 +43,12 @@ Docs: https://docs.openclaw.ai
   `agent.Dockerfile` (`ubuntu:24.04` plus `git` and `ca-certificates`) instead of raw
   `ubuntu:24.04`, so the agent's workspace is a real git repo it can commit to. A generic
   system git identity (`OpenClaw Agent <agent@openclaw.local>`) is baked in so commits
-  work without per-box configuration. `agent.yml` builds the image on first `up` (compose
-  caches it) and deploy now ships `agent.Dockerfile` next to `agent.yml`; the prod-mirror
-  image also gains `git` since host-side `openclaw setup` `git init`s the workspace.
+  work without per-box configuration. `agent.yml` carries a `build:` stanza (so a local
+  `compose up` can build it), but deploy pre-builds and tags the image in `setup.sh`
+  before it tears down the running stack, so a network-dependent build flake aborts with
+  the old router and agents still up instead of taking them offline; deploy also ships
+  `agent.Dockerfile` next to `agent.yml`. The prod-mirror image likewise gains `git`,
+  since host-side `openclaw setup` `git init`s the workspace.
 - Discord: new `/secret` slash command hands the agent a sensitive value without it ever
   appearing in the channel. The command opens a private modal (popup) that collects a
   secret value plus an optional name; on submit the value is delivered out-of-band to that
