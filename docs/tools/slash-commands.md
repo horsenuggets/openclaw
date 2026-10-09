@@ -49,8 +49,8 @@ model sees the message, and the remaining text continues through the normal flow
 ```
 
 - `commands.text` (default `true`) enables parsing `/...` in chat messages.
-  - On surfaces without native commands (WhatsApp/WebChat/Signal/iMessage/Google Chat/MS
-    Teams), text commands still work even if you set this to `false`.
+  - On surfaces without native commands (WhatsApp/WebChat/Signal/iMessage), text commands
+    still work even if you set this to `false`.
 - `commands.native` (default `"auto"`) registers native commands.
   - Auto: on for Discord/Telegram; off for Slack (until you add slash commands); ignored
     for providers without native support.

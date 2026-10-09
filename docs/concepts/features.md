@@ -12,7 +12,7 @@ title: "Features"
     WhatsApp, Telegram, Discord, and iMessage with a single Gateway.
   </Card>
   <Card title="Plugins" icon="plug">
-    Add Mattermost and more with extensions.
+    Extend OpenClaw with plugins.
   </Card>
   <Card title="Routing" icon="route">
     Multi-agent routing with isolated sessions.
@@ -33,7 +33,6 @@ title: "Features"
 - WhatsApp integration via WhatsApp Web (Baileys)
 - Telegram bot support (grammY)
 - Discord bot support (channels.discord.js)
-- Mattermost bot support (plugin)
 - iMessage integration via local imsg CLI (macOS)
 - Agent bridge for Pi in RPC mode with tool streaming
 - Streaming and chunking for long responses

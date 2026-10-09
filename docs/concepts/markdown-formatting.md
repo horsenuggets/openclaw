@@ -58,7 +58,7 @@ IR (schematic):
 ## Where it is used
 
 - Slack, Telegram, and Signal outbound adapters render from the IR.
-- Other channels (WhatsApp, iMessage, MS Teams, Discord) still use plain text or their own
+- Other channels (WhatsApp, iMessage, Discord) still use plain text or their own
   formatting rules, with Markdown table conversion applied before chunking when enabled.
 
 ## Table handling

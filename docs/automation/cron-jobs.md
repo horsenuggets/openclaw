@@ -221,8 +221,8 @@ Resolution priority:
 Isolated jobs can deliver output to a channel via the top-level `delivery` config:
 
 - `delivery.mode`: `announce` (deliver a summary) or `none`.
-- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `mattermost`
-  (plugin) / `signal` / `imessage` / `last`.
+- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `signal` / `imessage` /
+  `last`.
 - `delivery.to`: channel-specific recipient target.
 
 Delivery config is only valid for isolated jobs (`sessionTarget: "isolated"`).
@@ -232,8 +232,8 @@ session's "last route" (the last place the agent replied).
 
 Target format reminders:
 
-- Slack/Discord/Mattermost (plugin) targets should use explicit prefixes (e.g.
-  `channel:<id>`, `user:<id>`) to avoid ambiguity.
+- Slack/Discord targets should use explicit prefixes (e.g. `channel:<id>`, `user:<id>`) to
+  avoid ambiguity.
 - Telegram topics should use the `:topic:` form (see below).
 
 #### Telegram delivery targets (topics / forum threads)

@@ -177,7 +177,7 @@ JSON files (comma/semicolon/`PATH`-delimited). Each file should contain
 Default plugin ids:
 
 - Package packs: `package.json` `name`
-- Standalone file: file base name (`~/.../voice-call.ts` → `voice-call`)
+- Standalone file: file base name (`~/.../my-plugin.ts` → `my-plugin`)
 
 If a plugin exports `id`, OpenClaw uses it but warns when it doesn't match the configured
 id.
@@ -188,11 +188,11 @@ id.
 {
   plugins: {
     enabled: true,
-    allow: ["voice-call"],
+    allow: ["my-plugin"],
     deny: ["untrusted-plugin"],
-    load: { paths: ["~/Projects/oss/voice-call-extension"] },
+    load: { paths: ["~/Projects/oss/my-plugin"] },
     entries: {
-      "voice-call": { enabled: true, config: { provider: "twilio" } },
+      "my-plugin": { enabled: true, config: { option: "value" } },
     },
   },
 }
