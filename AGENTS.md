@@ -5,6 +5,9 @@ and test commands, coding style, the commit and PR flow, and a large set of agen
 operational notes. Read it before making changes.
 
 - Repo → https://github.com/horsenuggets/openclaw
+- For extra context, read whatever is in `.agents/` (also reachable via the `.claude/`
+  symlink). Its contents change over time, so browse it directly rather than relying on a
+  list here.
 
 ## Project structure and module organization
 
