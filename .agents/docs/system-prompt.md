@@ -9,12 +9,14 @@ reminder. This is tightly coupled to billing; read
 
 `buildEmbeddedSystemPrompt` (`src/agents/pi-embedded-runner/system-prompt.ts`) forwards to
 `buildAgentSystemPrompt` (`src/agents/system-prompt.ts`). The section prose lives in
-`docs/reference/templates/SYSTEM.md`, parsed by `loadSystemPromptSections`;
-`renderPromptSection` fills `${...}` tokens and fails loud if a required section is
-missing. The builder assembles intro, tooling, tool-call style, safety, skills, memory,
-self-update, model aliases, workspace, sandbox, messaging, voice, Project Context, and a
-runtime JSON block. A `PromptMode` (`full` / `minimal` / `none`) gates which sections
-render.
+`docs/reference/templates/SYSTEM.md`, which `pnpm prompt:gen` bakes into
+`src/agents/system-prompt-source.generated.ts`; `loadSystemPromptSections` reads that
+generated module, not the markdown at runtime, so run `prompt:gen` after editing SYSTEM.md
+(the `prompt:check` CI gate enforces it). `renderPromptSection` fills `${...}` tokens and
+fails loud if a required section is missing. The builder assembles intro, tooling,
+tool-call style, safety, skills, memory, self-update, model aliases, workspace, sandbox,
+messaging, voice, Project Context, and a runtime JSON block. A `PromptMode` (`full` /
+`minimal` / `none`) gates which sections render.
 
 ## The Subscription Prompt Swap
 

@@ -27,8 +27,8 @@ non-root user) as the real security boundary, not the `security = "deny"` string
 
 `src/auto-reply/command-policy.ts` gates in-session `/word` commands inside the box.
 `ENABLED_COMMAND_KEYS` is intentionally empty, because this fork owns `/channel`,
-`/lifecycle`, and `/secret` host-side in the router. Inside the box no in-session command
-is enabled, so such text reaches the model as plain content.
+`/lifecycle`, `/secret`, and `/connections` host-side in the router. Inside the box no
+in-session command is enabled, so such text reaches the model as plain content.
 
 ## Secrets
 

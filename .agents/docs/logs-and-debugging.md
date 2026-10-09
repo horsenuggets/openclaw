@@ -12,10 +12,11 @@ Each agent writes a JSONL transcript per session under
 `HOME`). Each line is a JSON entry; assistant content blocks are `thinking`, `text`, or
 `tool_use`. Useful fields » `stopReason` (`stop` normal, `error` killed or crashed,
 `max_tokens`) and `errorMessage` (for example "CLI exited with code 143" is a SIGTERM).
-Sort by mtime for the most recent session. A heartbeat turn runs in its own `heartbeat`
-session by default, which keeps it from contaminating user responses, but
-`heartbeat.session: "main"` or a global `session.scope` routes it to the main session, so
-verify those first.
+Sort by mtime for the most recent session. Note that a heartbeat turn does not reliably
+get its own session » The current runner resolves an unset `heartbeat.session` to the main
+session key (see [heartbeats.md](heartbeats.md)), so a heartbeat can appear in the main
+transcript. Check `heartbeat.session` and `session.scope` before ruling heartbeat
+contamination in or out.
 
 ## Structured and Process Logs
 
@@ -33,8 +34,11 @@ Prod has no git checkout; everything is a container. Use `docker` on the gateway
 - Router or health-monitor » `docker logs services.discord-router`.
 - A specific channel's agent » `docker logs agents.channel-<id>`, or exec in and read
   `/tmp/openclaw/openclaw-*.log`.
-- Inspect a box's effective env (for example to confirm a var reached it):
-  `docker inspect services.discord-router --format '{{range .Config.Env}}{{println .}}{{end}}'`.
+- Confirm a single expected variable reached the router without dumping the whole env
+  (which includes `DISCORD_BOT_TOKEN` and `OPENCLAW_PROVISIONER_TOKEN`) »
+  `docker inspect services.discord-router --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^OPENCLAW_MOCK_USER_BOT_ID='`
+  (grep for the one variable you care about; note this targets the router container, not
+  an agent box).
 - Confirm an instance's proxy URLs point at the bridge gateway, not loopback:
   `docker exec agents.channel-<id> sh -lc 'grep -oE "https?://[0-9.]+:[0-9]+" /etc/openclaw/openclaw.json'`.
 - Check the model proxy is healthy from inside the box by curling the model-proxy health

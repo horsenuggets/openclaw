@@ -57,14 +57,17 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
 
 Inside each agent box, `src/auto-reply/command-policy.ts` gates in-session `/word`
 commands. `ENABLED_COMMAND_KEYS` is intentionally empty » This fork owns `/channel`,
-`/lifecycle`, and `/secret` host-side in the router, so inside the box no in-session
-command is enabled and any such text reaches the model as plain content.
+`/lifecycle`, `/secret`, and `/connections` host-side in the router, so inside the box no
+in-session command is enabled and any such text reaches the model as plain content.
 
 ## Registration Flow
 
-`/channel register` runs `handleChannelCommand`, which checks the whitelist, admin, and
-owner gates, then calls the injected `ProvisioningClient.register`. Real provisioning is
-an HTTP call to a host daemon over loopback using `OPENCLAW_PROVISIONER_PORT` and
+`/channel register` runs `handleChannelCommand`, which checks whitelist and admin
+authorization (a non-admin whitelisted user may register only their own DM; the `owner`
+argument that assigns the channel to another user is admin-only), then calls the injected
+`ProvisioningClient.register`. Owner-gating applies to unregister and to the
+conversational and agent commands, not to registering. Real provisioning is an HTTP call
+to a host daemon over loopback using `OPENCLAW_PROVISIONER_PORT` and
 `OPENCLAW_PROVISIONER_TOKEN`; without those it is a fail-closed stub. On success the
 router calls `reloadInstances` to re-scan disk, then `kickOnboarding` fires the agent's
 first turn. The channel-to-port map comes from `loadRouterConfig` scanning the instances

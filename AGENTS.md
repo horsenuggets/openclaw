@@ -5,6 +5,8 @@ and test commands, coding style, the commit and PR flow, and a large set of agen
 operational notes. Read it before making changes.
 
 - Repo → https://github.com/horsenuggets/openclaw
+- On GitHub issues, comments, and PR comments, use literal multiline strings or
+  `-F - <<'EOF'` (or `$'...'`) for real newlines; never embed `\n`.
 - For extra context, read whatever is in `.agents/`. Its contents change over time, so
   browse it directly rather than relying on a list here. `.agents/docs/` holds subsystem
   references (architecture, commands, embeds, deployment, logs, heartbeats, system prompt,
