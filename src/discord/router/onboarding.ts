@@ -51,8 +51,10 @@ export function bootstrapExists(instance: InstanceConfig): boolean {
 export function readBootstrapDirective(instance: InstanceConfig): string | null {
   try {
     const bootstrapPath = path.join(instance.instanceDir, BOOTSTRAP_RELATIVE_PATH);
-    const content = fs.readFileSync(bootstrapPath, "utf-8").trim();
-    if (!content) {
+    const content = fs.readFileSync(bootstrapPath, "utf-8");
+    // Trim only to decide emptiness; return the raw bytes so the checklist is
+    // passed through verbatim (leading whitespace can change Markdown meaning).
+    if (!content.trim()) {
       return null;
     }
     return content;

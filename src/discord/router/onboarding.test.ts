@@ -22,6 +22,11 @@ describe("readBootstrapDirective", () => {
     expect(readBootstrapDirective(instance)).toBe(content);
   });
 
+  it("preserves surrounding whitespace (trims only for the emptiness check)", () => {
+    const content = "  \n# BOOTSTRAP.md\nitem\n\n";
+    expect(readBootstrapDirective(makeInstance(content))).toBe(content);
+  });
+
   it("returns null when BOOTSTRAP.md is missing or empty", () => {
     expect(readBootstrapDirective(makeInstance())).toBeNull();
     expect(readBootstrapDirective(makeInstance("   \n  "))).toBeNull();
