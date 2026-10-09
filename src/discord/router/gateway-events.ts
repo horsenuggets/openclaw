@@ -186,11 +186,18 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   const rawAttachments = d.attachments ?? [];
   const hasAttachments = rawAttachments.length > 0;
 
-  // Include reply context so the agent knows what message is being responded to
+  // Include reply context so the agent knows what message is being responded to.
   const ref = d.referenced_message;
   if (ref && typeof ref === "object") {
     const refAuthor = ref.author?.username ?? "unknown";
-    const refContent = (ref.content ?? "").slice(0, 500);
+    const rawRef = (ref.content ?? "").slice(0, 500);
+    // The referenced message may itself be a token-bearing `/connections add`
+    // (e.g. the bot's own reply to a not-yet-scrubbed token command, echoed back
+    // via MESSAGE_CREATE, or a user replying to one). Redact it so the token is
+    // not forwarded into the agent transcript or the fallback log below.
+    const refParsed = parseConnectTextCommand(rawRef);
+    const refContent =
+      refParsed && connectTextCommandHasToken(refParsed) ? "/connections add <redacted>" : rawRef;
     if (refContent) {
       content = `[Replying to ${refAuthor}: "${refContent}"]\n${content}`;
     }

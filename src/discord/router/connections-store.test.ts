@@ -64,12 +64,24 @@ describe("connections-store", () => {
     expect(removeConnection(dir, "todoist")).toBe(false);
   });
 
-  it("tolerates a malformed file as no connections", () => {
-    fs.writeFileSync(path.join(dir, CONNECTIONS_FILENAME), "{ not json");
+  it("reads a malformed file as no connections for display, but refuses to clobber it", () => {
+    const file = path.join(dir, CONNECTIONS_FILENAME);
+    fs.writeFileSync(file, "{ not json");
+    // Lenient read (list/get) shows nothing rather than crashing the command.
     expect(listConnections(dir)).toEqual([]);
-    // And a save over a corrupt file still works.
+    expect(getConnection(dir, "todoist")).toBeNull();
+    // But a write refuses, so the corrupt file is preserved for inspection
+    // instead of silently discarding whatever it held.
+    expect(() => saveConnection(dir, conn())).toThrow();
+    expect(() => removeConnection(dir, "todoist")).toThrow();
+    expect(fs.readFileSync(file, "utf-8")).toBe("{ not json");
+  });
+
+  it("writes the file atomically (no leftover temp file)", () => {
     saveConnection(dir, conn());
-    expect(getConnection(dir, "todoist")?.token).toBe("tok_123");
+    const entries = fs.readdirSync(dir);
+    expect(entries).toContain(CONNECTIONS_FILENAME);
+    expect(entries.some((e) => e.endsWith(".tmp"))).toBe(false);
   });
 
   it("writes the token file owner-only (0600) with a trailing newline", () => {
