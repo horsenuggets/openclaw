@@ -85,7 +85,7 @@ ACP defaults to an isolated `acp:<uuid>` session unless you override the key or 
 
 ## Zed editor setup
 
-Add a custom ACP agent in `~/.config/zed/settings.json` (or use Zed’s Settings UI):
+Add a custom ACP agent in `~/.config/zed/settings.json` (or use Zed's Settings UI):
 
 ```json
 {

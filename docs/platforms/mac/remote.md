@@ -8,7 +8,7 @@ title: "Remote Control"
 # Remote OpenClaw (macOS ⇄ remote host)
 
 This flow lets the macOS app act as a full remote control for a OpenClaw gateway running
-on another host (desktop/server). It’s the app’s **Remote over SSH** (remote run) feature.
+on another host (desktop/server). It's the app's **Remote over SSH** (remote run) feature.
 All features—health checks, Voice Wake forwarding, and Web Chat—reuse the same remote SSH
 configuration from *Settings → General*.
 
@@ -26,7 +26,7 @@ configuration from *Settings → General*.
 Remote mode supports two transports:
 
 - **SSH tunnel** (default): Uses `ssh -N -L ...` to forward the gateway port to localhost.
-  The gateway will see the node’s IP as `127.0.0.1` because the tunnel is loopback.
+  The gateway will see the node's IP as `127.0.0.1` because the tunnel is loopback.
 - **Direct (ws/wss)**: Connects straight to the gateway URL. The gateway sees the real
   client IP.
 
@@ -53,7 +53,7 @@ Remote mode supports two transports:
    - **CLI path** (advanced): optional path to a runnable `openclaw` entrypoint/binary
      (auto-filled when advertised).
 3. Hit **Test remote**. Success indicates the remote `openclaw status --json` runs
-   correctly. Failures usually mean PATH/CLI issues; exit 127 means the CLI isn’t found
+   correctly. Failures usually mean PATH/CLI issues; exit 127 means the CLI isn't found
    remotely.
 4. Health checks and Web Chat will now run through this SSH tunnel automatically.
 
@@ -70,7 +70,7 @@ Remote mode supports two transports:
   Recording, Microphone, Speech Recognition, Notifications). Run onboarding on that
   machine to grant them once.
 - Nodes advertise their permission state via `node.list` / `node.describe` so agents know
-  what’s available.
+  what's available.
 
 ## Security notes
 
@@ -86,7 +86,7 @@ Remote mode supports two transports:
 
 ## Troubleshooting
 
-- **exit 127 / not found**: `openclaw` isn’t on PATH for non-login shells. Add it to
+- **exit 127 / not found**: `openclaw` isn't on PATH for non-login shells. Add it to
   `/etc/paths`, your shell rc, or symlink into `/usr/local/bin`/`/opt/homebrew/bin`.
 - **Health probe failed**: check SSH reachability, PATH, and that Baileys is logged in
   (`openclaw status --json`).

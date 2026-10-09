@@ -21,7 +21,7 @@ and push-to-talk overlap.
 ### Implemented (Dec 9, 2025)
 
 - Overlay sessions now carry a token per capture (wake-word or push-to-talk).
-  Partial/final/send/dismiss/level updates are dropped when the token doesn’t match,
+  Partial/final/send/dismiss/level updates are dropped when the token doesn't match,
   avoiding stale callbacks.
 - Push-to-talk adopts any visible overlay text as a prefix (so pressing the hotkey while
   the wake overlay is up keeps the text and appends new speech). It waits up to 1.5s for a
@@ -53,7 +53,7 @@ and push-to-talk overlap.
      (plays send chime once, forwards, dismisses).
    - Push-to-talk: no delay; wake-word: optional delay for auto-send.
    - Apply a short cooldown to the wake runtime after push-to-talk finishes so wake-word
-     doesn’t immediately retrigger.
+     doesn't immediately retrigger.
 5. **Logging**
    - Coordinator emits `.info` logs in subsystem `bot.molt`, categories
      `voicewake.overlay` and `voicewake.chime`.

@@ -9,7 +9,7 @@ title: Feishu
 # Feishu bot
 
 Feishu (Lark) is a team chat platform used by companies for messaging and collaboration.
-This plugin connects OpenClaw to a Feishu/Lark bot using the platform’s WebSocket event
+This plugin connects OpenClaw to a Feishu/Lark bot using the platform's WebSocket event
 subscription so messages can be received without exposing a public webhook URL.
 
 ---

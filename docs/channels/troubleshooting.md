@@ -1,7 +1,7 @@
 ---
 summary: "Channel-specific troubleshooting shortcuts (Discord/Telegram/WhatsApp)"
 read_when:
-  - A channel connects but messages don’t flow
+  - A channel connects but messages don't flow
   - Investigating channel misconfiguration (intents, permissions, privacy mode)
 title: "Channel Troubleshooting"
 ---

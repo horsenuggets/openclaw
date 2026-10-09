@@ -20,7 +20,7 @@ messages intact. The summary is stored in the session history, so future request
 - The compaction summary
 - Recent messages after the compaction point
 
-Compaction **persists** in the session’s JSONL history.
+Compaction **persists** in the session's JSONL history.
 
 ## Configuration
 
@@ -29,10 +29,10 @@ settings.
 
 ## Auto-compaction (default on)
 
-When a session nears or exceeds the model’s context window, OpenClaw triggers
+When a session nears or exceeds the model's context window, OpenClaw triggers
 auto-compaction and may retry the original request using the compacted context.
 
-You’ll see:
+You'll see:
 
 - `🧹 Auto-compaction complete` in verbose mode
 - `/status` showing `🧹 Compactions: <count>`

@@ -44,7 +44,7 @@ openclaw plugins install ./extensions/line
 https://gateway-host/line/webhook
 ```
 
-The gateway responds to LINE’s webhook verification (GET) and inbound events (POST). If
+The gateway responds to LINE's webhook verification (GET) and inbound events (POST). If
 you need a custom path, set `channels.line.webhookPath` or
 `channels.line.accounts.<id>.webhookPath` and update the URL accordingly.
 

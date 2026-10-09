@@ -17,7 +17,7 @@ OpenClaw has three related (but different) controls:
 2. **Tool policy** (`tools.*`, `tools.sandbox.tools.*`, `agents.list[].tools.*`) decides
    **which tools are available/allowed**.
 3. **Elevated** (`tools.elevated.*`, `agents.list[].tools.elevated.*`) is an **exec-only
-   escape hatch** to run on the host when you’re sandboxed.
+   escape hatch** to run on the host when you're sandboxed.
 
 ## Quick debug
 
@@ -117,10 +117,10 @@ Available groups:
 
 Elevated does **not** grant extra tools; it only affects `exec`.
 
-- If you’re sandboxed, `/elevated on` (or `exec` with `elevated: true`) runs on the host
+- If you're sandboxed, `/elevated on` (or `exec` with `elevated: true`) runs on the host
   (approvals may still apply).
 - Use `/elevated full` to skip exec approvals for the session.
-- If you’re already running direct, elevated is effectively a no-op (still gated).
+- If you're already running direct, elevated is effectively a no-op (still gated).
 - Elevated is **not** skill-scoped and does **not** override tool allow/deny.
 - `/exec` is separate from elevated. It only adjusts per-session exec defaults for
   authorized senders.

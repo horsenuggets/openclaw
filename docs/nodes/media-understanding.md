@@ -130,7 +130,7 @@ Rules:
 
 ### Auto-detect media understanding (default)
 
-If `tools.media.<capability>.enabled` is **not** set to `false` and you haven’t configured
+If `tools.media.<capability>.enabled` is **not** set to `false` and you haven't configured
 models, OpenClaw auto-detects in this order and **stops at the first working option**:
 
 1. **Local CLIs** (audio only; if installed)

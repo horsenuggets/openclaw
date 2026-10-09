@@ -65,7 +65,7 @@ More debugging notes: [Bonjour](/gateway/bonjour).
 
 #### Tailnet (Vienna ⇄ London) discovery via unicast DNS-SD
 
-Android NSD/mDNS discovery won’t cross networks. If your Android node and the gateway are
+Android NSD/mDNS discovery won't cross networks. If your Android node and the gateway are
 on different networks but connected via Tailscale, use Wide-Area Bonjour / unicast DNS-SD
 instead:
 
@@ -115,7 +115,7 @@ Pairing details: [Gateway pairing](/gateway/pairing).
 
 ### 6) Chat + history
 
-The Android node’s Chat sheet uses the gateway’s **primary session key** (`main`), so
+The Android node's Chat sheet uses the gateway's **primary session key** (`main`), so
 history and replies are shared with WebChat and other clients:
 
 - History: `chat.history`

@@ -30,7 +30,7 @@ proxy requests can authenticate via Tailscale identity headers (`tailscale-user-
 without supplying a token/password. OpenClaw verifies the identity by resolving the
 `x-forwarded-for` address via the local Tailscale daemon (`tailscale whois`) and matching
 it to the header before accepting it. OpenClaw only treats a request as Serve when it
-arrives from loopback with Tailscale’s `x-forwarded-for`, `x-forwarded-proto`, and
+arrives from loopback with Tailscale's `x-forwarded-for`, `x-forwarded-proto`, and
 `x-forwarded-host` headers. To require explicit credentials, set
 `gateway.auth.allowTailscale: false` or force `gateway.auth.mode: "password"`.
 

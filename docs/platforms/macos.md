@@ -45,7 +45,7 @@ launchctl bootout gui/$UID/bot.molt.gateway
 
 Replace the label with `bot.molt.<profile>` when running a named profile.
 
-If the LaunchAgent isn’t installed, enable it from the app or run
+If the LaunchAgent isn't installed, enable it from the app or run
 `openclaw gateway install`.
 
 ## Node capabilities (mac)
@@ -58,7 +58,7 @@ The macOS app presents itself as a node. Common commands:
 - Screen: `screen.record`
 - System: `system.run`, `system.notify`
 
-The node reports a `permissions` map so agents can decide what’s allowed.
+The node reports a `permissions` map so agents can decide what's allowed.
 
 Node service + app IPC:
 
@@ -109,7 +109,7 @@ Notes:
 - `allowlist` entries are glob patterns for resolved binary paths.
 - Choosing “Always Allow” in the prompt adds that command to the allowlist.
 - `system.run` environment overrides are filtered (drops `PATH`, `DYLD_*`, `LD_*`,
-  `NODE_OPTIONS`, `PYTHON*`, `PERL*`, `RUBYOPT`) and then merged with the app’s
+  `NODE_OPTIONS`, `PYTHON*`, `PERL*`, `RUBYOPT`) and then merged with the app's
   environment.
 
 ## Deep links
@@ -176,8 +176,8 @@ Discovery options:
 - `--timeout <ms>`: overall discovery window (default: `2000`)
 - `--json`: structured output for diffing
 
-Tip: compare against `openclaw gateway discover --json` to see whether the macOS app’s
-discovery pipeline (NWBrowser + tailnet DNS‑SD fallback) differs from the Node CLI’s
+Tip: compare against `openclaw gateway discover --json` to see whether the macOS app's
+discovery pipeline (NWBrowser + tailnet DNS‑SD fallback) differs from the Node CLI's
 `dns-sd` based discovery.
 
 ## Remote connection plumbing (SSH tunnels)

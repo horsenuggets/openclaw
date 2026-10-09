@@ -97,7 +97,7 @@ If a prompt is required but no UI is reachable, fallback decides:
 
 ## Allowlist (per agent)
 
-Allowlists are **per agent**. If multiple agents exist, switch which agent you’re editing
+Allowlists are **per agent**. If multiple agents exist, switch which agent you're editing
 in the macOS app. Patterns are **case-insensitive glob matches**. Patterns should resolve
 to **binary paths** (basename-only entries are ignored). Legacy `agents.default` entries
 are migrated to `agents.main` on load.
@@ -231,7 +231,7 @@ Exec lifecycle is surfaced as system messages:
 - `Exec finished`
 - `Exec denied`
 
-These are posted to the agent’s session after the node reports the event. Gateway-host
+These are posted to the agent's session after the node reports the event. Gateway-host
 exec approvals emit the same lifecycle events when the command finishes (and optionally
 when running longer than the threshold). Approval-gated execs reuse the approval id as the
 `runId` in these messages for easy correlation.
@@ -240,7 +240,7 @@ when running longer than the threshold). Approval-gated execs reuse the approval
 
 - **full** is powerful; prefer allowlists when possible.
 - **ask** keeps you in the loop while still allowing fast approvals.
-- Per-agent allowlists prevent one agent’s approvals from leaking into others.
+- Per-agent allowlists prevent one agent's approvals from leaking into others.
 - Approvals only apply to host exec requests from **authorized senders**. Unauthorized
   senders cannot issue `/exec`.
 - `/exec security=full` is a session-level convenience for authorized operators and skips

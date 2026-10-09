@@ -89,7 +89,7 @@ with: `openclaw pairing approve whatsapp <code>`
 ### Personal number (fallback)
 
 Quick fallback: run OpenClaw on **your own number**. Message yourself (WhatsApp “Message
-yourself”) for testing so you don’t spam contacts. Expect to read verification codes on
+yourself”) for testing so you don't spam contacts. Expect to read verification codes on
 your main phone during setup and experiments. **Must enable self-chat mode.** When the
 wizard asks for your personal WhatsApp number, enter the phone you will message from (the
 owner/sender), not the assistant number.
@@ -125,12 +125,12 @@ sessions persist via `creds.json`.
 
 ## Why Not Twilio?
 
-- Early OpenClaw builds supported Twilio’s WhatsApp Business integration.
+- Early OpenClaw builds supported Twilio's WhatsApp Business integration.
 - WhatsApp Business numbers are a poor fit for a personal assistant.
-- Meta enforces a 24‑hour reply window; if you haven’t responded in the last 24 hours, the
-  business number can’t initiate new messages.
+- Meta enforces a 24‑hour reply window; if you haven't responded in the last 24 hours, the
+  business number can't initiate new messages.
 - High-volume or “chatty” usage triggers aggressive blocking, because business accounts
-  aren’t meant to send dozens of personal assistant messages.
+  aren't meant to send dozens of personal assistant messages.
 - Result: unreliable delivery and frequent blocks, so support was removed.
 
 ## Login + credentials
@@ -224,12 +224,12 @@ Pairing is a DM gate for unknown senders:
 **Can multiple people use different OpenClaw instances on one WhatsApp number?**  
 Yes, by routing each sender to a different agent via `bindings` (peer `kind: "dm"`, sender
 E.164 like `+15551234567`). Replies still come from the **same WhatsApp account**, and
-direct chats collapse to each agent’s main session, so use **one agent per person**. DM
+direct chats collapse to each agent's main session, so use **one agent per person**. DM
 access control (`dmPolicy`/`allowFrom`) is global per WhatsApp account. See
 [Multi-Agent Routing](/concepts/multi-agent).
 
 **Why do you ask for my phone number in the wizard?**  
-The wizard uses it to set your **allowlist/owner** so your own DMs are permitted. It’s not
+The wizard uses it to set your **allowlist/owner** so your own DMs are permitted. It's not
 used for auto-sending. If you run on your personal WhatsApp number, use that same number
 and enable `channels.whatsapp.selfChatMode`.
 

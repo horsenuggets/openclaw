@@ -32,10 +32,10 @@ allowlists, filesystem permissions).
   like `credentials/*.json`, `agents/*/agent/auth-profiles.json`, and
   `agents/*/sessions/sessions.json`).
 
-Running an AI agent with shell access on your machine is... *spicy*. Here’s how to not get
+Running an AI agent with shell access on your machine is... *spicy*. Here's how to not get
 pwned.
 
-OpenClaw is both a product and an experiment: you’re wiring frontier-model behavior into
+OpenClaw is both a product and an experiment: you're wiring frontier-model behavior into
 real messaging surfaces and real tools. **There is no “perfectly secure” setup.** The goal
 is to be deliberate about:
 
@@ -138,7 +138,7 @@ If a macOS node is paired, the Gateway can invoke `system.run` on that node. Thi
 
 - Requires node pairing (approval + token).
 - Controlled on the Mac via **Settings → Exec approvals** (security + ask + allowlist).
-- If you don’t want remote execution, set security to **deny** and remove node pairing for
+- If you don't want remote execution, set security to **deny** and remove node pairing for
   that Mac.
 
 ## Dynamic skills (watcher / remote nodes)
@@ -169,10 +169,10 @@ People who message you can:
 
 ## Core concept: access control before intelligence
 
-Most failures here are not fancy exploits — they’re “someone messaged the bot and the bot
+Most failures here are not fancy exploits — they're “someone messaged the bot and the bot
 did what they asked.”
 
-OpenClaw’s stance:
+OpenClaw's stance:
 
 - **Identity first:** decide who can talk to the bot (DM pairing / allowlists / explicit
   “open”).
@@ -217,7 +217,7 @@ All current DM-capable channels support a DM policy (`dmPolicy` or `*.dm.policy`
 gates inbound DMs **before** the message is processed:
 
 - `pairing` (default): unknown senders receive a short pairing code and the bot ignores
-  their message until approved. Codes expire after 1 hour; repeated DMs won’t resend a
+  their message until approved. Codes expire after 1 hour; repeated DMs won't resend a
   code until a new request is created. Pending requests are capped at **3 per channel** by
   default.
 - `allowlist`: unknown senders are blocked (no pairing handshake).
@@ -299,7 +299,7 @@ What helps in practice:
 - Keep inbound DMs locked down (pairing/allowlists).
 - Prefer mention gating in groups; avoid “always-on” bots in public rooms.
 - Treat links, attachments, and pasted instructions as hostile by default.
-- Run sensitive tool execution in a sandbox; keep secrets out of the agent’s reachable
+- Run sensitive tool execution in a sandbox; keep secrets out of the agent's reachable
   filesystem.
 - Note: sandboxing is opt-in. If sandbox mode is off, exec runs on the gateway host even
   though tools.exec.host defaults to sandbox, and host exec does not require approvals
@@ -308,7 +308,7 @@ What helps in practice:
   or explicit allowlists.
 - **Model choice matters:** older/legacy models can be less robust against prompt
   injection and tool misuse. Prefer modern, instruction-hardened models for any bot with
-  tools. We recommend Anthropic Opus 4.6 (or the latest Opus) because it’s strong at
+  tools. We recommend Anthropic Opus 4.6 (or the latest Opus) because it's strong at
   recognizing prompt injections (see
   [“A step forward on safety”](https://www.anthropic.com/news/claude-opus-4-5)).
 
@@ -382,7 +382,7 @@ leaked, or a plugin/tool did something unexpected.
    - Revoke/rotate model provider credentials (API keys / OAuth).
 3. **Review artifacts**
    - Check Gateway logs and recent sessions/transcripts for unexpected tool calls.
-   - Review `extensions/` and remove anything you don’t fully trust.
+   - Review `extensions/` and remove anything you don't fully trust.
 4. **Re-run audit**
    - `openclaw security audit --deep` and confirm the report is clean.
 
@@ -518,7 +518,7 @@ WS access. Optional: pin remote TLS with `gateway.remote.tlsFingerprint` when us
 
 Local device pairing:
 
-- Device pairing is auto‑approved for **local** connects (loopback or the gateway host’s
+- Device pairing is auto‑approved for **local** connects (loopback or the gateway host's
   own tailnet address) to keep same‑host clients smooth.
 - Other tailnet peers are **not** treated as local; they still need pairing approval.
 
@@ -569,14 +569,14 @@ the browser machine and let the Gateway proxy browser actions (see
 Recommended pattern:
 
 - Keep the Gateway and node host on the same tailnet (Tailscale).
-- Pair the node intentionally; disable browser proxy routing if you don’t need it.
+- Pair the node intentionally; disable browser proxy routing if you don't need it.
 
 Avoid:
 
 - Exposing relay/control ports over LAN or public Internet.
 - Tailscale Funnel for browser control endpoints (public exposure).
 
-### 0.7) Secrets on disk (what’s sensitive)
+### 0.7) Secrets on disk (what's sensitive)
 
 Assume anything under `~/.openclaw/` (or `$OPENCLAW_STATE_DIR/`) may contain secrets or
 private data:
@@ -614,7 +614,7 @@ Recommendations:
   hostnames, internal URLs).
 - When sharing diagnostics, prefer `openclaw status --all` (pasteable, secrets redacted)
   over raw logs.
-- Prune old session transcripts and log files if you don’t need long retention.
+- Prune old session transcripts and log files if you don't need long retention.
 
 Details: [Logging](/gateway/logging)
 
@@ -715,7 +715,7 @@ Also consider agent workspace access inside the sandbox:
   `/workspace`
 
 Important: `tools.elevated` is the global baseline escape hatch that runs exec on the
-host. Keep `tools.elevated.allowFrom` tight and don’t enable it for strangers. You can
+host. Keep `tools.elevated.allowFrom` tight and don't enable it for strangers. You can
 further restrict elevated per agent via `agents.list[].tools.elevated`. See
 [Elevated Mode](/tools/elevated).
 
@@ -735,9 +735,9 @@ and data. Treat browser profiles as **sensitive state**:
   whatever that profile can reach.
 - Keep the Gateway and node hosts tailnet-only; avoid exposing relay/control ports to LAN
   or public Internet.
-- The Chrome extension relay’s CDP endpoint is auth-gated; only OpenClaw clients can
+- The Chrome extension relay's CDP endpoint is auth-gated; only OpenClaw clients can
   connect.
-- Disable browser proxy routing when you don’t need it
+- Disable browser proxy routing when you don't need it
   (`gateway.nodes.browser.mode="off"`).
 - Chrome extension relay mode is **not** “safer”; it can take over your existing Chrome
   tabs. Assume it can act as you in whatever that tab/profile can reach.
@@ -912,7 +912,7 @@ fails, there are new candidates not yet in the baseline.
    ```
 5. If you need new excludes, add them to `.detect-secrets.cfg` and regenerate the baseline
    with matching `--exclude-files` / `--exclude-lines` flags (the config file is
-   reference-only; detect-secrets doesn’t read it automatically).
+   reference-only; detect-secrets doesn't read it automatically).
 
 Commit the updated `.secrets.baseline` once it reflects the intended state.
 

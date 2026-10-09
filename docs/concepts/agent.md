@@ -12,7 +12,7 @@ OpenClaw runs a single embedded agent runtime derived from **pi-mono**.
 ## Workspace (required)
 
 OpenClaw uses a single agent workspace directory (`agents.defaults.workspace`) as the
-agent’s **only** working directory (`cwd`) for tools and context.
+agent's **only** working directory (`cwd`) for tools and context.
 
 Recommended: use `openclaw setup` to create `~/.openclaw/openclaw.json` if missing and
 initialize the workspace files.
@@ -61,7 +61,7 @@ To disable bootstrap file creation entirely (for pre-seeded workspaces), set:
 
 Core tools (read/exec/edit/write and related system tools) are always available, subject
 to tool policy. `apply_patch` is optional and gated by `tools.exec.applyPatch`. `TOOLS.md`
-does **not** control which tools exist; it’s guidance for how *you* want them used.
+does **not** control which tools exist; it's guidance for how *you* want them used.
 
 ## Skills
 

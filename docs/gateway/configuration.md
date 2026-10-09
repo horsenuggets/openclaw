@@ -385,7 +385,7 @@ Legacy OAuth imports:
 
 The embedded Pi agent maintains a runtime cache at:
 
-- `<agentDir>/auth.json` (managed automatically; don’t edit manually)
+- `<agentDir>/auth.json` (managed automatically; don't edit manually)
 
 Legacy agent dir (pre multi-agent):
 
@@ -429,10 +429,10 @@ failover.
 Optional per-agent identity used for defaults and UX. This is written by the macOS
 onboarding assistant.
 
-If set, OpenClaw derives defaults (only when you haven’t set them explicitly):
+If set, OpenClaw derives defaults (only when you haven't set them explicitly):
 
-- `messages.ackReaction` from the **active agent**’s `identity.emoji` (falls back to 👀)
-- `agents.list[].groupChat.mentionPatterns` from the agent’s
+- `messages.ackReaction` from the **active agent**'s `identity.emoji` (falls back to 👀)
+- `agents.list[].groupChat.mentionPatterns` from the agent's
   `identity.name`/`identity.emoji` (so “@Samantha” works in groups across
   Telegram/Slack/Discord/Google Chat/iMessage/WhatsApp)
 - `identity.avatar` accepts a workspace-relative image path or a remote URL/data URL.
@@ -743,7 +743,7 @@ Notes:
 - `"open"`: groups bypass allowlists; mention-gating still applies.
 - `"disabled"`: block all group/room messages.
 - `"allowlist"`: only allow groups/rooms that match the configured allowlist.
-- `channels.defaults.groupPolicy` sets the default when a provider’s `groupPolicy` is
+- `channels.defaults.groupPolicy` sets the default when a provider's `groupPolicy` is
   unset.
 - WhatsApp/Telegram/Signal/iMessage/Microsoft Teams use `groupAllowFrom` (fallback:
   explicit `allowFrom`).
@@ -1056,7 +1056,7 @@ Notes:
 
 ### `web` (WhatsApp web channel runtime)
 
-WhatsApp runs through the gateway’s web channel (Baileys Web). It starts automatically
+WhatsApp runs through the gateway's web channel (Baileys Web). It starts automatically
 when a linked session exists. Set `web.enabled: false` to keep it off by default.
 
 ```json5
@@ -1287,7 +1287,7 @@ Notes:
   (`serviceAccountFile`).
 - Env fallbacks for the default account: `GOOGLE_CHAT_SERVICE_ACCOUNT` or
   `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE`.
-- `audienceType` + `audience` must match the Chat app’s webhook auth config.
+- `audienceType` + `audience` must match the Chat app's webhook auth config.
 - Use `spaces/<spaceId>` or `users/<userId|email>` when setting delivery targets.
 
 ### `channels.slack` (socket mode)
@@ -1522,7 +1522,7 @@ own per-scope workspaces under `agents.defaults.sandbox.workspaceRoot`.
 
 ### `agents.defaults.repoRoot`
 
-Optional repository root to show in the system prompt’s Runtime line. If unset, OpenClaw
+Optional repository root to show in the system prompt's Runtime line. If unset, OpenClaw
 tries to detect a `.git` directory by walking upward from the workspace (and current
 working directory). The path must exist to be used.
 
@@ -1574,7 +1574,7 @@ of injecting `IDENTITY.md` alongside the other workspace bootstrap files.
 
 ### `agents.defaults.userTimezone`
 
-Sets the user’s timezone for **system prompt context** (not for timestamps in message
+Sets the user's timezone for **system prompt context** (not for timestamps in message
 envelopes). If unset, OpenClaw uses the host timezone at runtime.
 
 ```json5
@@ -1585,7 +1585,7 @@ envelopes). If unset, OpenClaw uses the host timezone at runtime.
 
 ### `agents.defaults.timeFormat`
 
-Controls the **time format** shown in the system prompt’s Current Date & Time section.
+Controls the **time format** shown in the system prompt's Current Date & Time section.
 Default: `auto` (OS preference).
 
 ```json5
@@ -1670,7 +1670,7 @@ WhatsApp inbound prefix is configured via `channels.whatsapp.messagePrefix` (dep
 
 `ackReaction` sends a best-effort emoji reaction to acknowledge inbound messages on
 channels that support reactions (Slack/Discord/Telegram/Google Chat). Defaults to the
-active agent’s `identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
+active agent's `identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
 
 `ackReactionScope` controls when reactions fire:
 
@@ -1680,7 +1680,7 @@ active agent’s `identity.emoji` when set, otherwise `"👀"`. Set it to `""` t
 - `direct`: direct messages only
 - `all`: all messages
 
-`removeAckAfterReply` removes the bot’s ack reaction after a reply is sent
+`removeAckAfterReply` removes the bot's ack reaction after a reply is sent
 (Slack/Discord/Telegram/Google Chat only). Default: `false`.
 
 #### `messages.tts`
@@ -1749,7 +1749,7 @@ Notes:
 
 Defaults for Talk mode (macOS/iOS/Android). Voice IDs fall back to `ELEVENLABS_VOICE_ID`
 or `SAG_VOICE_ID` when unset. `apiKey` falls back to `ELEVENLABS_API_KEY` (or the
-gateway’s shell profile) when unset. `voiceAliases` lets Talk directives use friendly
+gateway's shell profile) when unset. `voiceAliases` lets Talk directives use friendly
 names (e.g. `"voice":"Clawd"`).
 
 ```json5
@@ -1782,7 +1782,7 @@ optional and is **only used if the primary model lacks image input**. Each
 
 `params` is also applied to streaming runs (embedded agent + compaction). Supported keys
 today: `temperature`, `maxTokens`. These merge with call-time options; caller-supplied
-values win. `temperature` is an advanced knob—leave unset unless you know the model’s
+values win. `temperature` is an advanced knob—leave unset unless you know the model's
 defaults and need a change.
 
 Example:
@@ -1957,7 +1957,7 @@ High level:
 - Modes:
   - `adaptive`: soft-trims oversized tool results (keep head/tail) when the estimated
     context ratio crosses `softTrimRatio`. Then hard-clears the oldest eligible tool
-    results when the estimated context ratio crosses `hardClearRatio` **and** there’s
+    results when the estimated context ratio crosses `hardClearRatio` **and** there's
     enough prunable tool-result bulk (`minPrunableToolChars`).
   - `aggressive`: always replaces eligible tool results before the cutoff with the
     `hardClear.placeholder` (no ratio checks).
@@ -1977,7 +1977,7 @@ Notes / current limitations:
 - Tool results containing **image blocks are skipped** (never trimmed/cleared) right now.
 - The estimated “context ratio” is based on **characters** (approximate), not exact
   tokens.
-- If the session doesn’t contain at least `keepLastAssistants` assistant messages yet,
+- If the session doesn't contain at least `keepLastAssistants` assistant messages yet,
   pruning is skipped.
 - In `aggressive` mode, `hardClear.enabled` is ignored (eligible tool results are always
   replaced with `hardClear.placeholder`).
@@ -2269,7 +2269,7 @@ Example:
 `agents.defaults.subagents` configures sub-agent defaults:
 
 - `model`: default model for spawned sub-agents (string or `{ primary, fallbacks }`). If
-  omitted, sub-agents inherit the caller’s model unless overridden per agent or per call.
+  omitted, sub-agents inherit the caller's model unless overridden per agent or per call.
 - `maxConcurrent`: max concurrent sub-agent runs (default 1)
 - `archiveAfterMinutes`: auto-archive sub-agent sessions after N minutes (default 60; set
   `0` to disable)
@@ -2682,7 +2682,7 @@ Notes:
 - If `ZAI_API_KEY` is missing, requests to `zai/*` will fail with an auth error at
   runtime.
 - Example error: `No API key found for provider "zai".`
-- Z.AI’s general API endpoint is `https://api.z.ai/api/paas/v4`. GLM coding requests use
+- Z.AI's general API endpoint is `https://api.z.ai/api/paas/v4`. GLM coding requests use
   the dedicated Coding endpoint `https://api.z.ai/api/coding/paas/v4`. The built-in `zai`
   provider uses the Coding endpoint. If you need the general endpoint, define a custom
   provider in `models.providers` with the base URL override (see the custom providers
@@ -2998,7 +2998,7 @@ Fields:
 
 Per-skill fields:
 
-- `enabled`: set `false` to disable a skill even if it’s bundled/installed.
+- `enabled`: set `false` to disable a skill even if it's bundled/installed.
 - `env`: environment variables injected for the agent run (only if not already set).
 - `apiKey`: optional convenience for skills that declare a primary env var (e.g.
   `nano-banana-pro` → `GEMINI_API_KEY`).
@@ -3527,7 +3527,7 @@ Defaults:
 Bind modes:
 
 - `lan`: `0.0.0.0` (reachable on any interface, including LAN/Wi‑Fi and Tailscale)
-- `tailnet`: bind only to the machine’s Tailscale IP (recommended for Vienna ⇄ London)
+- `tailnet`: bind only to the machine's Tailscale IP (recommended for Vienna ⇄ London)
 - `loopback`: `127.0.0.1` (local only)
 - `auto`: prefer tailnet IP if present, else `lan`
 

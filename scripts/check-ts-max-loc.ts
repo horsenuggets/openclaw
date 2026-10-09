@@ -26,7 +26,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function gitLsFilesAll(): string[] {
-  // Include untracked files too so local refactors don’t “pass” by accident.
+  // Include untracked files too so local refactors don't “pass” by accident.
   const stdout = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
     encoding: "utf8",
   });

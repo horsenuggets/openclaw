@@ -24,7 +24,7 @@ title: "Audio and Voice Notes"
 
 ## Auto-detection (default)
 
-If you **don’t configure models** and `tools.media.audio.enabled` is **not** set to
+If you **don't configure models** and `tools.media.audio.enabled` is **not** set to
 `false`, OpenClaw auto-detects in this order and stops at the first working option:
 
 1. **Local CLIs** (if installed)

@@ -50,7 +50,7 @@ If your gateway runs under launchd/systemd and PATH is minimal, add just the com
 }
 ```
 
-That’s it. No keys, no extra auth config needed beyond the CLI itself.
+That's it. No keys, no extra auth config needed beyond the CLI itself.
 
 ## Using it as a fallback
 
@@ -208,7 +208,7 @@ Override only if needed (common: absolute `command` path).
 - **No OpenClaw tools** (the CLI backend never receives tool calls). Some CLIs may still
   run their own agent tooling.
 - **No streaming** (CLI output is collected then returned).
-- **Structured outputs** depend on the CLI’s JSON format.
+- **Structured outputs** depend on the CLI's JSON format.
 - **Codex CLI sessions** resume via text output (no JSONL), which is less structured than
   the initial `--json` run. OpenClaw sessions still work normally.
 

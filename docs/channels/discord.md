@@ -92,7 +92,7 @@ Minimal config:
     rather than the shared `main` session.
 
 Note: Name → id resolution uses guild member search and requires Server Members Intent; if
-the bot can’t search members, use ids or `<@id>` mentions. Note: Slugs are lowercase with
+the bot can't search members, use ids or `<@id>` mentions. Note: Slugs are lowercase with
 spaces replaced by `-`. Channel names are slugged without the leading `#`. Note: Guild
 context `[from:]` lines include `author.tag` + `id` to make ping-ready replies easy.
 
@@ -128,7 +128,7 @@ Discord blocks “privileged intents” unless you explicitly enable them.
 In **Bot** → **Privileged Gateway Intents**, enable:
 
 - **Message Content Intent** (required to read message text in most guilds; without it
-  you’ll see “Used disallowed intents” or the bot will connect but not react to messages)
+  you'll see “Used disallowed intents” or the bot will connect but not react to messages)
 - **Server Members Intent** (recommended; required for some member/user lookups and
   allowlist matching in guilds)
 
@@ -155,7 +155,7 @@ In your app: **OAuth2** → **URL Generator**
 - ✅ Add Reactions (optional but recommended)
 - ✅ Use External Emojis / Stickers (optional; only if you want them)
 
-Avoid **Administrator** unless you’re debugging and fully trust the bot.
+Avoid **Administrator** unless you're debugging and fully trust the bot.
 
 Copy the generated URL, open it, pick your server, and install the bot.
 
@@ -263,7 +263,7 @@ Notes:
 - **Bot connects but never replies in a guild channel**:
   - Missing **Message Content Intent**, or
   - The bot lacks channel permissions (View/Send/Read History), or
-  - Your config requires mentions and you didn’t mention it, or
+  - Your config requires mentions and you didn't mention it, or
   - Your guild/channel allowlist denies the channel/user.
 - **`requireMention: false` but still no replies**:
 - `channels.discord.groupPolicy` defaults to **allowlist**; set it to `"open"` or add a
@@ -275,14 +275,14 @@ Notes:
 - `requireMention` must live under `channels.discord.guilds` (or a specific channel).
   `channels.discord.requireMention` at the top level is ignored.
 - **Permission audits** (`channels status --probe`) only check numeric channel IDs. If you
-  use slugs/names as `channels.discord.guilds.*.channels` keys, the audit can’t verify
+  use slugs/names as `channels.discord.guilds.*.channels` keys, the audit can't verify
   permissions.
-- **DMs don’t work**: `channels.discord.dm.enabled=false`,
-  `channels.discord.dm.policy="disabled"`, or you haven’t been approved yet
+- **DMs don't work**: `channels.discord.dm.enabled=false`,
+  `channels.discord.dm.policy="disabled"`, or you haven't been approved yet
   (`channels.discord.dm.policy="pairing"`).
 - **Exec approvals in Discord**: Discord supports a **button UI** for exec approvals in
   DMs (Allow once / Always allow / Deny). `/approve <id> ...` is only for forwarded
-  approvals and won’t resolve Discord’s button prompts. If you see
+  approvals and won't resolve Discord's button prompts. If you see
   `❌ Failed to submit approval: Error: unknown approval id` or the UI never shows up,
   check:
   - `channels.discord.execApprovals.enabled: true` in your config.
@@ -540,10 +540,10 @@ Allowlist matching notes:
 
 Native command notes:
 
-- The registered commands mirror OpenClaw’s chat commands.
+- The registered commands mirror OpenClaw's chat commands.
 - Native commands honor the same allowlists as DMs/guild messages
   (`channels.discord.dm.allowFrom`, `channels.discord.guilds`, per-channel rules).
-- Slash commands may still be visible in Discord UI to users who aren’t allowlisted;
+- Slash commands may still be visible in Discord UI to users who aren't allowlisted;
   OpenClaw enforces allowlists on execution and replies “not authorized”.
 
 ## Tool actions

@@ -19,7 +19,7 @@ title: "Voice Wake"
 ## Runtime behavior (wake-word)
 
 - Speech recognizer lives in `VoiceWakeRuntime`.
-- Trigger only fires when there’s a **meaningful pause** between the wake word and the
+- Trigger only fires when there's a **meaningful pause** between the wake word and the
   next word (~0.55s gap). The overlay/chime can start on the pause even before the command
   begins.
 - Silence windows: 2.0s when speech is flowing, 5.0s if only the trigger was heard.
@@ -38,7 +38,7 @@ title: "Voice Wake"
 ## Sticky overlay failure mode (previous)
 
 Previously, if the overlay got stuck visible and you manually closed it, Voice Wake could
-appear “dead” because the runtime’s restart attempt could be blocked by overlay visibility
+appear “dead” because the runtime's restart attempt could be blocked by overlay visibility
 and no subsequent restart was scheduled.
 
 Hardening:

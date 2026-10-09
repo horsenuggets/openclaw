@@ -33,7 +33,7 @@ Fast CLI to summarize URLs, local files, and YouTube links.
 Use this skill immediately when the user asks any of:
 
 - “use summarize.sh”
-- “what’s this link/video about?”
+- “what's this link/video about?”
 - “summarize this URL/article”
 - “transcribe this YouTube/video” (best-effort transcript extraction; no `yt-dlp` needed)
 
@@ -53,7 +53,7 @@ Best-effort transcript (URLs only):
 summarize "https://youtu.be/dQw4w9WgXcQ" --youtube auto --extract-only
 ```
 
-If the user asked for a transcript but it’s huge, return a tight summary first, then ask
+If the user asked for a transcript but it's huge, return a tight summary first, then ask
 which section/time range to expand.
 
 ## Model + keys

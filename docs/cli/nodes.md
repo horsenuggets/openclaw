@@ -2,7 +2,7 @@
 summary:
   "CLI reference for `openclaw nodes` (list/status/approve/invoke, camera/canvas/screen)"
 read_when:
-  - You’re managing paired nodes (cameras, screen, canvas)
+  - You're managing paired nodes (cameras, screen, canvas)
   - You need to approve requests or invoke node commands
 title: "nodes"
 ---
@@ -56,7 +56,7 @@ Invoke flags:
 
 ### Exec-style defaults
 
-`nodes run` mirrors the model’s exec behavior (defaults + approvals):
+`nodes run` mirrors the model's exec behavior (defaults + approvals):
 
 - Reads `tools.exec.*` (plus `agents.list[].tools.exec.*` overrides).
 - Uses exec approvals (`exec.approval.request`) before invoking `system.run`.

@@ -8,7 +8,7 @@ title: "Tools Invoke API"
 
 # Tools Invoke (HTTP)
 
-OpenClaw’s Gateway exposes a simple HTTP endpoint for invoking a single tool directly. It
+OpenClaw's Gateway exposes a simple HTTP endpoint for invoking a single tool directly. It
 is always enabled, but gated by Gateway auth and tool policy.
 
 - `POST /tools/invoke`

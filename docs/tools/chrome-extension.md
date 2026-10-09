@@ -89,7 +89,7 @@ openclaw browser create-profile \
 
 ## Which tab does it control?
 
-- It does **not** automatically control “whatever tab you’re looking at”.
+- It does **not** automatically control “whatever tab you're looking at”.
 - It controls **only the tab(s) you explicitly attached** by clicking the toolbar button.
 - To switch: open the other tab and click the extension icon there.
 
@@ -97,7 +97,7 @@ openclaw browser create-profile \
 
 - `ON`: attached; OpenClaw can drive that tab.
 - `…`: connecting to the local relay.
-- `!`: relay not reachable (most common: browser relay server isn’t running on this
+- `!`: relay not reachable (most common: browser relay server isn't running on this
   machine).
 
 If you see `!`:
@@ -152,7 +152,7 @@ Options:
 }
 ```
 
-Then ensure the tool isn’t denied by tool policy, and (if needed) call `browser` with
+Then ensure the tool isn't denied by tool policy, and (if needed) call `browser` with
 `target="host"`.
 
 Debugging: `openclaw sandbox explain`
@@ -161,7 +161,7 @@ Debugging: `openclaw sandbox explain`
 
 - Keep the Gateway and node host on the same tailnet; avoid exposing relay ports to LAN or
   public Internet.
-- Pair nodes intentionally; disable browser proxy routing if you don’t want remote control
+- Pair nodes intentionally; disable browser proxy routing if you don't want remote control
   (`gateway.nodes.browser.mode="off"`).
 
 ## How “extension path” works
@@ -180,13 +180,13 @@ until you reload it from a valid path.
 
 This is powerful and risky. Treat it like giving the model “hands on your browser”.
 
-- The extension uses Chrome’s debugger API (`chrome.debugger`). When attached, the model
+- The extension uses Chrome's debugger API (`chrome.debugger`). When attached, the model
   can:
   - click/type/navigate in that tab
   - read page content
-  - access whatever the tab’s logged-in session can access
+  - access whatever the tab's logged-in session can access
 - **This is not isolated** like the dedicated openclaw-managed profile.
-  - If you attach to your daily-driver profile/tab, you’re granting access to that account
+  - If you attach to your daily-driver profile/tab, you're granting access to that account
     state.
 
 Recommendations:

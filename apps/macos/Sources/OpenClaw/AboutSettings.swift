@@ -90,7 +90,7 @@ struct AboutSettings: View {
         .padding(.bottom, 24)
         .onAppear {
             guard let updater, !self.didLoadUpdaterState else { return }
-            // Keep Sparkle’s auto-check setting in sync with the persisted toggle.
+            // Keep Sparkle's auto-check setting in sync with the persisted toggle.
             updater.automaticallyChecksForUpdates = self.autoCheckEnabled
             updater.automaticallyDownloadsUpdates = self.autoCheckEnabled
             self.didLoadUpdaterState = true

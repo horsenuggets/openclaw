@@ -128,7 +128,7 @@ openclaw hooks enable <name>
 
 Enable a specific hook by adding it to your config (`~/.openclaw/config.json`).
 
-**Note:** Hooks managed by plugins show `plugin:<id>` in `openclaw hooks list` and can’t
+**Note:** Hooks managed by plugins show `plugin:<id>` in `openclaw hooks list` and can't
 be enabled/disabled here. Enable/disable the plugin instead.
 
 **Arguments:**

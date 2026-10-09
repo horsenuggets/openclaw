@@ -105,7 +105,7 @@ pnpm build
 openclaw onboard --install-daemon
 ```
 
-Tip: if you don’t have a global install yet, run repo commands via `pnpm openclaw ...`.
+Tip: if you don't have a global install yet, run repo commands via `pnpm openclaw ...`.
 
 For deeper development workflows, see [Setup](/start/setup).
 
@@ -174,7 +174,7 @@ echo "$PATH"
 ```
 
 If `$(npm prefix -g)/bin` (macOS/Linux) or `$(npm prefix -g)` (Windows) is **not** present
-inside `echo "$PATH"`, your shell can’t find global npm binaries (including `openclaw`).
+inside `echo "$PATH"`, your shell can't find global npm binaries (including `openclaw`).
 
 Fix: add it to your shell startup file (zsh: `~/.zshrc`, bash: `~/.bashrc`):
 

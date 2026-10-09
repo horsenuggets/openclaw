@@ -22,7 +22,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash
 
 Notes:
 
-- Add `--no-onboard` if you don’t want the onboarding wizard to run again.
+- Add `--no-onboard` if you don't want the onboarding wizard to run again.
 - For **source installs**, use:
   ```bash
   curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method git --no-onboard
@@ -84,7 +84,7 @@ Notes:
 
 - If your Gateway runs as a service, `openclaw gateway restart` is preferred over killing
   PIDs.
-- If you’re pinned to a specific version, see “Rollback / pinning” below.
+- If you're pinned to a specific version, see “Rollback / pinning” below.
 
 ## Update (`openclaw update`)
 
@@ -103,7 +103,7 @@ It runs a safe-ish update flow:
 - Restarts the gateway by default (use `--no-restart` to skip).
 
 If you installed via **npm/pnpm** (no git metadata), `openclaw update` will try to update
-via your package manager. If it can’t detect the install, use “Update (global install)”
+via your package manager. If it can't detect the install, use “Update (global install)”
 instead.
 
 ## Update (Control UI / RPC)
@@ -151,9 +151,9 @@ Notes:
 
 ## Always Run: `openclaw doctor`
 
-Doctor is the “safe update” command. It’s intentionally boring: repair + migrate + warn.
+Doctor is the “safe update” command. It's intentionally boring: repair + migrate + warn.
 
-Note: if you’re on a **source install** (git checkout), `openclaw doctor` will offer to
+Note: if you're on a **source install** (git checkout), `openclaw doctor` will offer to
 run `openclaw update` first.
 
 Typical things it does:
@@ -179,7 +179,7 @@ openclaw gateway --port 18789
 openclaw logs --follow
 ```
 
-If you’re supervised:
+If you're supervised:
 
 - macOS launchd (app-bundled LaunchAgent):
   `launchctl kickstart -k gui/$UID/bot.molt.gateway` (use `bot.molt.<profile>`; legacy
@@ -239,7 +239,7 @@ git checkout main
 git pull
 ```
 
-## If you’re stuck
+## If you're stuck
 
 - Run `openclaw doctor` again and read the output carefully (it often tells you the fix).
 - Check: [Troubleshooting](/gateway/troubleshooting)

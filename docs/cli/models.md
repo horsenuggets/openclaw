@@ -29,7 +29,7 @@ openclaw models scan
 provider usage snapshots are available, the OAuth/token status section includes provider
 usage headers. Add `--probe` to run live auth probes against each configured provider
 profile. Probes are real requests (may consume tokens and trigger rate limits). Use
-`--agent <id>` to inspect a configured agent’s model/auth state. When omitted, the command
+`--agent <id>` to inspect a configured agent's model/auth state. When omitted, the command
 uses `OPENCLAW_AGENT_DIR`/`PI_CODING_AGENT_DIR` if set, otherwise the configured default
 agent.
 
@@ -74,7 +74,7 @@ openclaw models auth setup-token
 openclaw models auth paste-token
 ```
 
-`models auth login` runs a provider plugin’s auth flow (OAuth/API key). Use
+`models auth login` runs a provider plugin's auth flow (OAuth/API key). Use
 `openclaw plugins list` to see which providers are installed.
 
 Notes:

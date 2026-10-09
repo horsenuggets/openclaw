@@ -17,10 +17,10 @@ Telegram/Discord/Slack/iMessage as well; this doc focuses on WhatsApp-specific b
 For multi-agent setups, set `agents.list[].groupChat.mentionPatterns` per agent (or use
 `messages.groupChat.mentionPatterns` as a global fallback).
 
-## What’s implemented (2025-12-03)
+## What's implemented (2025-12-03)
 
 - Activation modes: `mention` (default) or `always`. `mention` requires a ping (real
-  WhatsApp @-mentions via `mentionedJids`, regex patterns, or the bot’s E.164 anywhere in
+  WhatsApp @-mentions via `mentionedJids`, regex patterns, or the bot's E.164 anywhere in
   the text). `always` wakes the agent on every message but it should reply only when it
   can add meaningful value; otherwise it returns the silent-reply token `⁘ return`.
   Defaults can be set in config (`channels.whatsapp.groups`) and overridden per group via
@@ -44,7 +44,7 @@ For multi-agent setups, set `agents.list[].groupChat.mentionPatterns` per agent 
 - Group system prompt: on the first turn of a group session (and whenever `/activation`
   changes the mode) we inject a short blurb into the system prompt like
   `You are replying inside the WhatsApp group "<subject>". Group members: Alice (+44...), Bob (+43...), … Activation: trigger-only … Address the specific sender noted in the message context.`
-  If metadata isn’t available we still tell the agent it’s a group chat.
+  If metadata isn't available we still tell the agent it's a group chat.
 
 ## Config example (WhatsApp)
 
@@ -88,7 +88,7 @@ Use the group chat command:
 - `/activation mention`
 - `/activation always`
 
-Only the owner number (from `channels.whatsapp.allowFrom`, or the bot’s own E.164 when
+Only the owner number (from `channels.whatsapp.allowFrom`, or the bot's own E.164 when
 unset) can change this. Send `/status` as a standalone message in the group to see the
 current activation mode.
 
@@ -100,7 +100,7 @@ current activation mode.
 3. The agent prompt will include recent group context plus the trailing `[from: …]` marker
    so it can address the right person.
 4. Session-level directives (`/verbose on`, `/think high`, `/new` or `/reset`, `/compact`)
-   apply only to that group’s session; send them as standalone messages so they register.
+   apply only to that group's session; send them as standalone messages so they register.
    Your personal DM session remains independent.
 
 ## Testing / verification
@@ -120,6 +120,6 @@ current activation mode.
   without mentions, only the first will get a response.
 - Session store entries will appear as `agent:<agentId>:whatsapp:group:<jid>` in the
   session store (`~/.openclaw/agents/<agentId>/sessions/sessions.json` by default); a
-  missing entry just means the group hasn’t triggered a run yet.
+  missing entry just means the group hasn't triggered a run yet.
 - Typing indicators in groups follow `agents.defaults.typingMode` (default: `message` when
   unmentioned).

@@ -25,7 +25,7 @@ not require VS Code.
 ### 2) Copilot Proxy plugin (`copilot-proxy`)
 
 Use the **Copilot Proxy** VS Code extension as a local bridge. OpenClaw talks to the
-proxy’s `/v1` endpoint and uses the model list you configure there. Choose this when you
+proxy's `/v1` endpoint and uses the model list you configure there. Choose this when you
 already run Copilot Proxy in VS Code or need to route through it. You must enable the
 plugin and keep the VS Code extension running.
 

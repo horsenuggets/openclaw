@@ -10,22 +10,22 @@ title: "Context"
 # Context
 
 “Context” is **everything OpenClaw sends to the model for a run**. It is bounded by the
-model’s **context window** (token limit).
+model's **context window** (token limit).
 
 Beginner mental model:
 
 - **System prompt** (OpenClaw-built): rules, tools, skills list, time/runtime, and
   injected workspace files.
-- **Conversation history**: your messages + the assistant’s messages for this session.
+- **Conversation history**: your messages + the assistant's messages for this session.
 - **Tool calls/results + attachments**: command output, file reads, images/audio, etc.
 
 Context is *not the same thing* as “memory”: memory can be stored on disk and reloaded
-later; context is what’s inside the model’s current window.
+later; context is what's inside the model's current window.
 
 ## Quick start (inspect context)
 
 - `/status` → quick “how full is my window?” view + session settings.
-- `/context list` → what’s injected + rough sizes (per file + totals).
+- `/context list` → what's injected + rough sizes (per file + totals).
 - `/context detail` → deeper breakdown: per-file, per-tool schema sizes, per-skill entry
   sizes, and system prompt size.
 - `/usage tokens` → append per-reply usage footer to normal replies.
@@ -36,7 +36,7 @@ See also: [Slash commands](/tools/slash-commands), [Token use & costs](/token-us
 
 ## Example output
 
-Values vary by model, provider, tool policy, and what’s in your workspace.
+Values vary by model, provider, tool policy, and what's in your workspace.
 
 ### `/context list`
 
@@ -121,13 +121,13 @@ Large files are truncated per-file using `agents.defaults.bootstrapMaxChars` (de
 `20000` chars). `/context` shows **raw vs injected** sizes and whether truncation
 happened.
 
-## Skills: what’s injected vs loaded on-demand
+## Skills: what's injected vs loaded on-demand
 
 The system prompt includes a compact **skills list** (name + description + location). This
 list has real overhead.
 
 Skill instructions are *not* included by default. The model is expected to `read` the
-skill’s `SKILL.md` **only when needed**.
+skill's `SKILL.md` **only when needed**.
 
 ## Tools: there are two costs
 
@@ -135,7 +135,7 @@ Tools affect context in two ways:
 
 1. **Tool list text** in the system prompt (what you see as “Tooling”).
 2. **Tool schemas** (JSON). These are sent to the model so it can call tools. They count
-   toward context even though you don’t see them as plain text.
+   toward context even though you don't see them as plain text.
 
 `/context detail` breaks down the biggest tool schemas so you can see what dominates.
 
@@ -173,7 +173,7 @@ Docs: [Session](/concepts/session), [Compaction](/concepts/compaction),
 - `System prompt (run)` = captured from the last embedded (tool-capable) run and persisted
   in the session store.
 - `System prompt (estimate)` = computed on the fly when no run report exists (or when
-  running via a CLI backend that doesn’t generate the report).
+  running via a CLI backend that doesn't generate the report).
 
 Either way, it reports sizes and top contributors; it does **not** dump the full system
 prompt or tool schemas.

@@ -163,7 +163,7 @@ Common pitfalls:
 ## Tool policy + escape hatches
 
 Tool allow/deny policies still apply before sandbox rules. If a tool is denied globally or
-per-agent, sandboxing doesn’t bring it back.
+per-agent, sandboxing doesn't bring it back.
 
 `tools.elevated` is an explicit escape hatch that runs `exec` on the host. `/exec`
 directives only apply for authorized senders and persist per session; to hard-disable

@@ -31,13 +31,13 @@ Main agent credentials are **not** shared automatically. Never reuse `agentDir` 
 agents (it causes auth/session collisions). If you want to share creds, copy
 `auth-profiles.json` into the other agent's `agentDir`.
 
-Skills are per-agent via each workspace’s `skills/` folder, with shared skills available
+Skills are per-agent via each workspace's `skills/` folder, with shared skills available
 from `~/.openclaw/skills`. See
 [Skills: per-agent vs shared](/tools/skills#per-agent-vs-shared-skills).
 
 The Gateway can host **one agent** (default) or **many agents** side-by-side.
 
-**Workspace note:** each agent’s workspace is the **default cwd**, not a hard sandbox.
+**Workspace note:** each agent's workspace is the **default cwd**, not a hard sandbox.
 Relative paths resolve inside the workspace, but absolute paths can reach other host
 locations unless sandboxing is enabled. See [Sandboxing](/gateway/sandboxing).
 
@@ -92,7 +92,7 @@ You can route **different WhatsApp DMs** to different agents while staying on **
 WhatsApp account**. Match on sender E.164 (like `+15551234567`) with `peer.kind: "dm"`.
 Replies still come from the same WhatsApp number (no per‑agent sender identity).
 
-Important detail: direct chats collapse to the agent’s **main session key**, so true
+Important detail: direct chats collapse to the agent's **main session key**, so true
 isolation requires **one agent per person**.
 
 Example:

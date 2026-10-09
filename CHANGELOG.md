@@ -1461,7 +1461,7 @@ Docs: https://docs.openclaw.ai
   Use HTTPS (Tailscale Serve) or set `gateway.controlUi.allowInsecureAuth: true` to allow
   token-only auth. https://docs.openclaw.ai/web/control-ui#insecure-http
 - **BREAKING:** Envelope and system event timestamps now default to host-local time (was
-  UTC) so agents don’t have to constantly convert.
+  UTC) so agents don't have to constantly convert.
 
 ### Fixes
 
@@ -1473,7 +1473,7 @@ Docs: https://docs.openclaw.ai
   timeouts, and showing sync progress early.
 - Agents: enforce 9-char alphanumeric tool call ids for Mistral providers. (#1372) Thanks
   @zerone0x.
-- Embedded runner: persist injected history images so attachments aren’t reloaded each
+- Embedded runner: persist injected history images so attachments aren't reloaded each
   turn. (#1374) Thanks @Nicell.
 - Nodes tool: include agent/node/gateway context in tool failure logs to speed approval
   debugging.
@@ -2595,7 +2595,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 ### Fixes
 
 - Auto-reply: suppress draft/typing streaming for `NO_REPLY` (silent system ops) so it
-  doesn’t leak partial output.
+  doesn't leak partial output.
 - CLI/Status: expand tables to full terminal width; clarify provider setup vs runtime
   warnings; richer per-provider detail; token previews in `status` while keeping
   `status --all` redacted; add troubleshooting link footer; keep log tails pasteable; show
@@ -2609,7 +2609,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   — thanks @bjesuiter.
 - Telegram: add `/whoami` + `/id` commands to reveal sender id for allowlists; allow
   `@username` and prefixed ids in `allowFrom` prompts (with stability warning).
-- Heartbeat: strip markup-wrapped `HEARTBEAT_OK` so acks don’t leak to external providers
+- Heartbeat: strip markup-wrapped `HEARTBEAT_OK` so acks don't leak to external providers
   (e.g., Telegram).
 - Control UI: stop auto-writing `telegram.groups["*"]` and warn/confirm before enabling
   wildcard groups.
@@ -2908,7 +2908,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 
 - **SECURITY (update ASAP):** inbound DMs are now **locked down by default** on
   Telegram/WhatsApp/Signal/iMessage/Discord/Slack.
-  - Previously, if you didn’t configure an allowlist, your bot could be **open to anyone**
+  - Previously, if you didn't configure an allowlist, your bot could be **open to anyone**
     (especially discoverable Telegram bots).
   - New default: DM pairing (`dmPolicy="pairing"` / `discord.dm.policy="pairing"` /
     `slack.dm.policy="pairing"`).
@@ -2920,7 +2920,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - Sandbox: default `agent.sandbox.scope` to `"agent"` (one container/workspace per agent).
   Use `"session"` for per-session isolation; `"shared"` disables cross-session isolation.
 - Timestamps in agent envelopes are now UTC (compact `YYYY-MM-DDTHH:mmZ`); removed
-  `messages.timestampPrefix`. Add `agent.userTimezone` to tell the model the user’s local
+  `messages.timestampPrefix`. Add `agent.userTimezone` to tell the model the user's local
   time (system prompt only).
 - Model config schema changes (auth profiles + model lists); doctor auto-migrates and the
   gateway rewrites legacy configs on startup.

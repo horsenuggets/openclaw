@@ -56,7 +56,7 @@
   `scripts/docs-i18n` → apply targeted fixes only if instructed.
 - Translation memory: `docs/.i18n/zh-CN.tm.jsonl` (generated).
 - See `docs/.i18n/README.md`.
-- The pipeline can be slow/inefficient; if it’s dragging, ping @jospalmbier on Discord
+- The pipeline can be slow/inefficient; if it's dragging, ping @jospalmbier on Discord
   instead of hacking around it.
 
 ## exe.dev VM ops (general)
@@ -120,7 +120,7 @@
   `LIVE=1 pnpm test:live` (includes provider live tests). Docker:
   `pnpm test:docker:live-models`, `pnpm test:docker:live-gateway`. Onboarding Docker E2E:
   `pnpm test:docker:onboard`.
-- Full kit + what’s covered: `docs/testing.md`.
+- Full kit + what's covered: `docs/testing.md`.
 - Pure test additions/fixes generally do **not** need a changelog entry unless they alter
   user-facing behavior or the user asks for one.
 - Mobile: before using a simulator, check for connected real devices (iOS + Android) and
@@ -191,7 +191,7 @@
   messy.
 - PR merge flow: create a temp branch from `main`, merge the PR branch into it (prefer
   squash unless commit history is important; use rebase/merge when it is). Always try to
-  merge the PR unless it’s truly difficult, then use another approach. If we squash, add
+  merge the PR unless it's truly difficult, then use another approach. If we squash, add
   the PR author as a co-contributor. Apply fixes, add changelog entry (include PR # +
   thanks), run full gate before the final commit, commit, merge back to `main`, delete the
   temp branch, and end on `main`.
@@ -258,7 +258,7 @@
 - Patching dependencies (pnpm patches, overrides, or vendored changes) requires explicit
   approval; do not do this by default.
 - CLI progress: use `src/cli/progress.ts` (`osc-progress` + `@clack/prompts` spinner);
-  don’t hand-roll spinners/bars.
+  don't hand-roll spinners/bars.
 - Status output: keep tables + ANSI-safe wrapping (`src/terminal/table.ts`);
   `status --all` = read-only/pasteable, `status --deep` = probes.
 - Gateway currently runs only as the menubar app; there is no separate LaunchAgent/helper
@@ -272,7 +272,7 @@
 - If shared guardrails are available locally, review them; otherwise follow this repo's
   guidance.
 - SwiftUI state management (iOS/macOS): prefer the `Observation` framework (`@Observable`,
-  `@Bindable`) over `ObservableObject`/`@StateObject`; don’t introduce new
+  `@Bindable`) over `ObservableObject`/`@StateObject`; don't introduce new
   `ObservableObject` unless required for compatibility, and migrate existing usages when
   touching related code.
 - Connection providers: when adding a new connection, update every UI surface and docs
@@ -345,13 +345,13 @@
   go to internal UIs/control channel.
 - Voice wake forwarding tips:
   - Command template should stay `openclaw-mac agent --message "${text}" --thinking low`;
-    `VoiceWakeForwarder` already shell-escapes `${text}`. Don’t add extra quotes.
-  - launchd PATH is minimal; ensure the app’s launch agent PATH includes standard system
+    `VoiceWakeForwarder` already shell-escapes `${text}`. Don't add extra quotes.
+  - launchd PATH is minimal; ensure the app's launch agent PATH includes standard system
     paths plus your pnpm bin (typically `$HOME/Library/pnpm`) so `pnpm`/`openclaw`
     binaries resolve when invoked via `openclaw-mac`.
 - For manual `openclaw message send` messages that include `!`, use the heredoc pattern
-  noted below to avoid the Bash tool’s escaping.
-- Release guardrails: do not change version numbers without operator’s explicit consent;
+  noted below to avoid the Bash tool's escaping.
+- Release guardrails: do not change version numbers without operator's explicit consent;
   always ask permission before running any npm publish/release step.
 
 ## NPM + 1Password (publish/verify)

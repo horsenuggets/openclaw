@@ -16,7 +16,7 @@ See [/concepts/oauth](/concepts/oauth) for the full OAuth flow and storage layou
 
 ## Recommended Anthropic setup (API key)
 
-If you’re using Anthropic directly, use an API key.
+If you're using Anthropic directly, use an API key.
 
 1. Create an API key in the Anthropic Console.
 2. Put it on the **gateway host** (the machine running `openclaw gateway`).
@@ -42,7 +42,7 @@ openclaw models status
 openclaw doctor
 ```
 
-If you’d rather not manage env vars yourself, the onboarding wizard can store API keys for
+If you'd rather not manage env vars yourself, the onboarding wizard can store API keys for
 daemon use: `openclaw onboard`.
 
 See [Help](/help) for details on env inheritance (`env.shellEnv`, `~/.openclaw/.env`,
@@ -50,7 +50,7 @@ systemd/launchd).
 
 ## Anthropic: setup-token (subscription auth)
 
-For Anthropic, the recommended path is an **API key**. If you’re using a Claude
+For Anthropic, the recommended path is an **API key**. If you're using a Claude
 subscription, the setup-token flow is also supported. Run it on the **gateway host**:
 
 ```bash
@@ -114,7 +114,7 @@ view (candidates + next auth profile, plus provider endpoint details when config
 
 ### Per-agent (CLI override)
 
-Set an explicit auth profile order override for an agent (stored in that agent’s
+Set an explicit auth profile order override for an agent (stored in that agent's
 `auth-profiles.json`):
 
 ```bash

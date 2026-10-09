@@ -27,7 +27,7 @@ class OpenClawCanvasA2UIActionTest {
         sessionKey = "main",
         surfaceId = "main",
         sourceComponentId = "btnWeather",
-        host = "Peter’s iPad",
+        host = "Peter's iPad",
         instanceId = "ipad16,6",
         contextJson = "{\"city\":\"Vienna\"}",
       )

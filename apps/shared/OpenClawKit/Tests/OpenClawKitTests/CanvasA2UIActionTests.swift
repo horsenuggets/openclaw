@@ -20,7 +20,7 @@ import Testing
         let messageContext = OpenClawCanvasA2UIAction.AgentMessageContext(
             actionName: "Get Weather",
             session: .init(key: "main", surfaceId: "main"),
-            component: .init(id: "btnWeather", host: "Peter’s iPad", instanceId: "ipad16,6"),
+            component: .init(id: "btnWeather", host: "Peter's iPad", instanceId: "ipad16,6"),
             contextJSON: "{\"city\":\"Vienna\"}")
         let msg = OpenClawCanvasA2UIAction.formatAgentMessage(messageContext)
 

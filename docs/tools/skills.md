@@ -47,7 +47,7 @@ workspace wins, then managed/local, then bundled.
 Plugins can ship their own skills by listing `skills` directories in
 `openclaw.plugin.json` (paths relative to the plugin root). Plugin skills load when the
 plugin is enabled and participate in the normal skill precedence rules. You can gate them
-via `metadata.openclaw.requires.config` on the plugin’s config entry. See
+via `metadata.openclaw.requires.config` on the plugin's config entry. See
 [Plugins](/plugin) for discovery/config and [Tools](/tools) for the tool surface those
 skills teach.
 
@@ -195,7 +195,7 @@ Notes:
   options: npm/pnpm/yarn/bun). This only affects **skill installs**; the Gateway runtime
   should still be Node (Bun is not recommended for WhatsApp/Telegram).
 - Go installs: if `go` is missing and `brew` is available, the gateway installs Go via
-  Homebrew first and sets `GOBIN` to Homebrew’s `bin` when possible.
+  Homebrew first and sets `GOBIN` to Homebrew's `bin` when possible.
 - Download installs: `url` (required), `archive` (`tar.gz` | `tar.bz2` | `zip`), `extract`
   (default: auto when archive detected), `stripComponents`, `targetDir` (default:
   `~/.openclaw/tools/<skillKey>`).
@@ -236,8 +236,8 @@ Config keys match the **skill name** by default. If a skill defines
 
 Rules:
 
-- `enabled: false` disables the skill even if it’s bundled/installed.
-- `env`: injected **only if** the variable isn’t already set in the process.
+- `enabled: false` disables the skill even if it's bundled/installed.
+- `env`: injected **only if** the variable isn't already set in the process.
 - `apiKey`: convenience for skills that declare `metadata.openclaw.primaryEnv`.
 - `config`: optional bag for custom per-skill fields; custom keys must live here.
 - `allowBundled`: optional allowlist for **bundled** skills only. If set, only bundled

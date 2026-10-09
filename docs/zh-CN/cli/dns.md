@@ -1,7 +1,7 @@
 ---
 read_when:
   - 你想通过 Tailscale + CoreDNS 实现广域设备发现（DNS-SD）
-  - You’re setting up split DNS for a custom discovery domain (example: openclaw.internal)
+  - You're setting up split DNS for a custom discovery domain (example: openclaw.internal)
 summary: "`openclaw dns` 的 CLI 参考（广域设备发现辅助工具）"
 title: dns
 x-i18n:

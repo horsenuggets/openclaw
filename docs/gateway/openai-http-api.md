@@ -7,7 +7,7 @@ title: "OpenAI Chat Completions"
 
 # OpenAI Chat Completions (HTTP)
 
-OpenClaw’s Gateway can serve a small OpenAI-compatible Chat Completions endpoint.
+OpenClaw's Gateway can serve a small OpenAI-compatible Chat Completions endpoint.
 
 This endpoint is **disabled by default**. Enable it in config first.
 

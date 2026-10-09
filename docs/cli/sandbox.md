@@ -120,7 +120,7 @@ openclaw sandbox recreate --agent alfred
 **Solution:** Use `openclaw sandbox recreate` to force removal of old containers. They'll
 be recreated automatically with current settings when next needed.
 
-Tip: prefer `openclaw sandbox recreate` over manual `docker rm`. It uses the Gateway’s
+Tip: prefer `openclaw sandbox recreate` over manual `docker rm`. It uses the Gateway's
 container naming and avoids mismatches when scope/session keys change.
 
 ## Configuration

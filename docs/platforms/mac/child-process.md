@@ -36,7 +36,7 @@ Replace the label with `bot.molt.<profile>` when running a named profile.
 
 ## Unsigned dev builds
 
-`scripts/restart-mac.sh --no-sign` is for fast local builds when you don’t have signing
+`scripts/restart-mac.sh --no-sign` is for fast local builds when you don't have signing
 keys. To prevent launchd from pointing at an unsigned relay binary, it:
 
 - Writes `~/.openclaw/disable-launchagent`.

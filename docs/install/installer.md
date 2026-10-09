@@ -31,7 +31,7 @@ Windows (PowerShell) help:
 & ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -?
 ```
 
-If the installer completes but `openclaw` is not found in a new terminal, it’s usually a
+If the installer completes but `openclaw` is not found in a new terminal, it's usually a
 Node/npm PATH issue. See: [Install](/install#nodejs--npm-path-sanity).
 
 ## install.sh (recommended)
@@ -52,7 +52,7 @@ What it does (high level):
 - Mitigates `sharp` native install gotchas by defaulting `SHARP_IGNORE_GLOBAL_LIBVIPS=1`
   (avoids building against system libvips).
 
-If you *want* `sharp` to link against a globally-installed libvips (or you’re debugging),
+If you *want* `sharp` to link against a globally-installed libvips (or you're debugging),
 set:
 
 ```bash
@@ -92,7 +92,7 @@ NodeSource), npm's global prefix points at a root-owned location. Then
 ## install-cli.sh (non-root CLI installer)
 
 This script installs `openclaw` into a prefix (default: `~/.openclaw`) and also installs a
-dedicated Node runtime under that prefix, so it can work on machines where you don’t want
+dedicated Node runtime under that prefix, so it can work on machines where you don't want
 to touch the system Node/npm.
 
 Help:

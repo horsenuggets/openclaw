@@ -23,7 +23,7 @@ title: "Elevated Mode"
 - Only `on|off|ask|full` are accepted; anything else returns a hint and does not change
   state.
 
-## What it controls (and what it doesn’t)
+## What it controls (and what it doesn't)
 
 - **Availability gates**: `tools.elevated` is the global baseline.
   `agents.list[].tools.elevated` can further restrict elevated per agent (both must

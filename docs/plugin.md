@@ -13,12 +13,12 @@ title: "Plugins"
 A plugin is just a **small code module** that extends OpenClaw with extra features
 (commands, tools, and Gateway RPC).
 
-Most of the time, you’ll use plugins when you want a feature that’s not built into core
+Most of the time, you'll use plugins when you want a feature that's not built into core
 OpenClaw yet (or you want to keep optional features out of your main install).
 
 Fast path:
 
-1. See what’s already loaded:
+1. See what's already loaded:
 
 ```bash
 openclaw plugins list
@@ -191,7 +191,7 @@ Default plugin ids:
 - Package packs: `package.json` `name`
 - Standalone file: file base name (`~/.../voice-call.ts` → `voice-call`)
 
-If a plugin exports `id`, OpenClaw uses it but warns when it doesn’t match the configured
+If a plugin exports `id`, OpenClaw uses it but warns when it doesn't match the configured
 id.
 
 ## Config
@@ -626,7 +626,7 @@ export default function (api) {
 ## Skills
 
 Plugins can ship a skill in the repo (`skills/<name>/SKILL.md`). Enable it with
-`plugins.entries.<id>.enabled` (or other config gates) and ensure it’s present in your
+`plugins.entries.<id>.enabled` (or other config gates) and ensure it's present in your
 workspace/managed skills locations.
 
 ## Distribution (npm)

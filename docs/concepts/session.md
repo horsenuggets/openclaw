@@ -72,7 +72,7 @@ reading local files.
 
 - In **remote mode**, the session store you care about lives on the remote gateway host,
   not your Mac.
-- Token counts shown in UIs come from the gateway’s store fields (`inputTokens`,
+- Token counts shown in UIs come from the gateway's store fields (`inputTokens`,
   `outputTokens`, `totalTokens`, `contextTokens`). Clients do not parse JSONL transcripts
   to “fix up” totals.
 
@@ -219,7 +219,7 @@ Runtime override (owner only):
 - Send `/status` as a standalone message in chat to see whether the agent is reachable,
   how much of the session context is used, current thinking/verbose toggles, and when your
   WhatsApp web creds were last refreshed (helps spot relink needs).
-- Send `/context list` or `/context detail` to see what’s in the system prompt and
+- Send `/context list` or `/context detail` to see what's in the system prompt and
   injected workspace files (and the biggest context contributors).
 - Send `/stop` as a standalone message to abort the current run, clear queued followups
   for that session, and stop any sub-agent runs spawned from it (the reply includes the

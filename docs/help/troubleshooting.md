@@ -2,7 +2,7 @@
 summary: "Troubleshooting hub: symptoms → checks → fixes"
 read_when:
   - You see an error and want the fix path
-  - The installer says “success” but the CLI doesn’t work
+  - The installer says “success” but the CLI doesn't work
 title: "Troubleshooting"
 ---
 
@@ -50,7 +50,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash -s -- --beta --verbose
 
 You can also set `OPENCLAW_VERBOSE=1` instead of the flag.
 
-### Gateway “unauthorized”, can’t connect, or keeps reconnecting
+### Gateway “unauthorized”, can't connect, or keeps reconnecting
 
 - [Gateway troubleshooting](/gateway/troubleshooting)
 - [Gateway authentication](/gateway/authentication)
@@ -67,7 +67,7 @@ Disable Advanced Security or add `docs.openclaw.ai` to the allowlist, then retry
 
 - Xfinity Advanced Security help:
   https://www.xfinity.com/support/articles/using-xfinity-xfi-advanced-security
-- Quick sanity checks: try a mobile hotspot or VPN to confirm it’s ISP-level filtering
+- Quick sanity checks: try a mobile hotspot or VPN to confirm it's ISP-level filtering
 
 ### Service says running, but RPC probe fails
 
@@ -81,7 +81,7 @@ Disable Advanced Security or add `docs.openclaw.ai` to the allowlist, then retry
 
 ### `/model` says `model not allowed`
 
-This usually means `agents.defaults.models` is configured as an allowlist. When it’s
+This usually means `agents.defaults.models` is configured as an allowlist. When it's
 non-empty, only those provider/model keys can be selected.
 
 - Check the allowlist: `openclaw config get agents.defaults.models`

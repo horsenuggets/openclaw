@@ -72,6 +72,6 @@ Notes
 - Store dir: `~/.wacli` (override with `--store`).
 - Use `--json` for machine-readable output when parsing.
 - Backfill requires your phone online; results are best-effort.
-- WhatsApp CLI is not needed for routine user chats; it’s for messaging other people.
+- WhatsApp CLI is not needed for routine user chats; it's for messaging other people.
 - JIDs: direct chats look like `<number>@s.whatsapp.net`; groups look like `<id>@g.us`
   (use `wacli chats list` to find).

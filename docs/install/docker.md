@@ -15,7 +15,7 @@ Docker flow.
 
 - **Yes**: you want an isolated, throwaway gateway environment or to run OpenClaw on a
   host without local installs.
-- **No**: you’re running on your own machine and just want the fastest dev loop. Use the
+- **No**: you're running on your own machine and just want the fastest dev loop. Use the
   normal install flow instead.
 - **Sandboxing note**: agent sandboxing uses Docker too, but it does **not** require the
   full gateway to run in Docker. See [Sandboxing](/gateway/sandboxing).
@@ -118,7 +118,7 @@ Notes:
 - Paths must be shared with Docker Desktop on macOS/Windows.
 - If you edit `OPENCLAW_EXTRA_MOUNTS`, rerun `docker-setup.sh` to regenerate the extra
   compose file.
-- `docker-compose.extra.yml` is generated. Don’t hand-edit it.
+- `docker-compose.extra.yml` is generated. Don't hand-edit it.
 
 ### Persist the entire container home (optional)
 

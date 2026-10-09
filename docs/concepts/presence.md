@@ -14,7 +14,7 @@ OpenClaw “presence” is a lightweight, best‑effort view of:
 - the **Gateway** itself, and
 - **clients connected to the Gateway** (mac app, WebChat, CLI, etc.)
 
-Presence is used primarily to render the macOS app’s **Instances** tab and to provide
+Presence is used primarily to render the macOS app's **Instances** tab and to provide
 quick operator visibility.
 
 ## Presence fields (what shows up)
@@ -46,7 +46,7 @@ before any clients connect.
 Every WS client begins with a `connect` request. On successful handshake the Gateway
 upserts a presence entry for that connection.
 
-#### Why one‑off CLI commands don’t show up
+#### Why one‑off CLI commands don't show up
 
 The CLI often connects for short, one‑off commands. To avoid spamming the Instances list,
 `client.mode === "cli"` is **not** turned into a presence entry.

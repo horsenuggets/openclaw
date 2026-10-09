@@ -47,7 +47,7 @@ TypeScript, gateway schema, CLI flags, and UI form types, plus a UI mismatch for
   `kind` fields.
 - Agent cron tool schema matches the gateway schema, which reduces invalid payloads.
 - Provider enums are aligned across gateway, CLI, UI, and macOS picker.
-- Control UI uses the gateway’s `jobs` count field for status.
+- Control UI uses the gateway's `jobs` count field for status.
 
 ## Current behavior
 

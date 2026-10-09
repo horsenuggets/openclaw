@@ -22,7 +22,7 @@ You need Node 22+ on the Mac, then install `openclaw` globally:
 npm install -g openclaw@<version>
 ```
 
-The macOS app’s **Install CLI** button runs the same flow via npm/pnpm (bun not
+The macOS app's **Install CLI** button runs the same flow via npm/pnpm (bun not
 recommended for Gateway runtime).
 
 ## Launchd (Gateway as LaunchAgent)
@@ -54,7 +54,7 @@ Logging:
 
 ## Version compatibility
 
-The macOS app checks the gateway version against its own version. If they’re incompatible,
+The macOS app checks the gateway version against its own version. If they're incompatible,
 update the global CLI to match the app version.
 
 ## Smoke check

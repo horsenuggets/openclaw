@@ -22,7 +22,7 @@ to another session.
 ## Key Model
 
 - Main direct chat bucket is always the literal key `"main"` (resolved to the current
-  agent’s main key).
+  agent's main key).
 - Group chats use `agent:<agentId>:<channel>:group:<id>` or
   `agent:<agentId>:<channel>:channel:<id>` (pass the full key).
 - Cron jobs use `cron:<job.id>`.

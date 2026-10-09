@@ -331,7 +331,7 @@ Details: [Tailscale guide](https://docs.openclaw.ai/gateway/tailscale) ·
 
 ## Remote Gateway (Linux is great)
 
-It’s perfectly fine to run the Gateway on a small Linux instance. Clients (macOS app, CLI,
+It's perfectly fine to run the Gateway on a small Linux instance. Clients (macOS app, CLI,
 WebChat) can connect over **Tailscale Serve/Funnel** or **SSH tunnels**, and you can still
 pair device nodes (macOS/iOS/Android) to execute device‑local actions when needed.
 
@@ -351,7 +351,7 @@ over the Gateway WebSocket (`node.list` / `node.describe`). Clients can then exe
 actions via `node.invoke`:
 
 - `system.run` runs a local command and returns stdout/stderr/exit code; set
-  `needsScreenRecording: true` to require screen-recording permission (otherwise you’ll
+  `needsScreenRecording: true` to require screen-recording permission (otherwise you'll
   get `PERMISSION_MISSING`).
 - `system.notify` posts a user notification and fails if notifications are denied.
 - `canvas.*`, `camera.*`, `screen.record`, and `location.get` are also routed via
@@ -452,7 +452,7 @@ Minimal `~/.openclaw/openclaw.json` (model + defaults):
 ## Security model (important)
 
 - **Default:** tools run on the host for the **main** session, so the agent has full
-  access when it’s just you.
+  access when it's just you.
 - **Group/channel safety:** set `agents.defaults.sandbox.mode: "non-main"` to run
   **non‑main sessions** (groups/channels) inside per‑session Docker sandboxes; bash then
   runs in Docker for those sessions.
@@ -552,9 +552,9 @@ Browser control (optional):
 
 ## Docs
 
-Use these when you’re past the onboarding flow and want the deeper reference.
+Use these when you're past the onboarding flow and want the deeper reference.
 
-- [Start with the docs index for navigation and “what’s where.”](https://docs.openclaw.ai)
+- [Start with the docs index for navigation and “what's where.”](https://docs.openclaw.ai)
 - [Read the architecture overview for the gateway + protocol model.](https://docs.openclaw.ai/concepts/architecture)
 - [Use the full configuration reference when you need every key and example.](https://docs.openclaw.ai/gateway/configuration)
 - [Run the Gateway by the book with the operational runbook.](https://docs.openclaw.ai/gateway)

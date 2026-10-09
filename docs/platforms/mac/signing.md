@@ -59,7 +59,7 @@ ID. Ad-hoc signatures also break TCC permission persistence; see
 - `OpenClawBuildTimestamp`: ISO8601 UTC at package time
 - `OpenClawGitCommit`: short git hash (or `unknown` if unavailable)
 
-The About tab reads these keys to show version, build date, git commit, and whether it’s a
+The About tab reads these keys to show version, build date, git commit, and whether it's a
 debug build (via `#if DEBUG`). Run the packager to refresh these values after code
 changes.
 

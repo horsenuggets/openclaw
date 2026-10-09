@@ -15,7 +15,7 @@ metadata:
 
 # OpenAI Whisper API (curl)
 
-Transcribe an audio file via OpenAI’s `/v1/audio/transcriptions` endpoint.
+Transcribe an audio file via OpenAI's `/v1/audio/transcriptions` endpoint.
 
 ## Quick start
 

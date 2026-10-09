@@ -47,13 +47,13 @@ Recommended defaults:
 2. Preview payload + token spend (`--dry-run` + `--files-report`).
 3. Use browser mode for the usual GPT‑5.2 Pro workflow; use API only when you explicitly
    want it.
-4. If the run detaches/timeouts: reattach to the stored session (don’t re-run).
+4. If the run detaches/timeouts: reattach to the stored session (don't re-run).
 
 ## Commands (preferred)
 
 - Help:
   - `oracle --help`
-  - If the binary isn’t installed: `npx -y @steipete/oracle --help` (avoid `pnpx` here;
+  - If the binary isn't installed: `npx -y @steipete/oracle --help` (avoid `pnpx` here;
     sqlite bindings).
 
 - Preview (no tokens):
@@ -108,7 +108,7 @@ can be comma-separated.
 
 - Stored under `~/.oracle/sessions` (override with `ORACLE_HOME_DIR`).
 - Runs may detach or take a long time (browser + GPT‑5.2 Pro often does). If the CLI times
-  out: don’t re-run; reattach.
+  out: don't re-run; reattach.
   - List: `oracle status --hours 72`
   - Attach: `oracle session <id> --render`
 - Use `--slug "<3-5 words>"` to keep session IDs readable.
@@ -122,13 +122,13 @@ build tooling, conventions, or “obvious” paths. Include:
 - Project briefing (stack + build/test commands + platform constraints).
 - “Where things live” (key directories, entrypoints, config files, boundaries).
 - Exact question + what you tried + the error text (verbatim).
-- Constraints (“don’t change X”, “must keep public API”, etc).
+- Constraints (“don't change X”, “must keep public API”, etc).
 - Desired output (“return patch plan + tests”, “give 3 options with tradeoffs”).
 
 ## Safety
 
-- Don’t attach secrets by default (`.env`, key files, auth tokens). Redact aggressively;
-  share only what’s required.
+- Don't attach secrets by default (`.env`, key files, auth tokens). Redact aggressively;
+  share only what's required.
 
 ## “Exhaustive prompt” restoration pattern
 
@@ -138,6 +138,6 @@ For long investigations, write a standalone prompt + file set so you can rerun d
 - Repro steps + exact errors + what you tried.
 - Attach all context files needed (entrypoints, configs, key modules, docs).
 
-Oracle runs are one-shot; the model doesn’t remember prior runs. “Restoring context” means
+Oracle runs are one-shot; the model doesn't remember prior runs. “Restoring context” means
 re-running with the same prompt + `--file …` set (or reattaching a still-running stored
 session).

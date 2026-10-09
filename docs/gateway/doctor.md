@@ -133,7 +133,7 @@ Current migrations:
 
 ### 2b) OpenCode Zen provider overrides
 
-If you’ve added `models.providers.opencode` (or `opencode-zen`) manually, it overrides the
+If you've added `models.providers.opencode` (or `opencode-zen`) manually, it overrides the
 built-in OpenCode Zen catalog from `@mariozechner/pi-ai`. That can force every model onto
 a single API or zero out costs. Doctor warns so you can remove the override and restore
 per-model API routing + costs.
@@ -195,7 +195,7 @@ Doctor also reports auth profiles that are temporarily unusable due to:
 ### 6) Hooks model validation
 
 If `hooks.gmail.model` is set, doctor validates the model reference against the catalog
-and allowlist and warns when it won’t resolve or is disallowed.
+and allowlist and warns when it won't resolve or is disallowed.
 
 ### 7) Sandbox image repair
 

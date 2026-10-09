@@ -91,8 +91,8 @@ Auto-archive:
 Sub-agent auth is resolved by **agent id**, not by session type:
 
 - The sub-agent session key is `agent:<agentId>:subagent:<uuid>`.
-- The auth store is loaded from that agent’s `agentDir`.
-- The main agent’s auth profiles are merged in as a **fallback**; agent profiles override
+- The auth store is loaded from that agent's `agentDir`.
+- The main agent's auth profiles are merged in as a **fallback**; agent profiles override
   main profiles on conflicts.
 
 Note: the merge is additive, so main profiles are always available as fallbacks. Fully

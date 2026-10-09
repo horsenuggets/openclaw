@@ -36,7 +36,7 @@ LLM call. It does **not** rewrite the on-disk session history (`*.jsonl`).
 - **Why the TTL reset matters:** once pruning runs, the cache window resets, so follow‑up
   requests can reuse the freshly cached prompt instead of re-caching the full history
   again.
-- **What it does not do:** pruning doesn’t add tokens or “double” costs; it only changes
+- **What it does not do:** pruning doesn't add tokens or “double” costs; it only changes
   what gets cached on that first post‑TTL request.
 
 ## What can be pruned
@@ -45,7 +45,7 @@ LLM call. It does **not** rewrite the on-disk session history (`*.jsonl`).
 - User + assistant messages are **never** modified.
 - The last `keepLastAssistants` assistant messages are protected; tool results after that
   cutoff are not pruned.
-- If there aren’t enough assistant messages to establish the cutoff, pruning is skipped.
+- If there aren't enough assistant messages to establish the cutoff, pruning is skipped.
 - Tool results containing **image blocks** are skipped (never trimmed/cleared).
 
 ## Context window estimation

@@ -76,7 +76,7 @@ xcodebuild -version
 xcrun swift --version
 ```
 
-If versions don’t match, update macOS/Xcode and re-run the build.
+If versions don't match, update macOS/Xcode and re-run the build.
 
 ### App Crashes on Permission Grant
 
@@ -102,7 +102,7 @@ port:
 openclaw gateway status
 openclaw gateway stop
 
-# If you’re not using a LaunchAgent (dev mode / manual runs), find the listener:
+# If you're not using a LaunchAgent (dev mode / manual runs), find the listener:
 lsof -nP -iTCP:18789 -sTCP:LISTEN
 ```
 

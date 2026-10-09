@@ -9,7 +9,7 @@ title: "browser"
 
 # `openclaw browser`
 
-Manage OpenClaw’s browser control server and run browser actions (tabs, snapshots,
+Manage OpenClaw's browser control server and run browser actions (tabs, snapshots,
 screenshots, navigation, clicks, typing).
 
 Related:

@@ -157,8 +157,8 @@ for remote gateways.
 Notes:
 
 - The node host exposes its local browser control server via a **proxy command**.
-- Profiles come from the node’s own `browser.profiles` config (same as local).
-- Disable if you don’t want it:
+- Profiles come from the node's own `browser.profiles` config (same as local).
+- Disable if you don't want it:
   - On the node: `nodeHost.browserProxy.enabled=false`
   - On the gateway: `gateway.nodes.browser.mode="off"`
 
@@ -196,7 +196,7 @@ Notes:
 
 Key ideas:
 
-- Browser control is loopback-only; access flows through the Gateway’s auth or node
+- Browser control is loopback-only; access flows through the Gateway's auth or node
   pairing.
 - Keep the Gateway and any node hosts on a private network (Tailscale); avoid public
   exposure.
@@ -338,7 +338,7 @@ All endpoints accept `?profile=<name>`.
 ### Playwright requirement
 
 Some features (navigate/act/AI snapshot/role snapshot, element screenshots, PDF) require
-Playwright. If Playwright isn’t installed, those endpoints return a clear 501 error. ARIA
+Playwright. If Playwright isn't installed, those endpoints return a clear 501 error. ARIA
 snapshots and basic screenshots still work for openclaw-managed Chrome. For the Chrome
 extension relay driver, ARIA snapshots and screenshots require Playwright.
 
@@ -485,7 +485,7 @@ OpenClaw supports two “snapshot” styles:
 - **AI snapshot (numeric refs)**: `openclaw browser snapshot` (default; `--format ai`)
   - Output: a text snapshot that includes numeric refs.
   - Actions: `openclaw browser click 12`, `openclaw browser type 23 "hello"`.
-  - Internally, the ref is resolved via Playwright’s `aria-ref`.
+  - Internally, the ref is resolved via Playwright's `aria-ref`.
 
 - **Role snapshot (role refs like `e12`)**: `openclaw browser snapshot --interactive` (or
   `--compact`, `--depth`, `--selector`, `--frame`)

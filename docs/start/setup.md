@@ -29,7 +29,7 @@ Last updated: 2026-01-01
 - `pnpm`
 - Docker (optional; only for containerized setup/e2e — see [Docker](/install/docker))
 
-## Tailoring strategy (so updates don’t hurt)
+## Tailoring strategy (so updates don't hurt)
 
 If you want “100% tailored to me” *and* easy updates, keep your customization in:
 
@@ -49,7 +49,7 @@ From inside this repo, use the local CLI entry:
 openclaw setup
 ```
 
-If you don’t have a global install yet, run it via `pnpm openclaw setup`.
+If you don't have a global install yet, run it via `pnpm openclaw setup`.
 
 ## Run the Gateway from this repo
 
@@ -142,7 +142,7 @@ Use this when debugging auth or deciding what to back up:
 
 ## Updating (without wrecking your setup)
 
-- Keep `~/.openclaw/workspace` and `~/.openclaw/` as “your stuff”; don’t put personal
+- Keep `~/.openclaw/workspace` and `~/.openclaw/` as “your stuff”; don't put personal
   prompts/config into the `openclaw` repo.
 - Updating source: `git pull` + `pnpm install` (when lockfile changed) + keep using
   `pnpm gateway:watch`.
@@ -151,7 +151,7 @@ Use this when debugging auth or deciding what to back up:
 
 Linux installs use a systemd **user** service. By default, systemd stops user services on
 logout/idle, which kills the Gateway. Onboarding attempts to enable lingering for you (may
-prompt for sudo). If it’s still off, run:
+prompt for sudo). If it's still off, run:
 
 ```bash
 sudo loginctl enable-linger $USER

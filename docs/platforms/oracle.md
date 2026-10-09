@@ -13,7 +13,7 @@ title: "Oracle Cloud"
 
 Run a persistent OpenClaw Gateway on Oracle Cloud's **Always Free** ARM tier.
 
-Oracle’s free tier can be a great fit for OpenClaw (especially if you already have an OCI
+Oracle's free tier can be a great fit for OpenClaw (especially if you already have an OCI
 account), but it comes with tradeoffs:
 
 - ARM architecture (most things work, but some binaries may be x86-only)
@@ -115,7 +115,7 @@ When prompted "How do you want to hatch your bot?", select **"Do this later"**.
 
 ## 6) Configure Gateway (loopback + token auth) and enable Tailscale Serve
 
-Use token auth as the default. It’s predictable and avoids needing any “insecure auth”
+Use token auth as the default. It's predictable and avoids needing any “insecure auth”
 Control UI flags.
 
 ```bash
@@ -192,7 +192,7 @@ happens over your tailnet.
 
 This setup often removes the *need* for extra host-based firewall rules purely to stop
 Internet-wide SSH brute force — but you should still keep the OS updated, run
-`openclaw security audit`, and verify you aren’t accidentally listening on public
+`openclaw security audit`, and verify you aren't accidentally listening on public
 interfaces.
 
 ### What's Already Protected
@@ -204,7 +204,7 @@ interfaces.
 | sshd hardening     | No          | Tailscale SSH doesn't use sshd                                               |
 | Disable root login | No          | Tailscale uses Tailscale identity, not system users                          |
 | SSH key-only auth  | No          | Tailscale authenticates via your tailnet                                     |
-| IPv6 hardening     | Usually not | Depends on your VCN/subnet settings; verify what’s actually assigned/exposed |
+| IPv6 hardening     | Usually not | Depends on your VCN/subnet settings; verify what's actually assigned/exposed |
 
 ### Still Recommended
 

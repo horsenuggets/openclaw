@@ -154,7 +154,7 @@ extension OnboardingView {
 
                     self.connectionChoiceButton(
                         title: "Configure later",
-                        subtitle: "Don’t start the Gateway yet.",
+                        subtitle: "Don't start the Gateway yet.",
                         selected: self.state.connectionMode == .unconfigured)
                     {
                         self.selectUnconfiguredGateway()
@@ -472,7 +472,7 @@ extension OnboardingView {
                         .font(.headline)
                     Text(
                         "You can also use an Anthropic API key, but this UI is instructions-only for now " +
-                            "(GUI apps don’t automatically inherit your shell env vars like `ANTHROPIC_API_KEY`).")
+                            "(GUI apps don't automatically inherit your shell env vars like `ANTHROPIC_API_KEY`).")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -610,7 +610,7 @@ extension OnboardingView {
                         .font(.headline)
                     Text(
                         "Create the workspace on the remote host (SSH in first). " +
-                            "The macOS app can’t write files on your gateway over SSH yet.")
+                            "The macOS app can't write files on your gateway over SSH yet.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -669,8 +669,8 @@ extension OnboardingView {
                             .lineLimit(2)
                     } else {
                         Text(
-                            "Tip: edit AGENTS.md in this folder to shape the assistant’s behavior. " +
-                                "For backup, make the workspace a private git repo so your agent’s " +
+                            "Tip: edit AGENTS.md in this folder to shape the assistant's behavior. " +
+                                "For backup, make the workspace a private git repo so your agent's " +
                                 "“memory” is versioned.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -712,7 +712,7 @@ extension OnboardingView {
                 if self.state.connectionMode == .unconfigured {
                     self.featureRow(
                         title: "Configure later",
-                        subtitle: "Pick Local or Remote in Settings → General whenever you’re ready.",
+                        subtitle: "Pick Local or Remote in Settings → General whenever you're ready.",
                         systemImage: "gearshape")
                     Divider()
                         .padding(.vertical, 6)
@@ -795,7 +795,7 @@ extension OnboardingView {
 
             if let error = self.onboardingSkillsModel.error {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Couldn’t load skills from the Gateway.")
+                    Text("Couldn't load skills from the Gateway.")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.orange)
                     Text(

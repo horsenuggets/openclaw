@@ -214,7 +214,7 @@ Notes:
   `yieldMs`/`background`.
 - `elevated` is gated by `tools.elevated` plus any `agents.list[].tools.elevated` override
   (both must allow) and is an alias for `host=gateway` + `security=full`.
-- `elevated` only changes behavior when the agent is sandboxed (otherwise it’s a no-op).
+- `elevated` only changes behavior when the agent is sandboxed (otherwise it's a no-op).
 - `host=node` can target a macOS companion app or a headless node host
   (`openclaw node run`).
 - gateway/node approvals and allowlists: [Exec approvals](/tools/exec-approvals).
@@ -416,7 +416,7 @@ Notes:
 - `send` routes WhatsApp via the Gateway; other channels go direct.
 - `poll` uses the Gateway for WhatsApp and MS Teams; Discord polls go direct.
 - When a message tool call is bound to an active chat session, sends are constrained to
-  that session’s target to avoid cross-context leaks.
+  that session's target to avoid cross-context leaks.
 
 ### `cron`
 
@@ -544,4 +544,4 @@ Tools are exposed in two parallel channels:
 2. **Tool schema**: the structured function definitions sent to the model API.
 
 That means the agent sees both “what tools exist” and “how to call them.” If a tool
-doesn’t appear in the system prompt or the schema, the model cannot call it.
+doesn't appear in the system prompt or the schema, the model cannot call it.
