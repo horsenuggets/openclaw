@@ -11,6 +11,15 @@ Docs: https://docs.openclaw.ai
   message earns, delivered as an ephemeral reply only they can see (the notice wording
   lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
   check. `/channel` keeps its own admin/owner rules.
+- Discord: new `/connections` command (with a `/conn` alias) lets a channel owner list,
+  add, and remove the third-party services linked to that channel's agent. Connectors live
+  in a small registry (`connectors.ts`) with composable auth strategies
+  (`connector-auth.ts`), starting with paste-a-token connectors validated by
+  `connect-validators.ts`; links persist per channel in a `connections-store.ts` file. The
+  list renders as a Service/Status embed matching the `/channel` style, using the
+  connections icon, the `#c080ff` accent, and the bot's own custom application emoji for
+  the connected/not-connected/needs-auth glyphs (falling back to unicode when those emoji
+  are absent). A pasted token message is scrubbed from the channel after it is captured.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
   (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
   `/word` and reaches the model as plain text across every surface: native registration,
