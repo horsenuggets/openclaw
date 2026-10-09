@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- `/secret`: allow hyphens and underscores in the secret name (previously stripped to
+  `[a-z0-9]`), so names like `my-token_1` are preserved. They carry no shell meaning and
+  cannot escape the secrets directory, so the gateway boundary accepts `[a-z0-9_-]`.
+- `/secret`: write secrets flat at `/tmp/secrets/<name>` instead of nesting them under a
+  per-channel scope subfolder. A Discord channel maps 1:1 to its own agent container, so
+  the box only ever holds that channel's secrets and the extra nesting was redundant.
+
 - Agent box layout: each per-channel agent container now gets a real `HOME`
   (`/home/openclaw`) on its own writable mount (`~/.openclaw-instances/<id>/home`) instead
   of pointing `HOME` at `/state`, so the box behaves like a normal shell and `$HOME`-based

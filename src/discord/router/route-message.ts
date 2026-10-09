@@ -77,12 +77,11 @@ export async function routeMessage(params: {
   systemTurn?: boolean;
   /**
    * A secret to hand the agent box out-of-band (never in the message text or
-   * logs). The box writes it to `/tmp/secrets/<scope>/<name>` (0600) before the
-   * turn runs; the accompanying system-reminder message tells the agent where to
-   * read it. `scope` nests per channel so sessions cannot read each other's
-   * secrets. Used by the `/secret` command.
+   * logs). The box writes it to `/tmp/secrets/<name>` (0600) before the turn
+   * runs; the accompanying system-reminder message tells the agent where to read
+   * it. Used by the `/secret` command.
    */
-  secret?: { name: string; value: string; scope: string };
+  secret?: { name: string; value: string };
 }): Promise<boolean> {
   const { authorId, channelId, attachments, instance, discordToken, runtime, agentTimeoutMs } =
     params;

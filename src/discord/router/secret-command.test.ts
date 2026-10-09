@@ -11,7 +11,6 @@ import {
   sanitizeSecretName,
   secretPath,
   secretReminderMessage,
-  secretScopeToken,
 } from "./secret-command.js";
 
 describe("SECRET_COMMAND_SPEC", () => {
@@ -68,9 +67,11 @@ describe("parseSecretModalSubmit", () => {
 });
 
 describe("sanitizeSecretName", () => {
-  it("lowercases and strips everything but [a-z0-9]", () => {
+  it("lowercases and keeps [a-z0-9] + hyphen + underscore, stripping the rest", () => {
     expect(sanitizeSecretName("Google OAuth!", "v")).toBe("googleoauth");
-    expect(sanitizeSecretName("my-token_42", "v")).toBe("mytoken42");
+    // Hyphens and underscores are preserved; path/shell-unsafe chars are dropped.
+    expect(sanitizeSecretName("my-token_42", "v")).toBe("my-token_42");
+    expect(sanitizeSecretName("a/b c;d.e", "v")).toBe("abcde");
   });
 
   it("caps the length", () => {
@@ -92,32 +93,22 @@ describe("sanitizeSecretName", () => {
   });
 });
 
-describe("secretScopeToken", () => {
-  it("is a stable, injection-safe [a-z0-9] token derived from the channel id", () => {
-    const token = secretScopeToken("123456789");
-    expect(token).toMatch(/^ch[a-z0-9]+$/);
-    // Deterministic for the same channel, distinct across channels.
-    expect(secretScopeToken("123456789")).toBe(token);
-    expect(secretScopeToken("987654321")).not.toBe(token);
-  });
-});
-
 describe("secretPath / secretReminderMessage", () => {
-  it("nests the secret under the per-channel scope token", () => {
-    expect(secretPath("foo", "chabc")).toBe("/tmp/secrets/chabc/foo");
+  it("writes the secret flat under /tmp/secrets (no per-channel nesting)", () => {
+    expect(secretPath("foo")).toBe("/tmp/secrets/foo");
   });
 
   it("names the file, flags it temporary, and never includes the value", () => {
-    const msg = secretReminderMessage("redirect", "chabc");
-    expect(msg).toContain("/tmp/secrets/chabc/redirect");
+    const msg = secretReminderMessage("redirect");
+    expect(msg).toContain("/tmp/secrets/redirect");
     expect(msg).toContain('"redirect"');
     expect(msg.toLowerCase()).toContain("temporary");
     // The reminder is value-free by construction (it takes only the name).
-    expect(secretReminderMessage("redirect", "chabc")).not.toContain("code=");
+    expect(secretReminderMessage("redirect")).not.toContain("code=");
   });
 
   it("warns that tool output is persisted and steers the agent to use the path, not cat it", () => {
-    const msg = secretReminderMessage("redirect", "chabc").toLowerCase();
+    const msg = secretReminderMessage("redirect").toLowerCase();
     // Must not over-claim that the value never persists; instead it warns the
     // agent that printing it would land in the transcript and to use it by path.
     expect(msg).toContain("transcript");
