@@ -67,7 +67,7 @@ The wizard starts with **QuickStart** (defaults) vs **Advanced** (full control).
 2. **Workspace** — Location for agent files (default `~/.openclaw/workspace`). Seeds
    bootstrap files.
 3. **Gateway** — Port, bind address, auth mode, Tailscale exposure.
-4. **Channels** — WhatsApp, Telegram, Discord, Slack, Signal, or iMessage.
+4. **Channels** — WhatsApp, Telegram, Discord, Slack, Signal, and iMessage.
 5. **Daemon** — Installs a LaunchAgent (macOS) or systemd user unit (Linux/WSL2).
 6. **Health check** — Starts the Gateway and verifies it's running.
 7. **Skills** — Installs recommended skills and optional dependencies.

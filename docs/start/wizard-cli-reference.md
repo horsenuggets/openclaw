@@ -21,7 +21,7 @@ Local mode (default) walks you through:
   plus MiniMax, GLM, Moonshot, and AI Gateway options)
 - Workspace location and bootstrap files
 - Gateway settings (port, bind, auth, tailscale)
-- Channels and providers (Telegram, WhatsApp, Discord, Signal)
+- Channels and providers (WhatsApp, Telegram, Discord, Slack, Signal, and iMessage)
 - Daemon install (LaunchAgent or systemd user unit)
 - Health check
 - Skills setup
@@ -59,6 +59,7 @@ or modify anything on the remote host.
     - [WhatsApp](/channels/whatsapp): optional QR login
     - [Telegram](/channels/telegram): bot token
     - [Discord](/channels/discord): bot token
+    - [Slack](/channels/slack): bot and app tokens
     - [Signal](/channels/signal): optional `signal-cli` install + account config
     - [iMessage](/channels/imessage): legacy `imsg` CLI path + DB access
     - DM security: default is pairing. First DM sends a code; approve via
