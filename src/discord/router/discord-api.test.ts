@@ -83,4 +83,12 @@ describe("discordDeleteMessage", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     expect(await discordDeleteMessage("tok", "c1", "m1")).toBe(false);
   });
+
+  it("bounds the request with an abort signal so a stall cannot hang the caller", async () => {
+    const mock = vi.fn().mockResolvedValue(response(204));
+    vi.stubGlobal("fetch", mock);
+    await discordDeleteMessage("tok", "c1", "m1");
+    const init = mock.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
 });

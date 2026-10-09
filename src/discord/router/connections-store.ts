@@ -27,6 +27,33 @@ export type StoredConnection = {
 
 type ConnectionsFile = { connections: Record<string, StoredConnection> };
 
+const CONNECTION_STATUSES: ReadonlySet<string> = new Set<ConnectionStatus>([
+  "linked",
+  "not_linked",
+  "needs_reauth",
+]);
+
+/**
+ * Validate one stored record before it is handed to callers that dereference it
+ * (e.g. `listReply` reading `connectorId`/`status`). A valid JSON file can still
+ * hold a junk entry such as `{"github": null}`; dropping it here keeps a single
+ * bad record from crashing the whole command.
+ */
+function isStoredConnection(value: unknown): value is StoredConnection {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.connectorId === "string" &&
+    typeof record.status === "string" &&
+    CONNECTION_STATUSES.has(record.status) &&
+    typeof record.linkedAt === "string" &&
+    (record.token === undefined || typeof record.token === "string") &&
+    (record.accountLabel === undefined || typeof record.accountLabel === "string")
+  );
+}
+
 function filePath(instanceDir: string): string {
   return path.join(instanceDir, CONNECTIONS_FILENAME);
 }
@@ -82,7 +109,15 @@ function readConnectionsFileForWrite(instanceDir: string): ConnectionsFile {
   const parsed = JSON.parse(raw) as { connections?: unknown };
   const connections = parsed?.connections;
   if (connections && typeof connections === "object" && !Array.isArray(connections)) {
-    return { connections: connections as Record<string, StoredConnection> };
+    // Keep only well-formed records so a junk entry (e.g. a null value) cannot
+    // crash a later dereference; a wrong-typed outer object still throws below.
+    const clean: Record<string, StoredConnection> = {};
+    for (const [id, record] of Object.entries(connections as Record<string, unknown>)) {
+      if (isStoredConnection(record)) {
+        clean[id] = record;
+      }
+    }
+    return { connections: clean };
   }
   throw new Error(`Malformed connections file at ${pathname}`);
 }

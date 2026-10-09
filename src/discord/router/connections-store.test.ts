@@ -77,6 +77,29 @@ describe("connections-store", () => {
     expect(fs.readFileSync(file, "utf-8")).toBe("{ not json");
   });
 
+  it("drops malformed records (e.g. a null entry) rather than returning them", () => {
+    fs.writeFileSync(
+      path.join(dir, CONNECTIONS_FILENAME),
+      JSON.stringify({
+        connections: {
+          github: null,
+          notion: { connectorId: "notion" }, // missing status/linkedAt
+          todoist: {
+            connectorId: "todoist",
+            status: "linked",
+            token: "t",
+            linkedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+    const list = listConnections(dir);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.connectorId).toBe("todoist");
+    expect(getConnection(dir, "github")).toBeNull();
+    expect(getConnection(dir, "notion")).toBeNull();
+  });
+
   it("writes the file atomically (no leftover temp file)", () => {
     saveConnection(dir, conn());
     const entries = fs.readdirSync(dir);

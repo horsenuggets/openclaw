@@ -176,6 +176,11 @@ export async function discordDeleteMessage(
     const resp = await fetch(`${DISCORD_API}${Routes.channelMessage(channelId, messageId)}`, {
       method: "DELETE",
       headers: { Authorization: `Bot ${token}` },
+      // Bound the scrub: the caller awaits it before validating/replying, so a
+      // stalled delete must not hang the whole command with the token still
+      // visible. On timeout the fetch aborts and the catch returns false, which
+      // triggers the manual-delete warning just like any other failure.
+      signal: AbortSignal.timeout(10_000),
     });
     return resp.ok;
   } catch {
