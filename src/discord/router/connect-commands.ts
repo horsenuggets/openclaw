@@ -106,8 +106,16 @@ export type ConnectionStore = {
    * different owner's instance.
    */
   save: (channelId: string, connection: StoredConnection, expectedKey: string) => boolean;
-  remove: (channelId: string, connectorId: string) => boolean;
+  /**
+   * Remove a connection. `"removed"` when one was deleted, `"absent"` when there
+   * was nothing to remove, and `"error"` when the entry exists but the rewrite
+   * failed (e.g. a read-only mount) — distinguished so a failed unlink is never
+   * reported to the user as "was not linked" while the credential is still stored.
+   */
+  remove: (channelId: string, connectorId: string) => RemoveResult;
 };
+
+export type RemoveResult = "removed" | "absent" | "error";
 
 export type ConnectCommandDeps = {
   store: ConnectionStore;
@@ -425,17 +433,16 @@ export async function handleConnectCommand(
       await ctx.reply(connectionsReply("Disconnect", NOT_REGISTERED), { ephemeral: true });
       return;
     }
-    const removed = deps.store.remove(ctx.channelId, connector.id);
-    await ctx.reply(
-      connectionsReply(
-        "Disconnect",
-        removed
-          ? `${connector.label} has been unlinked.`
-          : `${connector.label} was not linked, so there is nothing to remove.`,
-      ),
-      { ephemeral: true },
-    );
-    if (removed) {
+    const result = deps.store.remove(ctx.channelId, connector.id);
+    const message =
+      result === "removed"
+        ? `${connector.label} has been unlinked.`
+        : result === "absent"
+          ? `${connector.label} was not linked, so there is nothing to remove.`
+          : `I could not unlink ${connector.label} right now — its storage is unavailable. ` +
+            "It is still linked; please try again.";
+    await ctx.reply(connectionsReply("Disconnect", message), { ephemeral: true });
+    if (result === "removed") {
       deps.log(`[connect] ${connector.id} unlinked for ${ctx.userId}`);
     }
     return;

@@ -96,7 +96,7 @@ function makeStore(registered = true, seed: StoredConnection[] = []) {
       map.set(connection.connectorId, connection);
       return true;
     },
-    remove: (_c, id) => map.delete(id),
+    remove: (_c, id) => (map.delete(id) ? "removed" : "absent"),
   };
   return { store, map };
 }
@@ -415,5 +415,21 @@ describe("handleConnectCommand remove", () => {
     const { ctx, replies } = makeCtx("remove", ["slack"]);
     await handleConnectCommand(ctx, makeDeps());
     expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
+  });
+
+  it("reports a storage failure distinctly from an absent connection", async () => {
+    const store: ConnectionStore = {
+      list: () => [],
+      get: () => null,
+      instanceKey: () => "k",
+      save: () => false,
+      remove: () => "error", // entry exists but the rewrite failed (e.g. EROFS)
+    };
+    const { ctx, replies } = makeCtx("remove", ["todoist"]);
+    await handleConnectCommand(ctx, makeDeps({ store }));
+    const description = embedOf(replies[0].payload).description ?? "";
+    expect(description).toContain("storage is unavailable");
+    expect(description).toContain("still linked");
+    expect(description).not.toContain("nothing to remove");
   });
 });

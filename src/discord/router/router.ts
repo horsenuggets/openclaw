@@ -514,13 +514,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     remove: (channelId, connectorId) => {
       const inst = instances.get(channelId);
       if (!inst) {
-        return false;
+        return "absent";
       }
       try {
-        return removeConnection(inst.instanceDir, connectorId);
+        return removeConnection(inst.instanceDir, connectorId) ? "removed" : "absent";
       } catch (err) {
+        // A read-only mount (EROFS) or similar makes the rewrite fail even though
+        // the entry exists; report it as an error, not an absent connection.
         runtime.error(`[router] failed to remove connection for ${channelId}: ${String(err)}`);
-        return false;
+        return "error";
       }
     },
   };
