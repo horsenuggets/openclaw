@@ -6,6 +6,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Extensions: remove the bundled plugins this fork does not use (bluebubbles, feishu,
+  googlechat, line, matrix, mattermost, msteams, nextcloud-talk, nostr, tlon, twitch,
+  voice-call, zalo, zalouser, diagnostics-otel, lobster, llm-task, open-prose,
+  memory-lancedb) along with their docs, skills, labeler entries, and lockfile packages.
+  Discord, memory-core, the other built-in channel plugins, and the provider auth plugins
+  stay.
 - Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
 - System prompt: the agent prompt's prose now comes from a single Markdown source,
   `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a

@@ -1,8 +1,3 @@
-"channel: bluebubbles":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/bluebubbles/**"
-          - "docs/channels/bluebubbles.md"
 "channel: discord":
   - changed-files:
       - any-glob-to-any-file:
@@ -13,49 +8,12 @@
   - changed-files:
       - any-glob-to-any-file:
           - "src/feishu/**"
-          - "extensions/feishu/**"
-          - "docs/channels/feishu.md"
-"channel: googlechat":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/googlechat/**"
-          - "docs/channels/googlechat.md"
 "channel: imessage":
   - changed-files:
       - any-glob-to-any-file:
           - "src/imessage/**"
           - "extensions/imessage/**"
           - "docs/channels/imessage.md"
-"channel: line":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/line/**"
-          - "docs/channels/line.md"
-"channel: matrix":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/matrix/**"
-          - "docs/channels/matrix.md"
-"channel: mattermost":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/mattermost/**"
-          - "docs/channels/mattermost.md"
-"channel: msteams":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/msteams/**"
-          - "docs/channels/msteams.md"
-"channel: nextcloud-talk":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/nextcloud-talk/**"
-          - "docs/channels/nextcloud-talk.md"
-"channel: nostr":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/nostr/**"
-          - "docs/channels/nostr.md"
 "channel: signal":
   - changed-files:
       - any-glob-to-any-file:
@@ -74,31 +32,12 @@
           - "src/telegram/**"
           - "extensions/telegram/**"
           - "docs/channels/telegram.md"
-"channel: tlon":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/tlon/**"
-          - "docs/channels/tlon.md"
-"channel: voice-call":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/voice-call/**"
 "channel: whatsapp-web":
   - changed-files:
       - any-glob-to-any-file:
           - "src/web/**"
           - "extensions/whatsapp/**"
           - "docs/channels/whatsapp.md"
-"channel: zalo":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/zalo/**"
-          - "docs/channels/zalo.md"
-"channel: zalouser":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/zalouser/**"
-          - "docs/channels/zalouser.md"
 
 "app: android":
   - changed-files:
@@ -190,10 +129,6 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/copilot-proxy/**"
-"extensions: diagnostics-otel":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/diagnostics-otel/**"
 "extensions: google-antigravity-auth":
   - changed-files:
       - any-glob-to-any-file:
@@ -202,26 +137,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/google-gemini-cli-auth/**"
-"extensions: llm-task":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/llm-task/**"
-"extensions: lobster":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/lobster/**"
 "extensions: memory-core":
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/memory-core/**"
-"extensions: memory-lancedb":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/memory-lancedb/**"
-"extensions: open-prose":
-  - changed-files:
-      - any-glob-to-any-file:
-          - "extensions/open-prose/**"
 "extensions: qwen-portal-auth":
   - changed-files:
       - any-glob-to-any-file:

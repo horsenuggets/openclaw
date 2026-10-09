@@ -220,7 +220,6 @@
     },
     "onlyBuiltDependencies": [
       "@lydell/node-pty",
-      "@matrix-org/matrix-sdk-crypto-nodejs",
       "@napi-rs/canvas",
       "@whiskeysockets/baileys",
       "authenticate-pam",

@@ -118,9 +118,6 @@ const EXTERNAL_MODULES = [
   "@napi-rs/canvas-*",
 ];
 
-// Extensions that fail to load as embedded (legacy export patterns, import issues).
-const EMBEDDED_SKIP = new Set(["lobster", "open-prose"]);
-
 // --- Argument parsing ---
 
 const args = process.argv.slice(2);
@@ -440,7 +437,7 @@ if (!skipBuild) {
     const embeddedRegistrations = [];
     for (const extDir of readdirSync(join(ROOT, "dist/extensions")).toSorted()) {
       const indexJs = join(ROOT, `dist/extensions/${extDir}/index.js`);
-      if (!existsSync(indexJs) || extDir === "node_modules" || EMBEDDED_SKIP.has(extDir)) {
+      if (!existsSync(indexJs) || extDir === "node_modules") {
         continue;
       }
       const varName = `ext_${extDir.replace(/[^a-zA-Z0-9]/g, "_")}`;
