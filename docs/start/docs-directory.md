@@ -38,8 +38,6 @@ For a complete map of the docs, see [Docs hubs](/start/hubs).
 - [Control UI (browser)](/web/control-ui)
 - [Telegram](/channels/telegram)
 - [Discord](/channels/discord)
-- [Mattermost (plugin)](/channels/mattermost)
-- [BlueBubbles (iMessage)](/channels/bluebubbles)
 - [iMessage (legacy)](/channels/imessage)
 - [Groups](/concepts/groups)
 - [WhatsApp group messages](/concepts/group-messages)

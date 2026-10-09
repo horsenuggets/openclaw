@@ -10,8 +10,6 @@ title: iMessage
 
 # iMessage (legacy: imsg)
 
-> **Recommended:** Use [BlueBubbles](/channels/bluebubbles) for new iMessage setups.
->
 > The `imsg` channel is a legacy external-CLI integration and may be removed in a future
 > release.
 

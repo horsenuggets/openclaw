@@ -788,20 +788,18 @@ No. OpenClaw runs on macOS or Linux (Windows via WSL2). A Mac mini is optional -
 people buy one as an always-on host, but a small VPS, home server, or Raspberry Pi-class
 box works too.
 
-You only need a Mac **for macOS-only tools**. For iMessage, use
-[BlueBubbles](/channels/bluebubbles) (recommended) - the BlueBubbles server runs on any
-Mac, and the Gateway can run on Linux or elsewhere. If you want other macOS-only tools,
-run the Gateway on a Mac or pair a macOS node.
+You only need a Mac **for macOS-only tools**. For iMessage, use BlueBubbles
+(recommended) - the BlueBubbles server runs on any Mac, and the Gateway can run on Linux
+or elsewhere. If you want other macOS-only tools, run the Gateway on a Mac or pair a macOS
+node.
 
-Docs: [BlueBubbles](/channels/bluebubbles), [Nodes](/nodes),
-[Mac remote mode](/platforms/mac/remote).
+Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
 
 ### Do I need a Mac mini for iMessage support
 
 You need **some macOS device** signed into Messages. It does **not** have to be a Mac
-mini - any Mac works. **Use [BlueBubbles](/channels/bluebubbles)** (recommended) for
-iMessage - the BlueBubbles server runs on macOS, while the Gateway can run on Linux or
-elsewhere.
+mini - any Mac works. **Use BlueBubbles** (recommended) for iMessage - the BlueBubbles
+server runs on macOS, while the Gateway can run on Linux or elsewhere.
 
 Common setups:
 
@@ -809,8 +807,7 @@ Common setups:
   Messages.
 - Run everything on the Mac if you want the simplest single‑machine setup.
 
-Docs: [BlueBubbles](/channels/bluebubbles), [Nodes](/nodes),
-[Mac remote mode](/platforms/mac/remote).
+Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
 
 ### If I buy a Mac mini to run OpenClaw can I connect it to my MacBook Pro
 

@@ -232,8 +232,6 @@ Add to your OpenClaw config:
 
 Restart the gateway. Now your agent can send and receive iMessages.
 
-Full setup details: [BlueBubbles channel](/channels/bluebubbles)
-
 ---
 
 ## Save a golden image
@@ -283,7 +281,6 @@ For true always-on, consider a dedicated Mac mini or a small VPS. See [VPS hosti
 - [VPS hosting](/vps)
 - [Nodes](/nodes)
 - [Gateway remote](/gateway/remote)
-- [BlueBubbles channel](/channels/bluebubbles)
 - [Lume Quickstart](https://cua.ai/docs/lume/guide/getting-started/quickstart)
 - [Lume CLI Reference](https://cua.ai/docs/lume/reference/cli-reference)
 - [Unattended VM Setup](https://cua.ai/docs/lume/guide/fundamentals/unattended-setup)

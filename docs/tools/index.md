@@ -171,15 +171,9 @@ Example (allow only file tools + browser):
 
 Plugins can register **additional tools** (and CLI commands) beyond the core set. See
 [Plugins](/plugin) for install + config, and [Skills](/tools/skills) for how tool usage
-guidance is injected into prompts. Some plugins ship their own skills alongside tools (for
-example, the voice-call plugin).
+guidance is injected into prompts. Some plugins ship their own skills alongside tools.
 
 Optional plugin tools:
-
-- [Lobster](/tools/lobster): typed workflow runtime with resumable approvals (requires the
-  Lobster CLI on the gateway host).
-- [LLM Task](/tools/llm-task): JSON-only LLM step for structured workflow output (optional
-  schema validation).
 
 ## Tool inventory
 

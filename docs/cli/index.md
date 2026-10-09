@@ -50,7 +50,6 @@ This page describes the current CLI behavior. If commands change, update this do
 - [`channels`](/cli/channels)
 - [`security`](/cli/security)
 - [`skills`](/cli/skills)
-- [`voicecall`](/cli/voicecall) (plugin; if installed)
 
 ## Global flags
 
