@@ -65,9 +65,8 @@ What `--isolated` does:
 ### Sending test messages
 
 ```bash
-# Send a message to the isolated gateway (agent has no --port; it reads
-# OPENCLAW_GATEWAY_PORT, then config)
-OPENCLAW_GATEWAY_PORT=<printed-port> openclaw agent --message "hello"
+# Send a message to the isolated gateway
+openclaw agent --message "hello" --port <printed-port>
 ```
 
 ### Running multiple instances
