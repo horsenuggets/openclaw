@@ -25,7 +25,7 @@ import {
   discordSendReply,
   editInteractionEmbedReply,
 } from "./discord-api.js";
-import { buildCommandResultEmbed } from "./embed-categories.js";
+import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
 import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
@@ -34,6 +34,8 @@ import { isAuthorizedForChannel } from "./router.js";
 import {
   SECRET_MODAL_CUSTOM_ID,
   buildSecretModal,
+  buildSecretNoticeEmbed,
+  buildSecretReceivedEmbed,
   parseSecretModalSubmit,
   sanitizeSecretName,
   secretReminderMessage,
@@ -845,12 +847,35 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
     channelGuild.set(d.channel_id, d.guild_id);
   }
 
-  const ack = (content: string) => {
-    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: 4, data: { content, flags: 64 } }),
-    }).catch((err) => runtime.error(`[router] secret ack failed: ${String(err)}`));
+  // Every ack is a Secrets-category embed whose footer icon is an uploaded
+  // attachment, which the plain callback endpoint cannot carry. So defer the
+  // interaction ephemerally, then edit the deferred reply in with the attachment
+  // -aware editor. The edit waits for the defer to land so the `@original` PATCH
+  // cannot race ahead of the response being created.
+  const ackEmbed = async (built: BuiltEmbed) => {
+    try {
+      const deferResp = await fetch(
+        `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+        },
+      );
+      if (!deferResp.ok) {
+        runtime.error(`[router] secret ack defer failed (${deferResp.status})`);
+        return;
+      }
+      const res = await editInteractionEmbedReply(applicationId, interactionToken, {
+        embeds: [built.embed],
+        attachments: built.attachments,
+      });
+      if (!res.ok) {
+        runtime.error(`[router] secret ack failed (${res.status})`);
+      }
+    } catch (err) {
+      runtime.error(`[router] secret ack failed: ${String(err)}`);
+    }
   };
 
   if (d.data?.custom_id !== SECRET_MODAL_CUSTOM_ID || !channelId) {
@@ -858,11 +883,16 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
   }
   const { value, name: rawName } = parseSecretModalSubmit(d.data?.components);
   if (!value) {
-    ack("No secret value was provided.");
+    void ackEmbed(buildSecretNoticeEmbed("Secret Not Provided.", "No secret value was provided."));
     return;
   }
   if (!instances.get(channelId)) {
-    ack("This channel is not registered, so there is no agent to receive a secret.");
+    void ackEmbed(
+      buildSecretNoticeEmbed(
+        "Channel Not Registered.",
+        "This channel is not registered, so there is no agent to receive a secret.",
+      ),
+    );
     return;
   }
   const userId = d.member?.user?.id ?? d.user?.id;
@@ -874,7 +904,12 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
   // The command spec already excludes group DMs (contexts [0, 1]); reject here
   // too as defense-in-depth in case a stale registration still dispatches one.
   if (!d.guild_id && d.channel?.type === GROUP_DM_CHANNEL_TYPE) {
-    ack("The /secret command is not available in group DMs.");
+    void ackEmbed(
+      buildSecretNoticeEmbed(
+        "Unavailable in Group DMs.",
+        "The /secret command is not available in group DMs.",
+      ),
+    );
     return;
   }
   const name = sanitizeSecretName(rawName, value);
@@ -888,7 +923,7 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
       systemTurn: true,
       secret: { name, value },
     });
-    ack(`Secret \`${name}\` received and handed to this channel's agent (temporary).`);
+    void ackEmbed(buildSecretReceivedEmbed(name));
     runtime.log(`[router] secret "${name}" delivered to channel ${channelId}`);
   };
 

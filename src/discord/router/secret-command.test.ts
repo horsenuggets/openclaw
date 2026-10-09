@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { EMBED_CATEGORIES } from "./embed-categories.js";
 import {
   MAX_SECRET_NAME_LENGTH,
   SECRET_COMMAND_SPEC,
@@ -7,6 +8,8 @@ import {
   SECRET_NAME_INPUT_ID,
   SECRET_VALUE_INPUT_ID,
   buildSecretModal,
+  buildSecretNoticeEmbed,
+  buildSecretReceivedEmbed,
   parseSecretModalSubmit,
   sanitizeSecretName,
   secretPath,
@@ -24,19 +27,19 @@ describe("SECRET_COMMAND_SPEC", () => {
 });
 
 describe("buildSecretModal", () => {
-  it("builds a modal with a required multiline value and an optional short name", () => {
+  it("builds a required short value input and an optional short name input", () => {
     const modal = buildSecretModal();
     expect(modal.custom_id).toBe(SECRET_MODAL_CUSTOM_ID);
     expect(modal.components).toHaveLength(2);
-    const [valueRow, nameRow] = modal.components;
-    const value = valueRow.components[0];
-    const name = nameRow.components[0];
-    expect(value.custom_id).toBe(SECRET_VALUE_INPUT_ID);
-    expect(value.style).toBe(2); // paragraph / multiline
-    expect(value.required).toBe(true);
-    expect(name.custom_id).toBe(SECRET_NAME_INPUT_ID);
-    expect(name.style).toBe(1); // short
-    expect(name.required).toBe(false);
+    const inputs = new Map(
+      modal.components.map((row) => [row.components[0].custom_id, row.components[0]]),
+    );
+    const value = inputs.get(SECRET_VALUE_INPUT_ID);
+    const name = inputs.get(SECRET_NAME_INPUT_ID);
+    expect(value?.style).toBe(1); // short (single line, to keep the value hidden)
+    expect(value?.required).toBe(true);
+    expect(name?.style).toBe(1); // short
+    expect(name?.required).toBe(false);
     // Every input lives in its own action row (Discord allows one per row).
     for (const row of modal.components) {
       expect(row.type).toBe(1);
@@ -67,10 +70,10 @@ describe("parseSecretModalSubmit", () => {
 });
 
 describe("sanitizeSecretName", () => {
-  it("lowercases and keeps [a-z0-9] + hyphen + underscore, stripping the rest", () => {
-    expect(sanitizeSecretName("Google OAuth!", "v")).toBe("googleoauth");
+  it("preserves case and keeps [A-Za-z0-9] + hyphen + underscore, stripping the rest", () => {
+    expect(sanitizeSecretName("Google OAuth!", "v")).toBe("GoogleOAuth");
     // Hyphens and underscores are preserved; path/shell-unsafe chars are dropped.
-    expect(sanitizeSecretName("my-token_42", "v")).toBe("my-token_42");
+    expect(sanitizeSecretName("MY-Token_42", "v")).toBe("MY-Token_42");
     expect(sanitizeSecretName("a/b c;d.e", "v")).toBe("abcde");
   });
 
@@ -79,11 +82,11 @@ describe("sanitizeSecretName", () => {
     expect(sanitizeSecretName(long, "v")).toHaveLength(MAX_SECRET_NAME_LENGTH);
   });
 
-  it("falls back to a deterministic hash of the value when the name is empty", () => {
+  it("falls back to a deterministic uppercase hash of the value when the name is empty", () => {
     const value = "the-secret-value";
-    const hash = createHash("sha256").update(value).digest("hex").slice(0, 8);
-    expect(sanitizeSecretName("", value)).toBe(`secret-${hash}`);
-    expect(sanitizeSecretName("!!!", value)).toBe(`secret-${hash}`);
+    const hash = createHash("sha256").update(value).digest("hex").slice(0, 8).toUpperCase();
+    expect(sanitizeSecretName("", value)).toBe(`SECRET_${hash}`);
+    expect(sanitizeSecretName("!!!", value)).toBe(`SECRET_${hash}`);
     // Deterministic: same value => same fallback name (so a re-submit overwrites).
     expect(sanitizeSecretName("", value)).toBe(sanitizeSecretName("", value));
   });
@@ -113,5 +116,38 @@ describe("secretPath / secretReminderMessage", () => {
     // agent that printing it would land in the transcript and to use it by path.
     expect(msg).toContain("transcript");
     expect(msg).toContain("path");
+  });
+});
+
+describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
+  it("styles both as Secrets-category embeds (color, footer, timestamp)", () => {
+    const category = EMBED_CATEGORIES.secrets;
+    for (const { embed } of [
+      buildSecretReceivedEmbed("redirect"),
+      buildSecretNoticeEmbed("T", "D"),
+    ]) {
+      expect(embed.color).toBe(category.color);
+      expect(embed.footer?.text).toBe(category.footerText);
+      expect(embed.footer?.icon_url).toBe(`attachment://${category.icon}`);
+      expect(typeof embed.timestamp).toBe("string");
+    }
+  });
+
+  it("names the secret in the received embed without leaking the value", () => {
+    const { embed, attachments } = buildSecretReceivedEmbed("redirect");
+    expect(embed.title).toBe("Secret Received!");
+    expect(embed.description).toContain("`redirect`");
+    // The builder takes only the name, so the value cannot appear by construction.
+    expect(embed.description.toLowerCase()).toContain("temporary");
+    expect(attachments).toContain(EMBED_CATEGORIES.secrets.icon);
+  });
+
+  it("passes the notice title and description straight through", () => {
+    const { embed } = buildSecretNoticeEmbed(
+      "Secret Not Provided.",
+      "No secret value was provided.",
+    );
+    expect(embed.title).toBe("Secret Not Provided.");
+    expect(embed.description).toBe("No secret value was provided.");
   });
 });
