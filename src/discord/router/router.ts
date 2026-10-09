@@ -432,8 +432,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           routeMessage({
             authorId: oId,
             channelId: cId,
+            // Neutral trigger only: routeMessage prepends BOOTSTRAP.md (which
+            // carries the first-run instructions) ahead of this, and the shared
+            // prompt's "first-run setup" section tells the agent how to act on
+            // it. No behavioral prose belongs here.
             messageContent:
-              "This channel was just registered and the user has not spoken yet. Begin first-run setup now: send the welcome card as your very first message, then greet them warmly and start the checklist.",
+              "(this channel was just registered; the user has not sent a message yet)",
             instance: inst,
             discordToken,
             runtime,

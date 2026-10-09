@@ -36,9 +36,17 @@ export function bootstrapExists(instance: InstanceConfig): boolean {
  * identity, and workspace persona/first-run text in the system prompt makes
  * requests spill into paid extra usage. Conversation content does not affect
  * that billing, so the router reads the instance's BOOTSTRAP.md (mounted
- * read-only) and prepends it, with a directive, to the user's message while the
- * file exists. Once the agent finishes setup and deletes BOOTSTRAP.md, this
- * returns null and normal chat resumes.
+ * read-only) and prepends its content to the user's message while the file
+ * exists. Once the agent finishes setup and deletes BOOTSTRAP.md, this returns
+ * null and normal chat resumes.
+ *
+ * The content is passed through verbatim. BOOTSTRAP.md itself carries the setup
+ * instructions (work through it conversationally, keep it invisible, tick each
+ * item, delete the file when done, introduce yourself as OpenClaw), and the
+ * general "if a BOOTSTRAP.md checklist is present, work through it" plus "do not
+ * narrate internal mechanics" guidance lives in the shared system prompt
+ * (SYSTEM.md "first-run setup" and "tool call style"). None of that prose is
+ * hard-coded in the router anymore.
  */
 export function readBootstrapDirective(instance: InstanceConfig): string | null {
   try {
@@ -47,16 +55,7 @@ export function readBootstrapDirective(instance: InstanceConfig): string | null 
     if (!content) {
       return null;
     }
-    return [
-      "[first-run setup]",
-      "This channel is brand new and not set up yet. Before replying to the user's message below, begin the first-run setup checklist and work through it step by step. This is your BOOTSTRAP.md:",
-      "",
-      content,
-      "",
-      "Identity: you are OpenClaw, the user's personal everything-assistant. Always introduce and refer to yourself as OpenClaw, never as Claude, Claude Code, or any other model or product name. If you need a noun, call yourself an assistant or your assistant.",
-      "",
-      'Follow it exactly, including emitting any control commands it specifies (a message that is only a control command is run by the host and never shown to the user). Tick each item as you complete it and delete BOOTSTRAP.md when every item is done. Keep all of this invisible to the user: never mention the checklist, that setup is happening, saving to files, ticking boxes, or wrapping up. Do not narrate mechanics like "let me save that" or "let me finish setup" - just chat naturally and do the bookkeeping silently. Now handle the user\'s message:',
-    ].join("\n");
+    return content;
   } catch {
     return null;
   }
