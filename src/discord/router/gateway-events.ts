@@ -92,6 +92,8 @@ type SlashInteractionData = {
   channel_id: string;
   token: string;
   guild_id?: string;
+  /** The interaction's channel object; `type` 1 = DM, 3 = group DM. */
+  channel?: { type?: number };
   data?: { name?: string; options?: unknown };
   member?: { user?: { id?: string } };
   user?: { id?: string };
@@ -397,11 +399,12 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
   // Owner gate for the commands that act on a channel's agent (/lifecycle, /secret).
   // In a guild channel only the registered owner may proceed; anyone else gets the
   // standard unauthorized notice as an ephemeral reply, the same wording a plain
-  // message earns. A DM is inherently 1:1 with its owner, so it passes untouched.
+  // message earns. A 1:1 DM is inherently with its owner, so it passes untouched.
   // (/channel is exempt: it manages registration itself and has its own admin and
   // owner rules, and it must work on channels that have no owner yet.)
   const runForOwner = (channelId: string, proceed: () => void) => {
-    if (!d.guild_id) {
+    // A group DM has several participants but no guild id, so it is gated like a guild.
+    if (!d.guild_id && d.channel?.type !== GROUP_DM_CHANNEL_TYPE) {
       proceed();
       return;
     }

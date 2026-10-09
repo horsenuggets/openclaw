@@ -1129,6 +1129,7 @@ describe("discord router channel-delete cleanup", () => {
       command: "lifecycle" | "secret";
       userId: string;
       guild: boolean;
+      groupDm?: boolean;
       ownerKnown: boolean;
     }) => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
@@ -1165,6 +1166,7 @@ describe("discord router channel-delete cleanup", () => {
           channel_id: CHANNEL,
           ...(params.guild ? { guild_id: GUILD, member: { user: { id: params.userId } } } : {}),
           ...(params.guild ? {} : { user: { id: params.userId } }),
+          ...(params.groupDm ? { channel: { type: 3 } } : {}),
           data: { name: params.command },
         });
         for (let i = 0; i < 5; i++) {
@@ -1214,6 +1216,20 @@ describe("discord router channel-delete cleanup", () => {
               : deferred?.data?.flags === 64;
           expect(proceeded).toBe(true);
         }
+      });
+    }
+
+    for (const command of ["lifecycle", "secret"] as const) {
+      it(`denies a stranger running ${command} in a group DM`, async () => {
+        const { callbacks, patches } = await runInteraction({
+          command,
+          userId: STRANGER,
+          guild: false,
+          groupDm: true,
+          ownerKnown: true,
+        });
+        expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
+        expect(patches[0]?.embeds?.[0]?.description).toContain("not authorized");
       });
     }
 
