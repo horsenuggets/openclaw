@@ -3,7 +3,7 @@
  * redirect URL) without it ever appearing in the channel.
  *
  * Both inputs are collected in a Discord MODAL (popup) so even the secret's
- * name stays private: a required multiline "secret" value and an optional short
+ * name stays private: a required single-line "secret" value and an optional short
  * "name". On submit the value is delivered out-of-band to the channel's agent
  * box (never in the message text or in any log), written to the box's own
  * ephemeral `/tmp/secrets/<name>` (0600), and the agent is told via a one-off
@@ -15,11 +15,12 @@
  */
 
 import { createHash } from "node:crypto";
+import { type BuiltEmbed, buildEmbed } from "./embed-categories.js";
 
 /** Slash-command registration body for Discord. */
 export const SECRET_COMMAND_SPEC = {
   name: "secret",
-  description: "Privately hand this channel's agent a sensitive value (collected via a popup)",
+  description: "Privately hand this channel's agent a sensitive value (collected via a popup).",
   type: 1, // CHAT_INPUT
   // Allow use in guilds (0) and one-to-one bot DMs (1) only. Group DMs (2) are
   // deliberately excluded: they have no `guild_id` to owner-gate on yet carry
@@ -29,7 +30,7 @@ export const SECRET_COMMAND_SPEC = {
 
 /** custom_id of the `/secret` modal (and the dispatch key for its submission). */
 export const SECRET_MODAL_CUSTOM_ID = "secret-modal";
-/** custom_id of the required multiline value input inside the modal. */
+/** custom_id of the required single-line value input inside the modal. */
 export const SECRET_VALUE_INPUT_ID = "secret-value";
 /** custom_id of the optional short name input inside the modal. */
 export const SECRET_NAME_INPUT_ID = "secret-name";
@@ -60,26 +61,27 @@ export type DiscordModal = {
 };
 
 /**
- * Build the `/secret` modal payload. The value input is a required multiline
- * (paragraph) field; the name input is an optional single-line field. Each
- * input must live in its own action row (Discord allows one input per row).
+ * Build the `/secret` modal payload. Both inputs are single-line: a required
+ * value field and an optional name field (secrets handed via `/secret` are
+ * expected to be one-liners such as tokens or OAuth redirect URLs). Each input
+ * must live in its own action row (Discord allows one input per row).
  */
 export function buildSecretModal(): DiscordModal {
   return {
     custom_id: SECRET_MODAL_CUSTOM_ID,
-    title: "Hand the agent a secret",
+    title: "Hand the agent a secret...",
     components: [
       {
         type: 1,
         components: [
           {
             type: 4,
-            custom_id: SECRET_VALUE_INPUT_ID,
-            style: 2, // paragraph (multiline)
-            label: "Secret value",
-            required: true,
-            max_length: 4000,
-            placeholder: "e.g. an OAuth redirect URL or token",
+            custom_id: SECRET_NAME_INPUT_ID,
+            style: 1, // short (single line)
+            label: "Name",
+            required: false,
+            max_length: 64,
+            placeholder: "Defaults to a hash of the value",
           },
         ],
       },
@@ -88,12 +90,15 @@ export function buildSecretModal(): DiscordModal {
         components: [
           {
             type: 4,
-            custom_id: SECRET_NAME_INPUT_ID,
-            style: 1, // short (single line)
-            label: "Name (optional)",
-            required: false,
-            max_length: 64,
-            placeholder: "defaults to a hash of the value",
+            custom_id: SECRET_VALUE_INPUT_ID,
+            // Single-line: secrets handed via /secret are expected to be
+            // one-liners (tokens, OAuth redirect URLs). Discord modals never mask
+            // input, so the style does not affect how hidden the value is.
+            style: 1,
+            label: "Secret Value",
+            required: true,
+            max_length: 4000,
+            placeholder: "e.g. an OAuth redirect URL or token",
           },
         ],
       },
@@ -133,25 +138,28 @@ export function parseSecretModalSubmit(components: ModalSubmitComponents | undef
 }
 
 /**
- * Sanitize a user-supplied secret name into a safe, stable filename token:
- * lowercase, keep only `[a-z0-9]`, hyphen, and underscore (everything else
+ * Sanitize a user-supplied secret name into a safe, stable filename token: keep
+ * only `[A-Za-z0-9]`, hyphen, and underscore (case preserved, everything else
  * stripped), capped at {@link MAX_SECRET_NAME_LENGTH}. Hyphen/underscore are
  * filename- and path-safe (no shell metacharacters, no `/`, cannot form `..`).
  * When the result is empty (name omitted or entirely stripped), derive a
- * deterministic fallback from the value: `secret-<first 8 hex of sha256(value)>`.
- * Two submissions with the same resolved name target the same path, so
- * re-submitting overwrites in place.
+ * deterministic fallback from the value: `SECRET_<first 8 uppercase hex of
+ * sha256(value)>`. Two submissions with the same resolved name target the same
+ * path, so re-submitting overwrites in place. Case is preserved, so on a
+ * case-sensitive host (the production Docker box, Linux) names differing only in
+ * case are distinct files; on a case-insensitive direct-mode host (e.g. default
+ * macOS) they alias to the same file, overwriting exactly as a same-name
+ * resubmit does. That overwrite is benign and consistent with the same-name
+ * semantics above; we intentionally do not canonicalize case (names stay as
+ * typed) or track cross-submission collisions here.
  */
 export function sanitizeSecretName(raw: string, value: string): string {
-  const cleaned = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "")
-    .slice(0, MAX_SECRET_NAME_LENGTH);
+  const cleaned = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, MAX_SECRET_NAME_LENGTH);
   if (cleaned) {
     return cleaned;
   }
-  const hash = createHash("sha256").update(value).digest("hex").slice(0, 8);
-  return `secret-${hash}`;
+  const hash = createHash("sha256").update(value).digest("hex").slice(0, 8).toUpperCase();
+  return `SECRET_${hash}`;
 }
 
 /**
@@ -187,4 +195,33 @@ export function secretReminderMessage(name: string): string {
     `conversation transcript, so echoing the value would copy it there. ` +
     `Never send its contents back into the channel.`
   );
+}
+
+/**
+ * Build the "secret received" success embed (Secrets category). The name is a
+ * sanitized label, never the value, so it is safe to show. Rendered when a
+ * submission is accepted and queued for the channel's agent. The wording says
+ * "queued for delivery" rather than "delivered" because the ack is sent as soon
+ * as the turn is enqueued; the actual write into the agent box happens when that
+ * turn runs and can still fail, so claiming completed delivery here would be a
+ * false guarantee.
+ */
+export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
+  return buildEmbed({
+    category: "secrets",
+    title: "Secret Received!",
+    description:
+      `The secret \`${name}\` was received and queued for delivery to this ` +
+      `channel's OpenClaw agent. Keep in mind that secrets are temporary and they ` +
+      `can be overwritten.`,
+  });
+}
+
+/**
+ * Build a Secrets-category notice embed for a submission that could not be
+ * accepted (missing value, unregistered channel, unsupported surface). Carries
+ * only the fixed wording passed in, never the secret value.
+ */
+export function buildSecretNoticeEmbed(title: string, description: string): BuiltEmbed {
+  return buildEmbed({ category: "secrets", title, description });
 }

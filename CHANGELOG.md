@@ -52,9 +52,15 @@ Docs: https://docs.openclaw.ai
   out of the Discord router: `readBootstrapDirective` now passes `BOOTSTRAP.md` through
   verbatim, and the general "work through a BOOTSTRAP.md checklist" plus "do not narrate
   internal mechanics" guidance lives in the shared prompt.
-- `/secret`: allow hyphens and underscores in the secret name (previously stripped to
-  `[a-z0-9]`), so names like `my-token_1` are preserved. They carry no shell meaning and
-  cannot escape the secrets directory, so the gateway boundary accepts `[a-z0-9_-]`.
+- `/secret`: preserve case and allow hyphens and underscores in the secret name
+  (previously lowercased and stripped to `[a-z0-9]`), so names like `My-Token_1` are kept
+  as typed. They carry no shell meaning and cannot escape the secrets directory, so the
+  gateway boundary accepts `[A-Za-z0-9_-]`. The fallback name for an unnamed secret is now
+  `SECRET_<8 uppercase hex of sha256(value)>`.
+- `/secret`: every response (the submit acknowledgement plus the missing-value,
+  not-registered, and group-DM notices) now renders as a styled Secrets-category embed
+  (amber `#a08060` accent, Secrets footer icon with a timestamp) instead of plain text, so
+  the command matches the `/connections` and `/channel` embed treatment.
 - `/secret`: write secrets flat at `/tmp/secrets/<name>` instead of nesting them under a
   per-channel scope subfolder. A Discord channel maps 1:1 to its own agent container, so
   the box only ever holds that channel's secrets and the extra nesting was redundant.

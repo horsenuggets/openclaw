@@ -1357,4 +1357,77 @@ describe("discord router channel-delete cleanup", () => {
       );
     });
   });
+
+  describe("secret modal submit responses", () => {
+    // Capture the deferred callback (type 5) and the @original PATCH payload so we
+    // can assert the defer-then-edit Secrets embed path for both a success and a
+    // notice branch of handleModalSubmit.
+    type DeferCallback = { type: number; data?: { flags?: number } };
+    type EmbedPatch = {
+      embeds?: Array<{ title?: string; color?: number; footer?: { text?: string } }>;
+    };
+
+    const runModalSubmit = async (data: Record<string, unknown>) => {
+      const callbacks: DeferCallback[] = [];
+      const patches: EmbedPatch[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (typeof url === "string" && url.includes("/callback")) {
+            callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+            return { ok: true, status: 200, json: async () => ({}) };
+          }
+          if (typeof url === "string" && url.includes("/messages/@original")) {
+            patches.push(payloadOf(init as RequestInit) as EmbedPatch);
+            return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+          }
+          return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+        }) as unknown as typeof fetch,
+      );
+      void start();
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+      // A 1:1 DM (channel type 1) on the registered channel skips the owner gate,
+      // so the success/notice branches run without onboarding setup.
+      ws.dispatch("INTERACTION_CREATE", {
+        type: 5,
+        id: "int-modal",
+        token: "tok",
+        channel_id: CHANNEL,
+        channel: { type: 1 },
+        user: { id: OWNER },
+        data,
+      });
+      for (let i = 0; i < 5; i++) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      return { callbacks, patches };
+    };
+
+    it("acks a submitted secret with a deferred ephemeral Secrets embed", async () => {
+      const { callbacks, patches } = await runModalSubmit({
+        custom_id: "secret-modal",
+        components: [{ components: [{ custom_id: "secret-value", value: "tok" }] }],
+      });
+      // Deferred ephemerally (type 5, flag 64), then the Secrets embed edited in.
+      expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
+      const embed = patches[0]?.embeds?.[0];
+      expect(embed?.title).toBe("Secret Received!");
+      expect(embed?.footer?.text).toBe("Secrets");
+      expect(embed?.color).toBe(0xa08060);
+    });
+
+    it("acks a missing value with a deferred ephemeral Secrets notice embed", async () => {
+      const { callbacks, patches } = await runModalSubmit({
+        custom_id: "secret-modal",
+        components: [{ components: [{ custom_id: "secret-value", value: "" }] }],
+      });
+      expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
+      expect(patches[0]?.embeds?.[0]?.title).toBe("Secret Not Provided.");
+      expect(patches[0]?.embeds?.[0]?.footer?.text).toBe("Secrets");
+    });
+  });
 });

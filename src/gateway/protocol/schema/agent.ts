@@ -71,7 +71,7 @@ export const AgentParamsSchema = Type.Object(
      * Out-of-band secret delivery (from the `/secret` Discord command): the
      * value is written to the box's own `/tmp/secrets/<name>` (0600) before the
      * turn runs, so it never rides in the message text. `name` is validated again
-     * gateway-side (strict `[a-z0-9_-]`) before being interpolated into the
+     * gateway-side (strict `[A-Za-z0-9_-]`) before being interpolated into the
      * sandbox write, so a malformed value cannot escape the directory or inject a
      * shell command.
      */
