@@ -145,8 +145,13 @@ export function parseSecretModalSubmit(components: ModalSubmitComponents | undef
  * When the result is empty (name omitted or entirely stripped), derive a
  * deterministic fallback from the value: `SECRET_<first 8 uppercase hex of
  * sha256(value)>`. Two submissions with the same resolved name target the same
- * path, so re-submitting overwrites in place; because case is preserved, names
- * that differ only in case are distinct.
+ * path, so re-submitting overwrites in place. Case is preserved, so on a
+ * case-sensitive host (the production Docker box, Linux) names differing only in
+ * case are distinct files; on a case-insensitive direct-mode host (e.g. default
+ * macOS) they alias to the same file, overwriting exactly as a same-name
+ * resubmit does. That overwrite is benign and consistent with the same-name
+ * semantics above; we intentionally do not canonicalize case (names stay as
+ * typed) or track cross-submission collisions here.
  */
 export function sanitizeSecretName(raw: string, value: string): string {
   const cleaned = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, MAX_SECRET_NAME_LENGTH);

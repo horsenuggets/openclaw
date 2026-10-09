@@ -847,11 +847,13 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
     channelGuild.set(d.channel_id, d.guild_id);
   }
 
-  // Every ack is a Secrets-category embed whose footer icon is an uploaded
+  // Each ack below is a Secrets-category embed whose footer icon is an uploaded
   // attachment, which the plain callback endpoint cannot carry. So defer the
   // interaction ephemerally, then edit the deferred reply in with the attachment
   // -aware editor. The edit waits for the defer to land so the `@original` PATCH
-  // cannot race ahead of the response being created.
+  // cannot race ahead of the response being created. (The guild owner-gate denial
+  // is the one exception: it goes through the shared unauthorized notice, a
+  // Log-category embed, so every command denies access with identical wording.)
   const ackEmbed = async (built: BuiltEmbed) => {
     try {
       const deferResp = await fetch(
