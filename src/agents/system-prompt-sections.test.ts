@@ -1,10 +1,8 @@
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   applyPromptTokens,
   loadSystemPromptSections,
   parseSystemPromptSections,
-  systemPromptTemplateCandidates,
 } from "./system-prompt-sections.js";
 
 const SAMPLE = [
@@ -83,26 +81,7 @@ describe("applyPromptTokens", () => {
 });
 
 describe("loadSystemPromptSections", () => {
-  it("prefers the executable-adjacent template over cwd-derived package roots in Bun", () => {
-    const packageRoot = path.resolve("untrusted/project");
-    const execPath = path.join(path.sep, "opt", "openclaw", "openclaw");
-    const candidates = systemPromptTemplateCandidates({
-      packageRoot,
-      execPath,
-      cwd: packageRoot,
-      moduleDir: path.join(path.sep, "virtual", "bundle", "src", "agents"),
-      isBun: true,
-    });
-
-    expect(candidates[0]).toBe(
-      path.join(path.dirname(execPath), "docs", "reference", "templates", "SYSTEM.md"),
-    );
-    expect(candidates[1]).toBe(
-      path.join(packageRoot, "docs", "reference", "templates", "SYSTEM.md"),
-    );
-  });
-
-  it("resolves and parses the real SYSTEM.md template", () => {
+  it("parses the embedded SYSTEM.md source", () => {
     const { intro, sections } = loadSystemPromptSections();
     expect(intro).toContain("you are openclaw");
     // The builder fails fast on a missing required section, so SYSTEM.md must

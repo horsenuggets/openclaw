@@ -102,6 +102,9 @@ jobs:
             task: protocol
             command: pnpm protocol:check
           - runtime: node
+            task: prompt
+            command: pnpm prompt:check
+          - runtime: node
             task: format
             command: pnpm format
     steps:

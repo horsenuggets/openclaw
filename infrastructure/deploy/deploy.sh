@@ -86,15 +86,6 @@ for t in AGENTS SOUL TOOLS IDENTITY USER HEARTBEAT BOOTSTRAP; do
     "$STAGING/deploy/bin/docs/reference/templates/$t.md"
 done
 
-# System-prompt source (NOT a workspace seed): the agent assembles its system prompt
-# from this at runtime, reading it via <binary-dir>/docs/reference/templates
-# (src/agents/system-prompt-sections.ts). The box resolves <binary-dir> to the
-# /bin/docs/reference/templates mount (agent.yml), so SYSTEM.md must ship here too or
-# every prompt build in the box throws. `openclaw setup` seeds a fixed file list and
-# never copies SYSTEM.md, so staging it here does not leak it into workspaces.
-cp "$PROJECT_ROOT/docs/reference/templates/SYSTEM.md" \
-  "$STAGING/deploy/bin/docs/reference/templates/SYSTEM.md"
-
 # Skills: the SKILL.md tool definitions the agent box discovers at <binary-dir>/skills
 # (mounted at /bin/skills in agent.yml) so connected tools work — their instructions
 # reach the prompt and skills.entries tokens surface as env vars.
