@@ -421,6 +421,42 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("~/.claude/");
   });
 
+  it("sources prose from SYSTEM.md and fills interpolation tokens", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/home/user/.openclaw/workspace",
+      toolNames: ["message"],
+      runtimeInfo: { channel: "telegram", capabilities: [] },
+    });
+
+    // ${workspaceDir} is interpolated, not left literal.
+    expect(prompt).toContain("your working directory is `/home/user/.openclaw/workspace`");
+    expect(prompt).not.toContain("${workspaceDir}");
+    expect(prompt).not.toContain("${toolList}");
+    // ${messageChannelOptions} / ${runtimeChannel} / ${silentReplyToken} all resolve.
+    expect(prompt).toContain(
+      `respond with only \`${SILENT_REPLY_TOKEN}\` (avoid duplicate replies)`,
+    );
+    expect(prompt).toContain("inline buttons not enabled for telegram");
+    expect(prompt).not.toContain("${");
+  });
+
+  it("includes the don't-narrate-mechanics rule in tool call style", () => {
+    const prompt = buildAgentSystemPrompt({ workspaceDir: "/tmp/openclaw" });
+    expect(prompt).toContain('do not narrate internal mechanics (e.g. "let me save that"');
+  });
+
+  it("includes the first-run setup section in full mode only", () => {
+    const full = buildAgentSystemPrompt({ workspaceDir: "/tmp/openclaw" });
+    expect(full).toContain("## first-run setup");
+    expect(full).toContain("if your workspace contains a BOOTSTRAP.md checklist");
+
+    const minimal = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "minimal",
+    });
+    expect(minimal).not.toContain("## first-run setup");
+  });
+
   it("includes workspace-specific memory paths in memory recall section", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/home/user/.openclaw/workspace",

@@ -13,10 +13,18 @@ OpenClaw builds a custom system prompt for every agent run. The prompt is
 
 The prompt is assembled by OpenClaw and injected into each agent run.
 
+The prose for each shared section comes from a single Markdown source,
+`docs/reference/templates/SYSTEM.md`. `src/agents/system-prompt-sections.ts` parses that
+file into header-keyed sections at runtime (cached), and `src/agents/system-prompt.ts`
+assembles the live prompt from them. The builder owns all wiring: interpolation tokens
+(`${workspaceDir}`, the generated tool list, etc.), conditional guards, section ordering,
+and the builder-only sections that `SYSTEM.md` does not describe. To change wording, edit
+`SYSTEM.md`; there is no separate port step.
+
 ## Structure
 
-The prompt is intentionally compact and uses fixed sections. The ported sections are
-written in the lowercase house style that mirrors the `SYSTEM.md` template source:
+The prompt is intentionally compact and uses fixed sections, written in the lowercase
+house style of the `SYSTEM.md` source:
 
 - **tooling**: current tool list + short descriptions.
 - **tool call style**: how to narrate and acknowledge before running tools.
@@ -33,6 +41,8 @@ written in the lowercase house style that mirrors the `SYSTEM.md` template sourc
 - **reply tags**: optional reply tag syntax for supported providers.
 - **messaging** + **silent replies**: routing, the `message` tool, and the `⁘ return`
   silent-reply convention.
+- **first-run setup**: how to work through a `BOOTSTRAP.md` checklist invisibly when one
+  is present (full mode only).
 - **message priority** / **output boundaries**: how to prioritize the incoming message and
   never fabricate user turns.
 - **Runtime**: a JSON block of runtime facts (agent id, host, OS, node, model, channel,
@@ -58,9 +68,10 @@ for each run (not a user-facing config):
 
 - `full` (default): includes all sections above.
 - `minimal`: used for sub-agents; omits **skills**, **Memory Recall**, **OpenClaw
-  Self-Update**, **Model Aliases**, **reply tags**, **messaging**, and **silent replies**.
-  **tooling**, **safety**, **workspace**, **Sandbox**, **Runtime**, and injected context
-  stay available.
+  Self-Update**, **Model Aliases**, **reply tags**, **messaging**, **silent replies**,
+  **first-run setup**, **message priority**, and **output boundaries**. **tooling**,
+  **tool call style**, **safety**, **workspace**, **Sandbox**, **Runtime**, and injected
+  context stay available.
 - `none`: returns only the base identity line.
 
 When `promptMode=minimal`, extra injected prompts are labeled **Subagent Context** instead
