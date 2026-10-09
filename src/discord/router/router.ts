@@ -349,6 +349,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
   };
 
+  // `instanceDir` is stable across unregister/re-register, so connection
+  // authorization uses an in-memory identity that rotates for each registration.
+  let connectionRegistrationGeneration = 0;
+  const nextConnectionRegistrationKey = (channelId: string): string => {
+    const ownerId = describeInstance(channelId)?.ownerId ?? "";
+    return `${++connectionRegistrationGeneration}:${ownerId}`;
+  };
+  const connectionRegistrationKeys = new Map<string, string>(
+    [...instances.keys()].map((id) => [id, nextConnectionRegistrationKey(id)]),
+  );
+  const rotateConnectionRegistrationKey = (channelId: string): void => {
+    if (instances.has(channelId)) {
+      connectionRegistrationKeys.set(channelId, nextConnectionRegistrationKey(channelId));
+    } else {
+      connectionRegistrationKeys.delete(channelId);
+    }
+  };
+  const currentConnectionRegistrationKey = (channelId: string): string | null => {
+    if (!instances.has(channelId)) {
+      return null;
+    }
+    let key = connectionRegistrationKeys.get(channelId);
+    if (!key) {
+      key = nextConnectionRegistrationKey(channelId);
+      connectionRegistrationKeys.set(channelId, key);
+    }
+    return key;
+  };
+
   // Reconcile the in-memory instance map with disk. The map is built once at
   // startup, so after the daemon creates/removes an instance we re-scan so the
   // channel becomes (or stops being) routable immediately, without a restart.
@@ -364,6 +393,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           channelQueue.clear(id);
         }
         instances.set(id, inst);
+        if (!existing || existing.instanceDir !== inst.instanceDir) {
+          connectionRegistrationKeys.set(id, nextConnectionRegistrationKey(id));
+        }
       }
       const removed: string[] = [];
       for (const id of instances.keys()) {
@@ -373,6 +405,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
       for (const id of removed) {
         instances.delete(id);
+        connectionRegistrationKeys.delete(id);
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
@@ -414,6 +447,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           const result = await daemonProvisioning.register(p);
           if (result.ok) {
             reloadInstances();
+            rotateConnectionRegistrationKey(p.channelId);
           }
           return result;
         },
@@ -421,6 +455,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
             reloadInstances();
+            rotateConnectionRegistrationKey(p.channelId);
           }
           return result;
         },
@@ -490,13 +525,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       const inst = instances.get(channelId);
       return inst ? getConnection(inst.instanceDir, connectorId) : null;
     },
-    // The instance dir is the stable identity: it changes (or disappears) when a
-    // channel is unregistered or re-registered, which is exactly what the save
-    // guard below needs to detect across a slow token validation.
-    instanceKey: (channelId) => instances.get(channelId)?.instanceDir ?? null,
+    // Capture a unique registration identity before token validation. The
+    // instance directory itself is preserved across unregister/re-register.
+    instanceKey: currentConnectionRegistrationKey,
     save: (channelId, connection, expectedKey) => {
       const inst = instances.get(channelId);
-      if (!inst || inst.instanceDir !== expectedKey) {
+      if (!inst || currentConnectionRegistrationKey(channelId) !== expectedKey) {
         return false;
       }
       try {

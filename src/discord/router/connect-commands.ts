@@ -92,18 +92,16 @@ export type ConnectionStore = {
   list: (channelId: string) => StoredConnection[] | null;
   get: (channelId: string, connectorId: string) => StoredConnection | null;
   /**
-   * A stable identity for the channel's current instance (e.g. its instance dir),
-   * or null when the channel is not registered. Snapshotted before a slow token
-   * validation so {@link ConnectionStore.save} can detect the channel being
-   * unregistered or re-registered to a different instance in the meantime.
+   * A unique identity for the channel's current registration, or null when the
+   * channel is not registered. It changes across unregister/re-register even when
+   * the instance directory is reused.
    */
   instanceKey: (channelId: string) => string | null;
   /**
    * Persist a connection, but only if the channel still maps to the instance
    * identified by `expectedKey`. Returns false (writing nothing) when the channel
-   * is no longer registered or now points at a different instance, so the caller
-   * never reports success after silently dropping the token or writing it into a
-   * different owner's instance.
+   * is no longer registered or its registration has changed, so a validated token
+   * cannot be written into a later owner's instance.
    */
   save: (channelId: string, connection: StoredConnection, expectedKey: string) => boolean;
   /**
@@ -154,6 +152,8 @@ export type ConnectCommandContext = {
   channelId: string;
   userId: string;
   isDM: boolean;
+  /** Registration identity captured when the caller was authorized. */
+  authorizedInstanceKey?: string | null;
   reply: ChannelReply;
   /**
    * Delete the originating message when a token was pasted in a visible text
@@ -280,8 +280,23 @@ export async function handleConnectCommand(
   deps: ConnectCommandDeps,
 ): Promise<void> {
   const sub = (ctx.subcommand ?? "list").toLowerCase();
+  const registrationIsCurrent = () =>
+    ctx.authorizedInstanceKey === undefined ||
+    deps.store.instanceKey(ctx.channelId) === ctx.authorizedInstanceKey;
+  const registrationChanged = async () =>
+    ctx.reply(
+      connectionsReply(
+        "Connections",
+        "This channel's registration changed while handling your command. Please try again.",
+      ),
+      { ephemeral: true },
+    );
 
   if (sub === "list") {
+    if (!registrationIsCurrent()) {
+      await registrationChanged();
+      return;
+    }
     const connections = deps.store.list(ctx.channelId);
     if (connections === null) {
       await ctx.reply(connectionsReply("Your Connections", NOT_REGISTERED), { ephemeral: true });
@@ -308,6 +323,19 @@ export async function handleConnectCommand(
         ? `${body}\n\nI could not delete your message containing the token. Please delete it ` +
           `manually so it does not stay in chat.`
         : body;
+
+    if (!registrationIsCurrent()) {
+      await ctx.reply(
+        connectionsReply(
+          "Connect",
+          withScrubNote(
+            "This channel's registration changed while handling your command. Please try again.",
+          ),
+        ),
+        { ephemeral: true },
+      );
+      return;
+    }
 
     const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
@@ -338,7 +366,10 @@ export async function handleConnectCommand(
     // token validation. `save` below requires it to still match, so a channel
     // unregistered or re-registered to a different instance during validation
     // fails instead of silently dropping the token or writing it elsewhere.
-    const instanceKey = deps.store.instanceKey(ctx.channelId);
+    const instanceKey =
+      ctx.authorizedInstanceKey === undefined
+        ? deps.store.instanceKey(ctx.channelId)
+        : ctx.authorizedInstanceKey;
     if (instanceKey === null) {
       await ctx.reply(connectionsReply("Connect", withScrubNote(NOT_REGISTERED)), {
         ephemeral: true,
@@ -427,6 +458,10 @@ export async function handleConnectCommand(
         ),
         { ephemeral: true },
       );
+      return;
+    }
+    if (!registrationIsCurrent()) {
+      await registrationChanged();
       return;
     }
     if (deps.store.list(ctx.channelId) === null) {

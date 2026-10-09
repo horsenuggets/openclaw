@@ -271,6 +271,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   if (connectCmd && authorId) {
     const commandMessageId = d.id;
     const hasToken = connectTextCommandHasToken(connectCmd);
+    const authorizedInstanceKey = connectCommandDeps.store.instanceKey(channelId);
     const dispatchConnect = () => {
       void handleConnectCommand(
         {
@@ -279,6 +280,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
           channelId,
           userId: authorId,
           isDM: !guildId,
+          authorizedInstanceKey,
           reply: (payload, opts) =>
             opts?.ephemeral && typeof payload === "string"
               ? discordSendEphemeral(discordToken, channelId, payload)
@@ -302,7 +304,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     // fails closed for a group DM since a non-owner participant is not the owner).
     // An unregistered channel has no owner or stored connections, so the handler's
     // own not-registered reply is safe to reach ungated.
-    if (instances.get(channelId)) {
+    if (authorizedInstanceKey !== null) {
       const status = describeInstance(channelId);
       void isAuthorizedForChannel(channelId, authorId, {
         describeInstance: () => status,
@@ -748,6 +750,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
     const userId = d.member?.user?.id ?? d.user?.id;
     if (userId) {
+      const authorizedInstanceKey = connectCommandDeps.store.instanceKey(interactionChannelId);
       const editReply = (payload: ChannelReplyPayload) => {
         if (typeof payload === "string") {
           void fetch(
@@ -802,6 +805,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
                 channelId: interactionChannelId,
                 userId,
                 isDM: !d.guild_id,
+                authorizedInstanceKey,
                 reply: (payload) => editReply(payload),
               },
               connectCommandDeps,
@@ -815,7 +819,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       // gate: /connections reads and writes the channel's stored credentials, so
       // only its owner may drive it, and group DMs are rejected (runForOwner fails
       // closed). An unregistered channel has no owner; the handler reports that.
-      if (instances.get(interactionChannelId)) {
+      if (authorizedInstanceKey !== null) {
         runForOwner(interactionChannelId, dispatch);
       } else {
         dispatch();

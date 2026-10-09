@@ -182,6 +182,27 @@ function embedOf(payload: ChannelReplyPayload) {
 }
 
 describe("handleConnectCommand list", () => {
+  it("does not read connections after the authorized registration changes", async () => {
+    let currentKey = "registration-a";
+    const list = vi.fn(() => []);
+    const store: ConnectionStore = {
+      list,
+      get: () => null,
+      instanceKey: () => currentKey,
+      save: () => false,
+      remove: () => "absent",
+    };
+    currentKey = "registration-b";
+    const { ctx, replies } = makeCtx("list", [], {
+      authorizedInstanceKey: "registration-a",
+    });
+
+    await handleConnectCommand(ctx, makeDeps({ store }));
+
+    expect(list).not.toHaveBeenCalled();
+    expect(embedOf(replies[0].payload).description).toContain("registration changed");
+  });
+
   it("tells unregistered channels to register first", async () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
@@ -364,24 +385,50 @@ describe("handleConnectCommand add", () => {
   });
 
   it("does not report success if the instance changes during validation", async () => {
-    // Simulate the channel being unregistered/re-registered while the token was
-    // being validated: the snapshotted key no longer matches, so `save` refuses.
     const map = new Map<string, StoredConnection>();
+    let registrationKey = "generation-a";
     const store: ConnectionStore = {
       list: () => [...map.values()],
       get: (_c, id) => map.get(id) ?? null,
-      instanceKey: () => "key-at-snapshot",
-      // Always reject: stands in for the instance key having moved on.
-      save: () => false,
+      instanceKey: () => registrationKey,
+      save: (_c, connection, expectedKey) => {
+        if (registrationKey !== expectedKey) {
+          return false;
+        }
+        map.set(connection.connectorId, connection);
+        return true;
+      },
       remove: (_c, id) => map.delete(id),
     };
-    const validate = vi.fn(async (): Promise<AuthResult> => ({ ok: true }));
+    const validate = vi.fn(async (): Promise<AuthResult> => {
+      registrationKey = "generation-b";
+      return { ok: true };
+    });
     const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"]);
     await handleConnectCommand(ctx, makeDeps({ store, registry: makeRegistry(validate) }));
     expect(map.size).toBe(0); // nothing persisted
     const embed = embedOf(replies[0].payload);
     expect(embed.title).not.toBe("Connected!");
     expect(embed.description).toContain("could not store the link");
+  });
+
+  it("rechecks the authorized registration after scrubbing an add command", async () => {
+    let registrationKey = "generation-a";
+    const validate = vi.fn(async (): Promise<AuthResult> => ({ ok: true }));
+    const { ctx, replies } = makeCtx("add", ["github", "ghp_secret"], {
+      authorizedInstanceKey: "generation-a",
+      scrubCommandMessage: async () => {
+        registrationKey = "generation-b";
+        return true;
+      },
+    });
+    const store = makeStore().store;
+    vi.spyOn(store, "instanceKey").mockImplementation(() => registrationKey);
+
+    await handleConnectCommand(ctx, makeDeps({ store, registry: makeRegistry(validate) }));
+
+    expect(validate).not.toHaveBeenCalled();
+    expect(embedOf(replies[0].payload).description).toContain("registration changed");
   });
 
   it("stores the token when the connector's auth confirms it", async () => {
