@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   applyPromptTokens,
@@ -83,16 +84,22 @@ describe("applyPromptTokens", () => {
 
 describe("loadSystemPromptSections", () => {
   it("prefers the executable-adjacent template over cwd-derived package roots in Bun", () => {
+    const packageRoot = path.resolve("untrusted/project");
+    const execPath = path.join(path.sep, "opt", "openclaw", "openclaw");
     const candidates = systemPromptTemplateCandidates({
-      packageRoot: "/untrusted/project",
-      execPath: "/opt/openclaw/openclaw",
-      cwd: "/untrusted/project",
-      moduleDir: "/virtual/bundle/src/agents",
+      packageRoot,
+      execPath,
+      cwd: packageRoot,
+      moduleDir: path.join(path.sep, "virtual", "bundle", "src", "agents"),
       isBun: true,
     });
 
-    expect(candidates[0]).toBe("/opt/openclaw/docs/reference/templates/SYSTEM.md");
-    expect(candidates[1]).toBe("/untrusted/project/docs/reference/templates/SYSTEM.md");
+    expect(candidates[0]).toBe(
+      path.join(path.dirname(execPath), "docs", "reference", "templates", "SYSTEM.md"),
+    );
+    expect(candidates[1]).toBe(
+      path.join(packageRoot, "docs", "reference", "templates", "SYSTEM.md"),
+    );
   });
 
   it("resolves and parses the real SYSTEM.md template", () => {
