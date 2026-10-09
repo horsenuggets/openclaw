@@ -30,6 +30,7 @@ import {
 import { normalizeMainKey } from "../../routing/session-key.js";
 import { normalizeSessionDeliveryFields } from "../../utils/delivery-context.js";
 import { resolveCommandAuthorization } from "../command-auth.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { formatInboundBodyWithSenderMeta } from "./inbound-sender-meta.js";
 import { normalizeInboundTextNewlines } from "./inbound-text.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
@@ -113,9 +114,14 @@ export async function initSessionState(params: {
     config: cfg,
   });
   const groupResolution = resolveGroupSessionKey(sessionCtxForState) ?? undefined;
-  const resetTriggers = sessionCfg?.resetTriggers?.length
-    ? sessionCfg.resetTriggers
-    : DEFAULT_RESET_TRIGGERS;
+  // Only the built-in "/new" and "/reset" triggers are the matching commands and follow the
+  // command policy. Any other configured trigger is a user-defined phrase and is kept.
+  const resetTriggers = (
+    sessionCfg?.resetTriggers?.length ? sessionCfg.resetTriggers : DEFAULT_RESET_TRIGGERS
+  ).filter((trigger) => {
+    const builtIn = trigger.match(/^\/(new|reset)$/i)?.[1]?.toLowerCase();
+    return !builtIn || isCommandKeyEnabled(builtIn);
+  });
   const sessionScope = sessionCfg?.scope ?? "per-sender";
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
 

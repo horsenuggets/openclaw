@@ -1,3 +1,4 @@
+import { isCommandKeyEnabled } from "../auto-reply/command-policy.js";
 import { isAbortTrigger } from "../auto-reply/reply/abort.js";
 
 export type ChatAbortControllerEntry = {
@@ -13,7 +14,9 @@ export function isChatStopCommandText(text: string): boolean {
   if (!trimmed) {
     return false;
   }
-  return trimmed.toLowerCase() === "/stop" || isAbortTrigger(trimmed);
+  return (
+    (trimmed.toLowerCase() === "/stop" && isCommandKeyEnabled("stop")) || isAbortTrigger(trimmed)
+  );
 }
 
 export function resolveChatRunExpiresAtMs(params: {

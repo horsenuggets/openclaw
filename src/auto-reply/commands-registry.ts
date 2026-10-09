@@ -14,6 +14,7 @@ import type {
 } from "./commands-registry.types.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
+import { getCommandPolicyIdentity, isCommandKeyEnabled } from "./command-policy.js";
 import { getChatCommands, getNativeCommandSurfaces } from "./commands-registry.data.js";
 
 export type {
@@ -41,8 +42,31 @@ let cachedTextAliasCommands: ChatCommandDefinition[] | null = null;
 let cachedDetection: CommandDetection | undefined;
 let cachedDetectionCommands: ChatCommandDefinition[] | null = null;
 
+let cachedActive: {
+  source: ChatCommandDefinition[];
+  policy: ReturnType<typeof getCommandPolicyIdentity>;
+  commands: ChatCommandDefinition[];
+} | null = null;
+
+/**
+ * Registry entries the command policy enables. Every lookup (aliases, detection, text
+ * resolution, native specs) reads through this, so a disabled command is invisible to
+ * all of them. The result is memoized per (registry, policy) because the alias and
+ * detection caches compare by array identity.
+ */
+function getActiveChatCommands(): ChatCommandDefinition[] {
+  const source = getChatCommands();
+  const policy = getCommandPolicyIdentity();
+  if (cachedActive && cachedActive.source === source && cachedActive.policy === policy) {
+    return cachedActive.commands;
+  }
+  const commands = source.filter((command) => isCommandKeyEnabled(command.key));
+  cachedActive = { source, policy, commands };
+  return commands;
+}
+
 function getTextAliasMap(): Map<string, TextAliasSpec> {
-  const commands = getChatCommands();
+  const commands = getActiveChatCommands();
   if (cachedTextAliasMap && cachedTextAliasCommands === commands) {
     return cachedTextAliasMap;
   }
@@ -90,7 +114,7 @@ function buildSkillCommandDefinitions(skillCommands?: SkillCommandSpec[]): ChatC
 export function listChatCommands(params?: {
   skillCommands?: SkillCommandSpec[];
 }): ChatCommandDefinition[] {
-  const commands = getChatCommands();
+  const commands = getActiveChatCommands();
   if (!params?.skillCommands?.length) {
     return [...commands];
   }
@@ -98,6 +122,9 @@ export function listChatCommands(params?: {
 }
 
 export function isCommandEnabled(cfg: OpenClawConfig, commandKey: string): boolean {
+  if (!isCommandKeyEnabled(commandKey)) {
+    return false;
+  }
   if (commandKey === "config") {
     return cfg.commands?.config === true;
   }
@@ -173,7 +200,7 @@ export function findCommandByNativeName(
   provider?: string,
 ): ChatCommandDefinition | undefined {
   const normalized = name.trim().toLowerCase();
-  return getChatCommands().find(
+  return getActiveChatCommands().find(
     (command) =>
       command.scope !== "text" &&
       resolveNativeName(command, provider)?.toLowerCase() === normalized,
@@ -422,7 +449,7 @@ export function isCommandMessage(raw: string): boolean {
 }
 
 export function getCommandDetection(_cfg?: OpenClawConfig): CommandDetection {
-  const commands = getChatCommands();
+  const commands = getActiveChatCommands();
   if (cachedDetection && cachedDetectionCommands === commands) {
     return cachedDetection;
   }
@@ -491,7 +518,7 @@ export function resolveTextCommand(
   if (!spec) {
     return null;
   }
-  const command = getChatCommands().find((entry) => entry.key === spec.key);
+  const command = getActiveChatCommands().find((entry) => entry.key === spec.key);
   if (!command) {
     return null;
   }

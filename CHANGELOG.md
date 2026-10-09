@@ -6,6 +6,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- In-box command policy: the auto-reply pipeline now enables no slash commands by default
+  (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
+  `/word` and reaches the model as plain text across every surface: native registration,
+  text commands, inline directives (`/think`, `/model`, `/queue`, ...), bare-word abort
+  triggers (`stop`, `esc`, ...), `/new` and `/reset` triggers, and per-skill commands. The
+  host-side `/lifecycle`, `/channel`, and `/secret` commands are unaffected.
 - Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
 - System prompt: the agent prompt's prose now comes from a single Markdown source,
   `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a
