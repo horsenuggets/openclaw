@@ -139,22 +139,22 @@ Example:
 
 ```json
 {
-  "name": "@openclaw/nextcloud-talk",
+  "name": "@acme/my-chat",
   "openclaw": {
     "extensions": ["./index.ts"],
     "channel": {
-      "id": "nextcloud-talk",
-      "label": "Nextcloud Talk",
-      "selectionLabel": "Nextcloud Talk (self-hosted)",
-      "docsPath": "/channels/nextcloud-talk",
-      "docsLabel": "nextcloud-talk",
-      "blurb": "Self-hosted chat via Nextcloud Talk webhook bots.",
+      "id": "my-chat",
+      "label": "My Chat",
+      "selectionLabel": "My Chat (self-hosted)",
+      "docsPath": "/channels/my-chat",
+      "docsLabel": "my-chat",
+      "blurb": "Self-hosted chat via webhook bots.",
       "order": 65,
-      "aliases": ["nc-talk", "nc"]
+      "aliases": ["mc"]
     },
     "install": {
-      "npmSpec": "@openclaw/nextcloud-talk",
-      "localPath": "extensions/nextcloud-talk",
+      "npmSpec": "@acme/my-chat",
+      "localPath": "extensions/my-chat",
       "defaultChoice": "npm"
     }
   }
