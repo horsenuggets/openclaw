@@ -11,8 +11,11 @@ proactive mechanism » The old standalone `ProactiveService` and its
   module load, plus a runtime `setHeartbeatsEnabled` and a per-agent
   `isHeartbeatEnabledForAgent`.
 - The interval comes from `agents.defaults.heartbeat.every` (default `30m`), parsed by
-  `resolveHeartbeatIntervalMs`. Each tick runs the agent in a dedicated `heartbeat`
-  session, so heartbeat reasoning never contaminates the user's session.
+  `resolveHeartbeatIntervalMs`. By default each tick runs in a dedicated `heartbeat`
+  session, so heartbeat reasoning does not contaminate the user's session. That is only
+  the default » setting `agents.defaults.heartbeat.session` to `main`, or a global
+  `session.scope`, routes the tick to the main session instead, so check those before
+  ruling heartbeats out when debugging contamination.
 
 ## The Silence Ack
 

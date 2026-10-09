@@ -147,9 +147,10 @@ operational notes. Read it before making changes.
   Discord API calls, CLI invocations, and external services.
 - For isolated gateway testing, `openclaw gateway run --isolated` creates a throwaway
   environment (temp state dir, auto-picked port, no channels, loopback-only). Use
-  `--port <N>` on the gateway for a specific port, and send a test message with
-  `openclaw agent` against it (see `docs/testing.md` for the exact isolated-gateway
-  invocation). Multiple isolated instances can run at once.
+  `--port <N>` on the gateway for a specific port, and drive it with
+  `OPENCLAW_GATEWAY_PORT=<printed-port> openclaw agent --message "..."` (`openclaw agent`
+  has no `--port`; it resolves the gateway port from `OPENCLAW_GATEWAY_PORT`, then
+  config). Multiple isolated instances can run at once.
 - For live persona or behavior e2e on the prod-mirror rig, confirm an agent-visible change
   (persona and `SOUL.md`, onboarding, routing, command gating) in a real Discord channel
   before merging by using `scripts/prod-mirror.sh` against the OpenClaw Lab test server.

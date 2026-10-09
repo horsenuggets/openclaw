@@ -73,8 +73,8 @@ These have all bitten real deploys...
 ## Smoke Test after Deploy
 
 Non-intrusive, no Discord needed » Exec a one-shot inside an agent box with a throwaway
-session and no delivery. A `PONG` reply proves the binary, gateway, system-prompt build,
-and model path all work:
+session and no delivery. A `PONG` reply proves the binary, system-prompt build, and model
+path work:
 
 ```bash
 docker exec agents.channel-<id> sh -lc \
@@ -82,5 +82,8 @@ docker exec agents.channel-<id> sh -lc \
 ```
 
 `openclaw agent` no longer takes a `--port`; it talks to the gateway via config, so run it
-inside the container. Benign log noise to ignore includes MDNS send errors, EROFS when the
-immutable box tries to persist config, and "Missing Control UI assets".
+inside the container. Note that on a gateway error the command falls back to an embedded
+run, so a `PONG` alone does not prove the gateway itself is healthy; probe the gateway or
+model proxy health separately if that is what you are checking. Benign log noise to ignore
+includes MDNS send errors, EROFS when the immutable box tries to persist config, and
+"Missing Control UI assets".

@@ -7,12 +7,15 @@ identifiers (channel ids, host) from the running environment; none are hardcoded
 ## Session Transcripts (The Primary Debug Source)
 
 Each agent writes a JSONL transcript per session under
-`~/.openclaw/agents/<agentId>/sessions/<sessionId>.jsonl` (inside a box, under the box's
-HOME). Each line is a JSON entry; assistant content blocks are `thinking`, `text`, or
+`~/.openclaw/agents/<agentId>/sessions/<sessionId>.jsonl` (session paths are rooted at
+`OPENCLAW_STATE_DIR`, which `agent.yml` sets to `/state` in deployed boxes, separate from
+`HOME`). Each line is a JSON entry; assistant content blocks are `thinking`, `text`, or
 `tool_use`. Useful fields » `stopReason` (`stop` normal, `error` killed or crashed,
 `max_tokens`) and `errorMessage` (for example "CLI exited with code 143" is a SIGTERM).
 Sort by mtime for the most recent session. A heartbeat turn runs in its own `heartbeat`
-session, which keeps it from contaminating user responses.
+session by default, which keeps it from contaminating user responses, but
+`heartbeat.session: "main"` or a global `session.scope` routes it to the main session, so
+verify those first.
 
 ## Structured and Process Logs
 

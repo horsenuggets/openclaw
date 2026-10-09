@@ -22,9 +22,10 @@ bundle:
 
 `openclaw gateway run --isolated` creates a throwaway environment (temp state dir,
 auto-picked port, no channels, loopback-only). Use `--port <N>` on the gateway for a
-specific port, and send a test message with `openclaw agent` against it (see
-`docs/testing.md` for the exact isolated-gateway invocation). Multiple isolated instances
-can run at once. Always stop any gateway you start » `pnpm gateway:killall` (and
+specific port. `openclaw agent` has no `--port` of its own; it resolves the gateway port
+from `OPENCLAW_GATEWAY_PORT` (then config), so drive a specific isolated instance with
+`OPENCLAW_GATEWAY_PORT=<printed-port> openclaw agent --message "..."`. Multiple isolated
+instances can run at once. Always stop any gateway you start » `pnpm gateway:killall` (and
 `pnpm gateway:ps` to see what is running). Never leave gateway processes running.
 
 ## Layer 3 » The Local Prod-Mirror Rig

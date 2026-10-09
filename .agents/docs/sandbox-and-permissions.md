@@ -49,13 +49,15 @@ instances tree is mounted read-only (only `shared/auth` is writable), so writing
 connections are not currently persisted or materialized into the boxes in production.
 Treat the connection store as best-effort until that mount is made writable.
 
-The `/connections` reply is intentionally public (non-ephemeral). It never contains the
-secret token (the token is scrubbed from input and never echoed); it only exposes the
-validated account label and which services are connected, which are considered
-non-sensitive, and the command is owner-gated so it is the owner self-disclosing. Do not
-"fix" this to be ephemeral-only for privacy; see the gating in
-[command-system.md](command-system.md). Still fix genuine issues such as token leaks or
-mis-reported storage errors.
+The `/connections` slash-command reply is ephemeral (it defers with `flags: 64`). The
+text-command fallback is public because Discord message replies cannot be ephemeral, and
+that public output is acceptable by design » it never contains the secret token (scrubbed
+from input and never echoed), only the validated account label and which services are
+connected, and the command is owner-gated so it is the owner self-disclosing. So do not
+force the public text fallback to be ephemeral for privacy, and do not drop the ephemeral
+`flags: 64` from the slash path either. See the gating in
+[command-system.md](command-system.md), and still fix genuine issues such as token leaks
+or mis-reported storage errors.
 
 ## Pitfalls
 
