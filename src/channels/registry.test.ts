@@ -8,9 +8,14 @@ import {
 describe("channel registry", () => {
   it("normalizes aliases", () => {
     expect(normalizeChatChannelId("imsg")).toBe("imessage");
-    expect(normalizeChatChannelId("gchat")).toBe("googlechat");
-    expect(normalizeChatChannelId("google-chat")).toBe("googlechat");
     expect(normalizeChatChannelId("web")).toBeNull();
+  });
+
+  it("does not expose the removed Google Chat integration", () => {
+    expect(normalizeChatChannelId("googlechat")).toBeNull();
+    expect(normalizeChatChannelId("gchat")).toBeNull();
+    expect(normalizeChatChannelId("google-chat")).toBeNull();
+    expect(listChatChannels().some((channel) => channel.id === "googlechat")).toBe(false);
   });
 
   it("keeps Telegram first in the default order", () => {
