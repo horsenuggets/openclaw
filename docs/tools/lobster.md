@@ -41,7 +41,7 @@ AI-friendly pipeline spec with first-class approvals and resume tokens.
   and resume* with a durable token without you inventing that runtime yourself.
 - **Determinism + auditability**: Pipelines are data, so they're easy to log, diff,
   replay, and review.
-- **Constrained surface for AI**: A tiny grammar + JSON piping reduces “creative” code
+- **Constrained surface for AI**: A tiny grammar + JSON piping reduces "creative" code
   paths and makes validation realistic.
 - **Safety policy baked in**: Timeouts, output caps, sandbox checks, and allowlists are
   enforced by the runtime, not each script.
@@ -366,7 +366,7 @@ the `lobster` tool for sub-agents via `tools.subagents.tools`. See [OpenProse](/
 
 ## Case study: community workflows
 
-One public example: a “second brain” CLI + Lobster pipelines that manage three Markdown
+One public example: a "second brain" CLI + Lobster pipelines that manage three Markdown
 vaults (personal, partner, shared). The CLI emits JSON for stats, inbox listings, and
 stale scans; Lobster chains those commands into workflows like `weekly-review`,
 `inbox-triage`, `memory-consolidation`, and `shared-task-sync`, each with approval gates.

@@ -10,7 +10,7 @@ title: "OAuth"
 
 # OAuth
 
-OpenClaw supports “subscription auth” via OAuth for providers that offer it (notably
+OpenClaw supports "subscription auth" via OAuth for providers that offer it (notably
 **OpenAI Codex (ChatGPT OAuth)**). For Anthropic subscriptions, use the **setup-token**
 flow. This page explains:
 
@@ -34,7 +34,7 @@ for the same user/app.
 Practical symptom:
 
 - you log in via OpenClaw *and* via Claude Code / Codex CLI → one of them randomly gets
-  “logged out” later
+  "logged out" later
 
 To reduce that, OpenClaw treats `auth-profiles.json` as a **token sink**:
 
@@ -123,7 +123,7 @@ Two patterns:
 
 ### 1) Preferred: separate agents
 
-If you want “personal” and “work” to never interact, use isolated agents (separate
+If you want "personal" and "work" to never interact, use isolated agents (separate
 sessions + credentials + workspace):
 
 ```bash

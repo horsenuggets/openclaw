@@ -44,21 +44,21 @@ openclaw browser extension path
 
 3. Chrome → `chrome://extensions`
 
-- Enable “Developer mode”
-- “Load unpacked” → select the directory printed above
+- Enable "Developer mode"
+- "Load unpacked" → select the directory printed above
 
 4. Pin the extension.
 
 ## Updates (no build step)
 
 The extension ships inside the OpenClaw release (npm package) as static files. There is no
-separate “build” step.
+separate "build" step.
 
 After upgrading OpenClaw:
 
 - Re-run `openclaw browser extension install` to refresh the installed files under your
   OpenClaw state directory.
-- Chrome → `chrome://extensions` → click “Reload” on the extension.
+- Chrome → `chrome://extensions` → click "Reload" on the extension.
 
 ## Use it (no extra config)
 
@@ -89,7 +89,7 @@ openclaw browser create-profile \
 
 ## Which tab does it control?
 
-- It does **not** automatically control “whatever tab you're looking at”.
+- It does **not** automatically control "whatever tab you're looking at".
 - It controls **only the tab(s) you explicitly attached** by clicking the toolbar button.
 - To switch: open the other tab and click the extension icon there.
 
@@ -164,7 +164,7 @@ Debugging: `openclaw sandbox explain`
 - Pair nodes intentionally; disable browser proxy routing if you don't want remote control
   (`gateway.nodes.browser.mode="off"`).
 
-## How “extension path” works
+## How "extension path" works
 
 `openclaw browser extension path` prints the **installed** on-disk directory containing
 the extension files.
@@ -178,7 +178,7 @@ until you reload it from a valid path.
 
 ## Security implications (read this)
 
-This is powerful and risky. Treat it like giving the model “hands on your browser”.
+This is powerful and risky. Treat it like giving the model "hands on your browser".
 
 - The extension uses Chrome's debugger API (`chrome.debugger`). When attached, the model
   can:

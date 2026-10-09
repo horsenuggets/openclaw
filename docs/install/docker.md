@@ -88,7 +88,7 @@ docker compose -f docker-compose.yml -f docker-compose.extra.yml <command>
 
 ### Control UI token + pairing (Docker)
 
-If you see “unauthorized” or “disconnected (1008): pairing required”, fetch a fresh
+If you see "unauthorized" or "disconnected (1008): pairing required", fetch a fresh
 dashboard link and approve the browser device:
 
 ```bash

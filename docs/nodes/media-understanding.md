@@ -123,7 +123,7 @@ Rules:
 
 - If media exceeds `maxBytes`, that model is skipped and the **next model is tried**.
 - If the model returns more than `maxChars`, output is trimmed.
-- `prompt` defaults to simple “Describe the {media}.” plus the `maxChars` guidance
+- `prompt` defaults to simple "Describe the {media}." plus the `maxChars` guidance
   (image/video only).
 - If `<capability>.enabled: true` but no models are configured, OpenClaw tries the
   **active reply model** when its provider supports the capability.

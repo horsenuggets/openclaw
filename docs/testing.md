@@ -12,7 +12,7 @@ title: "Testing"
 OpenClaw has three Vitest suites (unit/integration, e2e, live) and a small set of Docker
 runners.
 
-This doc is a “how we test” guide:
+This doc is a "how we test" guide:
 
 - What each suite covers (and what it deliberately does *not* cover)
 - Which commands to run for common workflows (local, pre-push, debugging)
@@ -97,7 +97,7 @@ OPENCLAW_SKIP_CRON=1 \
 
 ## Test suites (what runs where)
 
-Think of the suites as “increasing realism” (and increasing flakiness/cost):
+Think of the suites as "increasing realism" (and increasing flakiness/cost):
 
 ### Unit / integration (default)
 
@@ -133,13 +133,13 @@ Think of the suites as “increasing realism” (and increasing flakiness/cost):
 - Files: `src/**/*.live.test.ts`
 - Default: **enabled** by `pnpm test:live` (sets `OPENCLAW_LIVE_TEST=1`)
 - Scope:
-  - “Does this provider/model actually work *today* with real creds?”
+  - "Does this provider/model actually work *today* with real creds?"
   - Catch provider format changes, tool-calling quirks, auth issues, and rate limit
     behavior
 - Expectations:
   - Not CI-stable by design (real networks, real provider policies, quotas, outages)
   - Costs money / uses rate limits
-  - Prefer running narrowed subsets instead of “everything”
+  - Prefer running narrowed subsets instead of "everything"
   - Live runs will source `~/.profile` to pick up missing API keys
   - Anthropic key rotation: set `OPENCLAW_LIVE_ANTHROPIC_KEYS="sk-...,sk-..."` (or
     `OPENCLAW_LIVE_ANTHROPIC_KEY=sk-...`) or multiple `ANTHROPIC_API_KEY*` vars; tests
@@ -151,15 +151,15 @@ Use this decision table:
 
 - Editing logic/tests: run `pnpm test` (and `pnpm test:coverage` if you changed a lot)
 - Touching gateway networking / WS protocol / pairing: add `pnpm test:e2e`
-- Debugging “my bot is down” / provider-specific failures / tool calling: run a narrowed
+- Debugging "my bot is down" / provider-specific failures / tool calling: run a narrowed
   `pnpm test:live`
 
 ## Live: model smoke (profile keys)
 
 Live tests are split into two layers so we can isolate failures:
 
-- “Direct model” tells us the provider/model can answer at all with the given key.
-- “Gateway smoke” tells us the full gateway+agent pipeline works for that model (sessions,
+- "Direct model" tells us the provider/model can answer at all with the given key.
+- "Gateway smoke" tells us the full gateway+agent pipeline works for that model (sessions,
   history, tools, sandbox policy, etc.).
 
 ### Layer 1: Direct model completion (no gateway)
@@ -186,19 +186,19 @@ Live tests are split into two layers so we can isolate failures:
   - By default: profile store and env fallbacks
   - Set `OPENCLAW_LIVE_REQUIRE_PROFILE_KEYS=1` to enforce **profile store** only
 - Why this exists:
-  - Separates “provider API is broken / key is invalid” from “gateway agent pipeline is
-    broken”
+  - Separates "provider API is broken / key is invalid" from "gateway agent pipeline is
+    broken"
   - Contains small, isolated regressions (example: OpenAI Responses/Codex Responses
     reasoning replay + tool-call flows)
 
-### Layer 2: Gateway + dev agent smoke (what “@openclaw” actually does)
+### Layer 2: Gateway + dev agent smoke (what "@openclaw" actually does)
 
 - Test: `src/gateway/gateway-models.profiles.live.test.ts`
 - Goal:
   - Spin up an in-process gateway
   - Create/patch a `agent:dev:*` session (model override per run)
   - Iterate models-with-keys and assert:
-    - “meaningful” response (no tools)
+    - "meaningful" response (no tools)
     - a real tool invocation works (read probe)
     - optional extra tool probes (exec+read probe)
     - OpenAI regression paths (tool-call-only → follow-up) keep working
@@ -218,14 +218,14 @@ Live tests are split into two layers so we can isolate failures:
     MiniMax M2.1, Grok 4)
   - `OPENCLAW_LIVE_GATEWAY_MODELS=all` is an alias for the modern allowlist
   - Or set `OPENCLAW_LIVE_GATEWAY_MODELS="provider/model"` (or comma list) to narrow
-- How to select providers (avoid “OpenRouter everything”):
+- How to select providers (avoid "OpenRouter everything"):
   - `OPENCLAW_LIVE_GATEWAY_PROVIDERS="google,google-antigravity,google-gemini-cli,openai,anthropic,zai,minimax"`
     (comma allowlist)
 - Tool + image probes are always on in this live test:
   - `read` probe + `exec+read` probe (tool stress)
   - image probe runs when the model advertises image input support
   - Flow (high level):
-    - Test generates a tiny PNG with “CAT” + random code
+    - Test generates a tiny PNG with "CAT" + random code
       (`src/gateway/live-image-probe.ts`)
     - Sends it via `agent` `attachments: [{ mimeType: "image/png", content: "<base64>" }]`
     - Gateway parses attachments into `images[]` (`src/gateway/server-methods/agent.ts` +
@@ -326,18 +326,18 @@ Notes:
   tooling quirks).
 - Gemini API vs Gemini CLI:
   - API: OpenClaw calls Google's hosted Gemini API over HTTP (API key / profile auth);
-    this is what most users mean by “Gemini”.
+    this is what most users mean by "Gemini".
   - CLI: OpenClaw shells out to a local `gemini` binary; it has its own auth and can
     behave differently (streaming/tool support/version skew).
 
 ## Live: model matrix (what we cover)
 
-There is no fixed “CI model list” (live is opt-in), but these are the **recommended**
+There is no fixed "CI model list" (live is opt-in), but these are the **recommended**
 models to cover regularly on a dev machine with keys.
 
 ### Modern smoke set (tool calling + image)
 
-This is the “common models” run we expect to keep working:
+This is the "common models" run we expect to keep working:
 
 - OpenAI (non-Codex): `openai/gpt-5.2` (optional: `openai/gpt-5.1`)
 - OpenAI Codex: `openai-codex/gpt-5.3-codex` (optional:
@@ -366,7 +366,7 @@ Pick at least one per provider family:
 Optional additional coverage (nice to have):
 
 - xAI: `xai/grok-4` (or latest available)
-- Mistral: `mistral/`… (pick one “tools” capable model you have enabled)
+- Mistral: `mistral/`… (pick one "tools" capable model you have enabled)
 - Cerebras: `cerebras/`… (if you have access)
 - LM Studio: `lmstudio/`… (local; tool calling depends on API mode)
 
@@ -391,7 +391,7 @@ More providers you can include in the live matrix (if you have creds/config):
 - Via `models.providers` (custom endpoints): `minimax` (cloud/API), plus any
   OpenAI/Anthropic-compatible proxy (LM Studio, vLLM, LiteLLM, etc.)
 
-Tip: don't try to hardcode “all models” in docs. The authoritative list is whatever
+Tip: don't try to hardcode "all models" in docs. The authoritative list is whatever
 `discoverModels(...)` returns on your machine + whatever keys are available.
 
 ## Credentials (never commit)
@@ -399,10 +399,10 @@ Tip: don't try to hardcode “all models” in docs. The authoritative list is w
 Live tests discover credentials the same way the CLI does. Practical implications:
 
 - If the CLI works, live tests should find the same keys.
-- If a live test says “no creds”, debug the same way you'd debug `openclaw models list` /
+- If a live test says "no creds", debug the same way you'd debug `openclaw models list` /
   model selection.
 
-- Profile store: `~/.openclaw/credentials/` (preferred; what “profile keys” means in the
+- Profile store: `~/.openclaw/credentials/` (preferred; what "profile keys" means in the
   tests)
 - Config: `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`)
 
@@ -416,7 +416,7 @@ into the container).
 - Enable:
   `DEEPGRAM_API_KEY=... DEEPGRAM_LIVE_TEST=1 pnpm test:live src/media-understanding/providers/deepgram/audio.live.test.ts`
 
-## Docker runners (optional “works in Linux” checks)
+## Docker runners (optional "works in Linux" checks)
 
 These run `pnpm test:live` inside the repo Docker image, mounting your local config dir
 and workspace (and sourcing `~/.profile` if mounted):
@@ -480,7 +480,7 @@ Run docs checks after doc edits: `pnpm docs:list`.
 
 ## Offline regression (CI-safe)
 
-These are “real pipeline” regressions without real providers:
+These are "real pipeline" regressions without real providers:
 
 - Gateway tool calling (mock OpenAI, real gateway + agent loop):
   `src/gateway/gateway.tool-calling.mock-openai.test.ts`
@@ -489,7 +489,7 @@ These are “real pipeline” regressions without real providers:
 
 ## Agent reliability evals (skills)
 
-We already have a few CI-safe tests that behave like “agent reliability evals”:
+We already have a few CI-safe tests that behave like "agent reliability evals":
 
 - Mock tool-calling through the real gateway + agent loop
   (`src/gateway/gateway.tool-calling.mock-openai.test.ts`).

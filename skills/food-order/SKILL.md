@@ -8,7 +8,7 @@ metadata: {"openclaw":{"emoji":"🥡","requires":{"bins":["ordercli"]},"install"
 # Food order (Foodora via ordercli)
 
 Goal: reorder a previous Foodora order safely (preview first; confirm only on explicit
-user “yes/confirm/place the order”).
+user "yes/confirm/place the order").
 
 Hard safety rules
 

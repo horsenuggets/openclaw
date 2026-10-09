@@ -73,7 +73,7 @@ they are tried first, but OpenClaw may rotate to another profile on rate limits/
 User‑pinned profiles stay locked to that profile; if it fails and model fallbacks are
 configured, OpenClaw moves to the next model instead of switching profiles.
 
-### Why OAuth can “look lost”
+### Why OAuth can "look lost"
 
 If you have both an OAuth profile and an API key profile for the same provider,
 round‑robin can switch between them across messages unless pinned. To force a single
@@ -113,7 +113,7 @@ State is stored in `auth-profiles.json` under `usageStats`:
 
 ## Billing disables
 
-Billing/credit failures (for example “insufficient credits” / “credit balance too low”)
+Billing/credit failures (for example "insufficient credits" / "credit balance too low")
 are treated as failover‑worthy, but they're usually not transient. Instead of a short
 cooldown, OpenClaw marks the profile as **disabled** (with a longer backoff) and rotates
 to the next profile/provider.

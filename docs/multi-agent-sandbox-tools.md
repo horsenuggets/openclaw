@@ -35,7 +35,7 @@ Credentials are **not** shared between agents. Never reuse `agentDir` across age
 you want to share creds, copy `auth-profiles.json` into the other agent's `agentDir`.
 
 For how sandboxing behaves at runtime, see [Sandboxing](/gateway/sandboxing). For
-debugging “why is this blocked?”, see
+debugging "why is this blocked?", see
 [Sandbox vs Tool Policy vs Elevated](/gateway/sandbox-vs-tool-policy-vs-elevated) and
 `openclaw sandbox explain`.
 

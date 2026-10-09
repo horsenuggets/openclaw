@@ -98,9 +98,9 @@ export function registerBrowserExtensionCommands(
           [
             copied ? "Copied to clipboard." : "Copy to clipboard unavailable.",
             "Next:",
-            `- Chrome → chrome://extensions → enable “Developer mode”`,
-            `- “Load unpacked” → select: ${displayPath}`,
-            `- Pin “OpenClaw Browser Relay”, then click it on the tab (badge shows ON)`,
+            `- Chrome → chrome://extensions → enable "Developer mode"`,
+            `- "Load unpacked" → select: ${displayPath}`,
+            `- Pin "OpenClaw Browser Relay", then click it on the tab (badge shows ON)`,
             "",
             `${theme.muted("Docs:")} ${formatDocsLink("/tools/chrome-extension", "docs.openclaw.ai/tools/chrome-extension")}`,
           ].join("\n"),

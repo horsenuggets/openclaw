@@ -66,7 +66,7 @@ Notes:
 
 ## Gateway is the source of truth
 
-All session state is **owned by the gateway** (the “master” OpenClaw). UI clients (macOS
+All session state is **owned by the gateway** (the "master" OpenClaw). UI clients (macOS
 app, WebChat, etc.) must query the gateway for session lists and token counts instead of
 reading local files.
 
@@ -74,7 +74,7 @@ reading local files.
   not your Mac.
 - Token counts shown in UIs come from the gateway's store fields (`inputTokens`,
   `outputTokens`, `totalTokens`, `contextTokens`). Clients do not parse JSONL transcripts
-  to “fix up” totals.
+  to "fix up" totals.
 
 ## Where state lives
 
@@ -146,7 +146,7 @@ writable. See [Memory](/concepts/memory) and [Compaction](/concepts/compaction).
 - Reset triggers: exact `/new` or `/reset` (plus any extras in `resetTriggers`) start a
   fresh session id and pass the remainder of the message through. `/new <model>` accepts a
   model alias, `provider/model`, or provider name (fuzzy match) to set the new session
-  model. If `/new` or `/reset` is sent alone, OpenClaw runs a short “hello” greeting turn
+  model. If `/new` or `/reset` is sent alone, OpenClaw runs a short "hello" greeting turn
   to confirm the reset.
 - Manual reset: delete specific keys from the store or remove the JSONL transcript; the
   next message recreates them.

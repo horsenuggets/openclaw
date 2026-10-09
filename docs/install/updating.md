@@ -8,7 +8,7 @@ title: "Updating"
 
 # Updating
 
-OpenClaw is moving fast (pre “1.0”). Treat updates like shipping infra: update → run
+OpenClaw is moving fast (pre "1.0"). Treat updates like shipping infra: update → run
 checks → restart (or use `openclaw update`, which restarts) → verify.
 
 ## Recommended: re-run the website installer (upgrade in place)
@@ -84,7 +84,7 @@ Notes:
 
 - If your Gateway runs as a service, `openclaw gateway restart` is preferred over killing
   PIDs.
-- If you're pinned to a specific version, see “Rollback / pinning” below.
+- If you're pinned to a specific version, see "Rollback / pinning" below.
 
 ## Update (`openclaw update`)
 
@@ -103,7 +103,7 @@ It runs a safe-ish update flow:
 - Restarts the gateway by default (use `--no-restart` to skip).
 
 If you installed via **npm/pnpm** (no git metadata), `openclaw update` will try to update
-via your package manager. If it can't detect the install, use “Update (global install)”
+via your package manager. If it can't detect the install, use "Update (global install)"
 instead.
 
 ## Update (Control UI / RPC)
@@ -151,7 +151,7 @@ Notes:
 
 ## Always Run: `openclaw doctor`
 
-Doctor is the “safe update” command. It's intentionally boring: repair + migrate + warn.
+Doctor is the "safe update" command. It's intentionally boring: repair + migrate + warn.
 
 Note: if you're on a **source install** (git checkout), `openclaw doctor` will offer to
 run `openclaw update` first.
@@ -159,7 +159,7 @@ run `openclaw update` first.
 Typical things it does:
 
 - Migrate deprecated config keys / legacy config file locations.
-- Audit DM policies and warn on risky “open” settings.
+- Audit DM policies and warn on risky "open" settings.
 - Check Gateway health and can offer to restart.
 - Detect and migrate older gateway services (launchd/systemd; legacy schtasks) to current
   OpenClaw services.
@@ -217,7 +217,7 @@ openclaw gateway restart
 
 ### Pin (source) by date
 
-Pick a commit from a date (example: “state of main as of 2026-01-01”):
+Pick a commit from a date (example: "state of main as of 2026-01-01"):
 
 ```bash
 git fetch origin

@@ -7,7 +7,7 @@ title: "Remote Access"
 
 # Remote access (SSH, tunnels, and tailnets)
 
-This repo supports “remote over SSH” by keeping a single Gateway (the master) running on a
+This repo supports "remote over SSH" by keeping a single Gateway (the master) running on a
 dedicated host (desktop/server) and connecting clients to it.
 
 - For **operators (you / the macOS app)**: SSH tunneling is the universal fallback.
@@ -22,7 +22,7 @@ dedicated host (desktop/server) and connecting clients to it.
 
 ## Common VPN/tailnet setups (where the agent lives)
 
-Think of the **Gateway host** as “where the agent lives.” It owns sessions, auth profiles,
+Think of the **Gateway host** as "where the agent lives." It owns sessions, auth profiles,
 channels, and state. Your laptop/desktop (and nodes) connect to that host.
 
 ### 1) Always-on Gateway in your tailnet (VPS or home server)
@@ -41,8 +41,8 @@ This is ideal when your laptop sleeps often but you want the agent always-on.
 
 The laptop does **not** run the agent. It connects remotely:
 
-- Use the macOS app's **Remote over SSH** mode (Settings → General → “OpenClaw runs”).
-- The app opens and manages the tunnel, so WebChat + health checks “just work.”
+- Use the macOS app's **Remote over SSH** mode (Settings → General → "OpenClaw runs").
+- The app opens and manages the tunnel, so WebChat + health checks "just work."
 
 Runbook: [macOS remote access](/platforms/mac/remote).
 
@@ -71,7 +71,7 @@ Notes:
 - **Nodes do not run the gateway service.** Only one gateway should run per host unless
   you intentionally run isolated profiles (see
   [Multiple gateways](/gateway/multiple-gateways)).
-- macOS app “node mode” is just a node client over the Gateway WebSocket.
+- macOS app "node mode" is just a node client over the Gateway WebSocket.
 
 ## SSH tunnel (CLI + tools)
 
@@ -118,10 +118,10 @@ WebChat no longer uses a separate HTTP port. The SwiftUI chat UI connects direct
 Gateway WebSocket.
 
 - Forward `18789` over SSH (see above), then connect clients to `ws://127.0.0.1:18789`.
-- On macOS, prefer the app's “Remote over SSH” mode, which manages the tunnel
+- On macOS, prefer the app's "Remote over SSH" mode, which manages the tunnel
   automatically.
 
-## macOS app “Remote over SSH”
+## macOS app "Remote over SSH"
 
 The macOS menu bar app can drive the same setup end-to-end (remote status checks, WebChat,
 and Voice Wake forwarding).

@@ -629,7 +629,7 @@ struct DebugSettings: View {
                         .font(.caption2)
                         .foregroundStyle(.red)
                 } else {
-                    Text("Tip: the session directory is returned by “Show panel”.")
+                    Text("Tip: the session directory is returned by \"Show panel\".")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

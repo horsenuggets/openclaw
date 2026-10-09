@@ -429,7 +429,7 @@ Notes:
 
 ### Write a new messaging channel (step‑by‑step)
 
-Use this when you want a **new chat surface** (a “messaging channel”), not a model
+Use this when you want a **new chat surface** (a "messaging channel"), not a model
 provider. Model provider docs live under `/providers/*`.
 
 1. Pick an id + config shape

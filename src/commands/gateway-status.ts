@@ -304,7 +304,7 @@ export async function gatewayStatusCommand(
       colorize(
         rich,
         theme.muted,
-        "Tip: if the gateway is remote, mDNS won’t cross networks; use Wide-Area Bonjour (split DNS) or SSH tunnels.",
+        "Tip: if the gateway is remote, mDNS won't cross networks; use Wide-Area Bonjour (split DNS) or SSH tunnels.",
       ),
     );
   }

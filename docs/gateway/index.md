@@ -272,7 +272,7 @@ Notes:
 - `gateway status --json` is stable for scripts.
 - `gateway status` reports **supervisor runtime** (launchd/systemd running) separately
   from **RPC reachability** (WS connect + status RPC).
-- `gateway status` prints config path + probe target to avoid “localhost vs LAN bind”
+- `gateway status` prints config path + probe target to avoid "localhost vs LAN bind"
   confusion and profile mismatches.
 - `gateway status` includes the last gateway error line when the service looks running but
   the port is closed.

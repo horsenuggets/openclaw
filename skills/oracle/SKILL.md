@@ -26,14 +26,14 @@ metadata:
 
 # oracle — best use
 
-Oracle bundles your prompt + selected files into one “one-shot” request so another model
+Oracle bundles your prompt + selected files into one "one-shot" request so another model
 can answer with real repo context (API or browser automation). Treat output as advisory:
 verify against code + tests.
 
 ## Main use case (browser, GPT‑5.2 Pro)
 
 Default workflow here: `--engine browser` with GPT‑5.2 Pro in ChatGPT. This is the common
-“long think” path: ~10 minutes to ~1 hour is normal; expect a stored session you can
+"long think" path: ~10 minutes to ~1 hour is normal; expect a stored session you can
 reattach to.
 
 Recommended defaults:
@@ -117,20 +117,20 @@ can be comma-separated.
 ## Prompt template (high signal)
 
 Oracle starts with **zero** project knowledge. Assume the model cannot infer your stack,
-build tooling, conventions, or “obvious” paths. Include:
+build tooling, conventions, or "obvious" paths. Include:
 
 - Project briefing (stack + build/test commands + platform constraints).
-- “Where things live” (key directories, entrypoints, config files, boundaries).
+- "Where things live" (key directories, entrypoints, config files, boundaries).
 - Exact question + what you tried + the error text (verbatim).
-- Constraints (“don't change X”, “must keep public API”, etc).
-- Desired output (“return patch plan + tests”, “give 3 options with tradeoffs”).
+- Constraints ("don't change X", "must keep public API", etc).
+- Desired output ("return patch plan + tests", "give 3 options with tradeoffs").
 
 ## Safety
 
 - Don't attach secrets by default (`.env`, key files, auth tokens). Redact aggressively;
   share only what's required.
 
-## “Exhaustive prompt” restoration pattern
+## "Exhaustive prompt" restoration pattern
 
 For long investigations, write a standalone prompt + file set so you can rerun days later:
 
@@ -138,6 +138,6 @@ For long investigations, write a standalone prompt + file set so you can rerun d
 - Repro steps + exact errors + what you tried.
 - Attach all context files needed (entrypoints, configs, key modules, docs).
 
-Oracle runs are one-shot; the model doesn't remember prior runs. “Restoring context” means
+Oracle runs are one-shot; the model doesn't remember prior runs. "Restoring context" means
 re-running with the same prompt + `--file …` set (or reattaching a still-running stored
 session).

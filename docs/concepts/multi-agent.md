@@ -11,7 +11,7 @@ Goal: multiple *isolated* agents (separate workspace + `agentDir` + sessions), p
 multiple channel accounts (e.g. two WhatsApps) in one running Gateway. Inbound is routed
 to an agent via bindings.
 
-## What is “one agent”?
+## What is "one agent"?
 
 An **agent** is a fully scoped brain with its own:
 
@@ -83,7 +83,7 @@ With **multiple agents**, each `agentId` becomes a **fully isolated persona**:
 - **Different personalities** (per-agent workspace files like `AGENTS.md` and `SOUL.md`).
 - **Separate auth + sessions** (no cross-talk unless explicitly enabled).
 
-This lets **multiple people** share one Gateway server while keeping their AI “brains” and
+This lets **multiple people** share one Gateway server while keeping their AI "brains" and
 data isolated.
 
 ## One WhatsApp number, multiple people (DM split)
@@ -150,12 +150,12 @@ multiple phone numbers without mixing sessions.
 
 ## Concepts
 
-- `agentId`: one “brain” (workspace, per-agent auth, per-agent session store).
+- `agentId`: one "brain" (workspace, per-agent auth, per-agent session store).
 - `accountId`: one channel account instance (e.g. WhatsApp account `"personal"` vs
   `"biz"`).
 - `binding`: routes inbound messages to an `agentId` by `(channel, accountId, peer)` and
   optionally guild/team ids.
-- Direct chats collapse to `agent:<agentId>:<mainKey>` (per-agent “main”;
+- Direct chats collapse to `agent:<agentId>:<mainKey>` (per-agent "main";
   `session.mainKey`).
 
 ## Example: two WhatsApps → two agents

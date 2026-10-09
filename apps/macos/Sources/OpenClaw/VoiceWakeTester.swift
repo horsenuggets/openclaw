@@ -250,7 +250,7 @@ final class VoiceWakeTester {
             self.stop(force: true)
             let state: VoiceWakeTestState = text.isEmpty
                 ? .failed("No speech detected")
-                : .failed("No trigger heard: “\(text)”")
+                : .failed("No trigger heard: \"\(text)\"")
             Task { @MainActor in onUpdate(state) }
         } else {
             let state: VoiceWakeTestState = text.isEmpty ? .listening : .hearing(text)

@@ -6,6 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
 - `/secret`: allow hyphens and underscores in the secret name (previously stripped to
   `[a-z0-9]`), so names like `my-token_1` are preserved. They carry no shell meaning and
   cannot escape the secrets directory, so the gateway boundary accepts `[a-z0-9_-]`.
@@ -1410,7 +1411,7 @@ Docs: https://docs.openclaw.ai
   (#1450) Thanks @rodrigouroz.
 - Discord: honor accountId across message actions and cron deliveries. (#1492) Thanks
   @svkozak.
-- macOS: prefer linked channels in gateway summary to avoid false “not linked” status.
+- macOS: prefer linked channels in gateway summary to avoid false "not linked" status.
 - macOS/tests: fix gateway summary lookup after guard unwrap; prevent browser opens during
   tests. (ECID-1483)
 
@@ -1926,7 +1927,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - Channels: treat replies to the bot as implicit mentions across supported channels.
 - Channels: normalize object-format capabilities in channel capability parsing.
 - Security: default-deny slash/control commands unless a channel computed
-  `CommandAuthorized` (fixes accidental “open” behavior), and ensure WhatsApp + Zalo
+  `CommandAuthorized` (fixes accidental "open" behavior), and ensure WhatsApp + Zalo
   plugin channels gate inline `/…` tokens correctly.
   https://docs.openclaw.ai/gateway/security
 - Security: redact sensitive text in gateway WS logs.
@@ -2037,8 +2038,8 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   and improve local-embeddings fallback/errors.
 - Browser: add `snapshot refs=aria` (Playwright aria-ref ids) for self-resolving refs
   across `snapshot` → `act`.
-- Browser: `profile="chrome"` now defaults to host control and returns clearer “attach a
-  tab” errors.
+- Browser: `profile="chrome"` now defaults to host control and returns clearer "attach a
+  tab" errors.
 - Browser: prefer stable Chrome for auto-detect, with Brave/Edge fallbacks and updated
   docs. (#983) — thanks @cpojer.
 - Browser: increase remote CDP reachability timeouts + add
@@ -2183,8 +2184,8 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   (#873) — thanks @akonyer.
 - Slack: respect `channels.slack.requireMention` default when resolving channel mention
   gating. (#850) — thanks @evalexpr.
-- Telegram: aggregate split inbound messages into one prompt (reduces “one reply per
-  fragment”).
+- Telegram: aggregate split inbound messages into one prompt (reduces "one reply per
+  fragment").
 - Auto-reply: treat trailing `NO_REPLY` tokens as silent replies.
 - Config: prevent partial config writes from clobbering unrelated settings (base hash
   guard + merge patch for connection saves).
@@ -2299,7 +2300,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 
 ### Highlights
 
-- **BREAKING:** rename chat “providers” (Slack/Telegram/WhatsApp/…) to **channels** across
+- **BREAKING:** rename chat "providers" (Slack/Telegram/WhatsApp/…) to **channels** across
   CLI/RPC/config; legacy config keys auto-migrate on load (and are written back as
   `channels.*`).
 - Memory: add vector search for agent memories (Markdown-only) with SQLite index,
@@ -2474,7 +2475,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   config. (#728) — thanks @pkrmf.
 - Discord: expose channel/category management actions in the message tool. (#730) — thanks
   @NicholasSpisak.
-- Docs: rename README “macOS app” section to “Apps”. (#733) — thanks @AbhisekBasu1.
+- Docs: rename README "macOS app" section to "Apps". (#733) — thanks @AbhisekBasu1.
 - Gateway: require `client.id` in WebSocket connect params; use `client.instanceId` for
   presence de-dupe; update docs/tests.
 - macOS: remove the attach-only gateway setting; local mode now always manages launchd
@@ -2608,7 +2609,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   `status --all` redacted; add troubleshooting link footer; keep log tails pasteable; show
   gateway auth used when reachable; surface provider runtime errors
   (Signal/iMessage/Slack); harden `tailscale status --json` parsing; make `status --all`
-  scan progress determinate; and replace the footer with a 3-line “Next steps”
+  scan progress determinate; and replace the footer with a 3-line "Next steps"
   recommendation (share/debug/probe).
 - CLI/Gateway: clarify that `openclaw gateway status` reports RPC health (connect + RPC)
   and shows RPC failures separately from connect failures.
@@ -2677,10 +2678,10 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - Cron: `wakeMode: "now"` waits for heartbeat completion (and retries when the main lane
   is busy). (#666) — thanks @roshanasingh4.
 - Agents/OpenAI: fix Responses tool-only → follow-up turn handling (avoid standalone
-  `reasoning` items that trigger 400 “required following item”) and replay reasoning items
+  `reasoning` items that trigger 400 "required following item") and replay reasoning items
   in Responses/Codex Responses history for tool-call-only turns.
 - Sandbox: add `openclaw sandbox explain` (effective policy inspector + fix-it keys);
-  improve “sandbox jail” tool-policy/elevated errors with actionable config key paths;
+  improve "sandbox jail" tool-policy/elevated errors with actionable config key paths;
   link to docs.
 - Hooks/Gmail: keep Tailscale serve path at `/` while preserving the public path. (#668) —
   thanks @antons.
@@ -2706,7 +2707,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - CLI: `openclaw sessions` now includes `elev:*` + `usage:*` flags in the table output.
 - CLI/Pairing: accept positional provider for `pairing list|approve` (npm-run compatible);
   update docs/bot hints.
-- Branding: normalize legacy casing/branding to “OpenClaw” (CLI, status, docs).
+- Branding: normalize legacy casing/branding to "OpenClaw" (CLI, status, docs).
 - Auto-reply: fix native `/model` not updating the actual chat session
   (Telegram/Slack/Discord). (#646)
 - Doctor: offer to run `openclaw update` first on git installs (keeps doctor output
@@ -2919,7 +2920,7 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
     (especially discoverable Telegram bots).
   - New default: DM pairing (`dmPolicy="pairing"` / `discord.dm.policy="pairing"` /
     `slack.dm.policy="pairing"`).
-  - To keep old “open to everyone” behavior: set `dmPolicy="open"` and include `"*"` in
+  - To keep old "open to everyone" behavior: set `dmPolicy="open"` and include `"*"` in
     the relevant `allowFrom` (Discord/Slack: `discord.dm.allowFrom` /
     `slack.dm.allowFrom`).
   - Approve requests via `openclaw pairing list <provider>` +

@@ -57,7 +57,7 @@ imsg channel.
 
 ## Keeping Messages.app alive (VM / headless setups)
 
-Some macOS VM / always-on setups can end up with Messages.app going “idle” (incoming
+Some macOS VM / always-on setups can end up with Messages.app going "idle" (incoming
 events stop until the app is opened/foregrounded). A simple workaround is to **poke
 Messages every 5 minutes** using an AppleScript + LaunchAgent.
 

@@ -373,20 +373,20 @@ search.
 
 #### Why hybrid?
 
-Vector search is great at “this means the same thing”:
+Vector search is great at "this means the same thing":
 
-- “Mac Studio gateway host” vs “the machine running the gateway”
-- “debounce file updates” vs “avoid indexing on every write”
+- "Mac Studio gateway host" vs "the machine running the gateway"
+- "debounce file updates" vs "avoid indexing on every write"
 
 But it can be weak at exact, high-signal tokens:
 
 - IDs (`a828e60`, `b3b9895a…`)
 - code symbols (`memorySearch.query.hybrid`)
-- error strings (“sqlite-vec unavailable”)
+- error strings ("sqlite-vec unavailable")
 
 BM25 (full-text) is the opposite: strong at exact tokens, weaker at paraphrases. Hybrid
 search is the pragmatic middle ground: **use both retrieval signals** so you get good
-results for both “natural language” queries and “needle in a haystack” queries.
+results for both "natural language" queries and "needle in a haystack" queries.
 
 #### How we merge results (the current design)
 
@@ -413,7 +413,7 @@ Notes:
   and return keyword matches.
 - If FTS5 can't be created, we keep vector-only search (no hard failure).
 
-This isn't “IR-theory perfect”, but it's simple, fast, and tends to improve
+This isn't "IR-theory perfect", but it's simple, fast, and tends to improve
 recall/precision on real notes. If we want to get fancier later, common next steps are
 Reciprocal Rank Fusion (RRF) or score normalization (min/max or z-score) before mixing.
 

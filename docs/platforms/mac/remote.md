@@ -105,5 +105,5 @@ Pick sounds per notification from scripts with `openclaw` and `node.invoke`, e.g
 openclaw nodes notify --node <id> --title "Ping" --body "Remote gateway ready" --sound Glass
 ```
 
-There is no global “default sound” toggle in the app anymore; callers choose a sound (or
+There is no global "default sound" toggle in the app anymore; callers choose a sound (or
 none) per request.

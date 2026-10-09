@@ -128,7 +128,7 @@ agent.
 
 ## Troubleshooting
 
-### “No credentials found”
+### "No credentials found"
 
 If the Anthropic token profile is missing, run `claude setup-token` on the **gateway
 host**, then re-check:

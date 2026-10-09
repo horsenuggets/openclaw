@@ -8,7 +8,7 @@ title: "directory"
 
 # `openclaw directory`
 
-Directory lookups for channels that support it (contacts/peers, groups, and “me”).
+Directory lookups for channels that support it (contacts/peers, groups, and "me").
 
 ## Common flags
 
@@ -45,7 +45,7 @@ openclaw message send --channel slack --target user:U012ABCDEF --message "hello"
 - Zalo Personal / `zalouser` (plugin): thread id (DM/group) from `zca` (`me`,
   `friend list`, `group list`)
 
-## Self (“me”)
+## Self ("me")
 
 ```bash
 openclaw directory self --channel zalouser

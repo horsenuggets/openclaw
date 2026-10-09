@@ -24,11 +24,11 @@ struct VoiceTab: View {
                         if triggers.isEmpty {
                             Text("Add wake words in Settings.")
                         } else if triggers.count == 1 {
-                            Text("Say “\(triggers[0]) …” to trigger.")
+                            Text("Say \"\(triggers[0]) …\" to trigger.")
                         } else if triggers.count == 2 {
-                            Text("Say “\(triggers[0]) …” or “\(triggers[1]) …” to trigger.")
+                            Text("Say \"\(triggers[0]) …\" or \"\(triggers[1]) …\" to trigger.")
                         } else {
-                            Text("Say “\(triggers.joined(separator: " …”, “")) …” to trigger.")
+                            Text("Say \"\(triggers.joined(separator: " …\", \"")) …\" to trigger.")
                         }
                     }
                     .foregroundStyle(.secondary)

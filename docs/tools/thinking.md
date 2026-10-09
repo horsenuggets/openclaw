@@ -13,11 +13,11 @@ title: "Thinking Levels"
   `/thinking <level>`.
 - Levels (aliases): `off | minimal | low | medium | high | xhigh` (GPT-5.2 + Codex models
   only)
-  - minimal → “think”
-  - low → “think hard”
-  - medium → “think harder”
-  - high → “ultrathink” (max budget)
-  - xhigh → “ultrathink+” (GPT-5.2 + Codex models only)
+  - minimal → "think"
+  - low → "think hard"
+  - medium → "think harder"
+  - high → "ultrathink" (max budget)
+  - xhigh → "ultrathink+" (GPT-5.2 + Codex models only)
   - `highest`, `max` map to `high`.
 - Provider notes:
   - Z.AI (`zai/*`) only supports binary thinking (`on`/`off`). Any non-`off` level is

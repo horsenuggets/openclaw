@@ -433,7 +433,7 @@ If set, OpenClaw derives defaults (only when you haven't set them explicitly):
 
 - `messages.ackReaction` from the **active agent**'s `identity.emoji` (falls back to 👀)
 - `agents.list[].groupChat.mentionPatterns` from the agent's
-  `identity.name`/`identity.emoji` (so “@Samantha” works in groups across
+  `identity.name`/`identity.emoji` (so "@Samantha" works in groups across
   Telegram/Slack/Discord/Google Chat/iMessage/WhatsApp)
 - `identity.avatar` accepts a workspace-relative image path or a remote URL/data URL.
   Local files must live inside the agent workspace.
@@ -1975,7 +1975,7 @@ Soft vs hard pruning (what changes in the context sent to the LLM):
 Notes / current limitations:
 
 - Tool results containing **image blocks are skipped** (never trimmed/cleared) right now.
-- The estimated “context ratio” is based on **characters** (approximate), not exact
+- The estimated "context ratio" is based on **characters** (approximate), not exact
   tokens.
 - If the session doesn't contain at least `keepLastAssistants` assistant messages yet,
   pruning is skipped.
@@ -2944,7 +2944,7 @@ written.
 
 Fields:
 
-- `mainKey`: direct-chat bucket key (default: `"main"`). Useful when you want to “rename”
+- `mainKey`: direct-chat bucket key (default: `"main"`). Useful when you want to "rename"
   the primary DM thread without changing `agentId`.
   - Sandbox note: `agents.defaults.sandbox.mode: "non-main"` uses this key to detect the
     main session. Any session key that does not match `mainKey` (groups/channels) is
@@ -3142,7 +3142,7 @@ Use `gateway.mode` to explicitly declare whether this machine should run the Gat
 
 Defaults:
 
-- mode: **unset** (treated as “do not auto-start”)
+- mode: **unset** (treated as "do not auto-start")
 - bind: `loopback`
 - port: `18789` (single port for WS + HTTP)
 

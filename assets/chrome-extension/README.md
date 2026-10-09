@@ -14,8 +14,8 @@ local CDP relay server).
    openclaw browser extension path
    ```
 
-4. Chrome → `chrome://extensions` → enable “Developer mode”.
-5. “Load unpacked” → select the path printed above.
+4. Chrome → `chrome://extensions` → enable "Developer mode".
+5. "Load unpacked" → select the path printed above.
 6. Pin the extension. Click the icon on a tab to attach/detach.
 
 ## Options

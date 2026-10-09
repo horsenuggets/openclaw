@@ -88,8 +88,8 @@ with: `openclaw pairing approve whatsapp <code>`
 
 ### Personal number (fallback)
 
-Quick fallback: run OpenClaw on **your own number**. Message yourself (WhatsApp “Message
-yourself”) for testing so you don't spam contacts. Expect to read verification codes on
+Quick fallback: run OpenClaw on **your own number**. Message yourself (WhatsApp "Message
+yourself") for testing so you don't spam contacts. Expect to read verification codes on
 your main phone during setup and experiments. **Must enable self-chat mode.** When the
 wizard asks for your personal WhatsApp number, enter the phone you will message from (the
 owner/sender), not the assistant number.
@@ -129,7 +129,7 @@ sessions persist via `creds.json`.
 - WhatsApp Business numbers are a poor fit for a personal assistant.
 - Meta enforces a 24‑hour reply window; if you haven't responded in the last 24 hours, the
   business number can't initiate new messages.
-- High-volume or “chatty” usage triggers aggressive blocking, because business accounts
+- High-volume or "chatty" usage triggers aggressive blocking, because business accounts
   aren't meant to send dozens of personal assistant messages.
 - Result: unreliable delivery and frequent blocks, so support was removed.
 
@@ -441,14 +441,14 @@ WhatsApp sends audio as **voice notes** (PTT bubble).
 
 **Not linked / QR login required**
 
-- Symptom: `channels status` shows `linked: false` or warns “Not linked”.
+- Symptom: `channels status` shows `linked: false` or warns "Not linked".
 - Fix: run `openclaw channels login` on the gateway host and scan the QR (WhatsApp →
   Settings → Linked Devices).
 
 **Linked but disconnected / reconnect loop**
 
-- Symptom: `channels status` shows `running, disconnected` or warns “Linked but
-  disconnected”.
+- Symptom: `channels status` shows `running, disconnected` or warns "Linked but
+  disconnected".
 - Fix: `openclaw doctor` (or restart the gateway). If it persists, relink via
   `channels login` and inspect `openclaw logs --follow`.
 

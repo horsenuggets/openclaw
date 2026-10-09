@@ -12,7 +12,7 @@ title: "Installer Internals"
 
 OpenClaw ships two installer scripts (served from `openclaw.ai`):
 
-- `https://openclaw.ai/install.sh` — “recommended” installer (global npm install by
+- `https://openclaw.ai/install.sh` — "recommended" installer (global npm install by
   default; can also install from a GitHub checkout)
 - `https://openclaw.ai/install-cli.sh` — non-root-friendly CLI installer (installs into a
   prefix with its own Node)
@@ -59,7 +59,7 @@ set:
 SHARP_IGNORE_GLOBAL_LIBVIPS=0 curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
-### Discoverability / “git install” prompt
+### Discoverability / "git install" prompt
 
 If you run the installer while **already inside a OpenClaw source checkout** (detected via
 `package.json` + `pnpm-workspace.yaml`), it prompts:

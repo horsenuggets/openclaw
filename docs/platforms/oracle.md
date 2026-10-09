@@ -115,7 +115,7 @@ When prompted "How do you want to hatch your bot?", select **"Do this later"**.
 
 ## 6) Configure Gateway (loopback + token auth) and enable Tailscale Serve
 
-Use token auth as the default. It's predictable and avoids needing any “insecure auth”
+Use token auth as the default. It's predictable and avoids needing any "insecure auth"
 Control UI flags.
 
 ```bash

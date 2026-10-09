@@ -1,15 +1,15 @@
 ---
 summary: "Context: what the model sees, how it is built, and how to inspect it"
 read_when:
-  - You want to understand what “context” means in OpenClaw
-  - You are debugging why the model “knows” something (or forgot it)
+  - You want to understand what "context" means in OpenClaw
+  - You are debugging why the model "knows" something (or forgot it)
   - You want to reduce context overhead (/context, /status, /compact)
 title: "Context"
 ---
 
 # Context
 
-“Context” is **everything OpenClaw sends to the model for a run**. It is bounded by the
+"Context" is **everything OpenClaw sends to the model for a run**. It is bounded by the
 model's **context window** (token limit).
 
 Beginner mental model:
@@ -19,12 +19,12 @@ Beginner mental model:
 - **Conversation history**: your messages + the assistant's messages for this session.
 - **Tool calls/results + attachments**: command output, file reads, images/audio, etc.
 
-Context is *not the same thing* as “memory”: memory can be stored on disk and reloaded
+Context is *not the same thing* as "memory": memory can be stored on disk and reloaded
 later; context is what's inside the model's current window.
 
 ## Quick start (inspect context)
 
-- `/status` → quick “how full is my window?” view + session settings.
+- `/status` → quick "how full is my window?" view + session settings.
 - `/context list` → what's injected + rough sizes (per file + totals).
 - `/context detail` → deeper breakdown: per-file, per-tool schema sizes, per-skill entry
   sizes, and system prompt size.
@@ -90,7 +90,7 @@ Everything the model receives counts, including:
 - Tool calls + tool results.
 - Attachments/transcripts (images/audio/files).
 - Compaction summaries and pruning artifacts.
-- Provider “wrappers” or hidden headers (not visible, still counted).
+- Provider "wrappers" or hidden headers (not visible, still counted).
 
 ## How OpenClaw builds the system prompt
 
@@ -133,13 +133,13 @@ skill's `SKILL.md` **only when needed**.
 
 Tools affect context in two ways:
 
-1. **Tool list text** in the system prompt (what you see as “Tooling”).
+1. **Tool list text** in the system prompt (what you see as "Tooling").
 2. **Tool schemas** (JSON). These are sent to the model so it can call tools. They count
    toward context even though you don't see them as plain text.
 
 `/context detail` breaks down the biggest tool schemas so you can see what dominates.
 
-## Commands, directives, and “inline shortcuts”
+## Commands, directives, and "inline shortcuts"
 
 Slash commands are handled by the Gateway. There are a few different behaviors:
 
@@ -149,7 +149,7 @@ Slash commands are handled by the Gateway. There are a few different behaviors:
   - Directive-only messages persist session settings.
   - Inline directives in a normal message act as per-message hints.
 - **Inline shortcuts** (allowlisted senders only): certain `/...` tokens inside a normal
-  message can run immediately (example: “hey /status”), and are stripped before the model
+  message can run immediately (example: "hey /status"), and are stripped before the model
   sees the remaining text.
 
 Details: [Slash commands](/tools/slash-commands).

@@ -16,7 +16,7 @@ not choose a channel; routing is deterministic and controlled by the host config
 - **Channel**: `whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`,
   `webchat`.
 - **AccountId**: per‑channel account instance (when supported).
-- **AgentId**: an isolated workspace + session store (“brain”).
+- **AgentId**: an isolated workspace + session store ("brain").
 - **SessionKey**: the bucket key used to store context and control concurrency.
 
 ## Session key shapes (examples)

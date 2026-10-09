@@ -40,7 +40,7 @@ openclaw browser --browser-profile openclaw open https://example.com
 openclaw browser --browser-profile openclaw snapshot
 ```
 
-If you get “Browser disabled”, enable it in config (see below) and restart the Gateway.
+If you get "Browser disabled", enable it in config (see below) and restart the Gateway.
 
 ## Profiles: `openclaw` vs `chrome`
 
@@ -81,12 +81,12 @@ Notes:
 - The browser control service binds to loopback on a port derived from `gateway.port`
   (default: `18791`, which is gateway + 2). The relay uses the next port (`18792`).
 - If you override the Gateway port (`gateway.port` or `OPENCLAW_GATEWAY_PORT`), the
-  derived browser ports shift to stay in the same “family”.
+  derived browser ports shift to stay in the same "family".
 - `cdpUrl` defaults to the relay port when unset.
 - `remoteCdpTimeoutMs` applies to remote (non-loopback) CDP reachability checks.
 - `remoteCdpHandshakeTimeoutMs` applies to remote CDP WebSocket reachability checks.
-- `attachOnly: true` means “never launch a local browser; only attach if it is already
-  running.”
+- `attachOnly: true` means "never launch a local browser; only attach if it is already
+  running."
 - `color` + per-profile `color` tint the browser UI so you can see which profile is
   active.
 - Default profile is `chrome` (extension relay). Use `defaultProfile: "openclaw"` for the
@@ -228,7 +228,7 @@ All control endpoints accept `?profile=<name>`; the CLI uses `--browser-profile`
 
 ## Chrome extension relay (use your existing Chrome)
 
-OpenClaw can also drive **your existing Chrome tabs** (no separate “openclaw” Chrome
+OpenClaw can also drive **your existing Chrome tabs** (no separate "openclaw" Chrome
 instance) via a local CDP relay + a Chrome extension.
 
 Full guide: [Chrome extension](/tools/chrome-extension)
@@ -264,8 +264,8 @@ either:
 openclaw browser extension install
 ```
 
-- Chrome → `chrome://extensions` → enable “Developer mode”
-- “Load unpacked” → select the directory printed by `openclaw browser extension path`
+- Chrome → `chrome://extensions` → enable "Developer mode"
+- "Load unpacked" → select the directory printed by `openclaw browser extension path`
 - Pin the extension, then click it on the tab you want to control (badge shows `ON`).
 
 2. Use it:
@@ -293,7 +293,7 @@ Notes:
 
 - **Dedicated user data dir**: never touches your personal browser profile.
 - **Dedicated ports**: avoids `9222` to prevent collisions with dev workflows.
-- **Deterministic tab control**: target tabs by `targetId`, not “last tab”.
+- **Deterministic tab control**: target tabs by `targetId`, not "last tab".
 
 ## Browser selection
 
@@ -480,7 +480,7 @@ Notes:
 
 ## Snapshots and refs
 
-OpenClaw supports two “snapshot” styles:
+OpenClaw supports two "snapshot" styles:
 
 - **AI snapshot (numeric refs)**: `openclaw browser snapshot` (default; `--format ai`)
   - Output: a text snapshot that includes numeric refs.
@@ -526,7 +526,7 @@ openclaw browser wait "#main" \
 
 ## Debug workflows
 
-When an action fails (e.g. “not visible”, “strict mode violation”, “covered”):
+When an action fails (e.g. "not visible", "strict mode violation", "covered"):
 
 1. `openclaw browser snapshot --interactive`
 2. Use `click <ref>` / `type <ref>` (prefer role refs in interactive mode)
@@ -558,7 +558,7 @@ Role snapshots in JSON include `refs` plus a small `stats` block
 
 ## State and environment knobs
 
-These are useful for “make the site behave like X” workflows:
+These are useful for "make the site behave like X" workflows:
 
 - Cookies: `cookies`, `cookies set`, `cookies clear`
 - Storage: `storage local|session get|set|clear`

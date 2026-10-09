@@ -97,7 +97,7 @@ release assets (zip + dSYM) when publishing.
   - `curl -I https://raw.githubusercontent.com/openclaw/openclaw/main/appcast.xml`
     returns 200.
   - `curl -I <enclosure url>` returns 200 after assets upload.
-  - On a previous public build, run “Check for Updates…” from the About tab and verify
+  - On a previous public build, run "Check for Updates…" from the About tab and verify
     Sparkle installs the new build cleanly.
 
 Definition of done: signed app + appcast are published, update flow works from an older

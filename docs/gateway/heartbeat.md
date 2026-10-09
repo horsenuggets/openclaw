@@ -59,14 +59,14 @@ Example config:
 
 The default prompt is intentionally broad:
 
-- **Background tasks**: “Consider outstanding tasks” nudges the agent to review follow-ups
+- **Background tasks**: "Consider outstanding tasks" nudges the agent to review follow-ups
   (inbox, calendar, reminders, queued work) and surface anything urgent.
-- **Human check-in**: “Checkup sometimes on your human during day time” nudges an
-  occasional lightweight “anything you need?” message, but avoids night-time spam by using
+- **Human check-in**: "Checkup sometimes on your human during day time" nudges an
+  occasional lightweight "anything you need?" message, but avoids night-time spam by using
   your configured local timezone (see [/concepts/timezone](/concepts/timezone)).
 
-If you want a heartbeat to do something very specific (e.g. “check Gmail PubSub stats” or
-“verify gateway health”), set `agents.defaults.heartbeat.prompt` (or
+If you want a heartbeat to do something very specific (e.g. "check Gmail PubSub stats" or
+"verify gateway health"), set `agents.defaults.heartbeat.prompt` (or
 `agents.list[].heartbeat.prompt`) to a custom body. The silent-reply ack instruction is
 appended automatically if your prompt omits it, so idle turns on a custom prompt are still
 suppressed.
@@ -282,7 +282,7 @@ channels:
 ## HEARTBEAT.md (optional)
 
 If a `HEARTBEAT.md` file exists in the workspace, the default prompt tells the agent to
-read it. Think of it as your “heartbeat checklist”: small, stable, and safe to include
+read it. Think of it as your "heartbeat checklist": small, stable, and safe to include
 every 30 minutes.
 
 If `HEARTBEAT.md` exists but is effectively empty (only blank lines and markdown headers
@@ -308,12 +308,12 @@ Yes — if you ask it to.
 `HEARTBEAT.md` is just a normal file in the agent workspace, so you can tell the agent (in
 a normal chat) something like:
 
-- “Update `HEARTBEAT.md` to add a daily calendar check.”
-- “Rewrite `HEARTBEAT.md` so it's shorter and focused on inbox follow-ups.”
+- "Update `HEARTBEAT.md` to add a daily calendar check."
+- "Rewrite `HEARTBEAT.md` so it's shorter and focused on inbox follow-ups."
 
 If you want this to happen proactively, you can also include an explicit line in your
-heartbeat prompt like: “If the checklist becomes stale, update HEARTBEAT.md with a better
-one.”
+heartbeat prompt like: "If the checklist becomes stale, update HEARTBEAT.md with a better
+one."
 
 Safety note: don't put secrets (API keys, phone numbers, private tokens) into
 `HEARTBEAT.md` — it becomes part of the prompt context.
@@ -333,7 +333,7 @@ Use `--mode next-heartbeat` to wait for the next scheduled tick.
 
 ## Reasoning delivery (optional)
 
-By default, heartbeats deliver only the final “answer” payload.
+By default, heartbeats deliver only the final "answer" payload.
 
 If you want transparency, enable:
 

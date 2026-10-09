@@ -554,7 +554,7 @@ Browser control (optional):
 
 Use these when you're past the onboarding flow and want the deeper reference.
 
-- [Start with the docs index for navigation and “what's where.”](https://docs.openclaw.ai)
+- [Start with the docs index for navigation and "what's where."](https://docs.openclaw.ai)
 - [Read the architecture overview for the gateway + protocol model.](https://docs.openclaw.ai/concepts/architecture)
 - [Use the full configuration reference when you need every key and example.](https://docs.openclaw.ai/gateway/configuration)
 - [Run the Gateway by the book with the operational runbook.](https://docs.openclaw.ai/gateway)

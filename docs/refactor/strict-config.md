@@ -66,7 +66,7 @@ Allowed (diagnostic-only):
 - `openclaw status`
 - `openclaw gateway status`
 
-Everything else must hard-fail with: “Config invalid. Run `openclaw doctor --fix`.”
+Everything else must hard-fail with: "Config invalid. Run `openclaw doctor --fix`."
 
 ## Error UX format
 

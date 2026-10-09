@@ -543,5 +543,5 @@ Tools are exposed in two parallel channels:
 1. **System prompt text**: a human-readable list + guidance.
 2. **Tool schema**: the structured function definitions sent to the model API.
 
-That means the agent sees both “what tools exist” and “how to call them.” If a tool
+That means the agent sees both "what tools exist" and "how to call them." If a tool
 doesn't appear in the system prompt or the schema, the model cannot call it.

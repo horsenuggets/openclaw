@@ -128,7 +128,7 @@ openclaw onboard --auth-choice setup-token
 
 - Generate the setup-token with `claude setup-token` and paste it, or run
   `openclaw models auth setup-token` on the gateway host.
-- If you see “OAuth token refresh failed …” on a Claude subscription, re-auth with a
+- If you see "OAuth token refresh failed …" on a Claude subscription, re-auth with a
   setup-token. See
   [/gateway/troubleshooting#oauth-token-refresh-failed-anthropic-claude-subscription](/gateway/troubleshooting#oauth-token-refresh-failed-anthropic-claude-subscription).
 - Auth details + reuse rules are in [/concepts/oauth](/concepts/oauth).

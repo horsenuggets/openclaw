@@ -30,7 +30,7 @@ clients that explicitly call `node.pair.*` use this flow.
 2. The Gateway stores a **pending request** and emits `node.pair.requested`.
 3. You approve or reject the request (CLI or UI).
 4. On approval, the Gateway issues a **new token** (tokens are rotated on re‑pair).
-5. The node reconnects using the token and is now “paired”.
+5. The node reconnects using the token and is now "paired".
 
 Pending requests expire automatically after **5 minutes**.
 
@@ -76,7 +76,7 @@ The macOS app can optionally attempt a **silent approval** when:
 - the request is marked `silent`, and
 - the app can verify an SSH connection to the gateway host using the same user.
 
-If silent approval fails, it falls back to the normal “Approve/Reject” prompt.
+If silent approval fails, it falls back to the normal "Approve/Reject" prompt.
 
 ## Storage (local, private)
 

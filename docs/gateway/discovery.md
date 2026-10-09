@@ -36,7 +36,7 @@ Protocol details:
 - [Gateway protocol](/gateway/protocol)
 - [Bridge protocol (legacy)](/gateway/bridge-protocol)
 
-## Why we keep both “direct” and SSH
+## Why we keep both "direct" and SSH
 
 - **Direct WS** is the best UX on the same network and within a tailnet:
   - auto-discovery on LAN via Bonjour
@@ -51,13 +51,13 @@ Protocol details:
 
 ### 1) Bonjour / mDNS (LAN only)
 
-Bonjour is best-effort and does not cross networks. It is only used for “same LAN”
+Bonjour is best-effort and does not cross networks. It is only used for "same LAN"
 convenience.
 
 Target direction:
 
 - The **gateway** advertises its WS endpoint via Bonjour.
-- Clients browse and show a “pick a gateway” list, then store the chosen endpoint.
+- Clients browse and show a "pick a gateway" list, then store the chosen endpoint.
 
 Troubleshooting and beacon details: [Bonjour](/gateway/bonjour).
 
@@ -87,7 +87,7 @@ Disable/override:
 
 ### 2) Tailnet (cross-network)
 
-For London/Vienna style setups, Bonjour won't help. The recommended “direct” target is:
+For London/Vienna style setups, Bonjour won't help. The recommended "direct" target is:
 
 - Tailscale MagicDNS name (preferred) or a stable tailnet IP.
 
@@ -106,7 +106,7 @@ See [Remote access](/gateway/remote).
 Recommended client behavior:
 
 1. If a paired direct endpoint is configured and reachable, use it.
-2. Else, if Bonjour finds a gateway on LAN, offer a one-tap “Use this gateway” choice and
+2. Else, if Bonjour finds a gateway on LAN, offer a one-tap "Use this gateway" choice and
    save it as the direct endpoint.
 3. Else, if a tailnet DNS/IP is configured, try direct.
 4. Else, fall back to SSH.

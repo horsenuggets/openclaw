@@ -18,7 +18,7 @@ struct CronJobEditor: View {
         "Main jobs post a system event into the current main session. "
             + "Isolated jobs run OpenClaw in a dedicated session and can announce results to a channel."
     static let scheduleKindNote =
-        "“At” runs once, “Every” repeats with a duration, “Cron” uses a 5-field Unix expression."
+        "\"At\" runs once, \"Every\" repeats with a duration, \"Cron\" uses a 5-field Unix expression."
     static let isolatedPayloadNote =
         "Isolated jobs always run an agent turn. Announce sends a short summary to a channel."
     static let mainPayloadNote =
@@ -90,7 +90,7 @@ struct CronJobEditor: View {
                         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                             GridRow {
                                 self.gridLabel("Name")
-                                TextField("Required (e.g. “Daily summary”)", text: self.$name)
+                                TextField("Required (e.g. \"Daily summary\")", text: self.$name)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(maxWidth: .infinity)
                             }

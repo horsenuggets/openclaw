@@ -33,7 +33,7 @@ Set `agents.defaults.typingMode` to one of:
 - `message` — start typing on the **first non-silent text delta** (ignores the `⁘ return`
   silent-reply token).
 
-Order of “how early it fires”: `never` → `message` → `thinking` → `instant`
+Order of "how early it fires": `never` → `message` → `thinking` → `instant`
 
 ## Configuration
 

@@ -2,7 +2,7 @@
 summary: "Advanced setup and development workflows for OpenClaw"
 read_when:
   - Setting up a new machine
-  - You want “latest + greatest” without breaking your personal setup
+  - You want "latest + greatest" without breaking your personal setup
 title: "Setup"
 ---
 
@@ -31,7 +31,7 @@ Last updated: 2026-01-01
 
 ## Tailoring strategy (so updates don't hurt)
 
-If you want “100% tailored to me” *and* easy updates, keep your customization in:
+If you want "100% tailored to me" *and* easy updates, keep your customization in:
 
 - **Config:** `~/.openclaw/openclaw.json` (JSON/JSON5-ish)
 - **Workspace:** `~/.openclaw/workspace` (skills, prompts, memories; make it a private git
@@ -111,7 +111,7 @@ In **OpenClaw.app**:
 
 ### 3) Verify
 
-- In-app Gateway status should read **“Using existing gateway …”**
+- In-app Gateway status should read **"Using existing gateway …"**
 - Or via CLI:
 
 ```bash
@@ -142,7 +142,7 @@ Use this when debugging auth or deciding what to back up:
 
 ## Updating (without wrecking your setup)
 
-- Keep `~/.openclaw/workspace` and `~/.openclaw/` as “your stuff”; don't put personal
+- Keep `~/.openclaw/workspace` and `~/.openclaw/` as "your stuff"; don't put personal
   prompts/config into the `openclaw` repo.
 - Updating source: `git pull` + `pnpm install` (when lockfile changed) + keep using
   `pnpm gateway:watch`.

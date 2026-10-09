@@ -87,7 +87,7 @@ High-level:
 5. Rebases onto the selected commit (dev only).
 6. Installs deps (pnpm preferred; npm fallback).
 7. Builds + builds the Control UI.
-8. Runs `openclaw doctor` as the final “safe update” check.
+8. Runs `openclaw doctor` as the final "safe update" check.
 9. Syncs plugins to the active channel (dev uses bundled extensions; stable/beta uses npm)
    and updates npm-installed plugins.
 

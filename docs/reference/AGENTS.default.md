@@ -81,7 +81,7 @@ cp docs/reference/AGENTS.default.md ~/.openclaw/workspace/AGENTS.md
 
 ## Backup tip (recommended)
 
-If you treat this workspace as Clawd's “memory”, make it a git repo (ideally private) so
+If you treat this workspace as Clawd's "memory", make it a git repo (ideally private) so
 `AGENTS.md` and your memory files are backed up.
 
 ```bash

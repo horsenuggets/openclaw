@@ -42,5 +42,5 @@ At a timestamp:
 
 ## Notes
 
-- Prefer `--time` for “what is happening around here?”.
+- Prefer `--time` for "what is happening around here?".
 - Use a `.jpg` for quick share; use `.png` for crisp UI frames.

@@ -260,7 +260,7 @@ Approval is **gateway‑hosted**, UI delivered to operator clients.
 ## macOS app
 
 - Operator role by default (control UI).
-- Node role when “Mac node” enabled (system.run, screen, camera).
+- Node role when "Mac node" enabled (system.run, screen, camera).
 - Same deviceId for both connections → merged UI entry.
 
 ## CLI
@@ -292,7 +292,7 @@ Human label only.
 
 ## UI grouping
 
-Same `deviceId` across roles → single “Instance” row:
+Same `deviceId` across roles → single "Instance" row:
 
 - Badge: `operator`, `node`.
 - Shows capabilities + last seen.
@@ -343,7 +343,7 @@ Same `deviceId` across roles → single “Instance” row:
 # Security notes
 
 - Role/allowlist enforced at gateway boundary.
-- No client gets “full” API without operator scope.
+- No client gets "full" API without operator scope.
 - Pairing required for *all* connections.
 - TLS + pinning reduces MITM risk for mobile.
 - SSH silent approval is a convenience; still recorded + revocable.

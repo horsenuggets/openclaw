@@ -20,7 +20,7 @@ misconfiguration safety), under explicit assumptions.
 - Many claims have a paired **negative model** that produces a counterexample trace for a
   realistic bug class.
 
-**What this is not (yet):** a proof that “OpenClaw is secure in all respects” or that the
+**What this is not (yet):** a proof that "OpenClaw is secure in all respects" or that the
 full TypeScript implementation is correct.
 
 ## Where the models live
@@ -32,7 +32,7 @@ Models are maintained in a separate repo:
 
 - These are **models**, not the full TypeScript implementation. Drift between model and
   code is possible.
-- Results are bounded by the state space explored by TLC; “green” does not imply security
+- Results are bounded by the state space explored by TLC; "green" does not imply security
   beyond the modeled assumptions and bounds.
 - Some claims rely on explicit environmental assumptions (e.g., correct deployment,
   correct configuration inputs).
@@ -43,7 +43,7 @@ Today, results are reproduced by cloning the models repo locally and running TLC
 below). A future iteration could offer:
 
 - CI-run models with public artifacts (counterexample traces, run logs)
-- a hosted “run this model” workflow for small, bounded checks
+- a hosted "run this model" workflow for small, bounded checks
 
 Getting started:
 
@@ -95,7 +95,7 @@ live approval when configured; approvals are tokenized to prevent replay (in the
 
 ### Ingress gating (mentions + control-command bypass)
 
-**Claim:** in group contexts requiring mention, an unauthorized “control command” cannot
+**Claim:** in group contexts requiring mention, an unauthorized "control command" cannot
 bypass mention gating.
 
 - Green:
@@ -121,7 +121,7 @@ These are follow-on models that tighten fidelity around real-world failure modes
 ### Pairing store concurrency / idempotency
 
 **Claim:** a pairing store should enforce `MaxPending` and idempotency even under
-interleavings (i.e., “check-then-write” must be atomic / locked; refresh shouldn't create
+interleavings (i.e., "check-then-write" must be atomic / locked; refresh shouldn't create
 duplicates).
 
 What it means:
