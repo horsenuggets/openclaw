@@ -48,7 +48,10 @@ Docs: https://docs.openclaw.ai
   before it tears down the running stack, so a network-dependent build flake aborts with
   the old router and agents still up instead of taking them offline; deploy also ships
   `agent.Dockerfile` next to `agent.yml`. The prod-mirror image likewise gains `git`,
-  since host-side `openclaw setup` `git init`s the workspace.
+  since host-side `openclaw setup` `git init`s the workspace. `ensureAgentWorkspace` now
+  backfills a `.git` into any existing workspace that is not already a repo (not just
+  brand-new ones), so channels seeded before git was available become committable on their
+  next turn; `git init` is non-destructive and never touches the existing files.
 - Discord: new `/secret` slash command hands the agent a sensitive value without it ever
   appearing in the channel. The command opens a private modal (popup) that collects a
   secret value plus an optional name; on submit the value is delivered out-of-band to that
