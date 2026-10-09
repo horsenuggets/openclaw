@@ -13,6 +13,8 @@ import {
 } from "./connections-store.js";
 
 let dir: string;
+const OWNER_A = "owner-a";
+const OWNER_B = "owner-b";
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-connections-"));
@@ -34,14 +36,14 @@ function conn(over: Partial<StoredConnection> = {}): StoredConnection {
 
 describe("connections-store", () => {
   it("returns an empty set for a fresh instance dir", () => {
-    expect(listConnections(dir)).toEqual([]);
-    expect(getConnection(dir, "todoist")).toBeNull();
-    expect(readConnectionsFile(dir)).toEqual({ connections: {} });
+    expect(listConnections(dir, OWNER_A)).toEqual([]);
+    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
+    expect(readConnectionsFile(dir, OWNER_A)).toEqual({ ownerId: OWNER_A, connections: {} });
   });
 
   it("saves and reads a connection back", () => {
-    saveConnection(dir, conn({ accountLabel: "me@example.com" }));
-    const stored = getConnection(dir, "todoist");
+    saveConnection(dir, OWNER_A, conn({ accountLabel: "me@example.com" }));
+    const stored = getConnection(dir, OWNER_A, "todoist");
     expect(stored?.status).toBe("linked");
     expect(stored?.token).toBe("tok_123");
     expect(stored?.accountLabel).toBe("me@example.com");
@@ -49,31 +51,31 @@ describe("connections-store", () => {
   });
 
   it("replaces an existing connection without dropping the others", () => {
-    saveConnection(dir, conn({ connectorId: "todoist", token: "old" }));
-    saveConnection(dir, conn({ connectorId: "github", token: "gh" }));
-    saveConnection(dir, conn({ connectorId: "todoist", token: "new" }));
-    expect(getConnection(dir, "todoist")?.token).toBe("new");
-    expect(getConnection(dir, "github")?.token).toBe("gh");
-    expect(listConnections(dir)).toHaveLength(2);
+    saveConnection(dir, OWNER_A, conn({ connectorId: "todoist", token: "old" }));
+    saveConnection(dir, OWNER_A, conn({ connectorId: "github", token: "gh" }));
+    saveConnection(dir, OWNER_A, conn({ connectorId: "todoist", token: "new" }));
+    expect(getConnection(dir, OWNER_A, "todoist")?.token).toBe("new");
+    expect(getConnection(dir, OWNER_A, "github")?.token).toBe("gh");
+    expect(listConnections(dir, OWNER_A)).toHaveLength(2);
   });
 
   it("removes a connection and reports whether one existed", () => {
-    saveConnection(dir, conn());
-    expect(removeConnection(dir, "todoist")).toBe(true);
-    expect(getConnection(dir, "todoist")).toBeNull();
-    expect(removeConnection(dir, "todoist")).toBe(false);
+    saveConnection(dir, OWNER_A, conn());
+    expect(removeConnection(dir, OWNER_A, "todoist")).toBe(true);
+    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
+    expect(removeConnection(dir, OWNER_A, "todoist")).toBe(false);
   });
 
   it("reads a malformed file as no connections for display, but refuses to clobber it", () => {
     const file = path.join(dir, CONNECTIONS_FILENAME);
     fs.writeFileSync(file, "{ not json");
     // Lenient read (list/get) shows nothing rather than crashing the command.
-    expect(listConnections(dir)).toEqual([]);
-    expect(getConnection(dir, "todoist")).toBeNull();
+    expect(listConnections(dir, OWNER_A)).toEqual([]);
+    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
     // But a write refuses, so the corrupt file is preserved for inspection
     // instead of silently discarding whatever it held.
-    expect(() => saveConnection(dir, conn())).toThrow();
-    expect(() => removeConnection(dir, "todoist")).toThrow();
+    expect(() => saveConnection(dir, OWNER_A, conn())).toThrow();
+    expect(() => removeConnection(dir, OWNER_A, "todoist")).toThrow();
     expect(fs.readFileSync(file, "utf-8")).toBe("{ not json");
   });
 
@@ -81,6 +83,7 @@ describe("connections-store", () => {
     fs.writeFileSync(
       path.join(dir, CONNECTIONS_FILENAME),
       JSON.stringify({
+        ownerId: OWNER_A,
         connections: {
           github: null,
           notion: { connectorId: "notion" }, // missing status/linkedAt
@@ -93,22 +96,22 @@ describe("connections-store", () => {
         },
       }),
     );
-    const list = listConnections(dir);
+    const list = listConnections(dir, OWNER_A);
     expect(list).toHaveLength(1);
     expect(list[0]?.connectorId).toBe("todoist");
-    expect(getConnection(dir, "github")).toBeNull();
-    expect(getConnection(dir, "notion")).toBeNull();
+    expect(getConnection(dir, OWNER_A, "github")).toBeNull();
+    expect(getConnection(dir, OWNER_A, "notion")).toBeNull();
   });
 
   it("writes the file atomically (no leftover temp file)", () => {
-    saveConnection(dir, conn());
+    saveConnection(dir, OWNER_A, conn());
     const entries = fs.readdirSync(dir);
     expect(entries).toContain(CONNECTIONS_FILENAME);
     expect(entries.some((e) => e.endsWith(".tmp"))).toBe(false);
   });
 
   it("writes the token file owner-only (0600) with a trailing newline", () => {
-    saveConnection(dir, conn());
+    saveConnection(dir, OWNER_A, conn());
     const file = path.join(dir, CONNECTIONS_FILENAME);
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     expect(fs.readFileSync(file, "utf-8").endsWith("}\n")).toBe(true);
@@ -116,9 +119,31 @@ describe("connections-store", () => {
 
   it("tightens an existing world-readable file to 0600 on the next write", () => {
     const file = path.join(dir, CONNECTIONS_FILENAME);
-    fs.writeFileSync(file, JSON.stringify({ connections: {} }), { mode: 0o644 });
+    fs.writeFileSync(file, JSON.stringify({ ownerId: OWNER_A, connections: {} }), { mode: 0o644 });
     fs.chmodSync(file, 0o644); // force the loose mode regardless of umask
-    saveConnection(dir, conn());
+    saveConnection(dir, OWNER_A, conn());
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  it("does not expose one owner's saved connections to a later owner", () => {
+    saveConnection(dir, OWNER_A, conn({ token: "owner-a-token" }));
+
+    expect(listConnections(dir, OWNER_B)).toEqual([]);
+    expect(getConnection(dir, OWNER_B, "todoist")).toBeNull();
+
+    saveConnection(dir, OWNER_B, conn({ connectorId: "github", token: "owner-b-token" }));
+    expect(listConnections(dir, OWNER_A)).toEqual([]);
+    expect(getConnection(dir, OWNER_B, "github")?.token).toBe("owner-b-token");
+    expect(getConnection(dir, OWNER_B, "todoist")).toBeNull();
+  });
+
+  it("does not expose legacy unbound connections to any owner", () => {
+    fs.writeFileSync(
+      path.join(dir, CONNECTIONS_FILENAME),
+      JSON.stringify({ connections: { todoist: conn({ token: "legacy-token" }) } }),
+    );
+
+    expect(listConnections(dir, OWNER_A)).toEqual([]);
+    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
   });
 });

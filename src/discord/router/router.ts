@@ -519,22 +519,25 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const connectionStore: ConnectionStore = {
     list: (channelId) => {
       const inst = instances.get(channelId);
-      return inst ? listConnections(inst.instanceDir) : null;
+      const ownerId = describeInstance(channelId)?.ownerId;
+      return inst ? (ownerId ? listConnections(inst.instanceDir, ownerId) : []) : null;
     },
     get: (channelId, connectorId) => {
       const inst = instances.get(channelId);
-      return inst ? getConnection(inst.instanceDir, connectorId) : null;
+      const ownerId = describeInstance(channelId)?.ownerId;
+      return inst && ownerId ? getConnection(inst.instanceDir, ownerId, connectorId) : null;
     },
     // Capture a unique registration identity before token validation. The
     // instance directory itself is preserved across unregister/re-register.
     instanceKey: currentConnectionRegistrationKey,
     save: (channelId, connection, expectedKey) => {
       const inst = instances.get(channelId);
-      if (!inst || currentConnectionRegistrationKey(channelId) !== expectedKey) {
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId || currentConnectionRegistrationKey(channelId) !== expectedKey) {
         return false;
       }
       try {
-        saveConnection(inst.instanceDir, connection);
+        saveConnection(inst.instanceDir, ownerId, connection);
         return true;
       } catch (err) {
         // The production router mounts the instances tree read-only (only
@@ -547,11 +550,12 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     remove: (channelId, connectorId) => {
       const inst = instances.get(channelId);
-      if (!inst) {
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId) {
         return "absent";
       }
       try {
-        return removeConnection(inst.instanceDir, connectorId) ? "removed" : "absent";
+        return removeConnection(inst.instanceDir, ownerId, connectorId) ? "removed" : "absent";
       } catch (err) {
         // A read-only mount (EROFS) or similar makes the rewrite fail even though
         // the entry exists; report it as an error, not an absent connection.

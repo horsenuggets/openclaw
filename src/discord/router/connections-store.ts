@@ -2,12 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Per-instance persistence for connections (a user's authenticated links to
+ * Per-owner persistence for connections (a user's authenticated links to
  * external services). Each agent instance owns a `.connections.json` in its
- * instance directory, alongside `.onboarding.json` and `.port`. The file is
- * container-private; v1 stores the credential here (the agent box reads its own
- * `/state`). The clean end-state is a router-side broker (Phase 3) so the token
- * never lives next to the box at all.
+ * instance directory, alongside `.onboarding.json` and `.port`; the file is
+ * bound to the current owner so re-registration cannot expose a previous owner's
+ * credentials. The file is container-private; v1 stores the credential here
+ * (the agent box reads its own `/state`). The clean end-state is a router-side
+ * broker (Phase 3) so the token never lives next to the box at all.
  */
 
 export const CONNECTIONS_FILENAME = ".connections.json";
@@ -25,7 +26,7 @@ export type StoredConnection = {
   linkedAt: string;
 };
 
-type ConnectionsFile = { connections: Record<string, StoredConnection> };
+type ConnectionsFile = { ownerId: string; connections: Record<string, StoredConnection> };
 
 const CONNECTION_STATUSES: ReadonlySet<string> = new Set<ConnectionStatus>([
   "linked",
@@ -76,15 +77,16 @@ function writeConnectionsFile(instanceDir: string, file: ConnectionsFile): void 
 
 /**
  * Read the connections file leniently for display: a missing OR unreadable/corrupt
- * file reads as "no connections". Safe for list/get, which never write back.
+ * file or a file bound to another/unknown owner reads as "no connections". Safe
+ * for list/get, which never write back.
  * Writers must use {@link readConnectionsFileForWrite} instead, so they never
  * overwrite a corrupt file and discard its contents.
  */
-export function readConnectionsFile(instanceDir: string): ConnectionsFile {
+export function readConnectionsFile(instanceDir: string, ownerId: string): ConnectionsFile {
   try {
-    return readConnectionsFileForWrite(instanceDir);
+    return readConnectionsFileForWrite(instanceDir, ownerId);
   } catch {
-    return { connections: {} };
+    return { ownerId, connections: {} };
   }
 }
 
@@ -92,23 +94,31 @@ export function readConnectionsFile(instanceDir: string): ConnectionsFile {
  * Read for a read-modify-write. Only a genuinely absent file (ENOENT) counts as
  * "no connections"; a present-but-corrupt or wrong-shape file throws rather than
  * reading as empty, so a subsequent save/remove refuses instead of silently
- * clobbering previously stored connections. Other read errors (permissions, I/O)
- * also throw.
+ * clobbering previously stored connections. A valid file bound to a different or
+ * unknown owner is treated as empty, preventing credentials from crossing owners.
+ * Other read errors (permissions, I/O) also throw.
  */
-function readConnectionsFileForWrite(instanceDir: string): ConnectionsFile {
+function readConnectionsFileForWrite(instanceDir: string, ownerId: string): ConnectionsFile {
   const pathname = filePath(instanceDir);
   let raw: string;
   try {
     raw = fs.readFileSync(pathname, "utf-8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return { connections: {} };
+      return { ownerId, connections: {} };
     }
     throw err;
   }
-  const parsed = JSON.parse(raw) as { connections?: unknown };
-  const connections = parsed?.connections;
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`Malformed connections file at ${pathname}`);
+  }
+  const file = parsed as Record<string, unknown>;
+  const connections = file.connections;
   if (connections && typeof connections === "object" && !Array.isArray(connections)) {
+    if (file.ownerId !== ownerId) {
+      return { ownerId, connections: {} };
+    }
     // Keep only well-formed records so a junk entry (e.g. a null value) cannot
     // crash a later dereference; a wrong-typed outer object still throws below.
     const clean: Record<string, StoredConnection> = {};
@@ -117,19 +127,23 @@ function readConnectionsFileForWrite(instanceDir: string): ConnectionsFile {
         clean[id] = record;
       }
     }
-    return { connections: clean };
+    return { ownerId, connections: clean };
   }
   throw new Error(`Malformed connections file at ${pathname}`);
 }
 
 /** All stored connections for an instance, in insertion order. */
-export function listConnections(instanceDir: string): StoredConnection[] {
-  return Object.values(readConnectionsFile(instanceDir).connections);
+export function listConnections(instanceDir: string, ownerId: string): StoredConnection[] {
+  return Object.values(readConnectionsFile(instanceDir, ownerId).connections);
 }
 
 /** A single connection by connector id, or null when not linked. */
-export function getConnection(instanceDir: string, connectorId: string): StoredConnection | null {
-  return readConnectionsFile(instanceDir).connections[connectorId] ?? null;
+export function getConnection(
+  instanceDir: string,
+  ownerId: string,
+  connectorId: string,
+): StoredConnection | null {
+  return readConnectionsFile(instanceDir, ownerId).connections[connectorId] ?? null;
 }
 
 /**
@@ -137,8 +151,12 @@ export function getConnection(instanceDir: string, connectorId: string): StoredC
  * existing file is corrupt (rather than discarding its contents); callers treat a
  * throw as a storage failure.
  */
-export function saveConnection(instanceDir: string, connection: StoredConnection): void {
-  const file = readConnectionsFileForWrite(instanceDir);
+export function saveConnection(
+  instanceDir: string,
+  ownerId: string,
+  connection: StoredConnection,
+): void {
+  const file = readConnectionsFileForWrite(instanceDir, ownerId);
   file.connections[connection.connectorId] = connection;
   writeConnectionsFile(instanceDir, file);
 }
@@ -148,8 +166,12 @@ export function saveConnection(instanceDir: string, connection: StoredConnection
  * Throws if the existing file is corrupt, so the caller can report a failure
  * instead of silently rewriting (and discarding) a malformed file.
  */
-export function removeConnection(instanceDir: string, connectorId: string): boolean {
-  const file = readConnectionsFileForWrite(instanceDir);
+export function removeConnection(
+  instanceDir: string,
+  ownerId: string,
+  connectorId: string,
+): boolean {
+  const file = readConnectionsFileForWrite(instanceDir, ownerId);
   if (!(connectorId in file.connections)) {
     return false;
   }
