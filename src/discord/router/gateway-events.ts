@@ -172,7 +172,8 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   const authorId = d.author?.id;
   const isBot = d.author?.bot === true;
   const guildId = d.guild_id;
-  let content = d.content ?? "";
+  const messageContent = d.content ?? "";
+  let content = messageContent;
   const channelId = d.channel_id;
 
   // Learn the channel's guild so GUILD_DELETE can tear down its
@@ -198,15 +199,13 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // Redact a pasted token before it reaches the logs. `/connections add <svc>
   // <token>` carries a secret in the message body; the message is scrubbed from
   // Discord moments later, but router logs persist, so the token must never be
-  // written here. Detect against the RAW message (`d.content`), not the possibly
-  // reply-prefixed `content`, so a `/connections add` sent as a reply (whose body
-  // no longer starts with the command) is still caught. Other content is
-  // truncated as before.
-  const rawContent = d.content ?? "";
+  // written here. Detect against the original message, not the possibly
+  // reply-prefixed `content`, so a `/connections add` sent as a reply is still
+  // caught. Other content is truncated as before.
   const loggableContent = (() => {
-    const parsed = parseConnectTextCommand(rawContent);
+    const parsed = parseConnectTextCommand(messageContent);
     if (parsed && connectTextCommandHasToken(parsed)) {
-      return `/connections add ${parsed.args[0] ?? ""} <redacted>`;
+      return "/connections add <redacted>";
     }
     return content.slice(0, 60);
   })();
@@ -257,11 +256,11 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // `/connections` management commands, handled before the bot filter (so a
   // tester bot that is the channel owner can drive them). When the command
   // carried a pasted token, scrub the originating message so the secret does not
-  // linger in channel history. Parse the RAW message (not the reply-prefixed
+  // linger in channel history. Parse the original message (not the reply-prefixed
   // `content`) so a command sent as a reply is still recognized, scrubbed, and
   // kept out of the agent transcript rather than falling through as a normal
   // message that still contains the token.
-  const connectCmd = authorId ? parseConnectTextCommand(rawContent) : null;
+  const connectCmd = authorId ? parseConnectTextCommand(messageContent) : null;
   if (connectCmd && authorId) {
     const commandMessageId = d.id;
     const hasToken = connectTextCommandHasToken(connectCmd);

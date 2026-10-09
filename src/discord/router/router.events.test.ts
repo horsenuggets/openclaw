@@ -304,10 +304,10 @@ describe("discord router channel-delete cleanup", () => {
 
     // The generic MESSAGE_CREATE log must never carry the token; logs persist.
     expect(logs.some((l) => l.includes("ghp_SUPERSECRETVALUE"))).toBe(false);
-    expect(logs.some((l) => l.includes("content=/connections add github <redacted>"))).toBe(true);
+    expect(logs.some((l) => l.includes("content=/connections add <redacted>"))).toBe(true);
   });
 
-  it("redacts a token even when the /connections command is sent as a reply", async () => {
+  it("detects, redacts, and scrubs a token command sent as a reply", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
     const ws = FakeWebSocket.instances[0];
@@ -316,20 +316,22 @@ describe("discord router channel-delete cleanup", () => {
     ws.ready();
 
     ws.dispatch("MESSAGE_CREATE", {
-      id: "connect-reply-1",
+      id: "connect-reply-msg-1",
       author: { id: "444444444444444444" },
       guild_id: GUILD,
       channel_id: CHANNEL,
-      content: "/connections add github ghp_REPLYSECRET",
-      // A reply: the handler prepends a "[Replying to ...]" prefix to the body,
-      // which must not defeat token detection/redaction.
-      referenced_message: { author: { username: "someone" }, content: "hi" },
+      content: "/connections add ghp_REPLYSECRET",
+      referenced_message: { author: { username: "owner" }, content: "Link GitHub" },
       attachments: [],
     });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(logs.some((l) => l.includes("ghp_REPLYSECRET"))).toBe(false);
-    expect(logs.some((l) => l.includes("<redacted>"))).toBe(true);
+    expect(logs.some((l) => l.includes("content=/connections add <redacted>"))).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/channels/${CHANNEL}/messages/connect-reply-msg-1`),
+      expect.objectContaining({ method: "DELETE" }),
+    );
   });
 
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
