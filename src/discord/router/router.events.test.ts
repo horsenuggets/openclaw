@@ -1119,4 +1119,161 @@ describe("discord router channel-delete cleanup", () => {
     expect(ephemeral?.data?.flags).toBe(64);
     expect(unregisterCalls).toEqual([]);
   });
+
+  describe("owner gate on agent-facing slash commands", () => {
+    const STRANGER = "444444444444444444";
+    type Callback = { type: number; data?: { content?: string; flags?: number } };
+
+    // Drive one interaction through the router and return what the user saw.
+    const runInteraction = async (params: {
+      command: "lifecycle" | "secret";
+      userId: string;
+      guild: boolean;
+      ownerKnown: boolean;
+    }) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
+      if (params.ownerKnown) {
+        fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: OWNER }));
+      }
+      const callbacks: Callback[] = [];
+      const patches: { embeds?: { description?: string }[] }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (typeof url === "string" && url.includes("/callback")) {
+            callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+            return { ok: true, status: 200, json: async () => ({}) };
+          }
+          if (typeof url === "string" && url.includes("/messages/@original")) {
+            patches.push(payloadOf(init as RequestInit));
+            return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+          }
+          return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+        }) as unknown as typeof fetch,
+      );
+      try {
+        void start(dir);
+        await vi.advanceTimersByTimeAsync(0);
+        const ws = FakeWebSocket.instances[0];
+        ws.emit("open");
+        ws.hello();
+        ws.ready();
+        ws.dispatch("INTERACTION_CREATE", {
+          id: "int-gate",
+          type: 2,
+          token: "tok",
+          channel_id: CHANNEL,
+          ...(params.guild ? { guild_id: GUILD, member: { user: { id: params.userId } } } : {}),
+          ...(params.guild ? {} : { user: { id: params.userId } }),
+          data: { name: params.command },
+        });
+        for (let i = 0; i < 5; i++) {
+          await vi.advanceTimersByTimeAsync(0);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      return { callbacks, patches };
+    };
+
+    // Truth table over command x caller x surface x whether the owner is recorded.
+    const cases = (["lifecycle", "secret"] as const).flatMap((command) =>
+      [true, false].flatMap((guild) =>
+        [OWNER, STRANGER].flatMap((userId) =>
+          [true, false].map((ownerKnown) => ({ command, guild, userId, ownerKnown })),
+        ),
+      ),
+    );
+
+    for (const c of cases) {
+      // Only a guild channel is gated, and only the recorded owner passes.
+      const denied = c.guild && !(c.ownerKnown && c.userId === OWNER);
+      const label = `${c.command} in ${c.guild ? "a guild channel" : "a DM"} by ${
+        c.userId === OWNER ? "the owner" : "a stranger"
+      } (owner ${c.ownerKnown ? "recorded" : "unknown"}) is ${denied ? "denied" : "allowed"}`;
+      it(label, async () => {
+        const { callbacks, patches } = await runInteraction(c);
+        const deferred = callbacks.find((cb) => cb.type === 5);
+        const notice = patches.find((patch) =>
+          patch.embeds?.[0]?.description?.includes("not authorized"),
+        );
+        if (denied) {
+          // Ephemeral deferred ack, then the standard notice edited in.
+          expect(deferred?.data?.flags).toBe(64);
+          expect(notice?.embeds?.[0]?.description).toContain(`<#${CHANNEL}>`);
+          if (c.ownerKnown) {
+            expect(notice?.embeds?.[0]?.description).toContain(`<@${OWNER}>`);
+          }
+          // Nothing else ran: no secret modal opened.
+          expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
+        } else {
+          expect(notice).toBeUndefined();
+          const proceeded =
+            c.command === "secret"
+              ? callbacks.some((cb) => cb.type === 9)
+              : deferred?.data?.flags === 64;
+          expect(proceeded).toBe(true);
+        }
+      });
+    }
+
+    it("answers a stranger's secret modal submit with the standard notice, ephemerally", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
+      fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: OWNER }));
+      const callbacks: Callback[] = [];
+      const patches: { embeds?: { description?: string }[] }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (typeof url === "string" && url.includes("/callback")) {
+            callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+          } else if (typeof url === "string" && url.includes("/messages/@original")) {
+            patches.push(payloadOf(init as RequestInit));
+          }
+          return { ok: true, status: 200, json: async () => ({ id: "app-123", attachments: [] }) };
+        }) as unknown as typeof fetch,
+      );
+      try {
+        void start(dir);
+        await vi.advanceTimersByTimeAsync(0);
+        const ws = FakeWebSocket.instances[0];
+        ws.emit("open");
+        ws.hello();
+        ws.ready();
+        ws.dispatch("INTERACTION_CREATE", {
+          id: "int-modal",
+          type: 5,
+          token: "tok",
+          channel_id: CHANNEL,
+          guild_id: GUILD,
+          member: { user: { id: STRANGER } },
+          data: {
+            custom_id: "secret-modal",
+            components: [{ components: [{ custom_id: "secret-value", value: "hunter2" }] }],
+          },
+        });
+        for (let i = 0; i < 5; i++) {
+          await vi.advanceTimersByTimeAsync(0);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
+      expect(patches[0]?.embeds?.[0]?.description).toContain(`<@${OWNER}>`);
+      expect(patches[0]?.embeds?.[0]?.description).toContain("not authorized");
+    });
+
+    it("sends the same wording for an unauthorized plain message and a slash command", async () => {
+      const { buildUnauthorizedNoticeText } = await import("./unauthorized-notice.js");
+      const { patches } = await runInteraction({
+        command: "lifecycle",
+        userId: STRANGER,
+        guild: true,
+        ownerKnown: true,
+      });
+      expect(patches[0]?.embeds?.[0]?.description).toBe(
+        buildUnauthorizedNoticeText(CHANNEL, OWNER),
+      );
+    });
+  });
 });

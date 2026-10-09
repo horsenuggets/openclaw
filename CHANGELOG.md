@@ -6,6 +6,11 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
+  non-owner gets the same "not authorized to use this channel's agent" notice a plain
+  message earns, delivered as an ephemeral reply only they can see (the notice wording
+  lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
+  check. `/channel` keeps its own admin/owner rules.
 - Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
 - System prompt: the agent prompt's prose now comes from a single Markdown source,
   `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a
