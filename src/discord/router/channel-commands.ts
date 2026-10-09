@@ -22,6 +22,8 @@
 
 import { buildEmbed } from "./embed-categories.js";
 import { resolveEmoji } from "./emojis.js";
+import { buildLogEmbed } from "./log-embed.js";
+import { buildUnauthorizedNoticeText } from "./unauthorized-notice.js";
 
 export type ChannelSubcommand = "register" | "status" | "unregister";
 
@@ -174,6 +176,21 @@ function registrationReply(
     description,
     ...(fields ? { fields } : {}),
   });
+  return { embeds: [built.embed], attachments: built.attachments };
+}
+
+/**
+ * The shared "you are not authorized to use this channel's agent" notice,
+ * rendered as the same Log embed every other surface uses. A /channel denial on
+ * a channel owned by someone else (e.g. a stranger trying to unregister it) then
+ * reads identically to the plain-message, /lifecycle, and /secret denials,
+ * naming the owner when known.
+ */
+function unauthorizedReply(
+  channelId: string,
+  ownerId?: string | null,
+): { embeds: DiscordEmbed[]; attachments: string[] } {
+  const built = buildLogEmbed(buildUnauthorizedNoticeText(channelId, ownerId));
   return { embeds: [built.embed], attachments: built.attachments };
 }
 
@@ -421,13 +438,7 @@ export async function handleChannelCommand(
     // The owner may always remove their own channel; otherwise admin only.
     const isOwner = status.ownerId === ctx.userId;
     if (!isOwner && !(await deps.isAdmin(ctx.userId))) {
-      await ctx.reply(
-        registrationReply(
-          "Unregister",
-          "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
-        ),
-        { ephemeral: true },
-      );
+      await ctx.reply(unauthorizedReply(ctx.channelId, status.ownerId), { ephemeral: true });
       deps.log(`[channel] unregister denied for ${ctx.userId} (not owner or admin)`);
       return;
     }
@@ -541,10 +552,7 @@ export async function handleUnregisterButtonClick(
   if (!isOwner && !(await deps.isAdmin(params.clickerId))) {
     return {
       update: {
-        ...registrationReply(
-          "Unregister",
-          "You do not have permission to unregister this channel. Only the channel owner or an admin can remove it.",
-        ),
+        ...unauthorizedReply(channelId, status.ownerId),
         components: [],
       },
     };
