@@ -21,8 +21,9 @@ Docs: https://docs.openclaw.ai
   the connected/not-connected/needs-auth glyphs (falling back to unicode when those emoji
   are absent), and a not-yet-available service (Google) shows "Coming soon" rather than
   implying it can be linked. Only the channel owner may run it (both the slash command and
-  the `/connections` text form are owner-gated, group DMs are rejected), and a pasted
-  token is scrubbed from the channel before any early return so it cannot linger when the
+  the `/connections` text form are owner-gated; slash commands exclude group DMs, while
+  the recorded owner may use the text form there), and a pasted token is scrubbed from
+  the channel before any early return so it cannot linger when the
   command errors out; if the scrub fails the reply tells the user to delete the message by
   hand.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
