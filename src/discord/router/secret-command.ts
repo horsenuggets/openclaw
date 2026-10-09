@@ -30,7 +30,7 @@ export const SECRET_COMMAND_SPEC = {
 
 /** custom_id of the `/secret` modal (and the dispatch key for its submission). */
 export const SECRET_MODAL_CUSTOM_ID = "secret-modal";
-/** custom_id of the required multiline value input inside the modal. */
+/** custom_id of the required single-line value input inside the modal. */
 export const SECRET_VALUE_INPUT_ID = "secret-value";
 /** custom_id of the optional short name input inside the modal. */
 export const SECRET_NAME_INPUT_ID = "secret-name";
@@ -61,9 +61,10 @@ export type DiscordModal = {
 };
 
 /**
- * Build the `/secret` modal payload. The value input is a required multiline
- * (paragraph) field; the name input is an optional single-line field. Each
- * input must live in its own action row (Discord allows one input per row).
+ * Build the `/secret` modal payload. Both inputs are single-line: a required
+ * value field and an optional name field (secrets handed via `/secret` are
+ * expected to be one-liners such as tokens or OAuth redirect URLs). Each input
+ * must live in its own action row (Discord allows one input per row).
  */
 export function buildSecretModal(): DiscordModal {
   return {
