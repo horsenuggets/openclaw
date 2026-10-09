@@ -36,7 +36,7 @@ describe("buildSecretModal", () => {
     );
     const value = inputs.get(SECRET_VALUE_INPUT_ID);
     const name = inputs.get(SECRET_NAME_INPUT_ID);
-    expect(value?.style).toBe(1); // short (single line, to keep the value hidden)
+    expect(value?.style).toBe(1); // short (single line; one-liner secrets)
     expect(value?.required).toBe(true);
     expect(name?.style).toBe(1); // short
     expect(name?.required).toBe(false);

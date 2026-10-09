@@ -534,6 +534,17 @@ describe("writeAgentSecret (direct mode / main session)", () => {
     }
   });
 
+  it("accepts case-preserved names and the SECRET_ uppercase fallback", async () => {
+    // The router preserves case and generates `SECRET_<uppercase hex>` fallbacks,
+    // so the gateway grammar must admit uppercase letters or those writes fail.
+    for (const name of ["My-Token_1", "SECRET_A1B2C3D4"]) {
+      const target = `${AGENT_SECRETS_DIR}/${name}`;
+      const path = await writeAgentSecret({ name, value: "v", sessionKey: MAIN });
+      expect(path).toBe(target);
+      expect(fs.readFileSync(target, "utf-8")).toBe("v");
+    }
+  });
+
   it("fails closed when the existing secrets dir is group/world-writable", async () => {
     // `/tmp` is world-writable, so a pre-existing attacker-controlled secrets dir
     // must be rejected rather than written into (its owner could swap the target

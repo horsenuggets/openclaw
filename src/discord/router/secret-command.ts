@@ -90,7 +90,10 @@ export function buildSecretModal(): DiscordModal {
           {
             type: 4,
             custom_id: SECRET_VALUE_INPUT_ID,
-            style: 1, // short (single line (to hide input as much as possible))
+            // Single-line: secrets handed via /secret are expected to be
+            // one-liners (tokens, OAuth redirect URLs). Discord modals never mask
+            // input, so the style does not affect how hidden the value is.
+            style: 1,
             label: "Secret Value",
             required: true,
             max_length: 4000,

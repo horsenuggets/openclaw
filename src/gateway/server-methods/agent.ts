@@ -55,18 +55,19 @@ import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 export const AGENT_SECRETS_DIR = "/tmp/secrets";
 
 /**
- * Enforce the secret-name grammar at the gateway trust boundary: lowercase
- * alphanumerics plus hyphen and underscore, bounded length. The Discord router
- * already sanitizes to this shape, but the JSON-RPC schema accepts any non-empty
- * string, so a direct RPC caller could otherwise smuggle a name like `x;id` that
- * both escapes the secrets directory and (since the sandbox delivery interpolates
- * the name into a shell script) injects commands run as the sandbox user. Hyphen
- * and underscore carry no shell meaning and cannot form `/` or `..`, so they are
- * safe to allow; rejecting anything outside `[a-z0-9_-]{1,64}` here closes the
- * injection/traversal hole regardless of the caller.
+ * Enforce the secret-name grammar at the gateway trust boundary: alphanumerics
+ * (any case) plus hyphen and underscore, bounded length. The Discord router
+ * already sanitizes to this shape (preserving case, and generating `SECRET_<hex>`
+ * fallback names), but the JSON-RPC schema accepts any non-empty string, so a
+ * direct RPC caller could otherwise smuggle a name like `x;id` that both escapes
+ * the secrets directory and (since the sandbox delivery interpolates the name
+ * into a shell script) injects commands run as the sandbox user. Letters, digits,
+ * hyphen, and underscore carry no shell meaning and cannot form `/` or `..`, so
+ * they are safe to allow; rejecting anything outside `[A-Za-z0-9_-]{1,64}` here
+ * closes the injection/traversal hole regardless of the caller.
  */
 function assertSafeSecretName(name: string): void {
-  if (!/^[a-z0-9_-]{1,64}$/.test(name)) {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) {
     throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
   }
 }
@@ -147,7 +148,7 @@ function dockerExecStdin(args: string[], input: string): Promise<void> {
  * is readable by it), via a shell that `umask 177`s before writing so the file is
  * created 0600 from the start. The value is never passed as a process argument
  * (no `ps` leak) and never staged on the host. `name` is validated to
- * `[a-z0-9_-]` before this point, so interpolating it into the shell script is
+ * `[A-Za-z0-9_-]` before this point, so interpolating it into the shell script is
  * injection-safe.
  */
 async function writeAgentSecretToSandbox(
@@ -173,7 +174,7 @@ async function writeAgentSecretToSandbox(
 /**
  * Write an out-of-band secret so the channel's agent can read it at
  * `/tmp/secrets/<name>` (mode 0600). `name` is re-validated to the strict
- * `[a-z0-9_-]` grammar here at the gateway trust boundary (the Discord router
+ * `[A-Za-z0-9_-]` grammar here at the gateway trust boundary (the Discord router
  * sanitizes it, but a direct RPC caller could send anything). No per-channel
  * nesting is needed: a channel maps 1:1 to its own container, so the box only
  * ever holds this channel's secrets. Re-writing the same name overwrites in
