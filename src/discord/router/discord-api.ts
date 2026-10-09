@@ -160,6 +160,34 @@ export async function discordSendEphemeral(
   }
 }
 
+/**
+ * Delete a message. Used to scrub a pasted secret (e.g. `/connections add <svc>
+ * <token>`) from channel history. Returns true only when Discord confirms the
+ * delete (2xx); a 403/404 or a network failure returns false so the caller can
+ * warn the user their token is still visible instead of silently claiming it was
+ * removed.
+ */
+export async function discordDeleteMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`${DISCORD_API}${Routes.channelMessage(channelId, messageId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${token}` },
+      // Bound the scrub: the caller awaits it before validating/replying, so a
+      // stalled delete must not hang the whole command with the token still
+      // visible. On timeout the fetch aborts and the catch returns false, which
+      // triggers the manual-delete warning just like any other failure.
+      signal: AbortSignal.timeout(10_000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function discordTyping(token: string, channelId: string): Promise<void> {
   await fetch(`${DISCORD_API}${Routes.channelTyping(channelId)}`, {
     method: "POST",

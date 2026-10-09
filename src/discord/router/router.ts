@@ -5,6 +5,7 @@ import type { RouterConfig, InstanceConfig } from "./config.js";
 import type { RouterRuntime, RunAgentCommand } from "./types.js";
 import { parseBooleanValue } from "../../utils/boolean.js";
 import { runAgentCommandDispatch } from "./agent-command-dispatch.js";
+import { connectionEmojiFromMap, fetchAppEmojiMap } from "./app-emojis.js";
 import {
   CHANNEL_COMMAND_SPEC,
   type ChannelCommandDeps,
@@ -13,6 +14,18 @@ import {
 } from "./channel-commands.js";
 import { ChannelQueue } from "./channel-queue.js";
 import { loadRouterConfig, refreshToken, resolveProxyBindHost } from "./config.js";
+import {
+  CONNECTIONS_COMMAND_SPECS,
+  type ConnectCommandDeps,
+  type ConnectionStore,
+} from "./connect-commands.js";
+import {
+  getConnection,
+  listConnections,
+  removeConnection,
+  saveConnection,
+} from "./connections-store.js";
+import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
 import {
   DISCORD_API,
@@ -119,6 +132,20 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     body: JSON.stringify(SECRET_COMMAND_SPEC),
   }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
+
+  // Register the /connections command plus its /conn alias (list/add/remove).
+  for (const spec of CONNECTIONS_COMMAND_SPECS) {
+    await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(spec),
+    }).catch((err) =>
+      runtime.error(`[router] failed to register /${spec.name} command: ${String(err)}`),
+    );
+  }
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -322,6 +349,35 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
   };
 
+  // `instanceDir` is stable across unregister/re-register, so connection
+  // authorization uses an in-memory identity that rotates for each registration.
+  let connectionRegistrationGeneration = 0;
+  const nextConnectionRegistrationKey = (channelId: string): string => {
+    const ownerId = describeInstance(channelId)?.ownerId ?? "";
+    return `${++connectionRegistrationGeneration}:${ownerId}`;
+  };
+  const connectionRegistrationKeys = new Map<string, string>(
+    [...instances.keys()].map((id) => [id, nextConnectionRegistrationKey(id)]),
+  );
+  const rotateConnectionRegistrationKey = (channelId: string): void => {
+    if (instances.has(channelId)) {
+      connectionRegistrationKeys.set(channelId, nextConnectionRegistrationKey(channelId));
+    } else {
+      connectionRegistrationKeys.delete(channelId);
+    }
+  };
+  const currentConnectionRegistrationKey = (channelId: string): string | null => {
+    if (!instances.has(channelId)) {
+      return null;
+    }
+    let key = connectionRegistrationKeys.get(channelId);
+    if (!key) {
+      key = nextConnectionRegistrationKey(channelId);
+      connectionRegistrationKeys.set(channelId, key);
+    }
+    return key;
+  };
+
   // Reconcile the in-memory instance map with disk. The map is built once at
   // startup, so after the daemon creates/removes an instance we re-scan so the
   // channel becomes (or stops being) routable immediately, without a restart.
@@ -337,6 +393,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           channelQueue.clear(id);
         }
         instances.set(id, inst);
+        if (!existing || existing.instanceDir !== inst.instanceDir) {
+          connectionRegistrationKeys.set(id, nextConnectionRegistrationKey(id));
+        }
       }
       const removed: string[] = [];
       for (const id of instances.keys()) {
@@ -346,6 +405,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
       for (const id of removed) {
         instances.delete(id);
+        connectionRegistrationKeys.delete(id);
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
@@ -387,6 +447,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           const result = await daemonProvisioning.register(p);
           if (result.ok) {
             reloadInstances();
+            rotateConnectionRegistrationKey(p.channelId);
           }
           return result;
         },
@@ -394,6 +455,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
             reloadInstances();
+            rotateConnectionRegistrationKey(p.channelId);
           }
           return result;
         },
@@ -450,6 +512,69 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     log: (message) => runtime.log(message),
   };
 
+  // `/connect` store, backed by each instance's `.connections.json`. Resolving
+  // the channel's instance dir here keeps the command handler free of fs access.
+  // `null` from `list` means the channel has no instance (not registered), which
+  // the handler turns into a "register first" reply.
+  const connectionStore: ConnectionStore = {
+    list: (channelId) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      return inst ? (ownerId ? listConnections(inst.instanceDir, ownerId) : []) : null;
+    },
+    get: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      return inst && ownerId ? getConnection(inst.instanceDir, ownerId, connectorId) : null;
+    },
+    // Capture a unique registration identity before token validation. The
+    // instance directory itself is preserved across unregister/re-register.
+    instanceKey: currentConnectionRegistrationKey,
+    save: (channelId, connection, expectedKey) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId || currentConnectionRegistrationKey(channelId) !== expectedKey) {
+        return false;
+      }
+      try {
+        saveConnection(inst.instanceDir, ownerId, connection);
+        return true;
+      } catch (err) {
+        // The production router mounts the instances tree read-only (only
+        // shared/auth is writable), so a write here throws EROFS until the
+        // connection-storage rework ships a writable path. Degrade to a clean
+        // "could not store" reply instead of leaving the interaction hung.
+        runtime.error(`[router] failed to persist connection for ${channelId}: ${String(err)}`);
+        return false;
+      }
+    },
+    remove: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId) {
+        return "absent";
+      }
+      try {
+        return removeConnection(inst.instanceDir, ownerId, connectorId) ? "removed" : "absent";
+      } catch (err) {
+        // A read-only mount (EROFS) or similar makes the rewrite fail even though
+        // the entry exists; report it as an error, not an absent connection.
+        runtime.error(`[router] failed to remove connection for ${channelId}: ${String(err)}`);
+        return "error";
+      }
+    },
+  };
+  // Resolve this bot's own custom application emoji (connected/not-connected
+  // glyphs) by name, so the /connections list table renders them. Falls back to
+  // unicode when the emoji are not present on the app.
+  const connectionEmoji = connectionEmojiFromMap(await fetchAppEmojiMap(discordToken));
+  const connectCommandDeps: ConnectCommandDeps = {
+    store: connectionStore,
+    registry: connectorRegistry,
+    emoji: connectionEmoji,
+    log: (message) => runtime.log(message),
+  };
+
   // When a Discord channel with a registered instance is deleted (or the bot is
   // removed from a guild), tear the instance down through the same provisioning
   // path `/channel unregister` uses.
@@ -485,6 +610,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     unauthorizedNoticeEnabled,
     describeInstance,
     channelCommandDeps,
+    connectCommandDeps,
     cleanupDeletedChannel,
   };
 

@@ -9,7 +9,13 @@ import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
  * `assets/embeds` by the sender (see embed-send.ts).
  */
 
-export type EmbedCategoryKey = "commandResult" | "general" | "log" | "registration" | "system";
+export type EmbedCategoryKey =
+  | "commandResult"
+  | "connections"
+  | "general"
+  | "log"
+  | "registration"
+  | "system";
 
 export type EmbedCategory = {
   /** Footer label shown on every embed in this category. */
@@ -37,6 +43,7 @@ export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
     color: 0xffff80,
   },
   system: { footerText: "System", icon: "injected-system-prompt.png", color: 0x80ff80 },
+  connections: { footerText: "Connections", icon: "connections.png", color: 0xc080ff },
 };
 
 /**
