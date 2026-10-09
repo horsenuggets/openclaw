@@ -175,17 +175,14 @@ Notes:
 ### Phase 1: bridge cleanup (low risk)
 
 - Replace per-extension `core-bridge.ts` with `api.runtime`.
-- Migrate BlueBubbles, Zalo, Zalo Personal first (already close).
 - Remove duplicated bridge code.
 
 ### Phase 2: light direct-import plugins
 
-- Migrate Matrix to SDK + runtime.
 - Validate onboarding, directory, group mention logic.
 
 ### Phase 3: heavy direct-import plugins
 
-- Migrate MS Teams (largest set of runtime helpers).
 - Ensure reply/typing semantics match current behavior.
 
 ### Phase 4: iMessage pluginization

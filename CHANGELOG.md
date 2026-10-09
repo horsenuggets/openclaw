@@ -6,6 +6,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Extensions: remove the bundled plugins this fork does not use (bluebubbles, feishu,
+  googlechat, line, matrix, mattermost, msteams, nextcloud-talk, nostr, tlon, twitch,
+  voice-call, zalo, zalouser, diagnostics-otel, lobster, llm-task, open-prose,
+  memory-lancedb) along with their docs, skills, labeler entries, and lockfile packages.
+  Discord, memory-core, the other built-in channel plugins, and the provider auth plugins
+  stay.
 - Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
   non-owner gets the same "not authorized to use this channel's agent" notice a plain
   message earns, delivered as an ephemeral reply only they can see (the notice wording

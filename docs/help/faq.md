@@ -665,7 +665,7 @@ Docs: [Update](/cli/update), [Updating](/install/updating).
   OpenAI Codex OAuth supported, API keys optional, LM Studio local models supported)
 - **Workspace** location + bootstrap files
 - **Gateway settings** (bind/port/auth/tailscale)
-- **Providers** (WhatsApp, Telegram, Discord, Mattermost (plugin), Signal, iMessage)
+- **Providers** (WhatsApp, Telegram, Discord, Signal, iMessage)
 - **Daemon install** (LaunchAgent on macOS; systemd user unit on Linux/WSL2)
 - **Health checks** and **skills** selection
 
@@ -788,29 +788,25 @@ No. OpenClaw runs on macOS or Linux (Windows via WSL2). A Mac mini is optional -
 people buy one as an always-on host, but a small VPS, home server, or Raspberry Pi-class
 box works too.
 
-You only need a Mac **for macOS-only tools**. For iMessage, use
-[BlueBubbles](/channels/bluebubbles) (recommended) - the BlueBubbles server runs on any
-Mac, and the Gateway can run on Linux or elsewhere. If you want other macOS-only tools,
-run the Gateway on a Mac or pair a macOS node.
+You only need a Mac **for macOS-only tools**. For iMessage, use the
+[`imsg` channel](/channels/imessage) - it needs a Mac signed into Messages, and the
+Gateway can run on Linux or elsewhere (reaching the Mac over SSH). If you want other
+macOS-only tools, run the Gateway on a Mac or pair a macOS node.
 
-Docs: [BlueBubbles](/channels/bluebubbles), [Nodes](/nodes),
-[Mac remote mode](/platforms/mac/remote).
+Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
 
 ### Do I need a Mac mini for iMessage support
 
 You need **some macOS device** signed into Messages. It does **not** have to be a Mac
-mini - any Mac works. **Use [BlueBubbles](/channels/bluebubbles)** (recommended) for
-iMessage - the BlueBubbles server runs on macOS, while the Gateway can run on Linux or
-elsewhere.
+mini - any Mac works. Use the [`imsg` channel](/channels/imessage) for iMessage: the
+`imsg` CLI runs on macOS, while the Gateway can run on Linux or elsewhere.
 
 Common setups:
 
-- Run the Gateway on Linux/VPS, and run the BlueBubbles server on any Mac signed into
-  Messages.
+- Run the Gateway on Linux/VPS, and run `imsg` on any Mac signed into Messages.
 - Run everything on the Mac if you want the simplest single‑machine setup.
 
-Docs: [BlueBubbles](/channels/bluebubbles), [Nodes](/nodes),
-[Mac remote mode](/platforms/mac/remote).
+Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
 
 ### If I buy a Mac mini to run OpenClaw can I connect it to my MacBook Pro
 
@@ -945,8 +941,8 @@ and you're okay with sleep/restarts, run it locally.
 - **Cons:** often run headless (use screenshots), remote file access only, you must SSH
   for updates.
 
-**OpenClaw-specific note:** WhatsApp/Telegram/Slack/Mattermost (plugin)/Discord all work
-fine from a VPS. The only real trade-off is **headless browser** vs a visible window. See
+**OpenClaw-specific note:** WhatsApp/Telegram/Slack/Discord all work fine from a VPS. The
+only real trade-off is **headless browser** vs a visible window. See
 [Browser](/tools/browser).
 
 **Recommended default:** VPS if you had gateway disconnects before. Local is great when
@@ -1000,10 +996,9 @@ macOS in a VM, see [macOS VM](/install/macos-vm).
 ### What is OpenClaw in one paragraph
 
 OpenClaw is a personal AI assistant you run on your own devices. It replies on the
-messaging surfaces you already use (WhatsApp, Telegram, Slack, Mattermost (plugin),
-Discord, Google Chat, Signal, iMessage, WebChat) and can also do voice + a live Canvas on
-supported platforms. The **Gateway** is the always-on control plane; the assistant is the
-product.
+messaging surfaces you already use (WhatsApp, Telegram, Slack, Discord, Signal, iMessage,
+WebChat) and can also do voice + a live Canvas on supported platforms. The **Gateway** is
+the always-on control plane; the assistant is the product.
 
 ### What's the value proposition
 

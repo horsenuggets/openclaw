@@ -138,8 +138,7 @@ writable. See [Memory](/concepts/memory) and [Compaction](/concepts/compaction).
   `session.reset`/`resetByType` config, OpenClaw stays in idle-only mode for backward
   compatibility.
 - Per-type overrides (optional): `resetByType` lets you override the policy for `dm`,
-  `group`, and `thread` sessions (thread = Slack/Discord threads, Telegram topics, Matrix
-  threads when provided by the connector).
+  `group`, and `thread` sessions (thread = Slack/Discord threads or Telegram topics).
 - Per-channel overrides (optional): `resetByChannel` overrides the reset policy for a
   channel (applies to all session types for that channel and takes precedence over
   `reset`/`resetByType`).

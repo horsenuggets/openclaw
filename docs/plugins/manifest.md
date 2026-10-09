@@ -18,7 +18,7 @@ See the full plugin system guide: [Plugins](/plugin).
 
 ```json
 {
-  "id": "voice-call",
+  "id": "example-plugin",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -35,7 +35,8 @@ Required keys:
 Optional keys:
 
 - `kind` (string): plugin kind (example: `"memory"`).
-- `channels` (array): channel ids registered by this plugin (example: `["matrix"]`).
+- `channels` (array): channel ids registered by this plugin (example:
+  `["example-channel"]`).
 - `providers` (array): provider ids registered by this plugin.
 - `skills` (array): skill directories to load (relative to the plugin root).
 - `name` (string): display name for the plugin.

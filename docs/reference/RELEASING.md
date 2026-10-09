@@ -139,18 +139,7 @@ Process to derive the list:
 
 Current npm plugin list (update as needed):
 
-- @openclaw/bluebubbles
-- @openclaw/diagnostics-otel
 - @openclaw/discord
-- @openclaw/feishu
-- @openclaw/lobster
-- @openclaw/matrix
-- @openclaw/msteams
-- @openclaw/nextcloud-talk
-- @openclaw/nostr
-- @openclaw/voice-call
-- @openclaw/zalo
-- @openclaw/zalouser
 
 Release notes must also call out **new optional bundled plugins** that are **not on by
-default** (example: `tlon`).
+default**.

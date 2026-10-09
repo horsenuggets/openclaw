@@ -434,7 +434,7 @@ If set, OpenClaw derives defaults (only when you haven't set them explicitly):
 - `messages.ackReaction` from the **active agent**'s `identity.emoji` (falls back to 👀)
 - `agents.list[].groupChat.mentionPatterns` from the agent's
   `identity.name`/`identity.emoji` (so "@Samantha" works in groups across
-  Telegram/Slack/Discord/Google Chat/iMessage/WhatsApp)
+  Telegram/Slack/Discord/iMessage/WhatsApp)
 - `identity.avatar` accepts a workspace-relative image path or a remote URL/data URL.
   Local files must live inside the agent workspace.
 
@@ -591,7 +591,7 @@ Notes:
 - The legacy single-account Baileys auth dir is migrated by `openclaw doctor` into
   `whatsapp/default`.
 
-### `channels.telegram.accounts` / `channels.discord.accounts` / `channels.googlechat.accounts` / `channels.slack.accounts` / `channels.mattermost.accounts` / `channels.signal.accounts` / `channels.imessage.accounts`
+### `channels.telegram.accounts` / `channels.discord.accounts` / `channels.slack.accounts` / `channels.signal.accounts` / `channels.imessage.accounts`
 
 Run multiple accounts per channel (each account has its own `accountId` and optional
 `name`):
@@ -626,7 +626,7 @@ Notes:
 ### Group chat mention gating (`agents.list[].groupChat` + `messages.groupChat`)
 
 Group messages default to **require mention** (either metadata mention or regex patterns).
-Applies to WhatsApp, Telegram, Discord, Google Chat, and iMessage group chats.
+Applies to WhatsApp, Telegram, Discord, and iMessage group chats.
 
 **Mention types:**
 
@@ -718,10 +718,6 @@ Use `channels.*.groupPolicy` to control whether group/room messages are accepted
       groupPolicy: "allowlist",
       groupAllowFrom: ["chat_id:123"],
     },
-    msteams: {
-      groupPolicy: "allowlist",
-      groupAllowFrom: ["user@org.com"],
-    },
     discord: {
       groupPolicy: "allowlist",
       guilds: {
@@ -745,8 +741,7 @@ Notes:
 - `"allowlist"`: only allow groups/rooms that match the configured allowlist.
 - `channels.defaults.groupPolicy` sets the default when a provider's `groupPolicy` is
   unset.
-- WhatsApp/Telegram/Signal/iMessage/Microsoft Teams use `groupAllowFrom` (fallback:
-  explicit `allowFrom`).
+- WhatsApp/Telegram/Signal/iMessage use `groupAllowFrom` (fallback: explicit `allowFrom`).
 - Discord/Slack use channel allowlists (`channels.discord.guilds.*.channels`,
   `channels.slack.channels`).
 - Group DMs (Discord/Slack) are still controlled by `dm.groupEnabled` +
@@ -1248,48 +1243,6 @@ self-reply loops). Reaction notification modes:
   when under 2000 chars. Retry policy defaults and behavior are documented in
   [Retry policy](/concepts/retry).
 
-### `channels.googlechat` (Chat API webhook)
-
-Google Chat runs over HTTP webhooks with app-level auth (service account). Multi-account
-support lives under `channels.googlechat.accounts` (see the multi-account section above).
-Env vars only apply to the default account.
-
-```json5
-{
-  channels: {
-    googlechat: {
-      enabled: true,
-      serviceAccountFile: "/path/to/service-account.json",
-      audienceType: "app-url", // app-url | project-number
-      audience: "https://gateway.example.com/googlechat",
-      webhookPath: "/googlechat",
-      botUser: "users/1234567890", // optional; improves mention detection
-      dm: {
-        enabled: true,
-        policy: "pairing", // pairing | allowlist | open | disabled
-        allowFrom: ["users/1234567890"], // optional; "open" requires ["*"]
-      },
-      groupPolicy: "allowlist",
-      groups: {
-        "spaces/AAAA": { allow: true, requireMention: true },
-      },
-      actions: { reactions: true },
-      typingIndicator: "message",
-      mediaMaxMb: 20,
-    },
-  },
-}
-```
-
-Notes:
-
-- Service account JSON can be inline (`serviceAccount`) or file-based
-  (`serviceAccountFile`).
-- Env fallbacks for the default account: `GOOGLE_CHAT_SERVICE_ACCOUNT` or
-  `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE`.
-- `audienceType` + `audience` must match the Chat app's webhook auth config.
-- Use `spaces/<spaceId>` or `users/<userId|email>` when setting delivery targets.
-
 ### `channels.slack` (socket mode)
 
 Slack runs in Socket Mode and requires both a bot token and app token:
@@ -1385,57 +1338,6 @@ Slack action groups (gate `slack` tool actions):
 | pins         | enabled | Pin/unpin/list         |
 | memberInfo   | enabled | Member info            |
 | emojiList    | enabled | Custom emoji list      |
-
-### `channels.mattermost` (bot token)
-
-Mattermost ships as a plugin and is not bundled with the core install. Install it first:
-`openclaw plugins install @openclaw/mattermost` (or `./extensions/mattermost` from a git
-checkout).
-
-Mattermost requires a bot token plus the base URL for your server:
-
-```json5
-{
-  channels: {
-    mattermost: {
-      enabled: true,
-      botToken: "mm-token",
-      baseUrl: "https://chat.example.com",
-      dmPolicy: "pairing",
-      chatmode: "oncall", // oncall | onmessage | onchar
-      oncharPrefixes: [">", "!"],
-      textChunkLimit: 4000,
-      chunkMode: "length",
-    },
-  },
-}
-```
-
-OpenClaw starts Mattermost when the account is configured (bot token + base URL) and
-enabled. The token + base URL are resolved from `channels.mattermost.botToken` +
-`channels.mattermost.baseUrl` or `MATTERMOST_BOT_TOKEN` + `MATTERMOST_URL` for the default
-account (unless `channels.mattermost.enabled` is `false`).
-
-Chat modes:
-
-- `oncall` (default): respond to channel messages only when @mentioned.
-- `onmessage`: respond to every channel message.
-- `onchar`: respond when a message starts with a trigger prefix
-  (`channels.mattermost.oncharPrefixes`, default `[">", "!"]`).
-
-Access control:
-
-- Default DMs: `channels.mattermost.dmPolicy="pairing"` (unknown senders get a pairing
-  code).
-- Public DMs: `channels.mattermost.dmPolicy="open"` plus
-  `channels.mattermost.allowFrom=["*"]`.
-- Groups: `channels.mattermost.groupPolicy="allowlist"` by default (mention-gated). Use
-  `channels.mattermost.groupAllowFrom` to restrict senders.
-
-Multi-account support lives under `channels.mattermost.accounts` (see the multi-account
-section above). Env vars only apply to the default account. Use `channel:<id>` or
-`user:<id>` (or `@username`) when specifying delivery targets; bare ids are treated as
-channel ids.
 
 ### `channels.signal` (signal-cli)
 
@@ -1669,8 +1571,8 @@ WhatsApp inbound prefix is configured via `channels.whatsapp.messagePrefix` (dep
 `identity.name` set.
 
 `ackReaction` sends a best-effort emoji reaction to acknowledge inbound messages on
-channels that support reactions (Slack/Discord/Telegram/Google Chat). Defaults to the
-active agent's `identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
+channels that support reactions (Slack/Discord/Telegram). Defaults to the active agent's
+`identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
 
 `ackReactionScope` controls when reactions fire:
 
@@ -1681,7 +1583,7 @@ active agent's `identity.emoji` when set, otherwise `"👀"`. Set it to `""` to 
 - `all`: all messages
 
 `removeAckAfterReply` removes the bot's ack reaction after a reply is sent
-(Slack/Discord/Telegram/Google Chat only). Default: `false`.
+(Slack/Discord/Telegram only). Default: `false`.
 
 #### `messages.tts`
 
@@ -2100,13 +2002,11 @@ Block streaming:
   ```
 - `agents.defaults.blockStreamingCoalesce`: merge streamed blocks before sending. Defaults
   to `{ idleMs: 1000 }` and inherits `minChars` from `blockStreamingChunk` with `maxChars`
-  capped to the channel text limit. Signal/Slack/Discord/Google Chat default to
-  `minChars: 1500` unless overridden. Channel overrides:
-  `channels.whatsapp.blockStreamingCoalesce`, `channels.telegram.blockStreamingCoalesce`,
-  `channels.discord.blockStreamingCoalesce`, `channels.slack.blockStreamingCoalesce`,
-  `channels.mattermost.blockStreamingCoalesce`, `channels.signal.blockStreamingCoalesce`,
-  `channels.imessage.blockStreamingCoalesce`, `channels.msteams.blockStreamingCoalesce`,
-  `channels.googlechat.blockStreamingCoalesce` (and per-account variants).
+  capped to the channel text limit. Signal/Slack/Discord default to `minChars: 1500`
+  unless overridden. Channel overrides: `channels.whatsapp.blockStreamingCoalesce`,
+  `channels.telegram.blockStreamingCoalesce`, `channels.discord.blockStreamingCoalesce`,
+  `channels.slack.blockStreamingCoalesce`, `channels.signal.blockStreamingCoalesce`,
+  `channels.imessage.blockStreamingCoalesce` (and per-account variants).
 - `agents.defaults.humanDelay`: randomized pause between **block replies** after the
   first. Modes: `off` (default), `natural` (800–2500ms), `custom` (use `minMs`/`maxMs`).
   Per-agent override: `agents.list[].humanDelay`. Example:
@@ -2145,7 +2045,7 @@ require `ZAI_API_KEY` (or legacy `Z_AI_API_KEY`) in the environment.
 - `to`: optional recipient override (channel-specific id, e.g. E.164 for WhatsApp, chat id
   for Telegram).
 - `target`: optional delivery channel (`last`, `whatsapp`, `telegram`, `discord`, `slack`,
-  `msteams`, `signal`, `imessage`, `none`). Default: `last`.
+  `signal`, `imessage`, `none`). Default: `last`.
 - `prompt`: optional override for the heartbeat body (default:
   `Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply with the silent-reply token ⁘ return.`).
   Overrides replace the body; include a `Read HEARTBEAT.md` line if you still want the
@@ -3056,15 +2956,15 @@ Example:
 {
   plugins: {
     enabled: true,
-    allow: ["voice-call"],
+    allow: ["my-plugin"],
     load: {
-      paths: ["~/Projects/oss/voice-call-extension"],
+      paths: ["~/Projects/oss/my-plugin"],
     },
     entries: {
-      "voice-call": {
+      "my-plugin": {
         enabled: true,
         config: {
-          provider: "twilio",
+          option: "value",
         },
       },
     },
@@ -3410,7 +3310,7 @@ Mapping notes:
 - `deliver: true` sends the final reply to a channel; `channel` defaults to `last` (falls
   back to WhatsApp).
 - If there is no prior delivery route, set `channel` + `to` explicitly (required for
-  Telegram/Discord/Google Chat/Slack/Signal/iMessage/MS Teams).
+  Telegram/Discord/Slack/Signal/iMessage).
 - `model` overrides the LLM for this hook run (`provider/model` or alias; must be allowed
   if `agents.defaults.models` is set).
 
@@ -3620,8 +3520,8 @@ prompt for CLI entries | | `{{MaxChars}}` | Resolved max output chars for CLI en
 `{{ChatType}}` | `"direct"` or `"group"` | | `{{GroupSubject}}` | Group subject (best
 effort) | | `{{GroupMembers}}` | Group members preview (best effort) | | `{{SenderName}}`
 | Sender display name (best effort) | | `{{SenderE164}}` | Sender phone number (best
-effort) | | `{{Provider}}` | Provider hint (whatsapp | telegram | discord | googlechat |
-slack | signal | imessage | msteams | webchat | …) |
+effort) | | `{{Provider}}` | Provider hint (whatsapp | telegram | discord | slack | signal
+| imessage | webchat | …) |
 
 ## Cron (Gateway scheduler)
 
