@@ -26,8 +26,10 @@ registers it under "anthropic". Secondary agents fall back to the main agent's
 credentials.
 
 Credentials live in `auth-profiles.json` in the agent directory, under the canonical
-profile id `anthropic-subscription:default`. On deploy hosts a shared store is used, at
-`~/.openclaw-instances/shared/auth/`, so every box shares one set of OAuth profiles.
+profile id `anthropic-subscription:default`. On deploy hosts the profiles live in a shared
+store at `~/.openclaw-instances/shared/auth/`, but only the router container mounts that
+store (read-write, so it can refresh tokens). The hardened agent boxes mount no
+credentials at all; the router's model proxy injects the bearer for each token-free box.
 
 ## Minting a Token
 

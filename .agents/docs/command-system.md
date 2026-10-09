@@ -28,8 +28,9 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   slash commands can still drive them.
 - A second, smaller text-command path for `/lifecycle` lives in `route-message.ts`
   (`KNOWN_TEXT_COMMANDS`, `isKnownTextCommand`, `handleTextCommand`). `/lifecycle` is the
-  only entry there; `/secret` and `/connections` text handling is in `gateway-events.ts`
-  instead. This split is a known inconsistency worth keeping in mind.
+  only entry there, `/channel` and `/connections` get their text forms from
+  `gateway-events.ts` (above), and `/secret` has no text path at all (it is a slash
+  interaction plus modal only). This split is a known inconsistency worth keeping in mind.
 
 ## Gating and Authorization
 

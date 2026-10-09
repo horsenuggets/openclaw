@@ -5,17 +5,16 @@ and test commands, coding style, the commit and PR flow, and a large set of agen
 operational notes. Read it before making changes.
 
 - Repo → https://github.com/horsenuggets/openclaw
-- For extra context, read whatever is in `.agents/` (also reachable via the `.claude/`
-  symlink). Its contents change over time, so browse it directly rather than relying on a
-  list here. `.agents/docs/` holds subsystem references (architecture, commands, embeds,
-  deployment, logs, heartbeats, system prompt, auth and billing, sandbox, testing); start
-  at `.agents/docs/README.md`.
+- For extra context, read whatever is in `.agents/`. Its contents change over time, so
+  browse it directly rather than relying on a list here. `.agents/docs/` holds subsystem
+  references (architecture, commands, embeds, deployment, logs, heartbeats, system prompt,
+  auth and billing, sandbox, testing); start at `.agents/README.md`.
 - Keep `.agents/docs/` current as the work evolves. When you change a subsystem, update
   its doc in the same change; if a doc and the code disagree, trust the code and fix the
-  doc. This repo is public and everything under `.agents/` is tracked, so keep the docs
-  generic » No real Discord guild, bot, application, or emoji ids, no tokens, no machine
-  or host names, no IP addresses, and no personal absolute paths. Read concrete
-  identifiers from env or gitignored files at runtime.
+  doc. This repo is public and the committed `.agents/` content (its `README.md` and
+  `docs/`) ships with it, so keep those generic » No real Discord guild, bot, application,
+  or emoji ids, no tokens, no machine or host names, no IP addresses, and no personal
+  absolute paths. Read concrete identifiers from env or gitignored files at runtime.
 
 ## Project Structure and Module Organization
 
@@ -148,14 +147,14 @@ operational notes. Read it before making changes.
   Discord API calls, CLI invocations, and external services.
 - For isolated gateway testing, `openclaw gateway run --isolated` creates a throwaway
   environment (temp state dir, auto-picked port, no channels, loopback-only). Use
-  `--port <N>` for a specific port, and send test messages with
-  `openclaw agent --message "..." --port <port>`. Multiple isolated instances can run at
-  once; see `docs/testing.md` for details.
+  `--port <N>` on the gateway for a specific port, and send a test message with
+  `openclaw agent` against it (see `docs/testing.md` for the exact isolated-gateway
+  invocation). Multiple isolated instances can run at once.
 - For live persona or behavior e2e on the prod-mirror rig, confirm an agent-visible change
   (persona and `SOUL.md`, onboarding, routing, command gating) in a real Discord channel
   before merging by using `scripts/prod-mirror.sh` against the OpenClaw Lab test server.
   The full procedure (setup, deploying branch code, the mock-user driver pattern, gotchas)
-  lives in `.claude/docs/prod-mirror-e2e-testing.md` (tracked). The real lab guild and bot
+  lives in `.agents/docs/prod-mirror-e2e-testing.md` (tracked). The real lab guild and bot
   ids stay out of that doc; read them from the gitignored `.env.mirror` and
   `.prod-mirror/box.env` at runtime.
 - Never leave gateway processes running. If you do start a gateway or watchdog for

@@ -16,9 +16,9 @@ individual files.
 
 ## This Repo is Public » Keep Everything Generic
 
-`horsenuggets/openclaw` is a public repository, and everything under `.agents/` is tracked
-(unlike the old `.claude/*`, which was gitignored except for `docs/`). So treat everything
-here as if it were already public...
+`horsenuggets/openclaw` is a public repository. Only `.agents/README.md` and
+`.agents/docs/` are tracked (the rest of `.agents/` is gitignored, like the old
+`.claude/*`). Treat whatever you commit here as if it were already public...
 
 - No real Discord guild ids, bot or application ids, custom-emoji ids, or tokens.
 - No machine or host names, SSH aliases, LAN or public IP addresses.

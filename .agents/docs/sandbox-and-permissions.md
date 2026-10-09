@@ -42,9 +42,12 @@ the box (its delivery target is a file the box can read). Because exec runs unat
 `/connections` (`src/discord/router/connect-commands.ts`) links external accounts for the
 channel's agent. Paste-token connectors (Todoist, Notion, GitHub) are live; Google via gog
 is coming soon and is still marked unavailable in `connectors.ts` pending a shared OAuth
-client. The validated credentials are materialized into the box by
-`applyConnectionCredentials` (`src/agents/connections/credentials.ts`), wired into the
-embedded runner's attempt and compact paths, so the box gets the credential at run time.
+client. Validated credentials are stored per instance in a `.connections.json` file
+(`connections-store.ts`) and resolved by the router (`router.ts`). Important » On prod the
+instances tree is mounted read-only (only `shared/auth` is writable), so writing
+`.connections.json` throws `EROFS` (the router catches it), which means paste-token
+connections are not currently persisted or materialized into the boxes in production.
+Treat the connection store as best-effort until that mount is made writable.
 
 The `/connections` reply is intentionally public (non-ephemeral). It never contains the
 secret token (the token is scrubbed from input and never echoed); it only exposes the
@@ -59,6 +62,8 @@ mis-reported storage errors.
 - Do not assume `security = "deny"` blocks execution in the box; it does not. If you need
   to actually restrict box commands, change the box config or the sandbox path, not just
   the security string.
-- When adding a new connector, materialize its credential into the box home the agent
-  actually uses, and keep the validated label the only account detail that surfaces in the
-  public reply.
+- When adding a new connector, make sure its validated credential actually reaches the box
+  the agent uses » Today the per-instance `.connections.json` write is blocked by the
+  read-only prod mount (`EROFS`), so verify the delivery path end to end rather than
+  assuming it persists. Keep the validated label the only account detail that surfaces in
+  the public reply.
