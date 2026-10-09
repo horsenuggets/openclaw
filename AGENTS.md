@@ -11,9 +11,9 @@ operational notes. Read it before making changes.
 
 ## Project structure and module organization
 
-- Source code lives in `src/`: CLI wiring in `src/cli`, commands in `src/commands`, the
-  web provider in `src/provider-web.ts`, infrastructure in `src/infra`, and the media
-  pipeline in `src/media`.
+- Source code lives in `src/`: CLI wiring in `src/cli/`, commands in `src/commands/`, the
+  web provider in `src/provider-web.ts`, infrastructure in `src/infra/`, and the media
+  pipeline in `src/media/`.
 - Tests are colocated as `*.test.ts`.
 - Documentation lives in `docs/` (images, queue, Pi config), and built output lands in
   `dist/`.
@@ -25,14 +25,14 @@ operational notes. Read it before making changes.
   because npm install breaks on it; put `openclaw` in `devDependencies` or
   `peerDependencies` instead, since the runtime resolves `openclaw/plugin-sdk` via the
   jiti alias.
-- Installers served from `https://openclaw.ai/*` live in the sibling repo `../openclaw.ai`
-  (`public/install.sh`, `public/install-cli.sh`, `public/install.ps1`).
+- Installers served from `https://openclaw.ai/*` live in the sibling repo
+  `../openclaw.ai/` (`public/install.sh`, `public/install-cli.sh`, `public/install.ps1`).
 - When refactoring shared logic (routing, allowlists, pairing, command gating, onboarding,
   docs), always consider every built-in and extension channel. Core channel docs are in
-  `docs/channels/`; core channel code is in `src/telegram`, `src/discord`, `src/slack`,
-  `src/signal`, `src/imessage`, `src/web` (WhatsApp web), `src/channels`, and
-  `src/routing`; channel plugins are extensions under `extensions/*` (for example
-  `extensions/discord`, `extensions/telegram`, `extensions/slack`).
+  `docs/channels/`; core channel code is in `src/telegram/`, `src/discord/`, `src/slack/`,
+  `src/signal/`, `src/imessage/`, `src/web/` (WhatsApp web), `src/channels/`, and
+  `src/routing/`; channel plugins are extensions under `extensions/*` (for example
+  `extensions/discord/`, `extensions/telegram/`, `extensions/slack/`).
 - When adding channels, extensions, apps, or docs, review `.github/labeler.yml` for label
   coverage.
 
@@ -72,7 +72,7 @@ operational notes. Read it before making changes.
 - When SSH is flaky, use the exe.dev web terminal or Shelley (the web agent), and keep a
   tmux session for long operations.
 - Update with `sudo npm i -g openclaw@latest`; the global install needs root on
-  `/usr/lib/node_modules`.
+  `/usr/lib/node_modules/`.
 - Configure with `openclaw config set ...`, and make sure `gateway.mode=local` is set.
 - For Discord, store the raw token only, with no `DISCORD_BOT_TOKEN=` prefix.
 - To restart, stop the old gateway and run:
@@ -253,7 +253,7 @@ operational notes. Read it before making changes.
 ## Agent-specific notes
 
 - In the project vocabulary, "makeup" means "mac app".
-- Never edit `node_modules`, including global, Homebrew, npm, and git installs, because
+- Never edit `node_modules/`, including global, Homebrew, npm, and git installs, because
   updates overwrite it; put skill notes in `tools.md` or `AGENTS.md` instead.
 - Signal "update fly" means running
   `fly ssh console -a flawd-bot -C "bash -lc 'cd /data/clawd/openclaw && git pull --rebase origin main'"`
@@ -356,7 +356,7 @@ operational notes. Read it before making changes.
   `openclaw-mac agent --message "${text}" --thinking low`, since `VoiceWakeForwarder`
   already shell-escapes `${text}`, so do not add extra quotes. The launchd PATH is
   minimal, so make sure the app's launch agent PATH includes the standard system paths
-  plus your pnpm bin (typically `$HOME/Library/pnpm`) so the `pnpm` and `openclaw`
+  plus your pnpm bin (typically `$HOME/Library/pnpm/`) so the `pnpm` and `openclaw`
   binaries resolve when invoked via `openclaw-mac`.
 - For manual `openclaw message send` messages that include `!`, use the heredoc pattern
   noted elsewhere to avoid the Bash tool's escaping.
