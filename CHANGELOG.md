@@ -7,13 +7,23 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Normalize remaining curly quotes and apostrophes to ASCII across docs and source.
+- System prompt: the agent prompt's prose now comes from a single Markdown source,
+  `docs/reference/templates/SYSTEM.md`. A build step (`pnpm prompt:gen`) bakes it into a
+  committed generated module that `src/agents/system-prompt-sections.ts` parses and
+  `src/agents/system-prompt.ts` assembles. The builder still owns all wiring
+  (interpolation tokens, conditional guards, section ordering, the generated tool list,
+  and builder-only sections). This removes the hand-maintained "port SYSTEM.md into the
+  builder" step: the old `SYSTEM.port.md` guide is deleted, and editing wording means
+  editing `SYSTEM.md` and running `pnpm prompt:gen`. First-run onboarding prose also moved
+  out of the Discord router: `readBootstrapDirective` now passes `BOOTSTRAP.md` through
+  verbatim, and the general "work through a BOOTSTRAP.md checklist" plus "do not narrate
+  internal mechanics" guidance lives in the shared prompt.
 - `/secret`: allow hyphens and underscores in the secret name (previously stripped to
   `[a-z0-9]`), so names like `my-token_1` are preserved. They carry no shell meaning and
   cannot escape the secrets directory, so the gateway boundary accepts `[a-z0-9_-]`.
 - `/secret`: write secrets flat at `/tmp/secrets/<name>` instead of nesting them under a
   per-channel scope subfolder. A Discord channel maps 1:1 to its own agent container, so
   the box only ever holds that channel's secrets and the extra nesting was redundant.
-
 - Agent box layout: each per-channel agent container now gets a real `HOME`
   (`/home/openclaw`) on its own writable mount (`~/.openclaw-instances/<id>/home`) instead
   of pointing `HOME` at `/state`, so the box behaves like a normal shell and `$HOME`-based
