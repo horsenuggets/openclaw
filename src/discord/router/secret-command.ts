@@ -3,7 +3,7 @@
  * redirect URL) without it ever appearing in the channel.
  *
  * Both inputs are collected in a Discord MODAL (popup) so even the secret's
- * name stays private: a required multiline "secret" value and an optional short
+ * name stays private: a required single-line "secret" value and an optional short
  * "name". On submit the value is delivered out-of-band to the channel's agent
  * box (never in the message text or in any log), written to the box's own
  * ephemeral `/tmp/secrets/<name>` (0600), and the agent is told via a one-off
