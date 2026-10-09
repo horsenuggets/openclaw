@@ -30,6 +30,7 @@ import {
 import { normalizeMainKey } from "../../routing/session-key.js";
 import { normalizeSessionDeliveryFields } from "../../utils/delivery-context.js";
 import { resolveCommandAuthorization } from "../command-auth.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { formatInboundBodyWithSenderMeta } from "./inbound-sender-meta.js";
 import { normalizeInboundTextNewlines } from "./inbound-text.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
@@ -113,9 +114,11 @@ export async function initSessionState(params: {
     config: cfg,
   });
   const groupResolution = resolveGroupSessionKey(sessionCtxForState) ?? undefined;
-  const resetTriggers = sessionCfg?.resetTriggers?.length
-    ? sessionCfg.resetTriggers
-    : DEFAULT_RESET_TRIGGERS;
+  // A slash trigger ("/new") is the matching command, so it follows the command policy.
+  // Triggers without a leading slash are user-defined phrases and are left alone.
+  const resetTriggers = (
+    sessionCfg?.resetTriggers?.length ? sessionCfg.resetTriggers : DEFAULT_RESET_TRIGGERS
+  ).filter((trigger) => !trigger.startsWith("/") || isCommandKeyEnabled(trigger.slice(1)));
   const sessionScope = sessionCfg?.scope ?? "per-sender";
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
 

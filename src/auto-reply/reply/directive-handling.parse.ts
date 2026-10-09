@@ -3,6 +3,7 @@ import type { ExecAsk, ExecHost, ExecSecurity } from "../../infra/exec-approvals
 import type { MsgContext } from "../templating.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "./directives.js";
 import type { QueueDropPolicy, QueueMode } from "./queue.js";
+import { isCommandKeyEnabled } from "../command-policy.js";
 import { extractModelDirective } from "../model.js";
 import {
   extractElevatedDirective,
@@ -60,6 +61,20 @@ export type InlineDirectives = {
   hasQueueOptions: boolean;
 };
 
+/**
+ * Run `extract` only when the command policy enables `key`. A disabled directive is
+ * left in the text untouched and reports "not present", which is exactly what an
+ * unrecognized `/word` looks like to the parser.
+ */
+function whenEnabled<T extends { cleaned: string }>(
+  key: string,
+  body: string,
+  extract: (body: string) => T,
+  absent: Omit<T, "cleaned">,
+): T {
+  return isCommandKeyEnabled(key) ? extract(body) : ({ ...absent, cleaned: body } as T);
+}
+
 export function parseInlineDirectives(
   body: string,
   options?: {
@@ -73,19 +88,21 @@ export function parseInlineDirectives(
     thinkLevel,
     rawLevel: rawThinkLevel,
     hasDirective: hasThinkDirective,
-  } = extractThinkDirective(body);
+  } = whenEnabled("think", body, extractThinkDirective, { hasDirective: false });
   const {
     cleaned: verboseCleaned,
     verboseLevel,
     rawLevel: rawVerboseLevel,
     hasDirective: hasVerboseDirective,
-  } = extractVerboseDirective(thinkCleaned);
+  } = whenEnabled("verbose", thinkCleaned, extractVerboseDirective, { hasDirective: false });
   const {
     cleaned: reasoningCleaned,
     reasoningLevel,
     rawLevel: rawReasoningLevel,
     hasDirective: hasReasoningDirective,
-  } = extractReasoningDirective(verboseCleaned);
+  } = whenEnabled("reasoning", verboseCleaned, extractReasoningDirective, {
+    hasDirective: false,
+  });
   const {
     cleaned: elevatedCleaned,
     elevatedLevel,
@@ -98,7 +115,9 @@ export function parseInlineDirectives(
         rawLevel: undefined,
         hasDirective: false,
       }
-    : extractElevatedDirective(reasoningCleaned);
+    : whenEnabled("elevated", reasoningCleaned, extractElevatedDirective, {
+        hasDirective: false,
+      });
   const {
     cleaned: execCleaned,
     execHost,
@@ -115,8 +134,16 @@ export function parseInlineDirectives(
     invalidAsk: invalidExecAsk,
     invalidNode: invalidExecNode,
     hasDirective: hasExecDirective,
-  } = extractExecDirective(elevatedCleaned);
-  const allowStatusDirective = options?.allowStatusDirective !== false;
+  } = whenEnabled("exec", elevatedCleaned, extractExecDirective, {
+    hasExecOptions: false,
+    invalidHost: false,
+    invalidSecurity: false,
+    invalidAsk: false,
+    invalidNode: false,
+    hasDirective: false,
+  });
+  const allowStatusDirective =
+    options?.allowStatusDirective !== false && isCommandKeyEnabled("status");
   const { cleaned: statusCleaned, hasDirective: hasStatusDirective } = allowStatusDirective
     ? extractStatusDirective(execCleaned)
     : { cleaned: execCleaned, hasDirective: false };
@@ -125,9 +152,12 @@ export function parseInlineDirectives(
     rawModel,
     rawProfile,
     hasDirective: hasModelDirective,
-  } = extractModelDirective(statusCleaned, {
-    aliases: options?.modelAliases,
-  });
+  } = whenEnabled(
+    "model",
+    statusCleaned,
+    (text) => extractModelDirective(text, { aliases: options?.modelAliases }),
+    { hasDirective: false },
+  );
   const {
     cleaned: queueCleaned,
     queueMode,
@@ -141,7 +171,11 @@ export function parseInlineDirectives(
     rawDrop,
     hasDirective: hasQueueDirective,
     hasOptions: hasQueueOptions,
-  } = extractQueueDirective(modelCleaned);
+  } = whenEnabled("queue", modelCleaned, extractQueueDirective, {
+    queueReset: false,
+    hasDirective: false,
+    hasOptions: false,
+  });
 
   return {
     cleaned: queueCleaned,
