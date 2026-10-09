@@ -192,12 +192,18 @@ export function parseConnectTextCommand(
   return { subcommand: parts[0]?.toLowerCase() ?? null, args: parts.slice(1) };
 }
 
-/** True when a parsed text command would carry a pasted token (so it must be scrubbed). */
+/**
+ * True when a parsed text command might carry a pasted token (so the originating
+ * message must be scrubbed). Fail-safe: ANY argument after `add` counts, not just
+ * a second one. `/connections add <token>` (service omitted) puts the secret in
+ * the first argument, so requiring two args would leave that common mistake
+ * unscrubbed.
+ */
 export function connectTextCommandHasToken(parsed: {
   subcommand: string | null;
   args: string[];
 }): boolean {
-  return (parsed.subcommand ?? "").toLowerCase() === "add" && parsed.args.length >= 2;
+  return (parsed.subcommand ?? "").toLowerCase() === "add" && parsed.args.length >= 1;
 }
 
 /**
@@ -301,7 +307,7 @@ export async function handleConnectCommand(
         connectionsReply(
           "Connect",
           withScrubNote(
-            `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
+            `That is not a service I recognize. Available: ${deps.registry.availableIds()}.`,
           ),
         ),
         { ephemeral: true },
@@ -379,13 +385,14 @@ export async function handleConnectCommand(
         connectionsReply(
           `Link ${connector.label}`,
           withScrubNote(
-            "This channel's registration changed while I was verifying the token, so I did not " +
-              `store it. Please run \`/connections add ${connector.id} <token>\` again.`,
+            "I verified the token but could not store the link (the channel may have been " +
+              "unregistered, or its storage is unavailable). Please try " +
+              `\`/connections add ${connector.id} <token>\` again.`,
           ),
         ),
         { ephemeral: true },
       );
-      deps.log(`[connect] ${connector.id} save skipped for ${ctx.userId} (instance changed)`);
+      deps.log(`[connect] ${connector.id} save failed for ${ctx.userId} (not persisted)`);
       return;
     }
     await ctx.reply(
@@ -408,7 +415,7 @@ export async function handleConnectCommand(
       await ctx.reply(
         connectionsReply(
           "Disconnect",
-          `Unknown service "${ctx.args[0] ?? ""}". Available: ${deps.registry.availableIds()}.`,
+          `That is not a service I recognize. Available: ${deps.registry.availableIds()}.`,
         ),
         { ephemeral: true },
       );

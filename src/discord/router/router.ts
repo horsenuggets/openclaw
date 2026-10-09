@@ -499,12 +499,29 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       if (!inst || inst.instanceDir !== expectedKey) {
         return false;
       }
-      saveConnection(inst.instanceDir, connection);
-      return true;
+      try {
+        saveConnection(inst.instanceDir, connection);
+        return true;
+      } catch (err) {
+        // The production router mounts the instances tree read-only (only
+        // shared/auth is writable), so a write here throws EROFS until the
+        // connection-storage rework ships a writable path. Degrade to a clean
+        // "could not store" reply instead of leaving the interaction hung.
+        runtime.error(`[router] failed to persist connection for ${channelId}: ${String(err)}`);
+        return false;
+      }
     },
     remove: (channelId, connectorId) => {
       const inst = instances.get(channelId);
-      return inst ? removeConnection(inst.instanceDir, connectorId) : false;
+      if (!inst) {
+        return false;
+      }
+      try {
+        return removeConnection(inst.instanceDir, connectorId);
+      } catch (err) {
+        runtime.error(`[router] failed to remove connection for ${channelId}: ${String(err)}`);
+        return false;
+      }
     },
   };
   // Resolve this bot's own custom application emoji (connected/not-connected

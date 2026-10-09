@@ -65,9 +65,11 @@ describe("CONNECTIONS_COMMAND_SPECS", () => {
 });
 
 describe("connectTextCommandHasToken", () => {
-  it("is true only for add with a token arg", () => {
+  it("is true for add with any argument (fail-safe), false otherwise", () => {
     expect(connectTextCommandHasToken({ subcommand: "add", args: ["todoist", "tok"] })).toBe(true);
-    expect(connectTextCommandHasToken({ subcommand: "add", args: ["todoist"] })).toBe(false);
+    // Service omitted: the token is the sole arg, so this must still be scrubbed.
+    expect(connectTextCommandHasToken({ subcommand: "add", args: ["ghp_tok"] })).toBe(true);
+    expect(connectTextCommandHasToken({ subcommand: "add", args: [] })).toBe(false);
     expect(connectTextCommandHasToken({ subcommand: "list", args: [] })).toBe(false);
     expect(connectTextCommandHasToken({ subcommand: "remove", args: ["todoist", "x"] })).toBe(
       false,
@@ -262,7 +264,7 @@ describe("handleConnectCommand add", () => {
   it("rejects an unknown service", async () => {
     const { ctx, replies } = makeCtx("add", ["slack"]);
     await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
   });
 
   it("refuses a not-yet-available connector (Google)", async () => {
@@ -334,7 +336,7 @@ describe("handleConnectCommand add", () => {
     const { ctx, replies } = makeCtx("add", ["slakc", "tok_secret"], { scrubCommandMessage });
     await handleConnectCommand(ctx, makeDeps());
     expect(scrubCommandMessage).toHaveBeenCalledOnce();
-    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
   });
 
   it("scrubs a pasted token before the unavailable-service early return", async () => {
@@ -379,7 +381,7 @@ describe("handleConnectCommand add", () => {
     expect(map.size).toBe(0); // nothing persisted
     const embed = embedOf(replies[0].payload);
     expect(embed.title).not.toBe("Connected!");
-    expect(embed.description).toContain("registration changed");
+    expect(embed.description).toContain("could not store the link");
   });
 
   it("stores the token when the connector's auth confirms it", async () => {
@@ -412,6 +414,6 @@ describe("handleConnectCommand remove", () => {
   it("rejects an unknown service on remove", async () => {
     const { ctx, replies } = makeCtx("remove", ["slack"]);
     await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).description).toContain("Unknown service");
+    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
   });
 });
