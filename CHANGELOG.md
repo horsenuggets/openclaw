@@ -6,6 +6,11 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
+  non-owner gets the same "not authorized to use this channel's agent" notice a plain
+  message earns, delivered as an ephemeral reply only they can see (the notice wording
+  lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
+  check. `/channel` keeps its own admin/owner rules.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
   (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
   `/word` and reaches the model as plain text across every surface: native registration,
