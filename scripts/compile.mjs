@@ -263,12 +263,9 @@ if (existsSync("extensions")) {
   // This allows bun --compile to include them in the binary.
   const embeddedImports = [];
   const embeddedRegistrations = [];
-  // Extensions that fail to load as embedded (legacy export patterns, import issues).
-  // These still load from the extensions/ directory fallback.
-  const EMBEDDED_SKIP = new Set(["lobster", "open-prose"]);
   for (const extDir of readdirSync("dist/extensions").toSorted()) {
     const indexJs = `dist/extensions/${extDir}/index.js`;
-    if (!existsSync(indexJs) || extDir === "node_modules" || EMBEDDED_SKIP.has(extDir)) {
+    if (!existsSync(indexJs) || extDir === "node_modules") {
       continue;
     }
     const varName = `ext_${extDir.replace(/[^a-zA-Z0-9]/g, "_")}`;

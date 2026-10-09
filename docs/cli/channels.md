@@ -1,8 +1,8 @@
 ---
 summary: "CLI reference for `openclaw channels` (accounts, status, login/logout, logs)"
 read_when:
-  - You want to add/remove channel accounts (WhatsApp/Telegram/Discord/Google
-    Chat/Slack/Mattermost (plugin)/Signal/iMessage)
+  - You want to add/remove channel accounts
+    (WhatsApp/Telegram/Discord/Slack/Signal/iMessage)
   - You want to check channel status or tail channel logs
 title: "channels"
 ---
@@ -68,9 +68,8 @@ Notes:
 - `--target` accepts `channel:<id>` or a raw numeric channel id and only applies to
   Discord.
 - Probes are provider-specific: Discord intents + optional channel permissions; Slack
-  bot + user scopes; Telegram bot flags + webhook; Signal daemon version; MS Teams app
-  token + Graph roles/scopes (annotated where known). Channels without probes report
-  `Probe: unavailable`.
+  bot + user scopes; Telegram bot flags + webhook; Signal daemon version. Channels without
+  probes report `Probe: unavailable`.
 
 ## Resolve names to IDs
 
@@ -79,7 +78,6 @@ Resolve channel/user names to IDs using the provider directory:
 ```bash
 openclaw channels resolve --channel slack "#general" "@jane"
 openclaw channels resolve --channel discord "My Server/#support" "@someone"
-openclaw channels resolve --channel matrix "Project Room"
 ```
 
 Notes:

@@ -33,36 +33,20 @@ openclaw directory peers list --channel slack --query "U0"
 openclaw message send --channel slack --target user:U012ABCDEF --message "hello"
 ```
 
+## Commands
+
+Directory adapters vary by channel. Use these commands with a channel that supports the
+requested lookup:
+
+```bash
+openclaw directory self --channel <channel>
+openclaw directory peers list --channel <channel>
+openclaw directory groups list --channel <channel>
+```
+
 ## ID formats (by channel)
 
 - WhatsApp: `+15551234567` (DM), `1234567890-1234567890@g.us` (group)
 - Telegram: `@username` or numeric chat id; groups are numeric ids
 - Slack: `user:U…` and `channel:C…`
 - Discord: `user:<id>` and `channel:<id>`
-- Matrix (plugin): `user:@user:server`, `room:!roomId:server`, or `#alias:server`
-- Microsoft Teams (plugin): `user:<id>` and `conversation:<id>`
-- Zalo (plugin): user id (Bot API)
-- Zalo Personal / `zalouser` (plugin): thread id (DM/group) from `zca` (`me`,
-  `friend list`, `group list`)
-
-## Self ("me")
-
-```bash
-openclaw directory self --channel zalouser
-```
-
-## Peers (contacts/users)
-
-```bash
-openclaw directory peers list --channel zalouser
-openclaw directory peers list --channel zalouser --query "name"
-openclaw directory peers list --channel zalouser --limit 50
-```
-
-## Groups
-
-```bash
-openclaw directory groups list --channel zalouser
-openclaw directory groups list --channel zalouser --query "work"
-openclaw directory groups members --channel zalouser --group-id <id>
-```

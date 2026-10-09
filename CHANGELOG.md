@@ -6,11 +6,20 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Extensions: remove the bundled plugins this fork does not use (bluebubbles, feishu,
+  googlechat, line, matrix, mattermost, msteams, nextcloud-talk, nostr, tlon, twitch,
+  voice-call, zalo, zalouser, diagnostics-otel, lobster, llm-task, open-prose,
+  memory-lancedb) along with their docs, skills, labeler entries, and lockfile packages.
+  Discord, memory-core, the other built-in channel plugins, and the provider auth plugins
+  stay.
 - Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
   non-owner gets the same "not authorized to use this channel's agent" notice a plain
   message earns, delivered as an ephemeral reply only they can see (the notice wording
   lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
-  check. `/channel` keeps its own admin/owner rules.
+  check. `/channel` keeps its own admin/owner rules, but its ownership denials (a
+  non-owner, non-admin trying to unregister a channel registered to someone else, via the
+  command or the confirm button) now show that same notice instead of a bespoke message;
+  its role-based register denials keep their own wording.
 - Discord: new `/connections` command (with a `/conn` alias) lets a channel owner list,
   add, and remove the third-party services linked to that channel's agent. Connectors live
   in a small registry (`connectors.ts`) with composable auth strategies
@@ -22,10 +31,9 @@ Docs: https://docs.openclaw.ai
   are absent), and a not-yet-available service (Google) shows "Coming soon" rather than
   implying it can be linked. Only the channel owner may run it (both the slash command and
   the `/connections` text form are owner-gated; slash commands exclude group DMs, while
-  the recorded owner may use the text form there), and a pasted token is scrubbed from
-  the channel before any early return so it cannot linger when the
-  command errors out; if the scrub fails the reply tells the user to delete the message by
-  hand.
+  the recorded owner may use the text form there), and a pasted token is scrubbed from the
+  channel before any early return so it cannot linger when the command errors out; if the
+  scrub fails the reply tells the user to delete the message by hand.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
   (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
   `/word` and reaches the model as plain text across every surface: native registration,

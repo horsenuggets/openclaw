@@ -21,8 +21,6 @@ See [Signal](/channels/signal) for setup and endpoints.
 
 ## Pattern B: stdio child process (legacy: imsg)
 
-> **Note:** For new iMessage setups, use [BlueBubbles](/channels/bluebubbles) instead.
-
 - OpenClaw spawns `imsg rpc` as a child process (legacy iMessage integration).
 - JSON-RPC is line-delimited over stdin/stdout (one JSON object per line).
 - No TCP port, no daemon required.

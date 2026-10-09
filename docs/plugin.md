@@ -24,30 +24,18 @@ Fast path:
 openclaw plugins list
 ```
 
-2. Install an official plugin (example: Voice Call):
+2. Install a plugin from npm (or a local path):
 
 ```bash
-openclaw plugins install @openclaw/voice-call
+openclaw plugins install <npm-spec>
 ```
 
 3. Restart the Gateway, then configure under `plugins.entries.<id>.config`.
 
-See [Voice Call](/plugins/voice-call) for a concrete example plugin.
-
 ## Available plugins (official)
 
-- Microsoft Teams is plugin-only as of 2026.1.15; install `@openclaw/msteams` if you use
-  Teams.
 - Memory (Core) — bundled memory search plugin (enabled by default via
   `plugins.slots.memory`)
-- Memory (LanceDB) — bundled long-term memory plugin (auto-recall/capture; set
-  `plugins.slots.memory = "memory-lancedb"`)
-- [Voice Call](/plugins/voice-call) — `@openclaw/voice-call`
-- [Zalo Personal](/plugins/zalouser) — `@openclaw/zalouser`
-- [Matrix](/channels/matrix) — `@openclaw/matrix`
-- [Nostr](/channels/nostr) — `@openclaw/nostr`
-- [Zalo](/channels/zalo) — `@openclaw/zalo`
-- [Microsoft Teams](/channels/msteams) — `@openclaw/msteams`
 - Google Antigravity OAuth (provider auth) — bundled as `google-antigravity-auth`
   (disabled by default)
 - Gemini CLI OAuth (provider auth) — bundled as `google-gemini-cli-auth` (disabled by
@@ -151,22 +139,22 @@ Example:
 
 ```json
 {
-  "name": "@openclaw/nextcloud-talk",
+  "name": "@acme/my-chat",
   "openclaw": {
     "extensions": ["./index.ts"],
     "channel": {
-      "id": "nextcloud-talk",
-      "label": "Nextcloud Talk",
-      "selectionLabel": "Nextcloud Talk (self-hosted)",
-      "docsPath": "/channels/nextcloud-talk",
-      "docsLabel": "nextcloud-talk",
-      "blurb": "Self-hosted chat via Nextcloud Talk webhook bots.",
+      "id": "my-chat",
+      "label": "My Chat",
+      "selectionLabel": "My Chat (self-hosted)",
+      "docsPath": "/channels/my-chat",
+      "docsLabel": "my-chat",
+      "blurb": "Self-hosted chat via webhook bots.",
       "order": 65,
-      "aliases": ["nc-talk", "nc"]
+      "aliases": ["mc"]
     },
     "install": {
-      "npmSpec": "@openclaw/nextcloud-talk",
-      "localPath": "extensions/nextcloud-talk",
+      "npmSpec": "@acme/my-chat",
+      "localPath": "extensions/my-chat",
       "defaultChoice": "npm"
     }
   }
@@ -189,7 +177,7 @@ JSON files (comma/semicolon/`PATH`-delimited). Each file should contain
 Default plugin ids:
 
 - Package packs: `package.json` `name`
-- Standalone file: file base name (`~/.../voice-call.ts` → `voice-call`)
+- Standalone file: file base name (`~/.../my-plugin.ts` → `my-plugin`)
 
 If a plugin exports `id`, OpenClaw uses it but warns when it doesn't match the configured
 id.
@@ -200,11 +188,11 @@ id.
 {
   plugins: {
     enabled: true,
-    allow: ["voice-call"],
+    allow: ["my-plugin"],
     deny: ["untrusted-plugin"],
-    load: { paths: ["~/Projects/oss/voice-call-extension"] },
+    load: { paths: ["~/Projects/oss/my-plugin"] },
     entries: {
-      "voice-call": { enabled: true, config: { provider: "twilio" } },
+      "my-plugin": { enabled: true, config: { option: "value" } },
     },
   },
 }
@@ -286,11 +274,11 @@ Example:
 openclaw plugins list
 openclaw plugins info <id>
 openclaw plugins install <path>                 # copy a local file/dir into ~/.openclaw/extensions/<id>
-openclaw plugins install ./extensions/voice-call # relative path ok
+openclaw plugins install ./extensions/my-plugin # relative path ok
 openclaw plugins install ./plugin.tgz           # install from a local tarball
 openclaw plugins install ./plugin.zip           # install from a local zip
-openclaw plugins install -l ./extensions/voice-call # link (no copy) for dev
-openclaw plugins install @openclaw/voice-call # install from npm
+openclaw plugins install -l ./extensions/my-plugin # link (no copy) for dev
+openclaw plugins install <npm-spec> # install from npm
 openclaw plugins update <id>
 openclaw plugins update --all
 openclaw plugins enable <id>
@@ -634,7 +622,7 @@ workspace/managed skills locations.
 Recommended packaging:
 
 - Main package: `openclaw` (this repo)
-- Plugins: separate npm packages under `@openclaw/*` (example: `@openclaw/voice-call`)
+- Plugins: separate npm packages under `@openclaw/*` (example: `@openclaw/discord`)
 
 Publishing contract:
 
@@ -644,22 +632,6 @@ Publishing contract:
   `~/.openclaw/extensions/<id>/`, and enables it in config.
 - Config key stability: scoped packages are normalized to the **unscoped** id for
   `plugins.entries.*`.
-
-## Example plugin: Voice Call
-
-This repo includes a voice‑call plugin (Twilio or log fallback):
-
-- Source: `extensions/voice-call`
-- Skill: `skills/voice-call`
-- CLI: `openclaw voicecall start|status`
-- Tool: `voice_call`
-- RPC: `voicecall.start`, `voicecall.status`
-- Config (twilio): `provider: "twilio"` + `twilio.accountSid/authToken/from` (optional
-  `statusCallbackUrl`, `twimlUrl`)
-- Config (dev): `provider: "log"` (no network)
-
-See [Voice Call](/plugins/voice-call) and `extensions/voice-call/README.md` for setup and
-usage.
 
 ## Safety notes
 
@@ -673,7 +645,6 @@ Plugins run in-process with the Gateway. Treat them as trusted code:
 
 Plugins can (and should) ship tests:
 
-- In-repo plugins can keep Vitest tests under `src/**` (example:
-  `src/plugins/voice-call.plugin.test.ts`).
+- In-repo plugins can keep Vitest tests under `src/**`.
 - Separately published plugins should run their own CI (lint/build/test) and validate
   `openclaw.extensions` points at the built entrypoint (`dist/index.js`).

@@ -50,16 +50,10 @@ session entries.
   inbound (thread channel id already scopes session).
 - Telegram: topic IDs map to `chatId:topic:<id>` via `buildTelegramGroupPeerId`.
 
-## Extensions Covered
+## Notes
 
-- Matrix, MS Teams, Mattermost, BlueBubbles, Nextcloud Talk, Zalo, Zalo Personal, Nostr,
-  Tlon.
-- Notes:
-  - Mattermost targets now strip `@` for DM session key routing.
-  - Zalo Personal uses DM peer kind for 1:1 targets (group only when `group:` is present).
-  - BlueBubbles group targets strip `chat_*` prefixes to match inbound session keys.
-  - Slack auto-thread mirroring matches channel ids case-insensitively.
-  - Gateway send lowercases provided session keys before mirroring.
+- Slack auto-thread mirroring matches channel ids case-insensitively.
+- Gateway send lowercases provided session keys before mirroring.
 
 ## Decisions
 
@@ -85,11 +79,8 @@ session entries.
 
 ## Open Items / Follow-ups
 
-- Voice-call plugin uses custom `voice:<phone>` session keys. Outbound mapping is not
-  standardized here; if message-tool should support voice-call sends, add explicit
-  mapping.
-- Confirm if any external plugin uses non-standard `From/To` formats beyond the bundled
-  set.
+- Confirm if any external plugin uses non-standard `From/To` formats beyond the supported
+  channels.
 
 ## Files Touched
 

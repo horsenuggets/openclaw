@@ -99,14 +99,6 @@
       "destination": "/providers/opencode"
     },
     {
-      "source": "/mattermost",
-      "destination": "/channels/mattermost"
-    },
-    {
-      "source": "/line",
-      "destination": "/channels/line"
-    },
-    {
       "source": "/glm",
       "destination": "/providers/glm"
     },
@@ -123,10 +115,6 @@
       "destination": "/channels/discord"
     },
     {
-      "source": "/providers/googlechat",
-      "destination": "/channels/googlechat"
-    },
-    {
       "source": "/providers/grammy",
       "destination": "/channels/grammy"
     },
@@ -137,18 +125,6 @@
     {
       "source": "/providers/location",
       "destination": "/channels/location"
-    },
-    {
-      "source": "/providers/mattermost",
-      "destination": "/channels/mattermost"
-    },
-    {
-      "source": "/providers/msteams",
-      "destination": "/channels/msteams"
-    },
-    {
-      "source": "/providers/line",
-      "destination": "/channels/line"
     },
     {
       "source": "/providers/signal",
@@ -165,10 +141,6 @@
     {
       "source": "/providers/troubleshooting",
       "destination": "/channels/troubleshooting"
-    },
-    {
-      "source": "/providers/zalo",
-      "destination": "/channels/zalo"
     },
     {
       "source": "/providers/whatsapp",
@@ -848,16 +820,8 @@
                   "channels/grammy",
                   "channels/discord",
                   "channels/slack",
-                  "channels/feishu",
-                  "channels/googlechat",
-                  "channels/mattermost",
                   "channels/signal",
-                  "channels/imessage",
-                  "channels/msteams",
-                  "channels/line",
-                  "channels/matrix",
-                  "channels/zalo",
-                  "channels/zalouser"
+                  "channels/imessage"
                 ]
               },
               {
@@ -926,8 +890,6 @@
               {
                 "group": "Built-in tools",
                 "pages": [
-                  "tools/lobster",
-                  "tools/llm-task",
                   "tools/exec",
                   "tools/web",
                   "tools/apply-patch",
@@ -956,9 +918,7 @@
                   "tools/skills",
                   "tools/skills-config",
                   "tools/clawhub",
-                  "plugin",
-                  "plugins/voice-call",
-                  "plugins/zalouser"
+                  "plugin"
                 ]
               },
               {
@@ -1163,8 +1123,7 @@
                   "cli/system",
                   "cli/tui",
                   "cli/uninstall",
-                  "cli/update",
-                  "cli/voicecall"
+                  "cli/update"
                 ]
               },
               {

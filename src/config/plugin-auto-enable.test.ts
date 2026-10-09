@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { applyPluginAutoEnable } from "./plugin-auto-enable.js";
 
 describe("applyPluginAutoEnable", () => {
@@ -61,20 +64,55 @@ describe("applyPluginAutoEnable", () => {
   });
 
   describe("preferOver channel prioritization", () => {
-    it("prefers bluebubbles: skips imessage auto-enable when both are configured", () => {
+    // No bundled extension declares preferOver anymore, so feed the catalog a fixture entry.
+    let catalogDir = "";
+
+    beforeAll(() => {
+      catalogDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-auto-enable-"));
+      const catalogPath = path.join(catalogDir, "catalog.json");
+      fs.writeFileSync(
+        catalogPath,
+        JSON.stringify({
+          entries: [
+            {
+              name: "@openclaw/demo-bridge",
+              openclaw: {
+                channel: {
+                  id: "demo-bridge",
+                  label: "Demo Bridge",
+                  selectionLabel: "Demo Bridge",
+                  docsPath: "/channels/demo-bridge",
+                  blurb: "Fixture channel that is preferred over iMessage.",
+                  preferOver: ["imessage"],
+                },
+                install: { npmSpec: "@openclaw/demo-bridge" },
+              },
+            },
+          ],
+        }),
+      );
+      vi.stubEnv("OPENCLAW_PLUGIN_CATALOG_PATHS", catalogPath);
+    });
+
+    afterAll(() => {
+      vi.unstubAllEnvs();
+      fs.rmSync(catalogDir, { recursive: true, force: true });
+    });
+
+    it("prefers demo-bridge: skips imessage auto-enable when both are configured", () => {
       const result = applyPluginAutoEnable({
         config: {
           channels: {
-            bluebubbles: { serverUrl: "http://localhost:1234", password: "x" },
+            "demo-bridge": { serverUrl: "http://localhost:1234", password: "x" },
             imessage: { cliPath: "/usr/local/bin/imsg" },
           },
         },
         env: {},
       });
 
-      expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(true);
+      expect(result.config.plugins?.entries?.["demo-bridge"]?.enabled).toBe(true);
       expect(result.config.plugins?.entries?.imessage?.enabled).toBeUndefined();
-      expect(result.changes.join("\n")).toContain("bluebubbles configured, not enabled yet.");
+      expect(result.changes.join("\n")).toContain("demo-bridge configured, not enabled yet.");
       expect(result.changes.join("\n")).not.toContain("iMessage configured, not enabled yet.");
     });
 
@@ -82,7 +120,7 @@ describe("applyPluginAutoEnable", () => {
       const result = applyPluginAutoEnable({
         config: {
           channels: {
-            bluebubbles: { serverUrl: "http://localhost:1234", password: "x" },
+            "demo-bridge": { serverUrl: "http://localhost:1234", password: "x" },
             imessage: { cliPath: "/usr/local/bin/imsg" },
           },
           plugins: { entries: { imessage: { enabled: true } } },
@@ -90,40 +128,40 @@ describe("applyPluginAutoEnable", () => {
         env: {},
       });
 
-      expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(true);
+      expect(result.config.plugins?.entries?.["demo-bridge"]?.enabled).toBe(true);
       expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
     });
 
-    it("allows imessage auto-enable when bluebubbles is explicitly disabled", () => {
+    it("allows imessage auto-enable when demo-bridge is explicitly disabled", () => {
       const result = applyPluginAutoEnable({
         config: {
           channels: {
-            bluebubbles: { serverUrl: "http://localhost:1234", password: "x" },
+            "demo-bridge": { serverUrl: "http://localhost:1234", password: "x" },
             imessage: { cliPath: "/usr/local/bin/imsg" },
           },
-          plugins: { entries: { bluebubbles: { enabled: false } } },
+          plugins: { entries: { "demo-bridge": { enabled: false } } },
         },
         env: {},
       });
 
-      expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(false);
+      expect(result.config.plugins?.entries?.["demo-bridge"]?.enabled).toBe(false);
       expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
       expect(result.changes.join("\n")).toContain("iMessage configured, not enabled yet.");
     });
 
-    it("allows imessage auto-enable when bluebubbles is in deny list", () => {
+    it("allows imessage auto-enable when demo-bridge is in deny list", () => {
       const result = applyPluginAutoEnable({
         config: {
           channels: {
-            bluebubbles: { serverUrl: "http://localhost:1234", password: "x" },
+            "demo-bridge": { serverUrl: "http://localhost:1234", password: "x" },
             imessage: { cliPath: "/usr/local/bin/imsg" },
           },
-          plugins: { deny: ["bluebubbles"] },
+          plugins: { deny: ["demo-bridge"] },
         },
         env: {},
       });
 
-      expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBeUndefined();
+      expect(result.config.plugins?.entries?.["demo-bridge"]?.enabled).toBeUndefined();
       expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
     });
 

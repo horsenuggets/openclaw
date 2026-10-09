@@ -75,10 +75,8 @@ overview, see [Onboarding Wizard](/start/wizard).
     - [WhatsApp](/channels/whatsapp): optional QR login.
     - [Telegram](/channels/telegram): bot token.
     - [Discord](/channels/discord): bot token.
-    - [Google Chat](/channels/googlechat): service account JSON + webhook audience.
-    - [Mattermost](/channels/mattermost) (plugin): bot token + base URL.
+    - [Slack](/channels/slack): bot and app tokens.
     - [Signal](/channels/signal): optional `signal-cli` install + account config.
-    - [BlueBubbles](/channels/bluebubbles): **recommended for iMessage**; server URL + password + webhook.
     - [iMessage](/channels/imessage): legacy `imsg` CLI path + DB access.
     - DM security: default is pairing. First DM sends a code; approve via `openclaw pairing approve <channel> <code>` or use allowlists.
   </Step>
@@ -246,8 +244,8 @@ Typical fields in `~/.openclaw/openclaw.json`:
 - `gateway.*` (mode, bind, auth, tailscale)
 - `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`,
   `channels.imessage.*`
-- Channel allowlists (Slack/Discord/Matrix/Microsoft Teams) when you opt in during the
-  prompts (names resolve to IDs when possible).
+- Channel allowlists (Slack/Discord) when you opt in during the prompts (names resolve to
+  IDs when possible).
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`
 - `wizard.lastRunVersion`
@@ -269,7 +267,6 @@ will prompt to install it (npm or a local path) before it can be configured.
 - macOS app onboarding: [Onboarding](/start/onboarding)
 - Config reference: [Gateway configuration](/gateway/configuration)
 - Providers: [WhatsApp](/channels/whatsapp), [Telegram](/channels/telegram),
-  [Discord](/channels/discord), [Google Chat](/channels/googlechat),
-  [Signal](/channels/signal), [BlueBubbles](/channels/bluebubbles) (iMessage),
+  [Discord](/channels/discord), [Slack](/channels/slack), [Signal](/channels/signal),
   [iMessage](/channels/imessage) (legacy)
 - Skills: [Skills](/tools/skills), [Skills config](/tools/skills-config)
