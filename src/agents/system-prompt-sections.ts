@@ -47,6 +47,22 @@ const TEMPLATE_RELATIVE_PATH = path.join("docs", "reference", "templates", "SYST
 
 let cached: ParsedSystemPrompt | undefined;
 
+export function systemPromptTemplateCandidates(opts: {
+  packageRoot: string | null;
+  execPath: string;
+  cwd: string;
+  moduleDir: string;
+  isBun: boolean;
+}): string[] {
+  const candidates = [
+    opts.isBun ? path.join(path.dirname(opts.execPath), TEMPLATE_RELATIVE_PATH) : undefined,
+    opts.packageRoot ? path.join(opts.packageRoot, TEMPLATE_RELATIVE_PATH) : undefined,
+    path.resolve(opts.cwd, TEMPLATE_RELATIVE_PATH),
+    path.resolve(opts.moduleDir, "../..", TEMPLATE_RELATIVE_PATH),
+  ];
+  return candidates.filter((candidate): candidate is string => Boolean(candidate));
+}
+
 function stripFrontMatter(raw: string): string {
   return raw.replace(/^---\n[\s\S]*?\n---\n/, "");
 }
@@ -148,20 +164,20 @@ export function parseSystemPromptSections(markdown: string): ParsedSystemPrompt 
 function resolveSystemTemplate(): string {
   // Mirror resolveWorkspaceTemplateDir so SYSTEM.md resolves in dev, npm
   // package, and bun --compile binary layouts (the box ships the templates next
-  // to the executable; the package ships them under the package root).
+  // to the executable; the package ships them under the package root). In Bun
+  // builds, prefer the executable-adjacent template over roots inferred from cwd.
   const packageRoot = resolveOpenClawPackageRootSync({
     moduleUrl: import.meta.url,
     argv1: process.argv[1],
     cwd: process.cwd(),
   });
-  const candidates = [
-    packageRoot ? path.join(packageRoot, TEMPLATE_RELATIVE_PATH) : undefined,
-    typeof (globalThis as Record<string, unknown>).Bun !== "undefined"
-      ? path.join(path.dirname(process.execPath), TEMPLATE_RELATIVE_PATH)
-      : undefined,
-    path.resolve(process.cwd(), TEMPLATE_RELATIVE_PATH),
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..", TEMPLATE_RELATIVE_PATH),
-  ].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = systemPromptTemplateCandidates({
+    packageRoot,
+    execPath: process.execPath,
+    cwd: process.cwd(),
+    moduleDir: path.dirname(fileURLToPath(import.meta.url)),
+    isBun: typeof (globalThis as Record<string, unknown>).Bun !== "undefined",
+  });
   for (const candidate of candidates) {
     try {
       const text = readFileSync(candidate, "utf-8");

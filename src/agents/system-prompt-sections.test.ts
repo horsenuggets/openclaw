@@ -3,6 +3,7 @@ import {
   applyPromptTokens,
   loadSystemPromptSections,
   parseSystemPromptSections,
+  systemPromptTemplateCandidates,
 } from "./system-prompt-sections.js";
 
 const SAMPLE = [
@@ -81,6 +82,19 @@ describe("applyPromptTokens", () => {
 });
 
 describe("loadSystemPromptSections", () => {
+  it("prefers the executable-adjacent template over cwd-derived package roots in Bun", () => {
+    const candidates = systemPromptTemplateCandidates({
+      packageRoot: "/untrusted/project",
+      execPath: "/opt/openclaw/openclaw",
+      cwd: "/untrusted/project",
+      moduleDir: "/virtual/bundle/src/agents",
+      isBun: true,
+    });
+
+    expect(candidates[0]).toBe("/opt/openclaw/docs/reference/templates/SYSTEM.md");
+    expect(candidates[1]).toBe("/untrusted/project/docs/reference/templates/SYSTEM.md");
+  });
+
   it("resolves and parses the real SYSTEM.md template", () => {
     const { intro, sections } = loadSystemPromptSections();
     expect(intro).toContain("you are openclaw");
