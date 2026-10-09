@@ -198,11 +198,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // Redact a pasted token before it reaches the logs. `/connections add <svc>
   // <token>` carries a secret in the message body; the message is scrubbed from
   // Discord moments later, but router logs persist, so the token must never be
-  // written here. Any other content is truncated as before.
+  // written here. Detect against the RAW message (`d.content`), not the possibly
+  // reply-prefixed `content`, so a `/connections add` sent as a reply (whose body
+  // no longer starts with the command) is still caught. Other content is
+  // truncated as before.
+  const rawContent = d.content ?? "";
   const loggableContent = (() => {
-    const parsed = parseConnectTextCommand(content);
+    const parsed = parseConnectTextCommand(rawContent);
     if (parsed && connectTextCommandHasToken(parsed)) {
-      return `/connections add ${parsed.args[0]} <redacted>`;
+      return `/connections add ${parsed.args[0] ?? ""} <redacted>`;
     }
     return content.slice(0, 60);
   })();
@@ -253,8 +257,11 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // `/connections` management commands, handled before the bot filter (so a
   // tester bot that is the channel owner can drive them). When the command
   // carried a pasted token, scrub the originating message so the secret does not
-  // linger in channel history.
-  const connectCmd = authorId ? parseConnectTextCommand(content) : null;
+  // linger in channel history. Parse the RAW message (not the reply-prefixed
+  // `content`) so a command sent as a reply is still recognized, scrubbed, and
+  // kept out of the agent transcript rather than falling through as a normal
+  // message that still contains the token.
+  const connectCmd = authorId ? parseConnectTextCommand(rawContent) : null;
   if (connectCmd && authorId) {
     const commandMessageId = d.id;
     const hasToken = connectTextCommandHasToken(connectCmd);
