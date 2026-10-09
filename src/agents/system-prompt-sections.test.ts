@@ -84,19 +84,25 @@ describe("loadSystemPromptSections", () => {
   it("resolves and parses the real SYSTEM.md template", () => {
     const { intro, sections } = loadSystemPromptSections();
     expect(intro).toContain("you are openclaw");
-    // A representative set of the sections the builder depends on.
+    // The builder fails fast on a missing required section, so SYSTEM.md must
+    // keep every key it requests. This is the full set.
     for (const key of [
       "tooling",
       "tool call style",
       "safety",
       "skills (mandatory)",
+      "date and time",
       "workspace",
       "documentation",
+      "workspace files (injected)",
+      "first-run setup",
       "reply tags",
       "messaging",
+      "proactive messaging",
       "message tool",
+      "inline buttons enabled",
+      "inline buttons disabled",
       "silent replies",
-      "first-run setup",
       "message priority",
       "output boundaries",
     ]) {

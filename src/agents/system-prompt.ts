@@ -11,8 +11,12 @@ import { applyPromptTokens, loadSystemPromptSections } from "./system-prompt-sec
  * docs/reference/templates/SYSTEM.md (parsed by system-prompt-sections.ts); this
  * builder owns the wiring. `tokens` fills the section's `${...}` placeholders,
  * and `heading: false` emits only the body (for SYSTEM.md subsections that are
- * organizational and whose heading is not part of the live prompt). Missing
- * sections yield `[]` so a wording refactor cannot crash the builder.
+ * organizational and whose heading is not part of the live prompt).
+ *
+ * Every key the builder requests is a section that must exist, so a missing one
+ * is a packaging/wording error (renamed heading, truncated template, wrong file
+ * shipped). We fail loud rather than silently dropping a mandatory block such as
+ * `safety`, which would otherwise produce a valid-looking but unsafe prompt.
  */
 function renderPromptSection(
   key: string,
@@ -21,7 +25,9 @@ function renderPromptSection(
 ): string[] {
   const section = loadSystemPromptSections().sections.get(key);
   if (!section) {
-    return [];
+    throw new Error(
+      `SYSTEM.md is missing the required "${key}" section (docs/reference/templates/SYSTEM.md)`,
+    );
   }
   const body = section.lines.map((line) => applyPromptTokens(line, tokens));
   return opts.heading === false ? body : [section.heading, ...body];
