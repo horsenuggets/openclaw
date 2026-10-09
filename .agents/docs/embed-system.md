@@ -40,9 +40,11 @@ interaction's original reply; both wrap `dispatchEmbed` in `discord-api.ts`. For
 an embed references, `dispatchEmbed` either substitutes a cached CDN URL (rewriting
 `attachment://` to the CDN URL), uploads the icon as a multipart attachment, or drops the
 reference if the file is unreadable. After an upload, the returned CDN URLs are cached
-with an expiry. Because an icon used via `attachment://` is consumed by the embed, the
-resulting message's `attachments` array is empty from the outside; the icon lives in the
-embed footer or thumbnail, which is expected, not a failure.
+with an expiry. The upload response's `attachments` array does list the uploaded icons »
+`cacheUploadedIcons` reads each attachment's filename and URL from it to populate the CDN
+cache. The Discord client may not render a consumed icon as a separate visible attachment
+(it is referenced by the embed footer or thumbnail via `attachment://`), but the API array
+itself is not empty, so do not expect it to be when debugging the cache.
 
 ## Application Emojis
 

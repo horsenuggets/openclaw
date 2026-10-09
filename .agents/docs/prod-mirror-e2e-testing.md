@@ -64,8 +64,9 @@ workspace-file change, register a FRESH channel (or delete that file from the ch
 workspace so it gets re-seeded).
 
 If you only changed env (e.g. adding `OPENCLAW_MOCK_USER_BOT_ID` to `box.env`), skip
-`--build` and run `deploy` alone » It reuses the binaries and just recreates the router
-with the new env. Verify:
+`--build` and run `deploy` alone » It reuses the binaries and skips only compilation; it
+still runs the full `setup.sh` teardown (every container stopped and removed, then
+recreated), the same full-stack interruption as any deploy, just faster. Verify:
 
 ```bash
 docker exec openclaw-prod-mirror docker inspect services.discord-router \

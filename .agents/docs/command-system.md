@@ -34,11 +34,12 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
 
 ## Gating and Authorization
 
-- Register and unregister use a whitelist checker (`whitelist.ts`,
-  `createWhitelistChecker`) driven by env (`OPENCLAW_AUTH_GUILD_ID`,
-  `OPENCLAW_WHITELIST_ROLE_ID`, `OPENCLAW_ADMIN_ROLE_ID`), all fail-closed, with a short
-  role cache. `OPENCLAW_ADMIN_OVERRIDE_IDS` grants admin unconditionally (used by lab
-  rigs).
+- Register is gated by a whitelist checker (`whitelist.ts`, `createWhitelistChecker`)
+  driven by env (`OPENCLAW_AUTH_GUILD_ID`, `OPENCLAW_WHITELIST_ROLE_ID`,
+  `OPENCLAW_ADMIN_ROLE_ID`), all fail-closed, with a short role cache. Unregister is not
+  whitelist-gated » The recorded owner may always remove their own channel, and anyone
+  else needs admin (a deliberate owner-recovery path). `OPENCLAW_ADMIN_OVERRIDE_IDS`
+  grants admin unconditionally (used by lab rigs).
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
   `.onboarding.json`) may use them. Denials go through the shared unauthorized notice
