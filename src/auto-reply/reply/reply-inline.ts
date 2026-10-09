@@ -1,10 +1,12 @@
-const INLINE_SIMPLE_COMMAND_ALIASES = new Map<string, string>([
-  ["/help", "/help"],
-  ["/commands", "/commands"],
-  ["/whoami", "/whoami"],
-  ["/id", "/whoami"],
+import { isCommandKeyEnabled } from "../command-policy.js";
+
+// Inline alias -> [canonical command, policy key].
+const INLINE_SIMPLE_COMMAND_ALIASES = new Map<string, readonly [string, string]>([
+  ["help", ["/help", "help"]],
+  ["commands", ["/commands", "commands"]],
+  ["whoami", ["/whoami", "whoami"]],
+  ["id", ["/whoami", "whoami"]],
 ]);
-const INLINE_SIMPLE_COMMAND_RE = /(?:^|\s)\/(help|commands|whoami|id)(?=$|\s|:)/i;
 
 const INLINE_STATUS_RE = /(?:^|\s)\/status(?=$|\s|:)(?:\s*:\s*)?/gi;
 
@@ -15,12 +17,18 @@ export function extractInlineSimpleCommand(body?: string): {
   if (!body) {
     return null;
   }
-  const match = body.match(INLINE_SIMPLE_COMMAND_RE);
+  // A disabled command must stay in the prompt untouched, exactly like an unknown "/word".
+  const enabled = [...INLINE_SIMPLE_COMMAND_ALIASES]
+    .filter(([, [, key]]) => isCommandKeyEnabled(key))
+    .map(([alias]) => alias);
+  if (enabled.length === 0) {
+    return null;
+  }
+  const match = body.match(new RegExp(`(?:^|\\s)/(${enabled.join("|")})(?=$|\\s|:)`, "i"));
   if (!match || match.index === undefined) {
     return null;
   }
-  const alias = `/${match[1].toLowerCase()}`;
-  const command = INLINE_SIMPLE_COMMAND_ALIASES.get(alias);
+  const command = INLINE_SIMPLE_COMMAND_ALIASES.get(match[1].toLowerCase())?.[0];
   if (!command) {
     return null;
   }

@@ -20,6 +20,7 @@ import {
 import { isAbortTrigger } from "./reply/abort.js";
 import { listEnabledCommandHandlers } from "./reply/commands-core.js";
 import { parseInlineDirectives } from "./reply/directive-handling.parse.js";
+import { extractInlineSimpleCommand } from "./reply/reply-inline.js";
 
 const cfg = { commands: { text: true, config: true, debug: true, bash: true } } as OpenClawConfig;
 
@@ -188,5 +189,42 @@ describe("text command gating", () => {
         true,
       );
     }
+  });
+});
+
+describe("inline command extraction", () => {
+  const INLINE_BODIES = ["hello /help", "hello /commands", "hello /whoami", "hello /id"] as const;
+
+  it("leaves every disabled inline command in the prompt", () => {
+    setCommandPolicyForTest(null);
+    for (const body of INLINE_BODIES) {
+      expect(extractInlineSimpleCommand(body)).toBeNull();
+    }
+  });
+
+  it("extracts inline commands when the policy enables them", () => {
+    setCommandPolicyForTest("all");
+    expect(extractInlineSimpleCommand("hello /help")?.cleaned).toBe("hello");
+    expect(extractInlineSimpleCommand("hello /id")?.command).toBe("/whoami");
+  });
+
+  it("skips a disabled command and still finds an enabled one", () => {
+    setCommandPolicyForTest(new Set(["whoami"]));
+    expect(extractInlineSimpleCommand("/help then /whoami")?.command).toBe("/whoami");
+    expect(extractInlineSimpleCommand("/help only")).toBeNull();
+  });
+
+  it("is pure for the same policy", () => {
+    setCommandPolicyForTest("all");
+    expect(extractInlineSimpleCommand("hello /help")).toEqual(
+      extractInlineSimpleCommand("hello /help"),
+    );
+  });
+
+  it("keeps a disabled inline /status in the parsed body", () => {
+    setCommandPolicyForTest(null);
+    expect(parseInlineDirectives("hello /status", { allowStatusDirective: true }).cleaned).toBe(
+      "hello /status",
+    );
   });
 });
