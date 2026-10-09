@@ -26,7 +26,7 @@ title: "OpenClaw"
 
 <p align="center">
   <strong>Any OS gateway for AI agents across WhatsApp, Telegram, Discord, iMessage, and more.</strong><br />
-  Send a message, get an agent response from your pocket. Plugins add Mattermost and more.
+  Send a message, get an agent response from your pocket.
 </p>
 
 <Columns>
@@ -84,7 +84,7 @@ The Gateway is the single source of truth for sessions, routing, and channel con
     WhatsApp, Telegram, Discord, and iMessage with a single Gateway process.
   </Card>
   <Card title="Plugin channels" icon="plug">
-    Add Mattermost and more with extension packages.
+    Add more channels with extension packages.
   </Card>
   <Card title="Multi-agent routing" icon="route">
     Isolated sessions per agent, workspace, or sender.
