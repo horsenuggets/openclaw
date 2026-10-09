@@ -445,7 +445,11 @@ describe("handleChannelCommand unregister", () => {
       }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(embedOf(replies[0].payload).embed.description).toContain("do not have permission");
+    // Denials on a channel owned by someone else use the shared unauthorized
+    // notice (naming the owner), matching the plain-message and /lifecycle flows.
+    const description = embedOf(replies[0].payload).embed.description;
+    expect(description).toContain("not authorized to use this channel's agent");
+    expect(description).toContain("<@U1>");
   });
 
   it("lets an admin unregister a channel they do not own (with confirm:yes)", async () => {
@@ -527,6 +531,9 @@ describe("handleUnregisterButtonClick", () => {
       }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(result.update?.embeds[0].description).toContain("do not have permission");
+    expect(result.update?.embeds[0].description).toContain(
+      "not authorized to use this channel's agent",
+    );
+    expect(result.update?.embeds[0].description).toContain("<@U1>");
   });
 });

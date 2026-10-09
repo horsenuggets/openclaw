@@ -16,7 +16,10 @@ Docs: https://docs.openclaw.ai
   non-owner gets the same "not authorized to use this channel's agent" notice a plain
   message earns, delivered as an ephemeral reply only they can see (the notice wording
   lives in one place, `unauthorized-notice.ts`). `/lifecycle` previously had no owner
-  check. `/channel` keeps its own admin/owner rules.
+  check. `/channel` keeps its own admin/owner rules, but its ownership denials (a
+  non-owner, non-admin trying to unregister a channel registered to someone else, via the
+  command or the confirm button) now show that same notice instead of a bespoke message;
+  its role-based register denials keep their own wording.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
   (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
   `/word` and reaches the model as plain text across every surface: native registration,
