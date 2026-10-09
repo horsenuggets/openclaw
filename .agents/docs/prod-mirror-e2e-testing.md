@@ -1,26 +1,26 @@
-# prod-mirror e2e testing
+# Prod-Mirror E2E Testing
 
 How to live-test OpenClaw agent behavior end-to-end in a real Discord channel using the
 local prod-mirror rig.
 
-This doc is intentionally generic: the real lab guild id, bot ids, and tokens live in the
+This doc is intentionally generic » The real lab guild id, bot ids, and tokens live in the
 gitignored `.env.mirror` / `.prod-mirror/box.env` (and the operator's private notes),
 never here. Read the identifiers from those env files at runtime rather than hardcoding
 them.
 
-## When to use it
+## When to Use It
 
 The prod-mirror rig runs the full prod stack (Discord router + provisioner + per-channel
 agent containers) inside one privileged docker-in-docker box on the host, so you can drive
 a real Discord conversation against branch code before merging.
 
 Reach for it only when a change affects agent-visible behavior you cannot confirm any
-other way: persona/tone (`SOUL.md`), onboarding, routing, command gating. For pure logic,
+other way » Persona/tone (`SOUL.md`), onboarding, routing, command gating. For pure logic,
 unit tests plus `pnpm build` are faster.
 
 Test identity is always the dedicated mirror bot in the dedicated test ("lab") server,
 driven by a separate mock-user bot. Never use the production bot or a real server. The
-relevant values are:
+relevant values are...
 
 - Lab guild id -> `.env.mirror` / `box.env` (not in this doc).
 - Mock-user (driver) bot id -> `box.env` as `OPENCLAW_MOCK_USER_BOT_ID`; the driver can
@@ -35,7 +35,7 @@ its own location, so a `deploy --build` run from a worktree compiles that worktr
 branch.
 
 1. Create the worktree and `cd` into it.
-2. Symlink `node_modules` to the main checkout's (worktrees have none, and a build needs
+2. Symlink `node_modules/` to the main checkout's (worktrees have none, and a build needs
    it; a non-fork prettier can also corrupt markdown):
    `ln -s <main>/node_modules node_modules`.
 3. Copy the rig creds into the worktree (they live in the original checkout where `up` was
@@ -49,7 +49,7 @@ branch.
    now refuses to deploy a connected box when this is blank, pointing you back at
    `.env.mirror`.
 
-## Deploy the branch
+## Deploy the Branch
 
 Run `./scripts/prod-mirror.sh deploy --build` from the worktree. It recompiles the four
 linux binaries, redeploys over the box's sshd, and restarts the router and provisioner.
@@ -57,15 +57,16 @@ Confirm the compile log shows the worktree path.
 
 A deploy stops and recreates every registered `agents.channel-*` container with the new
 binary (`setup.sh` removes all containers, `boot.sh` brings each channel back up), so
-existing channels DO pick up new code. Workspace files are the exception: they are seeded
+existing channels DO pick up new code. Workspace files are the exception » They are seeded
 only when missing (`writeFileIfMissing`, `src/agents/workspace.ts`), so an existing
 workspace keeps its OLD templates (e.g. `SOUL.md`). To exercise a template or other
 workspace-file change, register a FRESH channel (or delete that file from the channel's
 workspace so it gets re-seeded).
 
 If you only changed env (e.g. adding `OPENCLAW_MOCK_USER_BOT_ID` to `box.env`), skip
-`--build` and run `deploy` alone: it reuses the binaries and just recreates the router
-with the new env. Verify:
+`--build` and run `deploy` alone » It reuses the binaries and skips only compilation; it
+still runs the full `setup.sh` teardown (every container stopped and removed, then
+recreated), the same full-stack interruption as any deploy, just faster. Verify:
 
 ```bash
 docker exec openclaw-prod-mirror docker inspect services.discord-router \
@@ -79,17 +80,17 @@ docker exec openclaw-prod-mirror \
   grep -n '<your new wording>' /root/deploy/docs/reference/templates/SOUL.md
 ```
 
-## Drive the conversation
+## Drive the Conversation
 
 Drive the mock-user bot over the raw Discord REST API (`https://discord.com/api/v10`,
 header `Authorization: Bot <token>`). The token is `DISCORD_E2E_BOT_TOKEN` from `box.env`;
 source it with `set -a; source .prod-mirror/box.env; set +a` and read the guild id from
 the env too (do not hardcode it).
 
-Flow for a behavior check:
+Flow for a behavior check...
 
-1. Create a channel: `POST /guilds/<guild>/channels` with `{name, type: 0}`.
-2. Register it: `POST /channels/<id>/messages {content: "/channel register"}`.
+1. Create a channel » `POST /guilds/<guild>/channels` with `{name, type: 0}`.
+2. Register it » `POST /channels/<id>/messages {content: "/channel register"}`.
    Registration kicks onboarding, so the agent's first turn is the welcome greeting that
    asks for a name.
 3. Post your probe messages and, after each, poll
@@ -100,13 +101,13 @@ Flow for a behavior check:
    derive the mock-user id from `GET /users/@me` and treat every other bot author as the
    agent.
 
-Pick probes that surface the change. A tone edit was verified with: give a capitalized
+Pick probes that surface the change. A tone edit was verified with » Give a capitalized
 name ("call me Alexander") and check the reply says "alexander"; ask for a web search
 (unconfigured) and check it says "brave search api" not "Brave Search API"; count `:)`
 across all turns. Keep the finished driver in gitignored `.prod-mirror/` as evidence (e.g.
 `.prod-mirror/e2e-tone.mjs`).
 
-## Gotchas and cleanup
+## Gotchas and Cleanup
 
 - Single-box contention is the main failure mode. Every registered channel leaves a
   persistent `agents.channel-<id>` container behind; they accumulate and OOM-kill the box.
