@@ -15,7 +15,7 @@ number that behaves like your always-on agent.
 
 ## ⚠️ Safety first
 
-You’re putting an agent in a position to:
+You're putting an agent in a position to:
 
 - run commands on your machine (depending on your Pi tool setup)
 - read/write files in your workspace
@@ -55,7 +55,7 @@ Your Phone (personal)          Second Phone (assistant)
 ```
 
 If you link your personal WhatsApp to OpenClaw, every message to you becomes “agent
-input”. That’s rarely what you want.
+input”. That's rarely what you want.
 
 ## 5-minute quick start
 
@@ -93,7 +93,7 @@ it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`)
 automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace
 is brand new (it should not come back after you delete it).
 
-Tip: treat this folder like OpenClaw’s “memory” and make it a git repo (ideally private)
+Tip: treat this folder like OpenClaw's “memory” and make it a git repo (ideally private)
 so your `AGENTS.md` + memory files are backed up. If git is installed, brand-new
 workspaces are auto-initialized.
 
@@ -127,7 +127,7 @@ creation entirely:
 
 ## The config that turns it into “an assistant”
 
-OpenClaw defaults to a good assistant setup, but you’ll usually want to tune:
+OpenClaw defaults to a good assistant setup, but you'll usually want to tune:
 
 - persona/instructions in `SOUL.md`
 - thinking defaults (if desired)
@@ -217,7 +217,7 @@ Outbound attachments from the agent: include `MEDIA:<path-or-url>` on its own li
 spaces). Example:
 
 ```
-Here’s the screenshot.
+Here's the screenshot.
 MEDIA:https://example.com/screenshot.png
 ```
 

@@ -705,7 +705,7 @@ Subcommands:
 
 Notes:
 
-- `gateway status` probes the Gateway RPC by default using the service’s resolved
+- `gateway status` probes the Gateway RPC by default using the service's resolved
   port/config (override with `--url/--token/--password`).
 - `gateway status` supports `--no-probe`, `--deep`, and `--json` for scripting.
 - `gateway status` also surfaces legacy or extra gateway services when it can detect them

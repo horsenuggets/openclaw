@@ -34,7 +34,7 @@ But it may be different if you use:
 - `--profile <name>` (often becomes `~/.openclaw-<profile>/`)
 - `OPENCLAW_STATE_DIR=/some/path`
 
-If you’re not sure, run on the **old** machine:
+If you're not sure, run on the **old** machine:
 
 ```bash
 openclaw status
@@ -74,7 +74,7 @@ Those live under `$OPENCLAW_STATE_DIR`.
 
 ### Step 0 — Make a backup (old machine)
 
-On the **old** machine, stop the gateway first so files aren’t changing mid-copy:
+On the **old** machine, stop the gateway first so files aren't changing mid-copy:
 
 ```bash
 openclaw gateway stop
@@ -99,7 +99,7 @@ On the **new** machine, install the CLI (and Node if needed):
 
 - See: [Install](/install)
 
-At this stage, it’s OK if onboarding creates a fresh `~/.openclaw/` — you will overwrite
+At this stage, it's OK if onboarding creates a fresh `~/.openclaw/` — you will overwrite
 it in the next step.
 
 ### Step 2 — Copy the state dir + workspace to the new machine
@@ -143,7 +143,7 @@ openclaw status
 ### Footgun: profile / state-dir mismatch
 
 If you ran the old gateway with a profile (or `OPENCLAW_STATE_DIR`), and the new gateway
-uses a different one, you’ll see symptoms like:
+uses a different one, you'll see symptoms like:
 
 - config changes not taking effect
 - channels missing / logged out
@@ -175,9 +175,9 @@ Fix: ensure the state dir + workspace are owned by the user running the gateway.
 
 - If your UI (WebUI/TUI) points at a **remote** gateway, the remote host owns the session
   store + workspace.
-- Migrating your laptop won’t move the remote gateway’s state.
+- Migrating your laptop won't move the remote gateway's state.
 
-If you’re in remote mode, migrate the **gateway host**.
+If you're in remote mode, migrate the **gateway host**.
 
 ### Footgun: secrets in backups
 
@@ -193,7 +193,7 @@ backups like production secrets:
 On the new machine, confirm:
 
 - `openclaw status` shows the gateway running
-- Your channels are still connected (e.g. WhatsApp doesn’t require re-pair)
+- Your channels are still connected (e.g. WhatsApp doesn't require re-pair)
 - The dashboard opens and shows existing sessions
 - Your workspace files (memory, configs) are present
 

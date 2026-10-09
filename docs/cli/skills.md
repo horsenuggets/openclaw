@@ -8,7 +8,7 @@ title: "skills"
 
 # `openclaw skills`
 
-Inspect skills (bundled + workspace + managed overrides) and see what’s eligible vs
+Inspect skills (bundled + workspace + managed overrides) and see what's eligible vs
 missing requirements.
 
 Related:

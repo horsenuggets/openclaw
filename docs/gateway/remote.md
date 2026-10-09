@@ -41,7 +41,7 @@ This is ideal when your laptop sleeps often but you want the agent always-on.
 
 The laptop does **not** run the agent. It connects remotely:
 
-- Use the macOS app’s **Remote over SSH** mode (Settings → General → “OpenClaw runs”).
+- Use the macOS app's **Remote over SSH** mode (Settings → General → “OpenClaw runs”).
 - The app opens and manages the tunnel, so WebChat + health checks “just work.”
 
 Runbook: [macOS remote access](/platforms/mac/remote).
@@ -118,7 +118,7 @@ WebChat no longer uses a separate HTTP port. The SwiftUI chat UI connects direct
 Gateway WebSocket.
 
 - Forward `18789` over SSH (see above), then connect clients to `ws://127.0.0.1:18789`.
-- On macOS, prefer the app’s “Remote over SSH” mode, which manages the tunnel
+- On macOS, prefer the app's “Remote over SSH” mode, which manages the tunnel
   automatically.
 
 ## macOS app “Remote over SSH”
@@ -130,7 +130,7 @@ Runbook: [macOS remote access](/platforms/mac/remote).
 
 ## Security rules (remote/VPN)
 
-Short version: **keep the Gateway loopback-only** unless you’re sure you need a bind.
+Short version: **keep the Gateway loopback-only** unless you're sure you need a bind.
 
 - **Loopback + SSH/Tailscale Serve** is the safest default (no public exposure).
 - **Non-loopback binds** (`lan`/`tailnet`/`custom`, or `auto` when loopback is

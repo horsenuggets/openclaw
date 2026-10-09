@@ -9,7 +9,7 @@ title: "Troubleshooting"
 
 When OpenClaw misbehaves, here's how to fix it.
 
-Start with the FAQ’s [First 60 seconds](/help/faq#first-60-seconds-if-somethings-broken)
+Start with the FAQ's [First 60 seconds](/help/faq#first-60-seconds-if-somethings-broken)
 if you just want a quick triage recipe. This page goes deeper on runtime failures and
 diagnostics.
 
@@ -23,8 +23,8 @@ Quick triage commands (in order):
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | `openclaw status`                  | Local summary: OS + update, gateway reachability/mode, service, agents/sessions, provider config state | First check, quick overview                       |
 | `openclaw status --all`            | Full local diagnosis (read-only, pasteable, safe-ish) incl. log tail                                   | When you need to share a debug report             |
-| `openclaw status --deep`           | Runs gateway health checks (incl. provider probes; requires reachable gateway)                         | When “configured” doesn’t mean “working”          |
-| `openclaw gateway probe`           | Gateway discovery + reachability (local + remote targets)                                              | When you suspect you’re probing the wrong gateway |
+| `openclaw status --deep`           | Runs gateway health checks (incl. provider probes; requires reachable gateway)                         | When “configured” doesn't mean “working”          |
+| `openclaw gateway probe`           | Gateway discovery + reachability (local + remote targets)                                              | When you suspect you're probing the wrong gateway |
 | `openclaw channels status --probe` | Asks the running gateway for channel status (and optionally probes)                                    | When gateway is reachable but channels misbehave  |
 | `openclaw gateway status`          | Supervisor state (launchd/systemd/schtasks), runtime PID/exit, last gateway error                      | When the service “looks loaded” but nothing runs  |
 | `openclaw logs --follow`           | Live logs (best signal for runtime issues)                                                             | When you need the actual failure reason           |
@@ -38,8 +38,8 @@ See also: [Health checks](/gateway/health) and [Logging](/logging).
 
 ### No API key found for provider "anthropic"
 
-This means the **agent’s auth store is empty** or missing Anthropic credentials. Auth is
-**per agent**, so a new agent won’t inherit the main agent’s keys.
+This means the **agent's auth store is empty** or missing Anthropic credentials. Auth is
+**per agent**, so a new agent won't inherit the main agent's keys.
 
 Fix options:
 
@@ -58,7 +58,7 @@ openclaw models status
 
 ### OAuth token refresh failed (Anthropic Claude subscription)
 
-This means the stored Anthropic OAuth token expired and the refresh failed. If you’re on a
+This means the stored Anthropic OAuth token expired and the refresh failed. If you're on a
 Claude subscription (no API key), the most reliable fix is to switch to a **Claude Code
 setup-token** and paste it on the **gateway host**.
 
@@ -83,7 +83,7 @@ More detail: [Anthropic](/providers/anthropic) and [OAuth](/concepts/oauth).
 
 If you open the dashboard over plain HTTP (e.g. `http://<lan-ip>:18789/` or
 `http://<tailscale-ip>:18789/`), the browser runs in a **non-secure context** and blocks
-WebCrypto, so device identity can’t be generated.
+WebCrypto, so device identity can't be generated.
 
 **Fix:**
 
@@ -179,7 +179,7 @@ This intentionally excludes version managers (nvm/fnm/volta/asdf) and package ma
 (pnpm/npm) because the service does not load your shell init. Runtime variables like
 `DISPLAY` should live in `~/.openclaw/.env` (loaded early by the gateway). Exec runs on
 `host=gateway` merge your login-shell `PATH` into the exec environment, so missing tools
-usually mean your shell init isn’t exporting them (or set `tools.exec.pathPrepend`). See
+usually mean your shell init isn't exporting them (or set `tools.exec.pathPrepend`). See
 [/tools/exec](/tools/exec).
 
 WhatsApp + Telegram channels require **Node**; Bun is unsupported. If your service was
@@ -218,7 +218,7 @@ Gateway likely refused to bind.
 - `gateway.mode` must be `local` for `openclaw gateway` and the service.
 - If you set `gateway.mode=remote`, the **CLI defaults** to a remote URL. The service can
   still be running locally, but your CLI may be probing the wrong place. Use
-  `openclaw gateway status` to see the service’s resolved port + probe target (or pass
+  `openclaw gateway status` to see the service's resolved port + probe target (or pass
   `--url`).
 - `openclaw gateway status` and `openclaw doctor` surface the **last gateway error** from
   logs when the service looks running but the port is closed.
@@ -230,7 +230,7 @@ Gateway likely refused to bind.
 **If `openclaw gateway status` shows a config mismatch**
 
 - `Config (cli): ...` and `Config (service): ...` should normally match.
-- If they don’t, you’re almost certainly editing one config while the service is running
+- If they don't, you're almost certainly editing one config while the service is running
   another.
 - Fix: rerun `openclaw gateway install --force` from the same `--profile` /
   `OPENCLAW_STATE_DIR` you want the service to use.
@@ -244,7 +244,7 @@ Gateway likely refused to bind.
 **If `Last gateway error:` mentions “refusing to bind … without auth”**
 
 - You set `gateway.bind` to a non-loopback mode (`lan`/`tailnet`/`custom`, or `auto` when
-  loopback is unavailable) but didn’t configure auth.
+  loopback is unavailable) but didn't configure auth.
 - Fix: set `gateway.auth.mode` + `gateway.auth.token` (or export `OPENCLAW_GATEWAY_TOKEN`)
   and restart the service.
 
@@ -256,7 +256,7 @@ Gateway likely refused to bind.
 
 **If `Probe note:` says the probe uses loopback**
 
-- That’s expected for `bind=lan`: the gateway listens on `0.0.0.0` (all interfaces), and
+- That's expected for `bind=lan`: the gateway listens on `0.0.0.0` (all interfaces), and
   loopback should still connect locally.
 - For remote clients, use a real LAN IP (not `0.0.0.0`) plus the port, and ensure auth is
   configured.
@@ -318,7 +318,7 @@ to prompt injection). If you see this error, the model name is no longer support
 **Fix:**
 
 - Pick a **latest** model for the provider and update your config or model alias.
-- If you’re unsure which models are available, run `openclaw models list` or
+- If you're unsure which models are available, run `openclaw models list` or
   `openclaw models scan` and choose a supported one.
 - Check gateway logs for the detailed failure reason.
 
@@ -363,7 +363,7 @@ openclaw pairing list <channel>
 ```
 
 Pending DM pairing requests are capped at **3 per channel** by default. If the list is
-full, new requests won’t generate a code until one is approved or expires.
+full, new requests won't generate a code until one is approved or expires.
 
 **Check 2:** Did the request get created but no reply was sent?
 
@@ -371,7 +371,7 @@ full, new requests won’t generate a code until one is approved or expires.
 openclaw logs --follow | grep "pairing request"
 ```
 
-**Check 3:** Confirm `dmPolicy` isn’t `open`/`allowlist` for that channel.
+**Check 3:** Confirm `dmPolicy` isn't `open`/`allowlist` for that channel.
 
 ### Image + Mention Not Working
 
@@ -433,7 +433,7 @@ openclaw status --deep
 openclaw logs --limit 200 | grep "connection\\|disconnect\\|logout"
 ```
 
-**Fix:** Usually reconnects automatically once the Gateway is running. If you’re stuck,
+**Fix:** Usually reconnects automatically once the Gateway is running. If you're stuck,
 restart the Gateway process (however you supervise it), or run it manually with verbose
 output:
 
@@ -441,7 +441,7 @@ output:
 openclaw gateway --verbose
 ```
 
-If you’re logged out / unlinked:
+If you're logged out / unlinked:
 
 ```bash
 openclaw channels logout
@@ -485,7 +485,7 @@ OpenClaw keeps conversation history in memory.
 
 ## Common troubleshooting
 
-### “Gateway won’t start — configuration invalid”
+### “Gateway won't start — configuration invalid”
 
 OpenClaw now refuses to start when the config contains unknown keys, malformed values, or
 invalid types. This is intentional for safety.
@@ -513,7 +513,7 @@ Notes:
 - **Gateway logs** in `/tmp/openclaw/…` for the exact provider error.
 - **Model status**: use `/model status` (chat) or `openclaw models status` (CLI).
 
-### I’m running on my personal WhatsApp number — why is self-chat weird?
+### I'm running on my personal WhatsApp number — why is self-chat weird?
 
 Enable self-chat mode and allowlist your own number:
 
@@ -539,7 +539,7 @@ Run the login command again and scan the QR code:
 openclaw channels login
 ```
 
-### Build errors on `main` — what’s the standard fix path?
+### Build errors on `main` — what's the standard fix path?
 
 1. `git pull origin main && pnpm install`
 2. `openclaw doctor`
@@ -548,13 +548,13 @@ openclaw channels login
 
 ### npm install fails (allow-build-scripts / missing tar or yargs). What now?
 
-If you’re running from source, use the repo’s package manager: **pnpm** (preferred). The
+If you're running from source, use the repo's package manager: **pnpm** (preferred). The
 repo declares `packageManager: "pnpm@…"`.
 
 Typical recovery:
 
 ```bash
-git status   # ensure you’re in the repo root
+git status   # ensure you're in the repo root
 pnpm install
 pnpm build
 openclaw doctor
@@ -589,7 +589,7 @@ Notes:
   openclaw gateway restart
   ```
 
-### Telegram block streaming isn’t splitting text between tool calls. Why?
+### Telegram block streaming isn't splitting text between tool calls. Why?
 
 Block streaming only sends **completed text blocks**. Common reasons you see a single
 message:
@@ -609,7 +609,7 @@ Fix checklist:
 
 See [Streaming](/concepts/streaming).
 
-### Discord doesn’t reply in my server even with `requireMention: false`. Why?
+### Discord doesn't reply in my server even with `requireMention: false`. Why?
 
 `requireMention` only controls mention‑gating **after** the channel passes allowlists. By
 default `channels.discord.groupPolicy` is **allowlist**, so guilds must be explicitly
@@ -681,7 +681,7 @@ openclaw gateway stop
 lsof -nP -iTCP:18789 -sTCP:LISTEN
 ```
 
-If it’s an unsupervised process, try a graceful stop first, then escalate:
+If it's an unsupervised process, try a graceful stop first, then escalate:
 
 ```bash
 kill -TERM <PID>

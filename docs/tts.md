@@ -22,7 +22,7 @@ works anywhere OpenClaw can send audio; Telegram gets a round voice-note bubble.
 ### Edge TTS notes
 
 Edge TTS uses Microsoft Edge's online neural TTS service via the `node-edge-tts` library.
-It's a hosted service (not local), uses Microsoft’s endpoints, and does not require an API
+It's a hosted service (not local), uses Microsoft's endpoints, and does not require an API
 key. `node-edge-tts` exposes speech configuration options and output formats, but not all
 options are supported by the Edge service. citeturn2search0
 

@@ -168,7 +168,7 @@ extension CronSettings {
                 Text("Select a job to inspect details and run history.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("Tip: use ‘New Job’ to add one, or enable cron in your gateway config.")
+                Text("Tip: use ‘New Job' to add one, or enable cron in your gateway config.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }

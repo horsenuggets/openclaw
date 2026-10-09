@@ -36,11 +36,11 @@ Shapes & sizes
 - Ear scale defaults to `1.0`; voice boost sets `earScale=1.9` and toggles `earHoles=true`
   without changing overall frame (18×18 pt template image rendered into a 36×36 px Retina
   backing store).
-- Scurry uses leg wiggle up to ~1.0 with a small horizontal jiggle; it’s additive to any
+- Scurry uses leg wiggle up to ~1.0 with a small horizontal jiggle; it's additive to any
   existing idle wiggle.
 
 Behavioral notes
 
-- No external CLI/broker toggle for ears/working; keep it internal to the app’s own
+- No external CLI/broker toggle for ears/working; keep it internal to the app's own
   signals to avoid accidental flapping.
 - Keep TTLs short (&lt;10s) so the icon returns to baseline quickly if a job hangs.

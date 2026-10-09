@@ -1,12 +1,12 @@
 ---
 title: Formal Verification (Security Models)
-summary: Machine-checked security models for OpenClaw’s highest-risk paths.
+summary: Machine-checked security models for OpenClaw's highest-risk paths.
 permalink: /security/formal-verification/
 ---
 
 # Formal Verification (Security Models)
 
-This page tracks OpenClaw’s **formal security models** (TLA+/TLC today; more as needed).
+This page tracks OpenClaw's **formal security models** (TLA+/TLC today; more as needed).
 
 > Note: some older links may refer to the previous project name.
 
@@ -121,12 +121,12 @@ These are follow-on models that tighten fidelity around real-world failure modes
 ### Pairing store concurrency / idempotency
 
 **Claim:** a pairing store should enforce `MaxPending` and idempotency even under
-interleavings (i.e., “check-then-write” must be atomic / locked; refresh shouldn’t create
+interleavings (i.e., “check-then-write” must be atomic / locked; refresh shouldn't create
 duplicates).
 
 What it means:
 
-- Under concurrent requests, you can’t exceed `MaxPending` for a channel.
+- Under concurrent requests, you can't exceed `MaxPending` for a channel.
 - Repeated requests/refreshes for the same `(channel, sender)` should not create duplicate
   live pending rows.
 

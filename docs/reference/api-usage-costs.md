@@ -3,7 +3,7 @@ summary: "Audit what can spend money, which keys are used, and how to view usage
 read_when:
   - You want to understand which features may call paid APIs
   - You need to audit keys, costs, and usage visibility
-  - You’re explaining /status or /usage cost reporting
+  - You're explaining /status or /usage cost reporting
 title: "API Usage and Costs"
 ---
 
@@ -98,7 +98,7 @@ See [Web tools](/tools/web).
 
 - `FIRECRAWL_API_KEY` or `tools.web.fetch.firecrawl.apiKey`
 
-If Firecrawl isn’t configured, the tool falls back to direct fetch + readability (no paid
+If Firecrawl isn't configured, the tool falls back to direct fetch + readability (no paid
 API).
 
 See [Web tools](/tools/web).
@@ -138,6 +138,6 @@ See [Talk mode](/nodes/talk).
 ### 10) Skills (third-party APIs)
 
 Skills can store `apiKey` in `skills.entries.<name>.apiKey`. If a skill uses that key for
-external APIs, it can incur costs according to the skill’s provider.
+external APIs, it can incur costs according to the skill's provider.
 
 See [Skills](/tools/skills).

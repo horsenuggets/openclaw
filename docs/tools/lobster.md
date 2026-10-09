@@ -37,9 +37,9 @@ runtime:
 Lobster is intentionally small. The goal is not "a new language," it's a predictable,
 AI-friendly pipeline spec with first-class approvals and resume tokens.
 
-- **Approve/resume is built in**: A normal program can prompt a human, but it can’t *pause
+- **Approve/resume is built in**: A normal program can prompt a human, but it can't *pause
   and resume* with a durable token without you inventing that runtime yourself.
-- **Determinism + auditability**: Pipelines are data, so they’re easy to log, diff,
+- **Determinism + auditability**: Pipelines are data, so they're easy to log, diff,
   replay, and review.
 - **Constrained surface for AI**: A tiny grammar + JSON piping reduces “creative” code
   paths and makes validation realistic.
@@ -167,7 +167,7 @@ steps:
 
 Notes:
 
-- `stdin: $step.stdout` and `stdin: $step.json` pass a prior step’s output.
+- `stdin: $step.stdout` and `stdin: $step.json` pass a prior step's output.
 - `condition` (or `when`) can gate steps on `$step.approved`.
 
 ## Install Lobster

@@ -13,7 +13,7 @@ read_when:
 OpenClaw uses a dedicated workspace directory for the agent. Default:
 `~/.openclaw/workspace` (configurable via `agents.defaults.workspace`).
 
-1. Create the workspace (if it doesn’t already exist):
+1. Create the workspace (if it doesn't already exist):
 
 ```bash
 mkdir -p ~/.openclaw/workspace
@@ -45,9 +45,9 @@ cp docs/reference/AGENTS.default.md ~/.openclaw/workspace/AGENTS.md
 
 ## Safety defaults
 
-- Don’t dump directories or secrets into chat.
-- Don’t run destructive commands unless explicitly asked.
-- Don’t send partial/streaming replies to external messaging surfaces (only final
+- Don't dump directories or secrets into chat.
+- Don't run destructive commands unless explicitly asked.
+- Don't send partial/streaming replies to external messaging surfaces (only final
   replies).
 
 ## Session start (required)
@@ -63,8 +63,8 @@ cp docs/reference/AGENTS.default.md ~/.openclaw/workspace/AGENTS.md
 
 ## Shared spaces (recommended)
 
-- You’re not the user’s voice; be careful in group chats or public channels.
-- Don’t share private data, contact info, or internal notes.
+- You're not the user's voice; be careful in group chats or public channels.
+- Don't share private data, contact info, or internal notes.
 
 ## Memory system (recommended)
 
@@ -76,12 +76,12 @@ cp docs/reference/AGENTS.default.md ~/.openclaw/workspace/AGENTS.md
 
 ## Tools & skills
 
-- Tools live in skills; follow each skill’s `SKILL.md` when you need it.
+- Tools live in skills; follow each skill's `SKILL.md` when you need it.
 - Keep environment-specific notes in `TOOLS.md` (Notes for Skills).
 
 ## Backup tip (recommended)
 
-If you treat this workspace as Clawd’s “memory”, make it a git repo (ideally private) so
+If you treat this workspace as Clawd's “memory”, make it a git repo (ideally private) so
 `AGENTS.md` and your memory files are backed up.
 
 ```bash
@@ -132,7 +132,7 @@ git commit -m "Add Clawd workspace"
 - Keep heartbeats enabled so the assistant can schedule reminders, monitor inboxes, and
   trigger camera captures.
 - Canvas UI runs full-screen with native overlays. Avoid placing critical controls in the
-  top-left/top-right/bottom edges; add explicit gutters in the layout and don’t rely on
+  top-left/top-right/bottom edges; add explicit gutters in the layout and don't rely on
   safe-area insets.
 - For browser-driven verification, use `openclaw browser` (tabs/status/screenshot) with
   the OpenClaw-managed Chrome profile.

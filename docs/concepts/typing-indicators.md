@@ -59,10 +59,10 @@ You can override mode or cadence per session:
 
 ## Notes
 
-- `message` mode won’t show typing for silent-only replies (e.g. the `⁘ return` token used
+- `message` mode won't show typing for silent-only replies (e.g. the `⁘ return` token used
   to suppress output).
 - `thinking` only fires if the run streams reasoning (`reasoningLevel: "stream"`). If the
-  model doesn’t emit reasoning deltas, typing won’t start.
+  model doesn't emit reasoning deltas, typing won't start.
 - Heartbeats never show typing, regardless of mode.
 - `typingIntervalSeconds` controls the **refresh cadence**, not the start time. The
   default is 6 seconds.

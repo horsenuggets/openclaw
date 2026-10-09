@@ -144,7 +144,7 @@ openclaw onboard --auth-choice setup-token
 
 **No API key found for provider "anthropic"**
 
-- Auth is **per agent**. New agents don’t inherit the main agent’s keys.
+- Auth is **per agent**. New agents don't inherit the main agent's keys.
 - Re-run onboarding for that agent, or paste a setup-token / API key on the gateway host,
   then verify with `openclaw models status`.
 

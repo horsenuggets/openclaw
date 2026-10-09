@@ -455,7 +455,7 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
 
 If more than one person can DM your bot (multiple entries in `allowFrom`, pairing
 approvals for multiple people, or `dmPolicy: "open"`), enable **secure DM mode** so DMs
-from different senders don’t share one context by default:
+from different senders don't share one context by default:
 
 ```json5
 {

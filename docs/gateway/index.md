@@ -202,7 +202,7 @@ stable `client.instanceId` matters.
 
 - Server validates every inbound frame with AJV against JSON Schema emitted from the
   protocol definitions.
-- Clients (TS/Swift) consume generated types (TS directly; Swift via the repo’s
+- Clients (TS/Swift) consume generated types (TS directly; Swift via the repo's
   generator).
 - Protocol definitions are the source of truth; regenerate schema/models with:
   - `pnpm protocol:gen`
@@ -265,7 +265,7 @@ openclaw logs --follow
 
 Notes:
 
-- `gateway status` probes the Gateway RPC by default using the service’s resolved
+- `gateway status` probes the Gateway RPC by default using the service's resolved
   port/config (override with `--url`).
 - `gateway status --deep` adds system-level scans (LaunchDaemons/system units).
 - `gateway status --no-probe` skips the RPC probe (useful when networking is down).

@@ -112,7 +112,7 @@ retrieval. Key points:
 
 - Disabled by default. Opt in per-config (`memory.backend = "qmd"`).
 - Install the QMD CLI separately (`bun install -g github.com/tobi/qmd` or grab a release)
-  and make sure the `qmd` binary is on the gateway’s `PATH`.
+  and make sure the `qmd` binary is on the gateway's `PATH`.
 - QMD needs an SQLite build that allows extensions (`brew install sqlite` on macOS).
 - QMD runs fully locally via Bun + `node-llama-cpp` and auto-downloads GGUF models from
   HuggingFace on first use (no separate Ollama daemon required).
@@ -134,9 +134,9 @@ retrieval. Key points:
   expansion) on the first `qmd query` run.
   - OpenClaw sets `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` automatically when it runs QMD.
   - If you want to pre-download models manually (and warm the same index OpenClaw uses),
-    run a one-off query with the agent’s XDG dirs.
+    run a one-off query with the agent's XDG dirs.
 
-    OpenClaw’s QMD state lives under your **state dir** (defaults to `~/.openclaw`). You
+    OpenClaw's QMD state lives under your **state dir** (defaults to `~/.openclaw`). You
     can point `qmd` at the exact same index by exporting the same XDG vars OpenClaw uses:
 
     ```bash
@@ -209,7 +209,7 @@ memory: {
 
 - `memory.citations` applies regardless of backend (`auto`/`on`/`off`).
 - When `qmd` runs, we tag `status().backend = "qmd"` so diagnostics show which engine
-  served the results. If the QMD subprocess exits or JSON output can’t be parsed, the
+  served the results. If the QMD subprocess exits or JSON output can't be parsed, the
   search manager logs a warning and returns the builtin provider (existing Markdown
   embeddings) until QMD recovers.
 
@@ -411,9 +411,9 @@ Notes:
   behave as percentages.
 - If embeddings are unavailable (or the provider returns a zero-vector), we still run BM25
   and return keyword matches.
-- If FTS5 can’t be created, we keep vector-only search (no hard failure).
+- If FTS5 can't be created, we keep vector-only search (no hard failure).
 
-This isn’t “IR-theory perfect”, but it’s simple, fast, and tends to improve
+This isn't “IR-theory perfect”, but it's simple, fast, and tends to improve
 recall/precision on real notes. If we want to get fancier later, common next steps are
 Reciprocal Rank Fusion (RRF) or score normalization (min/max or z-score) before mixing.
 
@@ -480,7 +480,7 @@ Notes:
 - `memory_search` never blocks on indexing; results can be slightly stale until background
   sync finishes.
 - Results still include snippets only; `memory_get` remains limited to memory files.
-- Session indexing is isolated per agent (only that agent’s session logs are indexed).
+- Session indexing is isolated per agent (only that agent's session logs are indexed).
 - Session logs live on disk (`~/.openclaw/agents/<agentId>/sessions/*.jsonl`). Any
   process/user with filesystem access can read them, so treat disk access as the trust
   boundary. For stricter isolation, run agents under separate OS users or hosts.

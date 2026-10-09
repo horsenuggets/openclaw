@@ -138,7 +138,7 @@ Draft streaming is DM-only; Telegram does not support it in groups or channels.
 
 ## Formatting (Telegram HTML)
 
-- Outbound Telegram text uses `parse_mode: "HTML"` (Telegram’s supported tag subset).
+- Outbound Telegram text uses `parse_mode: "HTML"` (Telegram's supported tag subset).
 - Markdown-ish input is rendered into **Telegram-safe HTML**
   (bold/italic/strike/code/links); block elements are flattened to text with
   newlines/bullets.
@@ -147,7 +147,7 @@ Draft streaming is DM-only; Telegram does not support it in groups or channels.
 
 ## Commands (native + custom)
 
-OpenClaw registers native commands (like `/status`, `/reset`, `/model`) with Telegram’s
+OpenClaw registers native commands (like `/status`, `/reset`, `/model`) with Telegram's
 bot menu on startup. You can add custom commands to the menu via config:
 
 ```json5
@@ -401,7 +401,7 @@ account only handles DMs while another is allowed in groups).
 - Pairing is the default token exchange used for Telegram DMs. Details:
   [Pairing](/start/pairing)
 - `channels.telegram.allowFrom` accepts numeric user IDs (recommended) or `@username`
-  entries. It is **not** the bot username; use the human sender’s ID. The wizard accepts
+  entries. It is **not** the bot username; use the human sender's ID. The wizard accepts
   `@username` and resolves it to the numeric ID when possible.
 
 #### Finding your Telegram user ID
@@ -757,15 +757,15 @@ and messages in the same topic stay together.
 
 ## Troubleshooting
 
-**Bot doesn’t respond to non-mention messages in a group:**
+**Bot doesn't respond to non-mention messages in a group:**
 
-- If you set `channels.telegram.groups.*.requireMention=false`, Telegram’s Bot API
+- If you set `channels.telegram.groups.*.requireMention=false`, Telegram's Bot API
   **privacy mode** must be disabled.
   - BotFather: `/setprivacy` → **Disable** (then remove + re-add the bot to the group)
 - `openclaw channels status` shows a warning when config expects unmentioned group
   messages.
 - `openclaw channels status --probe` can additionally check membership for explicit
-  numeric group IDs (it can’t audit wildcard `"*"` rules).
+  numeric group IDs (it can't audit wildcard `"*"` rules).
 - Quick test: `/activation always` (session-only; use config for persistence)
 
 **Bot not seeing group messages at all:**

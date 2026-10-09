@@ -204,7 +204,7 @@ Use `accountId` to target a specific account on multi-account channels like Tele
 
 ## Delivery behavior
 
-- Heartbeats run in the agent’s main session by default (`agent:<id>:<mainKey>`), or
+- Heartbeats run in the agent's main session by default (`agent:<id>:<mainKey>`), or
   `global` when `session.scope = "global"`. Set `session` to override to a specific
   channel session (Discord/WhatsApp/etc.).
 - `session` only affects the run context; delivery is controlled by `target` and `to`.
@@ -297,7 +297,7 @@ Example `HEARTBEAT.md`:
 # Heartbeat checklist
 
 - Quick scan: anything urgent in inboxes?
-- If it’s daytime, do a lightweight check-in if nothing else is pending.
+- If it's daytime, do a lightweight check-in if nothing else is pending.
 - If a task is blocked, write down *what is missing* and ask Peter next time.
 ```
 
@@ -309,13 +309,13 @@ Yes — if you ask it to.
 a normal chat) something like:
 
 - “Update `HEARTBEAT.md` to add a daily calendar check.”
-- “Rewrite `HEARTBEAT.md` so it’s shorter and focused on inbox follow-ups.”
+- “Rewrite `HEARTBEAT.md` so it's shorter and focused on inbox follow-ups.”
 
 If you want this to happen proactively, you can also include an explicit line in your
 heartbeat prompt like: “If the checklist becomes stale, update HEARTBEAT.md with a better
 one.”
 
-Safety note: don’t put secrets (API keys, phone numbers, private tokens) into
+Safety note: don't put secrets (API keys, phone numbers, private tokens) into
 `HEARTBEAT.md` — it becomes part of the prompt context.
 
 ## Manual wake (on-demand)

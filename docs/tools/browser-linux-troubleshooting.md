@@ -127,7 +127,7 @@ curl -s http://127.0.0.1:18791/tabs
 
 ### Problem: "Chrome extension relay is running, but no tab is connected"
 
-You’re using the `chrome` profile (extension relay). It expects the OpenClaw browser
+You're using the `chrome` profile (extension relay). It expects the OpenClaw browser
 extension to be attached to a live tab.
 
 Fix options:

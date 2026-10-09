@@ -23,7 +23,7 @@ title: grammY
   gating, media download via `getFile`/`download`, and delivers replies with
   `sendMessage/sendPhoto/sendVideo/sendAudio/sendDocument`. Supports long-poll or webhook
   via `webhookCallback`.
-- **Proxy:** optional `channels.telegram.proxy` uses `undici.ProxyAgent` through grammY’s
+- **Proxy:** optional `channels.telegram.proxy` uses `undici.ProxyAgent` through grammY's
   `client.baseFetch`.
 - **Webhook support:** `webhook-set.ts` wraps `setWebhook/deleteWebhook`; `webhook.ts`
   hosts the callback with health + graceful shutdown. Gateway enables webhook mode when

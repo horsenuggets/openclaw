@@ -15,7 +15,7 @@ Tailnet-based connectivity.
 
 ## Wide‑area Bonjour (Unicast DNS‑SD) over Tailscale
 
-If the node and gateway are on different networks, multicast mDNS won’t cross the
+If the node and gateway are on different networks, multicast mDNS won't cross the
 boundary. You can keep the same discovery UX by switching to **unicast DNS‑SD**
 ("Wide‑Area Bonjour") over Tailscale.
 
@@ -47,7 +47,7 @@ openclaw dns setup --apply
 
 This installs CoreDNS and configures it to:
 
-- listen on port 53 only on the gateway’s Tailscale interfaces
+- listen on port 53 only on the gateway's Tailscale interfaces
 - serve your chosen domain (example: `openclaw.internal.`) from
   `~/.openclaw/dns/<domain>.db`
 
@@ -62,7 +62,7 @@ dig @<TAILNET_IPV4> -p 53 _openclaw-gw._tcp.openclaw.internal PTR +short
 
 In the Tailscale admin console:
 
-- Add a nameserver pointing at the gateway’s tailnet IP (UDP/TCP 53).
+- Add a nameserver pointing at the gateway's tailnet IP (UDP/TCP 53).
 - Add split DNS so your discovery domain uses that nameserver.
 
 Once clients accept tailnet DNS, iOS nodes can browse `_openclaw-gw._tcp` in your
@@ -115,7 +115,7 @@ Useful built‑in tools:
   dns-sd -L "<instance>" _openclaw-gw._tcp local.
   ```
 
-If browsing works but resolving fails, you’re usually hitting a LAN policy or mDNS
+If browsing works but resolving fails, you're usually hitting a LAN policy or mDNS
 resolver issue.
 
 ## Debugging in Gateway logs
@@ -140,7 +140,7 @@ The log includes browser state transitions and result‑set changes.
 
 ## Common failure modes
 
-- **Bonjour doesn’t cross networks**: use Tailnet or SSH.
+- **Bonjour doesn't cross networks**: use Tailnet or SSH.
 - **Multicast blocked**: some Wi‑Fi networks disable mDNS.
 - **Sleep / interface churn**: macOS may temporarily drop mDNS results; retry.
 - **Browse works but resolve fails**: keep machine names simple (avoid emojis or

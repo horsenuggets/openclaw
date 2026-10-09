@@ -159,7 +159,7 @@ Configure your tunnel's ingress rules to only route the webhook path:
 4. DM access is pairing by default. Unknown senders receive a pairing code; approve with:
    - `openclaw pairing approve googlechat <code>`
 5. Group spaces require @-mention by default. Use `botUser` if mention detection needs the
-   app’s user name.
+   app's user name.
 
 ## Targets
 
@@ -205,7 +205,7 @@ Notes:
 
 - Service account credentials can also be passed inline with `serviceAccount` (JSON
   string).
-- Default webhook path is `/googlechat` if `webhookPath` isn’t set.
+- Default webhook path is `/googlechat` if `webhookPath` isn't set.
 - Reactions are available via the `reactions` tool and `channels action` when
   `actions.reactions` is enabled.
 - `typingIndicator` supports `none`, `message` (default), and `reaction` (reaction

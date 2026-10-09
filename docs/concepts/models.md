@@ -25,7 +25,7 @@ Related:
 
 - `agents.defaults.models` is the allowlist/catalog of models OpenClaw can use (plus
   aliases).
-- `agents.defaults.imageModel` is used **only when** the primary model can’t accept
+- `agents.defaults.imageModel` is used **only when** the primary model can't accept
   images.
 - Per-agent defaults can override `agents.defaults.model` via `agents.list[].model` plus
   bindings (see [/concepts/multi-agent](/concepts/multi-agent)).
@@ -37,7 +37,7 @@ Related:
 
 ## Setup wizard (recommended)
 
-If you don’t want to hand-edit config, run the onboarding wizard:
+If you don't want to hand-edit config, run the onboarding wizard:
 
 ```bash
 openclaw onboard
@@ -63,7 +63,7 @@ Provider configuration examples (including OpenCode Zen) live in
 ## “Model is not allowed” (and why replies stop)
 
 If `agents.defaults.models` is set, it becomes the **allowlist** for `/model` and for
-session overrides. When a user selects a model that isn’t in that allowlist, OpenClaw
+session overrides. When a user selects a model that isn't in that allowlist, OpenClaw
 returns:
 
 ```
@@ -71,7 +71,7 @@ Model "provider/model" is not allowed. Use /model to list available models.
 ```
 
 This happens **before** a normal reply is generated, so the message can feel like it
-“didn’t respond.” The fix is to either:
+“didn't respond.” The fix is to either:
 
 - Add the model to `agents.defaults.models`, or
 - Clear the allowlist (remove `agents.defaults.models`), or
@@ -174,7 +174,7 @@ openclaw models status
 
 ## Scanning (OpenRouter free models)
 
-`openclaw models scan` inspects OpenRouter’s **free model catalog** and can optionally
+`openclaw models scan` inspects OpenRouter's **free model catalog** and can optionally
 probe models for tool and image support.
 
 Key flags:

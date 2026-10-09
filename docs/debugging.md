@@ -63,7 +63,7 @@ pnpm gateway:dev
 OPENCLAW_PROFILE=dev openclaw tui
 ```
 
-If you don’t have a global install yet, run the CLI via `pnpm openclaw ...`.
+If you don't have a global install yet, run the CLI via `pnpm openclaw ...`.
 
 What this does:
 
@@ -152,7 +152,7 @@ Default file:
 
 `~/.pi-mono/logs/raw-openai-completions.jsonl`
 
-> Note: this is only emitted by processes using pi-mono’s `openai-completions` provider.
+> Note: this is only emitted by processes using pi-mono's `openai-completions` provider.
 
 ## Safety notes
 

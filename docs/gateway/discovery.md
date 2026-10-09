@@ -87,7 +87,7 @@ Disable/override:
 
 ### 2) Tailnet (cross-network)
 
-For London/Vienna style setups, Bonjour won’t help. The recommended “direct” target is:
+For London/Vienna style setups, Bonjour won't help. The recommended “direct” target is:
 
 - Tailscale MagicDNS name (preferred) or a stable tailnet IP.
 

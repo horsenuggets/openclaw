@@ -325,7 +325,7 @@ Notes:
 - `google-gemini-cli/...` uses the local Gemini CLI on your machine (separate auth +
   tooling quirks).
 - Gemini API vs Gemini CLI:
-  - API: OpenClaw calls Google’s hosted Gemini API over HTTP (API key / profile auth);
+  - API: OpenClaw calls Google's hosted Gemini API over HTTP (API key / profile auth);
     this is what most users mean by “Gemini”.
   - CLI: OpenClaw shells out to a local `gemini` binary; it has its own auth and can
     behave differently (streaming/tool support/version skew).
@@ -391,7 +391,7 @@ More providers you can include in the live matrix (if you have creds/config):
 - Via `models.providers` (custom endpoints): `minimax` (cloud/API), plus any
   OpenAI/Anthropic-compatible proxy (LM Studio, vLLM, LiteLLM, etc.)
 
-Tip: don’t try to hardcode “all models” in docs. The authoritative list is whatever
+Tip: don't try to hardcode “all models” in docs. The authoritative list is whatever
 `discoverModels(...)` returns on your machine + whatever keys are available.
 
 ## Credentials (never commit)
@@ -399,7 +399,7 @@ Tip: don’t try to hardcode “all models” in docs. The authoritative list is
 Live tests discover credentials the same way the CLI does. Practical implications:
 
 - If the CLI works, live tests should find the same keys.
-- If a live test says “no creds”, debug the same way you’d debug `openclaw models list` /
+- If a live test says “no creds”, debug the same way you'd debug `openclaw models list` /
   model selection.
 
 - Profile store: `~/.openclaw/credentials/` (preferred; what “profile keys” means in the
@@ -496,7 +496,7 @@ We already have a few CI-safe tests that behave like “agent reliability evals�
 - End-to-end wizard flows that validate session wiring and config effects
   (`src/gateway/gateway.wizard.e2e.test.ts`).
 
-What’s still missing for skills (see [Skills](/tools/skills)):
+What's still missing for skills (see [Skills](/tools/skills)):
 
 - **Decisioning:** when skills are listed in the prompt, does the agent pick the right
   skill (or avoid irrelevant ones)?
@@ -518,7 +518,7 @@ When you fix a provider/model issue discovered in live:
 
 - Add a CI-safe regression if possible (mock/stub provider, or capture the exact
   request-shape transformation)
-- If it’s inherently live-only (rate limits, auth policies), keep the live test narrow and
+- If it's inherently live-only (rate limits, auth policies), keep the live test narrow and
   opt-in via env vars
 - Prefer targeting the smallest layer that catches the bug:
   - provider request conversion/replay bug → direct models test

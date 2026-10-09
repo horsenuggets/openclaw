@@ -22,7 +22,7 @@ write a local, rotating file log to disk when you need a durable capture.
 Notes:
 
 - This is **off by default**. Enable only while actively debugging.
-- Treat the file as sensitive; don’t share it without review.
+- Treat the file as sensitive; don't share it without review.
 
 ## Unified logging private data on macOS
 

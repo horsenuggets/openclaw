@@ -13,7 +13,7 @@ title: "DigitalOcean"
 Run a persistent OpenClaw Gateway on DigitalOcean for **$6/month** (or $4/mo with reserved
 pricing).
 
-If you want a $0/month option and don’t mind ARM + provider-specific setup, see the
+If you want a $0/month option and don't mind ARM + provider-specific setup, see the
 [Oracle Cloud guide](/platforms/oracle).
 
 ## Cost Comparison (2026)

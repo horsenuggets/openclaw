@@ -66,13 +66,13 @@ emit multiple chunks at the end.
 
 Block chunking is implemented by `EmbeddedBlockChunker`:
 
-- **Low bound:** don’t emit until buffer >= `minChars` (unless forced).
+- **Low bound:** don't emit until buffer >= `minChars` (unless forced).
 - **High bound:** prefer splits before `maxChars`; if forced, split at `maxChars`.
 - **Break preference:** `paragraph` → `newline` → `sentence` → `whitespace` → hard break.
 - **Code fences:** never split inside fences; when forced at `maxChars`, close + reopen
   the fence to keep Markdown valid.
 
-`maxChars` is clamped to the channel `textChunkLimit`, so you can’t exceed per-channel
+`maxChars` is clamped to the channel `textChunkLimit`, so you can't exceed per-channel
 caps.
 
 ## Coalescing (merge streamed blocks)

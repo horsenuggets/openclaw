@@ -30,7 +30,7 @@ Default:
 bun install
 ```
 
-Note: `bun.lock`/`bun.lockb` are gitignored, so there’s no repo churn either way. If you
+Note: `bun.lock`/`bun.lockb` are gitignored, so there's no repo churn either way. If you
 want *no lockfile writes*:
 
 ```sh

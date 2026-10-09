@@ -28,7 +28,7 @@ localhost, LAN, and tailnet.
 
 Local trust:
 
-- Local connections (loopback or the gateway host’s own tailnet address) can be
+- Local connections (loopback or the gateway host's own tailnet address) can be
   auto‑approved for pairing to keep same‑host UX smooth.
 - Non‑local tailnet/LAN clients still require explicit pairing approval.
 

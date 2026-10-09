@@ -488,7 +488,7 @@ For fine-grained control, use these tags in agent responses:
 - Channels map to `agent:<agentId>:slack:channel:<channelId>` sessions.
 - Slash commands use `agent:<agentId>:slack:slash:<userId>` sessions (prefix configurable
   via `channels.slack.slashCommand.sessionPrefix`).
-- If Slack doesn’t provide `channel_type`, OpenClaw infers it from the channel ID prefix
+- If Slack doesn't provide `channel_type`, OpenClaw infers it from the channel ID prefix
   (`D`, `C`, `G`) and defaults to `channel` to keep session keys stable.
 - Native command registration uses `commands.native` (global default `"auto"` → Slack off)
   and can be overridden per-workspace with `channels.slack.commands.native`. Text commands

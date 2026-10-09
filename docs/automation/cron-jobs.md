@@ -12,7 +12,7 @@ title: "Cron Jobs"
 > **Cron vs Heartbeat?** See [Cron vs Heartbeat](/automation/cron-vs-heartbeat) for
 > guidance on when to use each.
 
-Cron is the Gateway’s built-in scheduler. It persists jobs, wakes the agent at the right
+Cron is the Gateway's built-in scheduler. It persists jobs, wakes the agent at the right
 time, and can optionally deliver output back to a chat.
 
 If you want *“run this every morning”* or *“poke the agent in 20 minutes”*, cron is the
@@ -21,7 +21,7 @@ mechanism.
 ## TL;DR
 
 - Cron runs **inside the Gateway** (not inside the model).
-- Jobs persist under `~/.openclaw/cron/` so restarts don’t lose schedules.
+- Jobs persist under `~/.openclaw/cron/` so restarts don't lose schedules.
 - Two execution styles:
   - **Main session**: enqueue a system event, then run on the next heartbeat.
   - **Isolated**: run a dedicated agent turn in `cron:<jobId>`, with delivery (announce by
@@ -116,7 +116,7 @@ Cron supports three schedule kinds:
 - `every`: fixed interval (ms).
 - `cron`: 5-field cron expression with optional IANA timezone.
 
-Cron expressions use `croner`. If a timezone is omitted, the Gateway host’s local timezone
+Cron expressions use `croner`. If a timezone is omitted, the Gateway host's local timezone
 is used.
 
 ### Main vs isolated execution
@@ -228,7 +228,7 @@ Isolated jobs can deliver output to a channel via the top-level `delivery` confi
 Delivery config is only valid for isolated jobs (`sessionTarget: "isolated"`).
 
 If `delivery.channel` or `delivery.to` is omitted, cron can fall back to the main
-session’s “last route” (the last place the agent replied).
+session's “last route” (the last place the agent replied).
 
 Target format reminders:
 
@@ -474,6 +474,6 @@ openclaw system event --mode now --text "Next heartbeat: check battery."
 
 ### Telegram delivers to the wrong place
 
-- For forum topics, use `-100…:topic:<id>` so it’s explicit and unambiguous.
-- If you see `telegram:...` prefixes in logs or stored “last route” targets, that’s
+- For forum topics, use `-100…:topic:<id>` so it's explicit and unambiguous.
+- If you see `telegram:...` prefixes in logs or stored “last route” targets, that's
   normal; cron delivery accepts them and still parses topic IDs correctly.

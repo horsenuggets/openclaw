@@ -47,7 +47,7 @@ Secrets are stored **per-agent**:
 
 - Auth profiles (OAuth + API keys):
   `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
-- Runtime cache (managed automatically; don’t edit):
+- Runtime cache (managed automatically; don't edit):
   `~/.openclaw/agents/<agentId>/agent/auth.json`
 
 Legacy import-only file (still supported, but not the main store):
@@ -79,7 +79,7 @@ openclaw models status
 
 ## OAuth exchange (how login works)
 
-OpenClaw’s interactive login flows are implemented in `@mariozechner/pi-ai` and wired into
+OpenClaw's interactive login flows are implemented in `@mariozechner/pi-ai` and wired into
 the wizards/commands.
 
 ### Anthropic (Claude Pro/Max) setup-token
@@ -99,7 +99,7 @@ Flow shape (PKCE):
 1. generate PKCE verifier/challenge + random `state`
 2. open `https://auth.openai.com/oauth/authorize?...`
 3. try to capture callback on `http://127.0.0.1:1455/auth/callback`
-4. if callback can’t bind (or you’re remote/headless), paste the redirect URL/code
+4. if callback can't bind (or you're remote/headless), paste the redirect URL/code
 5. exchange at `https://auth.openai.com/oauth/token`
 6. extract `accountId` from the access token and store
    `{ access, refresh, expires, accountId }`

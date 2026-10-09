@@ -28,7 +28,7 @@ The current setup (one file per day) is excellent for:
 - git-backed durability + auditability
 - low-friction capture (“just write it down”)
 
-It’s weak for:
+It's weak for:
 
 - high-recall retrieval (“what did we decide about X?”, “last time we tried Y?”)
 - entity-centric answers (“tell me about Alice / The Castle / warelay”) without rereading
@@ -60,7 +60,7 @@ Two pieces to blend:
 
 2. **Hindsight-style memory substrate**
 
-- separate what’s observed vs what’s believed vs what’s summarized
+- separate what's observed vs what's believed vs what's summarized
 - support retain/recall/reflect
 - confidence-bearing opinions that can evolve with evidence
 - entity-aware retrieval + temporal queries (even without full knowledge graphs)
@@ -116,7 +116,7 @@ The index is always **rebuildable from Markdown**.
 
 ### Retain: normalize daily logs into “facts”
 
-Hindsight’s key insight that matters here: store **narrative, self-contained facts**, not
+Hindsight's key insight that matters here: store **narrative, self-contained facts**, not
 tiny snippets.
 
 Practical rule for `memory/YYYY-MM-DD.md`:
@@ -130,7 +130,7 @@ Example:
 
 ```
 ## Retain
-- W @Peter: Currently in Marrakech (Nov 27–Dec 1, 2025) for Andy’s birthday.
+- W @Peter: Currently in Marrakech (Nov 27–Dec 1, 2025) for Andy's birthday.
 - B @warelay: I fixed the Baileys WS crash by wrapping connection.update handlers in try/catch (see memory/2025-11-27.md).
 - O(c=0.95) @Peter: Prefers concise replies (&lt;1500 chars) on WhatsApp; long content goes into files.
 ```
@@ -142,7 +142,7 @@ Minimal parsing:
 - Entities: `@Peter`, `@warelay`, etc (slugs map to `bank/entities/*.md`)
 - Opinion confidence: `O(c=0.0..1.0)` optional
 
-If you don’t want authors to think about it: the reflect job can infer these bullets from
+If you don't want authors to think about it: the reflect job can infer these bullets from
 the rest of the log, but having an explicit `## Retain` section is the easiest “quality
 lever”.
 
@@ -207,14 +207,14 @@ exploratory only.
 
 ## “S-Collide” / SuCo: when to use it (research)
 
-If “S-Collide” refers to **SuCo (Subspace Collision)**: it’s an ANN retrieval approach
+If “S-Collide” refers to **SuCo (Subspace Collision)**: it's an ANN retrieval approach
 that targets strong recall/latency tradeoffs by using learned/structured collisions in
 subspaces (paper: arXiv 2411.14754, 2024).
 
 Pragmatic take for `~/.openclaw/workspace`:
 
-- **don’t start** with SuCo.
-- start with SQLite FTS + (optional) simple embeddings; you’ll get most UX wins
+- **don't start** with SuCo.
+- start with SQLite FTS + (optional) simple embeddings; you'll get most UX wins
   immediately.
 - consider SuCo/HNSW/ScaNN-class solutions only once:
   - corpus is big (tens/hundreds of thousands of chunks)
@@ -226,11 +226,11 @@ Offline-friendly alternatives (in increasing complexity):
 - SQLite FTS5 + metadata filters (zero ML)
 - Embeddings + brute force (works surprisingly far if chunk count is low)
 - HNSW index (common, robust; needs a library binding)
-- SuCo (research-grade; attractive if there’s a solid implementation you can embed)
+- SuCo (research-grade; attractive if there's a solid implementation you can embed)
 
 Open question:
 
-- what’s the **best** offline embedding model for “personal assistant memory” on your
+- what's the **best** offline embedding model for “personal assistant memory” on your
   machines (laptop + desktop)?
   - if you already have Ollama: embed with a local model; otherwise ship a small embedding
     model in the toolchain.

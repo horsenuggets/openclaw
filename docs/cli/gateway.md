@@ -9,7 +9,7 @@ title: "gateway"
 
 # Gateway CLI
 
-The Gateway is OpenClaw’s WebSocket server (channels, nodes, sessions, hooks).
+The Gateway is OpenClaw's WebSocket server (channels, nodes, sessions, hooks).
 
 Subcommands in this page live under `openclaw gateway …`.
 
@@ -40,7 +40,7 @@ Notes:
 - Binding beyond loopback without auth is blocked (safety guardrail).
 - `SIGUSR1` triggers an in-process restart when authorized (enable `commands.restart` or
   use the gateway tool/config apply/update).
-- `SIGINT`/`SIGTERM` handlers stop the gateway process, but they don’t restore any custom
+- `SIGINT`/`SIGTERM` handlers stop the gateway process, but they don't restore any custom
   terminal state. If you wrap the CLI with a TUI or raw-mode input, restore the terminal
   before exit.
 

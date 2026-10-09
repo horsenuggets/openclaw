@@ -21,7 +21,7 @@ not choose a channel; routing is deterministic and controlled by the host config
 
 ## Session key shapes (examples)
 
-Direct messages collapse to the agent’s **main** session:
+Direct messages collapse to the agent's **main** session:
 
 - `agent:<agentId>:<mainKey>` (default: `agent:main:main`)
 
@@ -107,7 +107,7 @@ You can override the store path via `session.store` and `{agentId}` templating.
 
 ## WebChat behavior
 
-WebChat attaches to the **selected agent** and defaults to the agent’s main session.
+WebChat attaches to the **selected agent** and defaults to the agent's main session.
 Because of this, WebChat lets you see cross‑channel context for that agent in one place.
 
 ## Reply context

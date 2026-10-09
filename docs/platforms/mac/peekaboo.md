@@ -10,10 +10,10 @@ title: "Peekaboo Bridge"
 # Peekaboo Bridge (macOS UI automation)
 
 OpenClaw can host **PeekabooBridge** as a local, permission‑aware UI automation broker.
-This lets the `peekaboo` CLI drive UI automation while reusing the macOS app’s TCC
+This lets the `peekaboo` CLI drive UI automation while reusing the macOS app's TCC
 permissions.
 
-## What this is (and isn’t)
+## What this is (and isn't)
 
 - **Host**: OpenClaw.app can act as a PeekabooBridge host.
 - **Client**: use the `peekaboo` CLI (no separate `openclaw ui ...` surface).

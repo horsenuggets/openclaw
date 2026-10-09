@@ -27,7 +27,7 @@ struct AnthropicAuthControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if self.connectionMode != .local {
-                Text("Gateway isn’t running locally; OAuth must be created on the gateway host.")
+                Text("Gateway isn't running locally; OAuth must be created on the gateway host.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

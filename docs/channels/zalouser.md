@@ -141,9 +141,9 @@ Accounts map to zca profiles. Example:
 
 **`zca` not found:**
 
-- Install zca-cli and ensure it’s on `PATH` for the Gateway process.
+- Install zca-cli and ensure it's on `PATH` for the Gateway process.
 
-**Login doesn’t stick:**
+**Login doesn't stick:**
 
 - `openclaw channels status --probe`
 - Re-login:

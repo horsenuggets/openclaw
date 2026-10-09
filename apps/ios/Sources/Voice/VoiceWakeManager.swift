@@ -148,10 +148,10 @@ final class VoiceWakeManager: NSObject {
         if ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil ||
             ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
         {
-            // The iOS Simulator’s audio stack is unreliable for long-running microphone capture.
-            // (We’ve observed CoreAudio deadlocks after TCC permission prompts.)
+            // The iOS Simulator's audio stack is unreliable for long-running microphone capture.
+            // (We've observed CoreAudio deadlocks after TCC permission prompts.)
             self.isListening = false
-            self.statusText = "Voice Wake isn’t supported on Simulator"
+            self.statusText = "Voice Wake isn't supported on Simulator"
             return
         }
 

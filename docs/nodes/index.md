@@ -19,13 +19,13 @@ A **node** is a companion device (macOS/iOS/Android/headless) that connects to t
 Legacy transport: [Bridge protocol](/gateway/bridge-protocol) (TCP JSONL;
 deprecated/removed for current nodes).
 
-macOS can also run in **node mode**: the menubar app connects to the Gateway’s WS server
+macOS can also run in **node mode**: the menubar app connects to the Gateway's WS server
 and exposes its local canvas/camera commands as a node (so `openclaw nodes …` works
 against this Mac).
 
 Notes:
 
-- Nodes are **peripherals**, not gateways. They don’t run the gateway service.
+- Nodes are **peripherals**, not gateways. They don't run the gateway service.
 - Telegram/WhatsApp/etc. messages land on the **gateway**, not on nodes.
 
 ## Pairing + status
