@@ -222,7 +222,8 @@ Notes:
 ### Export to OpenTelemetry
 
 Diagnostics can be exported via the `diagnostics-otel` plugin (OTLP/HTTP). This works with
-any OpenTelemetry collector/backend that accepts OTLP/HTTP.
+any OpenTelemetry collector/backend that accepts OTLP/HTTP. The plugin is no longer
+bundled with OpenClaw, so install it separately before enabling it.
 
 ```json
 {
@@ -253,7 +254,8 @@ any OpenTelemetry collector/backend that accepts OTLP/HTTP.
 
 Notes:
 
-- You can also enable the plugin with `openclaw plugins enable diagnostics-otel`.
+- Once installed, you can also enable the plugin with
+  `openclaw plugins enable diagnostics-otel`.
 - `protocol` currently supports `http/protobuf` only. `grpc` is ignored.
 - Metrics include token usage, cost, context size, run duration, and message-flow
   counters/histograms (webhooks, queueing, session state, queue depth/wait).

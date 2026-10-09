@@ -622,7 +622,7 @@ workspace/managed skills locations.
 Recommended packaging:
 
 - Main package: `openclaw` (this repo)
-- Plugins: separate npm packages under `@openclaw/*` (example: `@openclaw/voice-call`)
+- Plugins: separate npm packages under `@openclaw/*` (example: `@openclaw/discord`)
 
 Publishing contract:
 
