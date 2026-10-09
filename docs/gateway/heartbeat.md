@@ -189,7 +189,8 @@ Use `accountId` to target a specific account on multi-account channels like Tele
   - Session key formats: see [Sessions](/concepts/session) and [Groups](/concepts/groups).
 - `target`:
   - `last` (default): deliver to the last used external channel.
-  - explicit channel: `whatsapp` / `telegram` / `discord` / `slack` / `signal` / `imessage`.
+  - explicit channel: `whatsapp` / `telegram` / `discord` / `slack` / `signal` /
+    `imessage`.
   - `none`: run the heartbeat but **do not deliver** externally.
 - `to`: optional recipient override (channel-specific id, e.g. E.164 for WhatsApp or a
   Telegram chat id).

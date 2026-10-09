@@ -7,8 +7,8 @@ title: "Groups"
 
 # Groups
 
-OpenClaw treats group chats consistently across WhatsApp, Telegram, Discord, Slack, Signal,
-and iMessage.
+OpenClaw treats group chats consistently across WhatsApp, Telegram, Discord, Slack,
+Signal, and iMessage.
 
 ## Beginner intro (2 minutes)
 
@@ -185,7 +185,8 @@ Control how group/room messages are handled per channel:
 Notes:
 
 - `groupPolicy` is separate from mention-gating (which requires @mentions).
-- WhatsApp/Telegram/Signal/iMessage: use `groupAllowFrom` (fallback: explicit `allowFrom`).
+- WhatsApp/Telegram/Signal/iMessage: use `groupAllowFrom` (fallback: explicit
+  `allowFrom`).
 - Discord: allowlist uses `channels.discord.guilds.<id>.channels`.
 - Slack: allowlist uses `channels.slack.channels`.
 - Group DMs are controlled separately (`channels.discord.dm.*`, `channels.slack.dm.*`).

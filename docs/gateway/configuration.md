@@ -1571,8 +1571,8 @@ WhatsApp inbound prefix is configured via `channels.whatsapp.messagePrefix` (dep
 `identity.name` set.
 
 `ackReaction` sends a best-effort emoji reaction to acknowledge inbound messages on
-channels that support reactions (Slack/Discord/Telegram). Defaults to the
-active agent's `identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
+channels that support reactions (Slack/Discord/Telegram). Defaults to the active agent's
+`identity.emoji` when set, otherwise `"👀"`. Set it to `""` to disable.
 
 `ackReactionScope` controls when reactions fire:
 
@@ -2002,12 +2002,11 @@ Block streaming:
   ```
 - `agents.defaults.blockStreamingCoalesce`: merge streamed blocks before sending. Defaults
   to `{ idleMs: 1000 }` and inherits `minChars` from `blockStreamingChunk` with `maxChars`
-  capped to the channel text limit. Signal/Slack/Discord default to
-  `minChars: 1500` unless overridden. Channel overrides:
-  `channels.whatsapp.blockStreamingCoalesce`, `channels.telegram.blockStreamingCoalesce`,
-  `channels.discord.blockStreamingCoalesce`, `channels.slack.blockStreamingCoalesce`,
-  `channels.signal.blockStreamingCoalesce`, `channels.imessage.blockStreamingCoalesce`
-  (and per-account variants).
+  capped to the channel text limit. Signal/Slack/Discord default to `minChars: 1500`
+  unless overridden. Channel overrides: `channels.whatsapp.blockStreamingCoalesce`,
+  `channels.telegram.blockStreamingCoalesce`, `channels.discord.blockStreamingCoalesce`,
+  `channels.slack.blockStreamingCoalesce`, `channels.signal.blockStreamingCoalesce`,
+  `channels.imessage.blockStreamingCoalesce` (and per-account variants).
 - `agents.defaults.humanDelay`: randomized pause between **block replies** after the
   first. Modes: `off` (default), `natural` (800–2500ms), `custom` (use `minMs`/`maxMs`).
   Per-agent override: `agents.list[].humanDelay`. Example:
@@ -3521,8 +3520,8 @@ prompt for CLI entries | | `{{MaxChars}}` | Resolved max output chars for CLI en
 `{{ChatType}}` | `"direct"` or `"group"` | | `{{GroupSubject}}` | Group subject (best
 effort) | | `{{GroupMembers}}` | Group members preview (best effort) | | `{{SenderName}}`
 | Sender display name (best effort) | | `{{SenderE164}}` | Sender phone number (best
-effort) | | `{{Provider}}` | Provider hint (whatsapp | telegram | discord | slack | signal |
-imessage | webchat | …) |
+effort) | | `{{Provider}}` | Provider hint (whatsapp | telegram | discord | slack | signal
+| imessage | webchat | …) |
 
 ## Cron (Gateway scheduler)
 

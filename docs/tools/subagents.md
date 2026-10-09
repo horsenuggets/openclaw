@@ -106,8 +106,8 @@ Sub-agents report back via an announce step:
 - If the sub-agent replies exactly `ANNOUNCE_SKIP`, nothing is posted.
 - Otherwise the announce reply is posted to the requester chat channel via a follow-up
   `agent` call (`deliver=true`).
-- Announce replies preserve thread/topic routing when available (Slack threads and Telegram
-  topics).
+- Announce replies preserve thread/topic routing when available (Slack threads and
+  Telegram topics).
 - Announce messages are normalized to a stable template:
   - `Status:` derived from the run outcome (`success`, `error`, `timeout`, or `unknown`).
   - `Result:` the summary content from the announce step (or `(not available)` if

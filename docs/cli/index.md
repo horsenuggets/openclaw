@@ -391,8 +391,7 @@ Subcommands:
 
 Common options:
 
-- `--channel <name>`:
-  `whatsapp|telegram|discord|slack|signal|imessage`
+- `--channel <name>`: `whatsapp|telegram|discord|slack|signal|imessage`
 - `--account <id>`: channel account id (default `default`)
 - `--name <label>`: display name for the account
 

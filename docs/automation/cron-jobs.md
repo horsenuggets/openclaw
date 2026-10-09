@@ -221,8 +221,8 @@ Resolution priority:
 Isolated jobs can deliver output to a channel via the top-level `delivery` config:
 
 - `delivery.mode`: `announce` (deliver a summary) or `none`.
-- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `signal` / `imessage` /
-  `last`.
+- `delivery.channel`: `whatsapp` / `telegram` / `discord` / `slack` / `signal` /
+  `imessage` / `last`.
 - `delivery.to`: channel-specific recipient target.
 
 Delivery config is only valid for isolated jobs (`sessionTarget: "isolated"`).
