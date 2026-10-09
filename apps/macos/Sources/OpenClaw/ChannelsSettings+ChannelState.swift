@@ -293,7 +293,7 @@ extension ChannelsSettings {
     }
 
     var orderedChannels: [ChannelItem] {
-        let fallback = ["whatsapp", "telegram", "discord", "googlechat", "slack", "signal", "imessage"]
+        let fallback = ["whatsapp", "telegram", "discord", "slack", "signal", "imessage"]
         let order = self.store.snapshot?.channelOrder ?? fallback
         let channels = order.enumerated().map { index, id in
             ChannelItem(

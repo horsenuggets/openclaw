@@ -173,8 +173,6 @@ Plugins can register **additional tools** (and CLI commands) beyond the core set
 [Plugins](/plugin) for install + config, and [Skills](/tools/skills) for how tool usage
 guidance is injected into prompts. Some plugins ship their own skills alongside tools.
 
-Optional plugin tools:
-
 ## Tool inventory
 
 ### `apply_patch`

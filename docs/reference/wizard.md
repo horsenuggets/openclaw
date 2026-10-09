@@ -267,6 +267,6 @@ will prompt to install it (npm or a local path) before it can be configured.
 - macOS app onboarding: [Onboarding](/start/onboarding)
 - Config reference: [Gateway configuration](/gateway/configuration)
 - Providers: [WhatsApp](/channels/whatsapp), [Telegram](/channels/telegram),
-  [Discord](/channels/discord), [Signal](/channels/signal), [iMessage](/channels/imessage)
-  (legacy)
+  [Discord](/channels/discord), [Slack](/channels/slack), [Signal](/channels/signal),
+  [iMessage](/channels/imessage) (legacy)
 - Skills: [Skills](/tools/skills), [Skills config](/tools/skills-config)
