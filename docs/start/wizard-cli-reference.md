@@ -21,8 +21,7 @@ Local mode (default) walks you through:
   plus MiniMax, GLM, Moonshot, and AI Gateway options)
 - Workspace location and bootstrap files
 - Gateway settings (port, bind, auth, tailscale)
-- Channels and providers (Telegram, WhatsApp, Discord, Google Chat, Mattermost plugin,
-  Signal)
+- Channels and providers (Telegram, WhatsApp, Discord, Signal)
 - Daemon install (LaunchAgent or systemd user unit)
 - Health check
 - Skills setup

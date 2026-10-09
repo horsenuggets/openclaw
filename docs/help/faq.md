@@ -788,23 +788,22 @@ No. OpenClaw runs on macOS or Linux (Windows via WSL2). A Mac mini is optional -
 people buy one as an always-on host, but a small VPS, home server, or Raspberry Pi-class
 box works too.
 
-You only need a Mac **for macOS-only tools**. For iMessage, use BlueBubbles
-(recommended) - the BlueBubbles server runs on any Mac, and the Gateway can run on Linux
-or elsewhere. If you want other macOS-only tools, run the Gateway on a Mac or pair a macOS
-node.
+You only need a Mac **for macOS-only tools**. For iMessage, use the
+[`imsg` channel](/channels/imessage) - it needs a Mac signed into Messages, and the
+Gateway can run on Linux or elsewhere (reaching the Mac over SSH). If you want other
+macOS-only tools, run the Gateway on a Mac or pair a macOS node.
 
 Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
 
 ### Do I need a Mac mini for iMessage support
 
 You need **some macOS device** signed into Messages. It does **not** have to be a Mac
-mini - any Mac works. **Use BlueBubbles** (recommended) for iMessage - the BlueBubbles
-server runs on macOS, while the Gateway can run on Linux or elsewhere.
+mini - any Mac works. Use the [`imsg` channel](/channels/imessage) for iMessage: the
+`imsg` CLI runs on macOS, while the Gateway can run on Linux or elsewhere.
 
 Common setups:
 
-- Run the Gateway on Linux/VPS, and run the BlueBubbles server on any Mac signed into
-  Messages.
+- Run the Gateway on Linux/VPS, and run `imsg` on any Mac signed into Messages.
 - Run everything on the Mac if you want the simplest single‑machine setup.
 
 Docs: [Nodes](/nodes), [Mac remote mode](/platforms/mac/remote).
