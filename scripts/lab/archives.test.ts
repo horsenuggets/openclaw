@@ -3,6 +3,7 @@ import {
   type ArchiveClient,
   collectArchiveChannelIds,
   deleteChannels,
+  planArchiveCategoryOrder,
   tidyArchives,
 } from "./archives.js";
 import { ChannelType, type DiscordChannel } from "./discord.js";
@@ -71,6 +72,16 @@ class FakeGuild implements ArchiveClient {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
+  async modifyChannelPositions(entries: Array<{ id: string; position: number }>): Promise<void> {
+    for (const entry of entries) {
+      const channel = this.channels.find((c) => c.id === entry.id);
+      if (channel) {
+        channel.position = entry.position;
+      }
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
   async deleteChannel(channelId: string): Promise<void> {
     this.channels = this.channels.filter((c) => c.id !== channelId);
   }
@@ -111,7 +122,7 @@ describe("tidyArchives", () => {
       category("c2", "Archive 0002"),
       ...texts("b", 10, "c2"),
     ]);
-    await tidyArchives(guild, { paceMs: 0 });
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
     const layout = guild.layout();
     expect(layout.map((l) => l.name)).toEqual(["Archive 0001", "Archive 0002"]);
     expect(layout[0].children).toHaveLength(50);
@@ -125,7 +136,11 @@ describe("tidyArchives", () => {
       // Five loose channels (e.g. freshly expired Testing days) to be archived.
       ...texts("x", 5, "loose"),
     ]);
-    await tidyArchives(guild, { include: ["x0", "x1", "x2", "x3", "x4"], paceMs: 0 });
+    await tidyArchives(guild, {
+      include: ["x0", "x1", "x2", "x3", "x4"],
+      paceMs: 0,
+      verbose: false,
+    });
     const layout = guild.layout();
     expect(layout.map((l) => l.name)).toEqual(["Archive 0001", "Archive 0002"]);
     expect(layout[0].children).toHaveLength(50);
@@ -140,7 +155,7 @@ describe("tidyArchives", () => {
 
   it("renames non-contiguous categories to a contiguous sequence", async () => {
     const guild = new FakeGuild([category("c9", "Archive 0009"), ...texts("a", 10, "c9")]);
-    await tidyArchives(guild, { paceMs: 0 });
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
     expect(guild.layout().map((l) => l.name)).toEqual(["Archive 0001"]);
   });
 
@@ -150,19 +165,19 @@ describe("tidyArchives", () => {
       ...texts("a", 10, "c1"),
       category("c2", "Archive 0002"),
     ]);
-    await tidyArchives(guild, { paceMs: 0 });
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
     expect(guild.layout().map((l) => l.name)).toEqual(["Archive 0001"]);
   });
 
   it("removes every category when there is nothing to archive", async () => {
     const guild = new FakeGuild([category("c1", "Archive 0001"), category("c2", "Archive 0002")]);
-    await tidyArchives(guild, { paceMs: 0 });
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
     expect(guild.layout()).toEqual([]);
   });
 
   it("ignores included ids that are not in the guild", async () => {
     const guild = new FakeGuild([category("c1", "Archive 0001"), ...texts("a", 3, "c1")]);
-    await tidyArchives(guild, { include: ["does-not-exist"], paceMs: 0 });
+    await tidyArchives(guild, { include: ["does-not-exist"], paceMs: 0, verbose: false });
     const layout = guild.layout();
     expect(layout).toHaveLength(1);
     expect(layout[0].children).toHaveLength(3);
@@ -180,13 +195,81 @@ describe("tidyArchives", () => {
       ],
       true,
     );
-    await tidyArchives(guild, { paceMs: 0 });
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
     const layout = guild.layout();
     expect(layout.map((l) => l.name)).toEqual(["Archive 0001", "Archive 0002"]);
     expect(layout[0].children).toHaveLength(50);
     expect(layout[1].children).toHaveLength(30);
     // Order is preserved: cat0 holds the 30 a-channels then the first 20 b-channels.
     expect(layout[0].children.slice(0, 30)).toEqual(texts("a", 30, "c1").map((c) => c.id));
+  });
+
+  it("orders archive categories ascending by number and after every non-archive category", async () => {
+    const guild = new FakeGuild([
+      category("gen", "General", 0),
+      category("test", "Testing", 5),
+      // Archive categories start out before the non-archive ones and out of order.
+      category("c2", "Archive 0002", 1),
+      ...texts("b", 3, "c2"),
+      category("c1", "Archive 0001", 2),
+      ...texts("a", 3, "c1"),
+    ]);
+    await tidyArchives(guild, { paceMs: 0, verbose: false });
+    const cats = guild.channels.filter((c) => c.type === ChannelType.GuildCategory);
+    const maxNonArchive = Math.max(
+      ...cats.filter((c) => !c.name.startsWith("Archive ")).map((c) => c.position ?? 0),
+    );
+    const archives = cats
+      .filter((c) => c.name.startsWith("Archive "))
+      .toSorted((x, y) => Number(x.name.slice(8)) - Number(y.name.slice(8)));
+    // Positions strictly ascending by number, all above the non-archive max.
+    const positions = archives.map((c) => c.position ?? 0);
+    for (let i = 0; i < positions.length; i++) {
+      expect(positions[i]).toBeGreaterThan(maxNonArchive);
+      if (i > 0) {
+        expect(positions[i]).toBeGreaterThan(positions[i - 1]);
+      }
+    }
+  });
+});
+
+describe("planArchiveCategoryOrder", () => {
+  it("places archives after the max non-archive position in numeric order", () => {
+    const channels = [
+      category("gen", "General", 0),
+      category("test", "Testing", 3),
+      category("c1", "Archive 0001", 0),
+      category("c2", "Archive 0002", 0),
+    ];
+    expect(planArchiveCategoryOrder(channels)).toEqual([
+      { id: "c1", position: 4 },
+      { id: "c2", position: 5 },
+    ]);
+  });
+
+  it("corrects out-of-order archive categories", () => {
+    const channels = [
+      category("gen", "General", 0),
+      category("c2", "Archive 0002", 1),
+      category("c1", "Archive 0001", 2),
+    ];
+    expect(planArchiveCategoryOrder(channels)).toEqual([
+      { id: "c1", position: 1 },
+      { id: "c2", position: 2 },
+    ]);
+  });
+
+  it("returns an empty array for an already-correct layout", () => {
+    const channels = [
+      category("gen", "General", 0),
+      category("c1", "Archive 0001", 1),
+      category("c2", "Archive 0002", 2),
+    ];
+    expect(planArchiveCategoryOrder(channels)).toEqual([]);
+  });
+
+  it("returns an empty array when there are no categories", () => {
+    expect(planArchiveCategoryOrder([])).toEqual([]);
   });
 });
 

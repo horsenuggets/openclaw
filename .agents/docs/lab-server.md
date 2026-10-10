@@ -61,23 +61,28 @@ entrypoint. Pure logic (name sanitization, numbering, archive bin-packing, the m
 filter) lives in `lab-core.ts` and is unit-tested in `lab-core.test.ts`; the archive
 repacking is tested in `archives.test.ts`; Discord I/O lives in `discord.ts`.
 
-- `create_new_thread.sh <title> [description] [--no-members]` - the main entry point.
-  Creates today's `YYYY-MM-DD` Testing channel on demand (with its intro embed), then a
-  sequentially numbered `NNNN-<slug>` thread with a confirmation embed. The title is
-  slugified (lowercase, punctuation runs collapsed to `-`, trimmed, capped at 32 chars)
-  and a description over 1000 chars is rejected before any Discord work. Expired Testing
-  days are archived first. By default every non-bot Lab member is added to the new thread
-  so all testers see it; pass `--no-members` to skip that.
+- `create_new_thread.sh <title> [description]` - the main entry point. Creates today's
+  `YYYY-MM-DD` Testing channel on demand (with its intro embed), then a sequentially
+  numbered `NNNN-<slug>` thread with a confirmation embed. The title is slugified
+  (lowercase, punctuation runs collapsed to `-`, trimmed, capped at 32 chars) and a
+  description over 1000 chars is rejected before any Discord work. Expired Testing days
+  are archived first. Every non-bot Lab member is always added to the new thread so all
+  testers see it. Thread creation is serialized across processes with a 3-second debounce
+  (a lockfile in the temp dir keyed by guild id, plus a minimum spacing), so rapid or
+  concurrent runs cannot read the same max number and spawn threads out of order.
 - `archive_old_threads.sh` - moves Testing day channels (and their threads) older than 7
   days into the archive categories. `create_new_thread.sh` runs this automatically, so it
   rarely needs to be run by hand.
+- `archive_all_threads.sh` - moves every channel in the Testing category into the archive
+  categories, regardless of age. Use it to clear out the whole Testing category at once.
 - `archive_channel.sh <channel-id>` - archives one channel (must exist and not be a
   category), then tidies.
 - `tidy_archives.sh` - repacks every archived channel into contiguous `Archive NNNN`
   categories of up to 50. Each channel moves straight to its destination; a move that
   would momentarily exceed the 50-channel ceiling is deferred and retried once another
-  move frees a slot, so a channel is never left parentless. Runs automatically whenever a
-  channel is archived.
+  move frees a slot, so a channel is never left parentless. It also reorders the archive
+  categories so they sit in ascending numeric order after the other categories. Runs
+  automatically whenever a channel is archived.
 - `thanos_snap_archives.sh [--yes]` - deletes a random half of the archived channels, then
   tidies.
 - `clear_archives.sh [--yes]` - deletes every archived channel, then tidies (removing the
@@ -92,6 +97,10 @@ passed (and require `--yes` when there is no interactive terminal).
 
 - "Archive" means move a channel into an `Archive NNNN` category; Discord channels have no
   native archived state.
+- The `Archive NNNN` categories are kept in ascending numeric order, after the other
+  categories, on every tidy.
+- The archive commands log each action they take (channels archived or deleted, categories
+  created, renamed, reordered, or removed) so a run is auditable from its output.
 - Testing channels and threads are archived after 7 days.
 - Leave created test threads and channels in place as evidence; the scripts archive them
   on their own schedule.

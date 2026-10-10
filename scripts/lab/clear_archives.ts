@@ -14,6 +14,9 @@ import { confirmDestructive } from "./prompt.js";
 
 async function clearArchives(): Promise<void> {
   const client = new LabDiscord();
+  // Map ids to names so the deletion log reads channel names, not bare ids.
+  const channels = await client.listGuildChannels();
+  const nameById = new Map(channels.map((c) => [c.id, c.name]));
   const ids = await collectArchiveChannelIds(client);
   if (ids.length === 0) {
     // Still tidy so any stray empty archive categories are removed.
@@ -24,6 +27,9 @@ async function clearArchives(): Promise<void> {
   if (!(await confirmDestructive(`Delete all ${ids.length} archived channels?`, process.argv))) {
     console.log("Aborted. Re-run with --yes to confirm.");
     return;
+  }
+  for (const id of ids) {
+    console.log(`Deleting "${nameById.get(id) ?? id}" (${id}).`);
   }
   await deleteChannels(client, ids);
   await tidyArchives(client);

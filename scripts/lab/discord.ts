@@ -206,6 +206,20 @@ export class LabDiscord {
     });
   }
 
+  /**
+   * Bulk-reorder guild channels via Discord's "Modify Guild Channel Positions"
+   * endpoint, which returns 204 with an empty body (so no `this.json`).
+   */
+  async modifyChannelPositions(entries: Array<{ id: string; position: number }>): Promise<void> {
+    const resp = await this.request(`${API}/guilds/${this.guildId}/channels`, {
+      method: "PATCH",
+      json: entries,
+    });
+    if (!resp.ok) {
+      throw new Error(`modify channel positions failed: ${resp.status} ${await resp.text()}`);
+    }
+  }
+
   async deleteChannel(channelId: string): Promise<void> {
     const resp = await this.request(`${API}/channels/${channelId}`, { method: "DELETE" });
     if (!resp.ok && resp.status !== 404) {
