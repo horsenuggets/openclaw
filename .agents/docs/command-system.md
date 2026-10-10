@@ -23,8 +23,10 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   (`tokenizeDebugCommand` / `parseDebugCommand`). Subcommands live in `DEBUG_SUBCOMMANDS`
   (currently `echo` and `help`); `help` (also the empty-input default) renders a
   Debug-category embed listing every subcommand alphabetically, overflowing across extra
-  embeds when it exceeds Discord's per-embed limits. Every reply is ephemeral, so internal
-  tools never surface to regular users in the slash picker or the channel.
+  embeds within Discord's shared per-message limit (6000 characters across at most 10
+  embeds, 25 fields each) with a truncation note past that. Every reply is ephemeral, so
+  internal tools never surface to regular users in the slash picker or the channel. See
+  [debug-command.md](debug-command.md) for usage and how to add a subcommand.
 
 ## Slash versus Text Dispatch
 
