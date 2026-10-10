@@ -160,18 +160,18 @@ export function parseDebugCommand(input: string): { subcommand: string | null; a
 }
 
 /**
- * A short, log-safe label for a debug command: just the subcommand name, with
- * any non-printable-ASCII stripped and the length bounded. Never includes the
- * arguments, which can carry credentials or forged newlines. Empty input logs
- * as `(help)` (the default action).
+ * A short, log-safe label for a debug command. Only ever a registered
+ * subcommand name (fixed, control-char-free strings), `(help)` for empty input,
+ * or `(unknown)` for anything unrecognized. Crucially, unrecognized input is NOT
+ * echoed into the log: an admin who accidentally pastes a credential as the
+ * command does not match a registered name, so the raw value never persists.
  */
 export function debugSubcommandLabel(input: string): string {
   const { subcommand } = parseDebugCommand(input);
   if (!subcommand) {
     return "(help)";
   }
-  const safe = subcommand.replace(/[^\x20-\x7e]/g, "").slice(0, MAX_ECHOED_NAME_CHARS);
-  return safe || "(unknown)";
+  return DEBUG_SUBCOMMANDS.some((sub) => sub.name === subcommand) ? subcommand : "(unknown)";
 }
 
 /** Build a single Debug-category notice embed as an embeds result. */

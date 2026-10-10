@@ -5,6 +5,7 @@ import {
   DEBUG_SUBCOMMANDS,
   type DebugSubcommand,
   buildDebugHelpEmbeds,
+  debugSubcommandLabel,
   parseDebugCommand,
   runDebugCommand,
   tokenizeDebugCommand,
@@ -237,6 +238,22 @@ describe("buildDebugHelpEmbeds", () => {
     ];
     const { embeds } = buildDebugHelpEmbeds(subs);
     expect((embeds[0].fields ?? []).map((f) => f.name)).toEqual(["`alpha`", "`zed`"]);
+  });
+});
+
+describe("debugSubcommandLabel", () => {
+  it("labels empty input as help", () => {
+    expect(debugSubcommandLabel("")).toBe("(help)");
+  });
+
+  it("returns the name only for a registered subcommand", () => {
+    expect(debugSubcommandLabel("echo hi")).toBe("echo");
+    expect(debugSubcommandLabel("HELP")).toBe("help");
+  });
+
+  it("never echoes unrecognized input (e.g. a pasted credential)", () => {
+    expect(debugSubcommandLabel("sk-secret-token-value")).toBe("(unknown)");
+    expect(debugSubcommandLabel("bogus whatever")).toBe("(unknown)");
   });
 });
 

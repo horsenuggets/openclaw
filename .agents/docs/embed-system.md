@@ -20,11 +20,14 @@ Specific builders » `buildWelcomeEmbed` (`onboarding.ts`), `buildLogEmbed`
 registration and command-result embeds (`channel-commands.ts`, `gateway-events.ts`).
 
 `buildDebugHelpEmbeds` (`debug-command.ts`) is the one builder that returns multiple
-embeds: when the subcommand list exceeds Discord's per-embed limits (25 fields or 6000
-characters) it packs the fields across several embeds, keeping the title and description
-on the first, plain fields on the middle, and the footer and timestamp on the last. It
-builds the embed objects directly (rather than via `buildEmbed`) so the non-last embeds
-can omit the footer.
+embeds. It respects two distinct Discord limits: each embed holds at most 25 fields (a
+per-embed cap), while the combined text of all embeds in the message (title +
+description + every field name/value + footer) must stay under 6000 characters (a
+per-message cap, not per-embed) across at most 10 embeds. It packs fields across several
+embeds accordingly, keeping the title and description on the first, plain fields in the
+middle, and the footer and timestamp on the last; if either limit is hit it stops and
+appends a truncation note field so the message still renders. It builds the embed objects
+directly (rather than via `buildEmbed`) so the non-last embeds can omit the footer.
 
 ## Icon Assets
 
