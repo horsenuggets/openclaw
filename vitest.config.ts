@@ -22,6 +22,7 @@ export default defineConfig({
     maxWorkers: isCI ? ciWorkers : localWorkers,
     include: [
       "discord-health-monitor/**/*.test.ts",
+      "scripts/**/*.test.ts",
       "src/**/*.test.ts",
       "extensions/**/*.test.ts",
       "test/format-error.test.ts",
