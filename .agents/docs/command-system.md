@@ -24,9 +24,12 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   (currently `echo` and `help`); `help` (also the empty-input default) renders a
   Debug-category embed listing every subcommand alphabetically, overflowing across extra
   embeds within Discord's shared per-message limit (6000 characters across at most 10
-  embeds, 25 fields each) with a truncation note past that. Every reply is ephemeral, so
-  internal tools never surface to regular users in the slash picker or the channel. See
-  [debug-command.md](debug-command.md) for usage and how to add a subcommand.
+  embeds, 25 fields each) with a truncation note past that. Keeping subcommands behind the
+  one free-text option (rather than registering each as its own slash command) is what
+  hides them from the public slash picker; `/debug` itself is still globally registered
+  and visible, gated at runtime by the admin check. Replies are ephemeral, so debug output
+  stays out of the channel. See [debug-command.md](debug-command.md) for usage and how to
+  add a subcommand.
 
 ## Slash versus Text Dispatch
 

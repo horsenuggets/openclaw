@@ -68,9 +68,12 @@ Subcommands are defined inside `debug-command.ts` and registered in the
    is nothing else to wire up for it to appear.
 3. Return the right `DebugResult` kind:
    - `{ kind: "content", content }` for raw text with no embed (like `echo`). The router
-     sends this content unchanged, so each content-producing subcommand must clamp its own
-     output to Discord's 2000-char message limit (for example via the in-module `clamp`
-     helper, as `echo` does); there is no automatic clamp in the dispatcher or the sender.
+     sends this content unchanged via `editInteractionContentReply`, which also clears any
+     embeds and components, so the content must be non-empty and clamped to Discord's
+     2000-char message limit; otherwise Discord rejects the edit (nothing to show). There
+     is no automatic clamp or empty-guard in the dispatcher or sender, so each
+     content-producing subcommand enforces both itself: `echo` clamps via the in-module
+     `clamp` helper and returns a notice embed instead when given no text.
    - `{ kind: "embeds", embeds, attachments }` for rich output. For a simple one-embed
      notice use the in-module `debugNotice(title, description)` helper, which builds a
      Debug-category embed and returns the result for you.
