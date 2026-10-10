@@ -61,16 +61,15 @@ entrypoint. Pure logic (name sanitization, numbering, archive bin-packing, the m
 filter) lives in `lab-core.ts` and is unit-tested in `lab-core.test.ts`; the archive
 repacking is tested in `archives.test.ts`; Discord I/O lives in `discord.ts`.
 
-- `create_new_thread.sh <title> [description] [--no-members]` - the main entry point.
-  Creates today's `YYYY-MM-DD` Testing channel on demand (with its intro embed), then a
-  sequentially numbered `NNNN-<slug>` thread with a confirmation embed. The title is
-  slugified (lowercase, punctuation runs collapsed to `-`, trimmed, capped at 32 chars)
-  and a description over 1000 chars is rejected before any Discord work. Expired Testing
-  days are archived first. By default every non-bot Lab member is added to the new thread
-  so all testers see it; pass `--no-members` to skip that. Thread creation is serialized
-  across processes with a 3-second debounce (a lockfile in the temp dir keyed by guild id,
-  plus a minimum spacing), so rapid or concurrent runs cannot read the same max number and
-  spawn threads out of order.
+- `create_new_thread.sh <title> [description]` - the main entry point. Creates today's
+  `YYYY-MM-DD` Testing channel on demand (with its intro embed), then a sequentially
+  numbered `NNNN-<slug>` thread with a confirmation embed. The title is slugified
+  (lowercase, punctuation runs collapsed to `-`, trimmed, capped at 32 chars) and a
+  description over 1000 chars is rejected before any Discord work. Expired Testing days
+  are archived first. Every non-bot Lab member is always added to the new thread so all
+  testers see it. Thread creation is serialized across processes with a 3-second debounce
+  (a lockfile in the temp dir keyed by guild id, plus a minimum spacing), so rapid or
+  concurrent runs cannot read the same max number and spawn threads out of order.
 - `archive_old_threads.sh` - moves Testing day channels (and their threads) older than 7
   days into the archive categories. `create_new_thread.sh` runs this automatically, so it
   rarely needs to be run by hand.

@@ -2,17 +2,17 @@
  * Create a numbered end-to-end testing thread in the OpenClaw Lab server.
  *
  * Usage (via the wrapper, which loads the Lab env):
- *   scripts/lab/create_new_thread.sh <title> [description] [--no-members]
+ *   scripts/lab/create_new_thread.sh <title> [description]
  *
  * A Testing day channel named `YYYY-MM-DD` (local time) is created on demand with
  * its intro embed, then a thread `NNNN-<slug>` is added (numbered sequentially
  * within the day) and a confirmation embed is posted inside it. Expired Testing
  * days are archived first via archive_old_threads.
  *
- * By default every non-bot member of the Lab server is added to the new thread as
- * a follow-up so all testers see it; pass `--no-members` to skip that. Auto-adding
- * needs the Mirror bot's Server Members privileged intent; without it the add is
- * skipped with a warning and the thread is still created.
+ * Every non-bot member of the Lab server is always added to the new thread as a
+ * follow-up so all testers see it. Auto-adding needs the Mirror bot's Server
+ * Members privileged intent; without it the add is skipped with a warning and the
+ * thread is still created.
  *
  * Thread numbering reads the current max and adds one, so near-simultaneous or
  * rapid back-to-back runs could read the same max and create threads out of
@@ -97,6 +97,7 @@ type Lock = { path: string; token: string; heartbeat: ReturnType<typeof setInter
  */
 async function acquireLock(lockPath: string): Promise<Lock> {
   const token = `${process.pid}-${randomUUID()}`;
+  const stealPath = `${lockPath}.steal`;
   for (;;) {
     try {
       fs.writeFileSync(lockPath, token, { flag: "wx" });
@@ -114,18 +115,54 @@ async function acquireLock(lockPath: string): Promise<Lock> {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
         throw err;
       }
-      // Lock is held; steal it only if its owner stopped refreshing (crashed).
-      try {
-        const age = Date.now() - fs.statSync(lockPath).mtimeMs;
-        if (age > LOCK_STALE_MS) {
-          fs.rmSync(lockPath, { force: true });
-          continue;
-        }
-      } catch {
-        // The holder released the lock between our open and stat; just retry.
-      }
+      reclaimIfStale(lockPath, stealPath, token);
       await sleep(LOCK_POLL_MS);
     }
+  }
+}
+
+/**
+ * Reclaim the lock only if it is stale, serializing the check-and-remove behind a
+ * short-lived steal lock and RE-checking staleness while holding it. Two waiters
+ * can therefore never both delete the lock: whichever wins the steal lock removes
+ * the stale file, and the other then sees either no lock or a fresh one under the
+ * mutex and backs off. A crashed reclaimer's steal lock is itself reclaimed by
+ * mtime, so the steal path cannot deadlock.
+ */
+function reclaimIfStale(lockPath: string, stealPath: string, token: string): void {
+  try {
+    if (Date.now() - fs.statSync(lockPath).mtimeMs <= LOCK_STALE_MS) {
+      return;
+    }
+  } catch {
+    return; // The lock vanished between our open and stat; just retry.
+  }
+  try {
+    fs.writeFileSync(stealPath, token, { flag: "wx" });
+  } catch (err) {
+    // Another waiter is already reclaiming. Only clear its steal lock if the
+    // reclaimer itself died (its steal lock went stale); otherwise leave it be.
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      try {
+        if (Date.now() - fs.statSync(stealPath).mtimeMs > LOCK_STALE_MS) {
+          fs.rmSync(stealPath, { force: true });
+        }
+      } catch {
+        // The steal lock vanished; nothing to do.
+      }
+    }
+    return;
+  }
+  try {
+    // Re-check under mutual exclusion: remove the lock only if it is STILL stale,
+    // so a lock another waiter just refreshed or recreated is never deleted.
+    if (Date.now() - fs.statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
+      fs.rmSync(lockPath, { force: true });
+    }
+  } catch {
+    // The lock already went away.
+  } finally {
+    fs.rmSync(stealPath, { force: true });
   }
 }
 
@@ -189,11 +226,9 @@ async function addEveryoneToThread(client: LabDiscord, threadId: string): Promis
 }
 
 async function createNewThread(): Promise<void> {
-  const args = process.argv.slice(2);
-  const addMembers = !args.includes("--no-members");
-  const [title, description] = args.filter((arg) => arg !== "--no-members");
+  const [title, description] = process.argv.slice(2);
   if (!title) {
-    throw new Error("Usage: create_new_thread.sh <title> [description] [--no-members]");
+    throw new Error("Usage: create_new_thread.sh <title> [description]");
   }
   if (description && description.length > MAX_DESCRIPTION) {
     throw new Error(
@@ -278,7 +313,7 @@ async function createNewThread(): Promise<void> {
     releaseLock(lock);
   }
 
-  if (addMembers && threadId) {
+  if (threadId) {
     await addEveryoneToThread(client, threadId);
   }
 }
