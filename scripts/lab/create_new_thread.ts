@@ -8,6 +8,11 @@
  * its intro embed, then a thread `NNNN-<slug>` is added (numbered sequentially
  * within the day) and a confirmation embed is posted inside it. Expired Testing
  * days are archived first via archive_old_threads.
+ *
+ * Thread numbering reads the current max and adds one, so it assumes a single
+ * operator: this is a manual test-server helper, not a concurrent service, and
+ * two simultaneous runs for the same day could pick the same number. Discord has
+ * no atomic name reservation, so a lock is deliberately out of scope here.
  */
 
 import { archiveExpiredTestingDays } from "./archive_old_threads.js";
