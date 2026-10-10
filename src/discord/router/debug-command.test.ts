@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DiscordEmbed } from "./channel-commands.js";
 import {
   DEBUG_COMMAND_SPEC,
   DEBUG_SUBCOMMANDS,
@@ -8,6 +9,19 @@ import {
   runDebugCommand,
   tokenizeDebugCommand,
 } from "./debug-command.js";
+
+/** Discord counts this combined text against the shared 6000-char message cap. */
+function messageChars(embeds: DiscordEmbed[]): number {
+  return embeds.reduce(
+    (sum, embed) =>
+      sum +
+      (embed.title?.length ?? 0) +
+      (embed.description?.length ?? 0) +
+      (embed.footer?.text.length ?? 0) +
+      (embed.fields ?? []).reduce((acc, f) => acc + f.name.length + f.value.length, 0),
+    0,
+  );
+}
 
 describe("tokenizeDebugCommand", () => {
   it("splits on whitespace", () => {
@@ -154,6 +168,9 @@ describe("buildDebugHelpEmbeds", () => {
       expect(embed.description).toBeUndefined();
     }
 
+    // At most 10 embeds per message (Discord's hard cap).
+    expect(embeds.length).toBeLessThanOrEqual(10);
+
     // Only the last embed carries the footer and timestamp.
     const last = embeds.length - 1;
     embeds.forEach((embed, index) => {
@@ -167,17 +184,40 @@ describe("buildDebugHelpEmbeds", () => {
       // Every embed shares the category color and respects the field cap.
       expect(embed.color).toBe(0xff80e0);
       expect((embed.fields ?? []).length).toBeLessThanOrEqual(25);
-      const chars =
-        (embed.title?.length ?? 0) +
-        (embed.description?.length ?? 0) +
-        (embed.footer?.text.length ?? 0) +
-        (embed.fields ?? []).reduce((sum, f) => sum + f.name.length + f.value.length, 0);
-      expect(chars).toBeLessThanOrEqual(6000);
     });
 
-    // No field is lost or duplicated across the overflow.
+    // The message-wide character budget (6000, shared across all embeds) holds.
+    expect(messageChars(embeds)).toBeLessThanOrEqual(6000);
+
+    // These 60 fields fit comfortably, so none are dropped.
     const total = embeds.reduce((sum, embed) => sum + (embed.fields ?? []).length, 0);
     expect(total).toBe(many.length);
+  });
+
+  it("truncates with a note when the registry exceeds the message-wide budget", () => {
+    // Each field here costs ~120 chars, so a few hundred blow past 6000.
+    const huge: DebugSubcommand[] = Array.from({ length: 400 }, (_unused, index) => {
+      const name = `command-number-${String(index).padStart(4, "0")}`;
+      return {
+        name,
+        usage: `${name} <argument>`,
+        description: `A fairly long description for ${name} so the message budget is exhausted fast.`,
+        run: () => ({ kind: "content", content: "" }),
+      };
+    });
+    const { embeds } = buildDebugHelpEmbeds(huge);
+
+    expect(embeds.length).toBeLessThanOrEqual(10);
+    expect(messageChars(embeds)).toBeLessThanOrEqual(6000);
+    for (const embed of embeds) {
+      expect((embed.fields ?? []).length).toBeLessThanOrEqual(25);
+    }
+
+    // Fewer fields than subcommands were rendered, and the final field is the note.
+    const rendered = embeds.reduce((sum, embed) => sum + (embed.fields ?? []).length, 0);
+    expect(rendered).toBeLessThan(huge.length);
+    const lastEmbedFields = embeds[embeds.length - 1].fields ?? [];
+    expect(lastEmbedFields.at(-1)?.value).toContain("omitted");
   });
 
   it("sorts fields alphabetically regardless of input order", () => {

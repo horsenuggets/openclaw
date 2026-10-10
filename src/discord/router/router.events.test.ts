@@ -1358,6 +1358,118 @@ describe("discord router channel-delete cleanup", () => {
     });
   });
 
+  describe("/debug admin gate", () => {
+    const ADMIN = "222222222222222222";
+    const NON_ADMIN = "333333333333333333";
+    type DebugCallback = { type: number; data?: { flags?: number } };
+    type DebugPatch = {
+      content?: string;
+      embeds?: Array<{ title?: string; footer?: { text?: string } }>;
+    };
+
+    // Parse an @original PATCH body whether it was sent as JSON (content edit) or
+    // multipart (embed edit uploading the footer icon).
+    const parsePatch = (init: RequestInit): DebugPatch => {
+      const raw =
+        init.body instanceof FormData
+          ? (init.body.get("payload_json") as string)
+          : (init.body as string);
+      return JSON.parse(raw);
+    };
+
+    // Drive one /debug interaction. `admin` grants the caller admin via the
+    // override-id env (no auth-guild lookup, so no network), matching how a real
+    // admin is recognized without touching Discord's role API.
+    const runDebug = async (params: { userId: string; admin: boolean; command?: string }) => {
+      if (params.admin) {
+        vi.stubEnv("OPENCLAW_ADMIN_OVERRIDE_IDS", params.userId);
+      }
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-debug-"));
+      const callbacks: DebugCallback[] = [];
+      const patches: DebugPatch[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (typeof url === "string" && url.includes("/callback")) {
+            callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+            return { ok: true, status: 200, json: async () => ({}) };
+          }
+          if (typeof url === "string" && url.includes("/messages/@original")) {
+            patches.push(parsePatch(init as RequestInit));
+            return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+          }
+          return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+        }) as unknown as typeof fetch,
+      );
+      try {
+        void start(dir);
+        await vi.advanceTimersByTimeAsync(0);
+        const ws = FakeWebSocket.instances[0];
+        ws.emit("open");
+        ws.hello();
+        ws.ready();
+        ws.dispatch("INTERACTION_CREATE", {
+          id: "int-debug",
+          type: 2,
+          token: "tok",
+          channel_id: CHANNEL,
+          guild_id: GUILD,
+          member: { user: { id: params.userId } },
+          data: {
+            name: "debug",
+            options:
+              params.command !== undefined ? [{ name: "command", value: params.command }] : [],
+          },
+        });
+        for (let i = 0; i < 6; i++) {
+          await vi.advanceTimersByTimeAsync(0);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      return { callbacks, patches };
+    };
+
+    it("defers ephemerally and denies a non-admin", async () => {
+      const { callbacks, patches } = await runDebug({ userId: NON_ADMIN, admin: false });
+      // Ephemeral deferred ack (type 5, flags 64), then an authorization denial.
+      expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
+      expect(patches[0]?.content).toContain("not authorized");
+      // No help embed was rendered to a non-admin.
+      expect(patches.some((p) => p.embeds?.[0]?.title === "Debug Subcommands")).toBe(false);
+    });
+
+    it("never dispatches a subcommand for a non-admin (admin is checked first)", async () => {
+      // Even with a real subcommand, the denial lands and nothing is echoed.
+      const { patches } = await runDebug({
+        userId: NON_ADMIN,
+        admin: false,
+        command: "echo pwned",
+      });
+      expect(patches[0]?.content).toContain("not authorized");
+      expect(patches.some((p) => p.content === "pwned")).toBe(false);
+    });
+
+    it("renders the help embed for an admin (empty input)", async () => {
+      const { callbacks, patches } = await runDebug({ userId: ADMIN, admin: true });
+      expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
+      const help = patches.find((p) => p.embeds?.[0]?.title === "Debug Subcommands");
+      expect(help?.embeds?.[0]?.footer?.text).toBe("Debug");
+    });
+
+    it("echoes raw content for an admin", async () => {
+      const { patches } = await runDebug({
+        userId: ADMIN,
+        admin: true,
+        command: 'echo "hello world"',
+      });
+      const echoed = patches.find((p) => p.content === "hello world");
+      expect(echoed).toBeDefined();
+      // The content edit clears any prior embeds (sends an empty array).
+      expect(echoed?.embeds).toEqual([]);
+    });
+  });
+
   describe("secret modal submit responses", () => {
     // Capture the deferred callback (type 5) and the @original PATCH payload so we
     // can assert the defer-then-edit Secrets embed path for both a success and a

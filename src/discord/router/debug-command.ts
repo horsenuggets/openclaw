@@ -20,7 +20,18 @@ import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.
 
 /** Discord embed limits the help overflow must respect. */
 const MAX_FIELDS_PER_EMBED = 25;
-const MAX_EMBED_TOTAL_CHARS = 6000;
+/**
+ * Discord caps the combined text of ALL embeds in one message at 6000
+ * characters (title + description + every field name/value + footer text), not
+ * per embed, and allows at most 10 embeds. Overflowing to more embeds only buys
+ * room past the 25-field-per-embed cap; it does not raise this message-wide
+ * budget. Packing stops at whichever limit comes first and appends a truncation
+ * note so an oversized registry still renders instead of 400-ing.
+ */
+const MAX_MESSAGE_TOTAL_CHARS = 6000;
+const MAX_EMBEDS_PER_MESSAGE = 10;
+/** Characters reserved from the message budget for the truncation note. */
+const TRUNCATION_RESERVE = 160;
 const MAX_FIELD_NAME_CHARS = 256;
 const MAX_FIELD_VALUE_CHARS = 1024;
 /** Upper bound for a user-echoed subcommand name in a notice embed. */
@@ -31,6 +42,10 @@ const MAX_CONTENT_CHARS = 2000;
 const HELP_TITLE = "Debug Subcommands";
 const HELP_DESCRIPTION =
   "Below are all of the currently-registered subcommands under the `/debug` command...";
+const TRUNCATION_FIELD: DiscordEmbedField = {
+  name: "...",
+  value: "Some subcommands were omitted because the list exceeded Discord's message limit.",
+};
 
 /** Slash-command registration body for Discord. */
 export const DEBUG_COMMAND_SPEC = {
@@ -144,6 +159,21 @@ export function parseDebugCommand(input: string): { subcommand: string | null; a
   return { subcommand: tokens[0].toLowerCase(), args: tokens.slice(1) };
 }
 
+/**
+ * A short, log-safe label for a debug command: just the subcommand name, with
+ * any non-printable-ASCII stripped and the length bounded. Never includes the
+ * arguments, which can carry credentials or forged newlines. Empty input logs
+ * as `(help)` (the default action).
+ */
+export function debugSubcommandLabel(input: string): string {
+  const { subcommand } = parseDebugCommand(input);
+  if (!subcommand) {
+    return "(help)";
+  }
+  const safe = subcommand.replace(/[^\x20-\x7e]/g, "").slice(0, MAX_ECHOED_NAME_CHARS);
+  return safe || "(unknown)";
+}
+
 /** Build a single Debug-category notice embed as an embeds result. */
 function debugNotice(title: string, description: string): DebugResult {
   const built = buildEmbed({ category: "debug", title, description });
@@ -152,12 +182,16 @@ function debugNotice(title: string, description: string): DebugResult {
 
 /**
  * Build the `/debug help` embed(s). Subcommands are listed alphabetically, one
- * field each (``usage`` as the name, description as the value). When the fields
- * exceed Discord's per-embed limits (25 fields or 6000 total characters) they
- * overflow across additional embeds: the first embed carries the title and
- * description, middle embeds carry only fields, and the last embed carries the
- * footer and timestamp. Every embed shares the category color, and only the
- * footer-bearing last embed references the icon, so one attachment is returned.
+ * field each (``usage`` as the name, description as the value). Fields pack into
+ * as few embeds as needed: an embed holds at most 25 fields, and the whole
+ * message is capped at Discord's shared 6000-character budget (title +
+ * description + every field + footer) across at most 10 embeds. Once a field
+ * would breach the message budget or the embed count, packing stops and a final
+ * truncation note is appended, so an oversized registry still renders rather
+ * than being rejected. The first embed carries the title and description, middle
+ * embeds carry only fields, and the last embed carries the footer and timestamp.
+ * Every embed shares the category color, and only the footer-bearing last embed
+ * references the icon, so one attachment is returned.
  */
 export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
   embeds: DiscordEmbed[];
@@ -171,26 +205,42 @@ export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
       value: clamp(sub.description, MAX_FIELD_VALUE_CHARS),
     }));
 
-  // Pack fields into pages. Page 0 reserves the title and description budget;
-  // every page reserves the footer budget (we do not yet know which page is
-  // last, and over-reserving on earlier pages only costs a little capacity but
-  // guarantees the real last page has room for the footer).
-  const pages: DiscordEmbedField[][] = [];
-  let page: DiscordEmbedField[] = [];
+  // Pack fields across pages against the shared message budget. `used` counts
+  // the whole message (title + description + footer appear once), so it is never
+  // reset per page. A fixed slice is reserved up front for the truncation note
+  // so there is always room to append it if we stop early.
+  const pages: DiscordEmbedField[][] = [[]];
   let used = HELP_TITLE.length + HELP_DESCRIPTION.length + category.footerText.length;
+  const budget = MAX_MESSAGE_TOTAL_CHARS - TRUNCATION_RESERVE;
+  let truncated = false;
   for (const field of fields) {
     const cost = field.name.length + field.value.length;
-    const atFieldCap = page.length >= MAX_FIELDS_PER_EMBED;
-    const atCharCap = used + cost > MAX_EMBED_TOTAL_CHARS;
-    if (page.length > 0 && (atFieldCap || atCharCap)) {
-      pages.push(page);
+    if (used + cost > budget) {
+      truncated = true;
+      break;
+    }
+    let page = pages[pages.length - 1];
+    if (page.length >= MAX_FIELDS_PER_EMBED) {
+      if (pages.length >= MAX_EMBEDS_PER_MESSAGE) {
+        truncated = true;
+        break;
+      }
       page = [];
-      used = category.footerText.length;
+      pages.push(page);
     }
     page.push(field);
     used += cost;
   }
-  pages.push(page);
+
+  if (truncated) {
+    const last = pages[pages.length - 1];
+    // Replace the final field when the last embed is already full, so appending
+    // the note never pushes the embed past the 25-field cap.
+    if (last.length >= MAX_FIELDS_PER_EMBED) {
+      last.pop();
+    }
+    last.push(TRUNCATION_FIELD);
+  }
 
   const lastIndex = pages.length - 1;
   const embeds: DiscordEmbed[] = pages.map((pageFields, index) => {

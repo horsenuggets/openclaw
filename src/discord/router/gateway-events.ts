@@ -18,7 +18,7 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
-import { DEBUG_COMMAND_SPEC, runDebugCommand } from "./debug-command.js";
+import { DEBUG_COMMAND_SPEC, debugSubcommandLabel, runDebugCommand } from "./debug-command.js";
 import {
   DISCORD_API,
   discordDeleteMessage,
@@ -598,11 +598,14 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         }
         if (!(await isAdmin(userId))) {
           runtime.log(`[router] denied /debug from ${userId} (not an admin)`);
-          await editInteractionContentReply(
+          const denial = await editInteractionContentReply(
             applicationId,
             interactionToken,
             "You are not authorized to use `/debug`.",
           );
+          if (!denial.ok) {
+            runtime.error(`[router] debug denial reply failed (${denial.status})`);
+          }
           return;
         }
         const result = runDebugCommand(commandInput);
@@ -616,7 +619,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         if (!res.ok) {
           runtime.error(`[router] debug command result failed (${res.status})`);
         }
-        runtime.log(`[router] /debug from ${userId}: ${commandInput.slice(0, 60) || "(help)"}`);
+        // Log only the caller and the (sanitized) subcommand name, never the
+        // arguments: debug input can carry credentials or other sensitive state,
+        // and raw text could inject forged newlines into the router log.
+        runtime.log(`[router] /debug from ${userId}: ${debugSubcommandLabel(commandInput)}`);
       } catch (err) {
         runtime.error(`[router] debug command failed: ${String(err)}`);
       }
