@@ -116,6 +116,7 @@ function embedOf(payload: ChannelReplyPayload) {
       description?: string;
       color?: number;
       fields?: { name: string; value: string }[];
+      footer?: { text: string; icon_url?: string };
     },
     components: obj.components,
   };
@@ -291,9 +292,27 @@ describe("handleChannelCommand register", () => {
     const { ctx, replies } = makeCtx("register", [], { isDM: false });
     await handleChannelCommand(ctx, makeDeps({ provisioning: { register, unregister: vi.fn() } }));
     expect(register).not.toHaveBeenCalled();
-    expect(embedOf(replies[0].payload).embed.description).toContain(
-      "can only register their own DM",
+    const { embed } = embedOf(replies[0].payload);
+    expect(embed.description).toContain("can only register their own DM");
+    // Register permission denials use the shared permission embed (Log category),
+    // not the Channel Registration embed reserved for registration outcomes.
+    expect(embed.footer?.text).toBe("Log Message");
+  });
+
+  it("denies a non-whitelisted user with the shared permission embed", async () => {
+    const register = vi.fn();
+    const { ctx, replies } = makeCtx("register", [], { isDM: true });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        isWhitelisted: async () => false,
+        provisioning: { register, unregister: vi.fn() },
+      }),
     );
+    expect(register).not.toHaveBeenCalled();
+    const { embed } = embedOf(replies[0].payload);
+    expect(embed.description).toContain("not authorized to manage OpenClaw instances");
+    expect(embed.footer?.text).toBe("Log Message");
   });
 
   it("forbids a whitelisted user from registering on another user's behalf", async () => {

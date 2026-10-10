@@ -194,6 +194,19 @@ function unauthorizedReply(
 }
 
 /**
+ * A `/channel register` permission denial, rendered as the shared permission
+ * embed rather than a Channel Registration embed. Used for the role-based
+ * register refusals (not whitelisted, non-admin registering for someone else, or
+ * a non-admin registering a guild channel), so every slash-command permission
+ * denial reads identically. Registration *outcomes* (success, already
+ * registered, provisioning failure) keep the Channel Registration embed.
+ */
+function permissionDeniedReply(notice: string): { embeds: DiscordEmbed[]; attachments: string[] } {
+  const built = buildPermissionDeniedEmbed(notice);
+  return { embeds: [built.embed], attachments: built.attachments };
+}
+
+/**
  * Parse a `/channel ...` text command (also tolerates a leading `//`). Returns
  * null when the message is not a channel command.
  */
@@ -344,8 +357,7 @@ export async function handleChannelCommand(
     const admin = await deps.isAdmin(ctx.userId);
     if (!admin && !(await deps.isWhitelisted(ctx.userId))) {
       await ctx.reply(
-        registrationReply(
-          "Register",
+        permissionDeniedReply(
           "You are not authorized to manage OpenClaw instances. Ask an admin for access.",
         ),
         { ephemeral: true },
@@ -361,10 +373,7 @@ export async function handleChannelCommand(
     if (requestedOwner && requestedOwner !== ctx.userId) {
       if (!admin) {
         await ctx.reply(
-          registrationReply(
-            "Register",
-            "Only admins can register a channel on behalf of another user.",
-          ),
+          permissionDeniedReply("Only admins can register a channel on behalf of another user."),
           { ephemeral: true },
         );
         deps.log(`[channel] register on-behalf denied for non-admin ${ctx.userId}`);
@@ -376,8 +385,7 @@ export async function handleChannelCommand(
     // Whitelisted-but-not-admin users may only register their own DM.
     if (!admin && !ctx.isDM) {
       await ctx.reply(
-        registrationReply(
-          "Register",
+        permissionDeniedReply(
           "Whitelisted users can only register their own DM. Ask an admin to register this channel.",
         ),
         { ephemeral: true },
