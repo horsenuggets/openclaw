@@ -1557,6 +1557,52 @@ describe("discord router channel-delete cleanup", () => {
       expect(ack).toBeDefined();
       expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
     });
+
+    it("still recognizes /debug when sent as a reply (parses the original body)", async () => {
+      vi.stubEnv("OPENCLAW_ADMIN_OVERRIDE_IDS", ADMIN_BOT);
+      const posts: RequestInit[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (
+            typeof url === "string" &&
+            url.includes(`/channels/${CHANNEL}/messages`) &&
+            init?.method === "POST"
+          ) {
+            posts.push(init);
+            return new Response(JSON.stringify({ id: "debug-reply-2" }), { status: 200 });
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: "app-123" }),
+          } as unknown as Response;
+        }) as unknown as typeof fetch,
+      );
+      void start();
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+      // A reply prefixes `content` with "[Replying to ...]"; the command must still
+      // be parsed from the original body, not missed and routed to the agent.
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "debug-reply-msg",
+        author: { id: ADMIN_BOT, bot: true },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: "/debug echo from-a-reply",
+        referenced_message: { author: { username: "someone" }, content: "earlier message" },
+        attachments: [],
+      });
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(
+        posts.map((p) => payloadOf(p) as TextReply).some((p) => p.content === "from-a-reply"),
+      ).toBe(true);
+    });
   });
 
   describe("secret modal submit responses", () => {

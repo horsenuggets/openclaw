@@ -191,10 +191,11 @@ function deliverDebugSecret(params: {
     );
   }
   // Buffered (never steered) so the out-of-band secret reaches routeMessage
-  // intact, exactly like the /secret modal submission does.
+  // intact, exactly like the /secret modal submission does. The reminder uses the
+  // visible-in-channel framing because the value arrived as plaintext.
   channelQueue.enqueue(channelId, {
     authorId,
-    messageContent: secretReminderMessage(name),
+    messageContent: secretReminderMessage(name, true),
     systemTurn: true,
     secret: { name, value },
   });
@@ -247,13 +248,18 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   if (ref && typeof ref === "object") {
     const refAuthor = ref.author?.username ?? "unknown";
     const rawRef = (ref.content ?? "").slice(0, 500);
-    // The referenced message may itself be a token-bearing `/connections add`
-    // (e.g. the bot's own reply to a not-yet-scrubbed token command, echoed back
-    // via MESSAGE_CREATE, or a user replying to one). Redact it so the token is
-    // not forwarded into the agent transcript or the fallback log below.
+    // The referenced message may itself carry a secret: a token-bearing
+    // `/connections add`, or a `/debug secrettest` command (notably the bot's own
+    // ack is a reply to that command, so Discord echoes it back with the command
+    // in `referenced_message`). Redact either so the value is not forwarded into
+    // the agent transcript or the fallback log below.
     const refParsed = parseConnectTextCommand(rawRef);
     const refContent =
-      refParsed && connectTextCommandHasToken(refParsed) ? "/connections add <redacted>" : rawRef;
+      refParsed && connectTextCommandHasToken(refParsed)
+        ? "/connections add <redacted>"
+        : debugTextCommandHasSecret(rawRef)
+          ? "/debug secrettest <redacted>"
+          : rawRef;
     if (refContent) {
       content = `[Replying to ${refAuthor}: "${refContent}"]\n${content}`;
     }
@@ -420,7 +426,9 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   // non-admin gets the same permission notice. Replies land in-channel (bots
   // cannot send true ephemerals), so unlike the slash path this debug output is
   // visible in the channel, which is acceptable on a testing surface.
-  const debugInput = authorId ? parseDebugTextCommand(content) : null;
+  // Parse the original message body (not the reply-prefixed `content`) so a
+  // `/debug` sent as a reply is still recognized, matching the `/connections` path.
+  const debugInput = authorId ? parseDebugTextCommand(messageContent) : null;
   if (debugInput !== null && authorId) {
     const commandMessageId = d.id;
     const reply = (payload: BuiltEmbed) =>

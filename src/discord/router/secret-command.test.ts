@@ -118,6 +118,20 @@ describe("secretPath / secretReminderMessage", () => {
     expect(msg).toContain("transcript");
     expect(msg).toContain("path");
   });
+
+  it("defaults to the private framing but flips it for a visible-in-channel test secret", () => {
+    const privateMsg = secretReminderMessage("redirect");
+    expect(privateMsg).toContain("provided privately");
+    expect(privateMsg).not.toContain("secrettest");
+
+    const testMsg = secretReminderMessage("redirect", true);
+    // The plaintext-visible framing must not claim privacy (that would contradict
+    // the /debug secrettest warning); it still steers consume-by-path.
+    expect(testMsg).not.toContain("provided privately");
+    expect(testMsg.toLowerCase()).toContain("visible in this channel");
+    expect(testMsg).toContain("secrettest");
+    expect(testMsg).toContain("/tmp/secrets/redirect");
+  });
 });
 
 describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
