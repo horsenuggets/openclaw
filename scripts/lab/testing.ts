@@ -12,9 +12,10 @@ import { isDateChannelExpired, TESTING_CATEGORY } from "./lab-core.js";
 
 /**
  * The non-category children of the Testing category. With `expiredOnly`, keep
- * only the day channels (`YYYY-MM-DD`) old enough to archive (strictly older
- * than the archive threshold); without it, every Testing child is returned.
- * Returns [] when there is no Testing category.
+ * only the day text channels (`YYYY-MM-DD`, `GuildText`) old enough to archive
+ * (strictly older than the archive threshold) so a stray non-text channel named
+ * like a date is never swept up; without it, every Testing child is returned
+ * (the bulk archive_all case). Returns [] when there is no Testing category.
  */
 export function filterTestingDayChannels(
   channels: DiscordChannel[],
@@ -27,10 +28,13 @@ export function filterTestingDayChannels(
     return [];
   }
   const now = opts.now ?? new Date();
-  return channels.filter(
-    (c) =>
-      c.parent_id === testing.id &&
-      c.type !== ChannelType.GuildCategory &&
-      (!opts.expiredOnly || isDateChannelExpired(c.name, now)),
-  );
+  return channels.filter((c) => {
+    if (c.parent_id !== testing.id || c.type === ChannelType.GuildCategory) {
+      return false;
+    }
+    if (!opts.expiredOnly) {
+      return true;
+    }
+    return c.type === ChannelType.GuildText && isDateChannelExpired(c.name, now);
+  });
 }

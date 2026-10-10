@@ -27,7 +27,9 @@ export async function archiveExpiredTestingDays(
   const channels = await client.listGuildChannels();
   const expired = filterTestingDayChannels(channels, { expiredOnly: true, now });
   if (expired.length > 0) {
-    await tidyArchives(client, { include: expired.map((c) => c.id) });
+    // Quiet: this runs as the create_new_thread pre-step, so suppress the tidy
+    // narration (tidyArchives is verbose by default). main() stays verbose.
+    await tidyArchives(client, { include: expired.map((c) => c.id), verbose: false });
   }
   return expired.map((c) => c.id);
 }
