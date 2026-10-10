@@ -85,16 +85,11 @@ src/discord/e2e/dump-chunks.ts
 
 # Agent credentials and memory (NEVER COMMIT)
 memory/
-.agent/*.json
-!.agent/workflows/
 
 # Watchdog versioned builds and state
 .builds/
 .watchdog/
 .pm2-ecosystem.json
-# Local .claude tooling stays untracked; only shared docs under .claude/docs/ are committed
-.claude/*
-!.claude/docs/
 # Local .agents tooling stays untracked; only the shared README and docs/ are committed
 .agents/*
 !.agents/README.md
