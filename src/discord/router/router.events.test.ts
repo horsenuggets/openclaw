@@ -1364,7 +1364,7 @@ describe("discord router channel-delete cleanup", () => {
     type DebugCallback = { type: number; data?: { flags?: number } };
     type DebugPatch = {
       content?: string;
-      embeds?: Array<{ title?: string; footer?: { text?: string } }>;
+      embeds?: Array<{ title?: string; description?: string; footer?: { text?: string } }>;
     };
 
     // Parse an @original PATCH body whether it was sent as JSON (content edit) or
@@ -1430,11 +1430,14 @@ describe("discord router channel-delete cleanup", () => {
       return { callbacks, patches };
     };
 
-    it("defers ephemerally and denies a non-admin", async () => {
+    it("defers ephemerally and denies a non-admin with the permission embed", async () => {
       const { callbacks, patches } = await runDebug({ userId: NON_ADMIN, admin: false });
-      // Ephemeral deferred ack (type 5, flags 64), then an authorization denial.
+      // Ephemeral deferred ack (type 5, flags 64), then the shared permission
+      // embed (no bespoke plain-text denial).
       expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
-      expect(patches[0]?.content).toContain("not authorized");
+      expect(patches[0]?.content).toBeUndefined();
+      expect(patches[0]?.embeds?.[0]?.description).toContain("necessary permissions");
+      expect(patches[0]?.embeds?.[0]?.description).toContain("`/debug`");
       // No help embed was rendered to a non-admin.
       expect(patches.some((p) => p.embeds?.[0]?.title === "Debug Subcommands")).toBe(false);
     });
@@ -1446,7 +1449,7 @@ describe("discord router channel-delete cleanup", () => {
         admin: false,
         command: "echo pwned",
       });
-      expect(patches[0]?.content).toContain("not authorized");
+      expect(patches[0]?.embeds?.[0]?.description).toContain("necessary permissions");
       expect(patches.some((p) => p.content === "pwned")).toBe(false);
     });
 

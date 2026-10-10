@@ -22,8 +22,7 @@
 
 import { buildEmbed } from "./embed-categories.js";
 import { resolveEmoji } from "./emojis.js";
-import { buildLogEmbed } from "./log-embed.js";
-import { buildUnauthorizedNoticeText } from "./unauthorized-notice.js";
+import { buildPermissionDeniedEmbed, buildUnauthorizedNoticeText } from "./unauthorized-notice.js";
 
 export type ChannelSubcommand = "register" | "status" | "unregister";
 
@@ -190,7 +189,7 @@ function unauthorizedReply(
   channelId: string,
   ownerId?: string | null,
 ): { embeds: DiscordEmbed[]; attachments: string[] } {
-  const built = buildLogEmbed(buildUnauthorizedNoticeText(channelId, ownerId));
+  const built = buildPermissionDeniedEmbed(buildUnauthorizedNoticeText(channelId, ownerId));
   return { embeds: [built.embed], attachments: built.attachments };
 }
 

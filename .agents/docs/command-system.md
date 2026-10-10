@@ -70,17 +70,26 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   whitelist-gated » The recorded owner may always remove their own channel, and anyone
   else needs admin (a deliberate owner-recovery path). `OPENCLAW_ADMIN_OVERRIDE_IDS`
   grants admin unconditionally (used by lab rigs).
+- Every permission denial, for every slash command, renders the SAME ephemeral embed
+  (`unauthorized-notice.ts`). `buildPermissionDeniedEmbed` builds the Log-category embed;
+  `denyInteractionEphemeral` defers the interaction (or skips the defer when the handler
+  already deferred) and edits the embed into the reply. Two notice flavors feed it:
+  `buildUnauthorizedNoticeText` (channel-ownership denial, names the owner) and
+  `buildMissingPermissionText` (generic "you do not have the necessary permissions to use
+  `/<command>`" for globally gated commands). Plain-message denials reuse the same embed
+  builder, posted as a threaded reply instead of an ephemeral one. New slash commands get
+  this behavior by calling the shared helper rather than inventing their own denial.
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
-  `.onboarding.json`) may use them. Denials go through the shared unauthorized notice
-  (`unauthorized-notice.ts`), which is an ephemeral reply for interactions and a threaded
-  log embed for plain messages.
+  `.onboarding.json`) may use them. Non-owners get the channel-ownership denial embed
+  (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
+  `denyInteractionEphemeral`).
 - `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
-  state rather than one channel's agent. A non-admin gets an ephemeral "not authorized"
-  reply. The handler defers ephemerally first (the admin check can hit the Discord role
-  API), then edits the original reply with either embeds (`help` / notices) or raw content
-  (`echo`).
+  state rather than one channel's agent. A non-admin gets the same permission embed via
+  `denyInteractionEphemeral` (with `buildMissingPermissionText` and
+  `alreadyDeferred: true`, since the handler defers ephemerally first for the role
+  lookup). An admin's reply is then embeds (`help` / notices) or raw content (`echo`).
 - Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.

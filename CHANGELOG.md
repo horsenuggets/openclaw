@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: every slash-command permission denial now renders the same ephemeral
+  embed. The unauthorized notice was centralized in `unauthorized-notice.ts`
+  (`buildPermissionDeniedEmbed` plus `denyInteractionEphemeral`, with a channel-ownership
+  text and a generic `buildMissingPermissionText` for globally gated commands), and
+  `/debug` now denies non-admins with that embed instead of a bespoke plain-text reply.
+  `/channel`, `/lifecycle`, `/secret`, `/connections`, and the threaded plain-message
+  denials all share the one builder, so denials read identically and new commands get the
+  behavior by default.
 - Extensions: remove the bundled plugins this fork does not use (bluebubbles, feishu,
   googlechat, line, matrix, mattermost, msteams, nextcloud-talk, nostr, tlon, twitch,
   voice-call, zalo, zalouser, diagnostics-otel, lobster, llm-task, open-prose,

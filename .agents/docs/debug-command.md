@@ -38,8 +38,10 @@ Behavior worth knowing:
   admin (fail closed). `OPENCLAW_ADMIN_OVERRIDE_IDS` is a separate, test/lab-only escape
   hatch: listed ids are accepted unconditionally, before any auth-guild role lookup, for
   rigs whose bot is not a member of the auth server. Do not use the override to grant
-  `/debug` in production; add the real role there instead. A non-admin gets an ephemeral
-  "not authorized" reply.
+  `/debug` in production; add the real role there instead. A non-admin gets the shared
+  ephemeral permission-denied embed (`denyInteractionEphemeral` with
+  `buildMissingPermissionText`), the same embed every other slash command uses to refuse
+  access.
 - Every reply is ephemeral (only the invoker sees it), so debug output never leaks into
   the channel.
 - Usable anywhere (guild channels, bot DMs, group DMs: `contexts: [0, 1, 2]`) since the
