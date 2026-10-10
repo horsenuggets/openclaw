@@ -1512,6 +1512,20 @@ describe("discord router channel-delete cleanup", () => {
       // The content edit clears any prior embeds (sends an empty array).
       expect(echoed?.embeds).toEqual([]);
     });
+
+    it("delivers a secrettest secret via the slash branch and acks with the test embed", async () => {
+      // Covers the interaction-specific wiring (deliverDebugSecret + the ephemeral
+      // embed edit) that the plain-message path does not exercise. CHANNEL is
+      // registered in the harness, so the secret is enqueued and acked.
+      const { patches } = await runDebug({
+        userId: ADMIN,
+        admin: true,
+        command: "secrettest slash-secret-value my-name",
+      });
+      const ack = patches.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      expect(ack).toBeDefined();
+      expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
+    });
   });
 
   // The text-command path lets a tester/automation bot (which cannot invoke slash
