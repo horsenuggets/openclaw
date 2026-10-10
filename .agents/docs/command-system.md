@@ -21,15 +21,20 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   the subcommand is entered as free text into a single `command` option (for example
   `echo "hello world"`) and parsed by our own quote-aware command-string parser
   (`tokenizeDebugCommand` / `parseDebugCommand`). Subcommands live in `DEBUG_SUBCOMMANDS`
-  (currently `echo` and `help`); `help` (also the empty-input default) renders a
-  Debug-category embed listing every subcommand alphabetically, overflowing across extra
-  embeds within Discord's shared per-message limit (6000 characters across at most 10
-  embeds, 25 fields each) with a truncation note past that. Keeping subcommands behind the
-  one free-text option (rather than registering each as its own slash command) is what
-  hides them from the public slash picker; `/debug` itself is still globally registered
-  and visible, gated at runtime by the admin check. Replies are ephemeral, so debug output
-  stays out of the channel. See [debug-command.md](debug-command.md) for usage and how to
-  add a subcommand.
+  (currently `echo`, `secrettest`, and `help`); `help` (also the empty-input default)
+  renders a Debug-category embed listing every subcommand alphabetically, overflowing
+  across extra embeds within Discord's shared per-message limit (6000 characters across at
+  most 10 embeds, 25 fields each) with a truncation note past that.
+  `secrettest <value> [name]` is a testing convenience that hands the channel's agent a
+  secret like `/secret`, but with the value passed as plaintext (so it only ever carries
+  throwaway test values). Keeping subcommands behind the one free-text option (rather than
+  registering each as its own slash command) is what hides them from the public slash
+  picker; `/debug` itself is still globally registered and visible, gated at runtime by
+  the admin check. Slash replies are ephemeral, so debug output stays out of the channel;
+  `/debug` also has an admin-gated text path (`parseDebugTextCommand`) for
+  automation/tester bots, whose replies are in-channel because bots cannot send
+  ephemerals. See [debug-command.md](debug-command.md) for usage and how to add a
+  subcommand.
 
 These five (six counting the `/conn` alias) are the only slash commands the bot should
 expose. On startup `startRouter` registers them with a single bulk-overwrite
@@ -53,12 +58,13 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
 
 - Slash, modal, and button interactions go through `handleSlashInteraction`,
   `handleModalSubmit`, and `handleComponentInteraction`.
-- A text fallback in `handleMessageCreate` parses `/channel` and `/connections` text forms
-  (tolerating a `//` prefix) before the bot filter, so automation bots that cannot invoke
-  slash commands can still drive them.
+- A text fallback in `handleMessageCreate` parses `/channel`, `/connections`, and `/debug`
+  text forms (tolerating a `//` prefix) before the bot filter, so automation bots that
+  cannot invoke slash commands can still drive them. The `/debug` text path is admin-gated
+  (same check as the slash path) and its replies are in-channel rather than ephemeral.
 - A second, smaller text-command path for `/lifecycle` lives in `route-message.ts`
   (`KNOWN_TEXT_COMMANDS`, `isKnownTextCommand`, `handleTextCommand`). `/lifecycle` is the
-  only entry there, `/channel` and `/connections` get their text forms from
+  only entry there, `/channel`, `/connections`, and `/debug` get their text forms from
   `gateway-events.ts` (above), and `/secret` has no text path at all (it is a slash
   interaction plus modal only). This split is a known inconsistency worth keeping in mind.
 

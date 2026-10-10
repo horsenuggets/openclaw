@@ -218,6 +218,25 @@ export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
 }
 
 /**
+ * Build the ack embed for the `/debug secrettest` command (Secrets category).
+ * Unlike {@link buildSecretReceivedEmbed}, this loudly flags that the value
+ * arrived as PLAINTEXT (it was typed into the channel, not a private modal), so
+ * it must only ever carry throwaway test values. The name is a sanitized label,
+ * never the value.
+ */
+export function buildSecretTestReceivedEmbed(name: string): BuiltEmbed {
+  return buildEmbed({
+    category: "secrets",
+    title: "Test Secret Received!",
+    description:
+      `The test secret \`${name}\` was queued for delivery to this channel's OpenClaw agent. ` +
+      `This is a TESTING command, so the value was sent as plaintext and is visible in this ` +
+      `channel's history. Never use it for anything truly sensitive, use \`/secret\` (a private ` +
+      `popup) for that. Secrets are temporary and can be overwritten.`,
+  });
+}
+
+/**
  * Build a Secrets-category notice embed for a submission that could not be
  * accepted (missing value, unregistered channel, unsupported surface). Carries
  * only the fixed wording passed in, never the secret value.

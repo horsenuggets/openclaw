@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/debug` now has an admin-gated text-command path so an automation or
+  tester bot that cannot invoke slash commands can drive it (`/debug ...` or `//debug ...`
+  as a plain message). Added a `secrettest <value> [name]` debug subcommand that hands the
+  channel's agent a secret like `/secret`, but with the value passed as plaintext for
+  testing (the ack loudly flags that it is visible in the channel and must never carry a
+  real secret). `/channel unregister` now accepts more confirm arguments (`confirm`,
+  `yes`, `force`, `--yes`, `-y`, `confirm:yes`) to skip the confirmation button, and the
+  button label reads "Confirm Unregister".
 - Discord router: every slash-command permission denial now renders the same ephemeral
   embed. The unauthorized notice was centralized in `unauthorized-notice.ts`
   (`buildPermissionDeniedEmbed` plus `denyInteractionEphemeral`, with a channel-ownership

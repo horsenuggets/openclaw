@@ -6,6 +6,7 @@ import {
   buildUnregisterCustomId,
   handleChannelCommand,
   handleUnregisterButtonClick,
+  isUnregisterConfirmArg,
   parseChannelTextCommand,
   parseUnregisterCustomId,
   parseUserMention,
@@ -43,6 +44,20 @@ describe("parseChannelTextCommand", () => {
     expect(parseChannelTextCommand("hello")).toBeNull();
     expect(parseChannelTextCommand("/lifecycle on")).toBeNull();
     expect(parseChannelTextCommand("channel register")).toBeNull();
+  });
+});
+
+describe("isUnregisterConfirmArg", () => {
+  it("accepts every confirm spelling (case-insensitive)", () => {
+    for (const arg of ["confirm", "yes", "force", "--yes", "-y", "confirm:yes", "CONFIRM", "Yes"]) {
+      expect(isUnregisterConfirmArg(arg)).toBe(true);
+    }
+  });
+
+  it("rejects a missing or unrelated argument so the button still shows", () => {
+    for (const arg of [undefined, "", "no", "cancel", "maybe", "confirm:no"]) {
+      expect(isUnregisterConfirmArg(arg)).toBe(false);
+    }
   });
 });
 
@@ -437,6 +452,20 @@ describe("handleChannelCommand unregister", () => {
     const button = components?.[0].components[0];
     expect(button?.custom_id).toBe(buildUnregisterCustomId("confirm", "123456789012345678", "U1"));
     expect(button?.style).toBe(4);
+    expect(button?.label).toBe("Confirm Unregister");
+  });
+
+  it("accepts a bare confirm text token and skips the button", async () => {
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    const { ctx } = makeCtx("unregister", ["confirm"], { userId: "U1" });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        describeInstance: () => ({ port: 1, ownerId: "U1", onboarded: true }),
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).toHaveBeenCalledOnce();
   });
 
   it("accepts the confirm:yes text token and skips the button", async () => {

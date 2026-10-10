@@ -1473,6 +1473,92 @@ describe("discord router channel-delete cleanup", () => {
     });
   });
 
+  // The text-command path lets a tester/automation bot (which cannot invoke slash
+  // commands) drive /debug as a plain message. Admin-gated the same way, but its
+  // replies land in-channel because a bot cannot send a true ephemeral.
+  describe("/debug text path", () => {
+    const ADMIN_BOT = "444444444444444444";
+    const NON_ADMIN_BOT = "555555555555555555";
+    type TextReply = { content?: string; embeds?: Array<{ title?: string; description?: string }> };
+
+    const runDebugText = async (params: { authorId: string; admin: boolean; content: string }) => {
+      if (params.admin) {
+        vi.stubEnv("OPENCLAW_ADMIN_OVERRIDE_IDS", params.authorId);
+      }
+      const posts: RequestInit[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (
+            typeof url === "string" &&
+            url.includes(`/channels/${CHANNEL}/messages`) &&
+            init?.method === "POST"
+          ) {
+            posts.push(init);
+            return new Response(JSON.stringify({ id: "debug-reply-1" }), { status: 200 });
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: "app-123" }),
+          } as unknown as Response;
+        }) as unknown as typeof fetch,
+      );
+
+      void start();
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "debug-text-msg",
+        author: { id: params.authorId, bot: true },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: params.content,
+        attachments: [],
+      });
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      return { posts: posts.map((p) => payloadOf(p) as TextReply) };
+    };
+
+    it("lets an admin bot drive /debug echo via text, replying in-channel", async () => {
+      const { posts } = await runDebugText({
+        authorId: ADMIN_BOT,
+        admin: true,
+        content: "/debug echo hi-there",
+      });
+      expect(posts.some((p) => p.content === "hi-there")).toBe(true);
+    });
+
+    it("denies a non-admin bot's /debug text with the shared permission embed", async () => {
+      const { posts } = await runDebugText({
+        authorId: NON_ADMIN_BOT,
+        admin: false,
+        content: "/debug echo pwned",
+      });
+      expect(posts.some((p) => p.embeds?.[0]?.description?.includes("necessary permissions"))).toBe(
+        true,
+      );
+      // The subcommand never ran, so the echoed text was never posted.
+      expect(posts.some((p) => p.content === "pwned")).toBe(false);
+    });
+
+    it("delivers a secrettest secret and acks with the plaintext-test embed", async () => {
+      const { posts } = await runDebugText({
+        authorId: ADMIN_BOT,
+        admin: true,
+        content: "/debug secrettest test-value my-name",
+      });
+      const ack = posts.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      expect(ack).toBeDefined();
+      expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
+    });
+  });
+
   describe("secret modal submit responses", () => {
     // Capture the deferred callback (type 5) and the @original PATCH payload so we
     // can assert the defer-then-edit Secrets embed path for both a success and a

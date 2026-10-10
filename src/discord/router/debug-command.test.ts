@@ -6,10 +6,13 @@ import {
   type DebugSubcommand,
   buildDebugHelpEmbeds,
   debugSubcommandLabel,
+  debugTextCommandHasSecret,
   parseDebugCommand,
+  parseDebugTextCommand,
   runDebugCommand,
   tokenizeDebugCommand,
 } from "./debug-command.js";
+import { sanitizeSecretName } from "./secret-command.js";
 
 /** Discord counts this combined text against the shared 6000-char message cap. */
 function messageChars(embeds: DiscordEmbed[]): number {
@@ -141,6 +144,13 @@ describe("buildDebugHelpEmbeds", () => {
     expect(embed.fields).toEqual([
       { name: "`echo <message>`", value: "Sends the raw text as an individual message." },
       { name: "`help`", value: "Prints this help message." },
+      {
+        name: "`secrettest <secret-value> [secret-name]`",
+        value:
+          "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as " +
+          "plaintext (so it stays visible in the channel). Never use a real secret here; use " +
+          "/secret for anything sensitive.",
+      },
     ]);
     expect(embed.footer).toEqual({ text: "Debug", icon_url: "attachment://debug.png" });
     expect(embed.timestamp).toBeDefined();
@@ -265,5 +275,70 @@ describe("DEBUG_COMMAND_SPEC", () => {
     expect(option.name).toBe("command");
     expect(option.required).toBe(false);
     expect(option.type).toBe(3);
+  });
+});
+
+describe("secrettest subcommand", () => {
+  it("is registered and advertises its test-only, plaintext nature", () => {
+    const sub = DEBUG_SUBCOMMANDS.find((s) => s.name === "secrettest");
+    expect(sub).toBeDefined();
+    expect(sub?.usage).toContain("secrettest");
+    expect(sub?.description.toLowerCase()).toContain("plaintext");
+  });
+
+  it("returns a secret result with the raw value and a sanitized name", () => {
+    const result = runDebugCommand('secrettest my-value "my name!!"');
+    expect(result).toEqual({
+      kind: "secret",
+      value: "my-value",
+      name: sanitizeSecretName("my name!!", "my-value"),
+    });
+  });
+
+  it("derives a deterministic fallback name when none is given", () => {
+    const result = runDebugCommand("secrettest only-a-value");
+    expect(result).toEqual({
+      kind: "secret",
+      value: "only-a-value",
+      name: sanitizeSecretName("", "only-a-value"),
+    });
+    // Same value always maps to the same fallback name.
+    expect(result.kind === "secret" && result.name).toBe(sanitizeSecretName("", "only-a-value"));
+  });
+
+  it("returns a notice (not a secret) when no value is provided", () => {
+    const result = runDebugCommand("secrettest");
+    expect(result.kind).toBe("embeds");
+  });
+
+  it("is labeled by name only, never echoing the secret value", () => {
+    expect(debugSubcommandLabel("secrettest sk-super-secret my-name")).toBe("secrettest");
+  });
+});
+
+describe("parseDebugTextCommand", () => {
+  it("extracts the remainder after /debug (tolerating // and whitespace)", () => {
+    expect(parseDebugTextCommand("/debug echo hi")).toBe("echo hi");
+    expect(parseDebugTextCommand("  //debug  secrettest x  ")).toBe("secrettest x");
+    expect(parseDebugTextCommand("/debug")).toBe("");
+  });
+
+  it("returns null for non-debug messages", () => {
+    expect(parseDebugTextCommand("hello")).toBeNull();
+    expect(parseDebugTextCommand("/debugger start")).toBeNull();
+    expect(parseDebugTextCommand("debug echo")).toBeNull();
+  });
+});
+
+describe("debugTextCommandHasSecret", () => {
+  it("is true only for a secrettest command carrying a value", () => {
+    expect(debugTextCommandHasSecret("/debug secrettest the-value")).toBe(true);
+    expect(debugTextCommandHasSecret("//debug secrettest v name")).toBe(true);
+  });
+
+  it("is false for other debug commands or a value-less secrettest", () => {
+    expect(debugTextCommandHasSecret("/debug secrettest")).toBe(false);
+    expect(debugTextCommandHasSecret("/debug echo hi")).toBe(false);
+    expect(debugTextCommandHasSecret("just a message")).toBe(false);
   });
 });
