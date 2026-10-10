@@ -9,8 +9,8 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
 
 - `/channel` (`channel-commands.ts`, `CHANNEL_COMMAND_SPEC`) - register, show status for,
   or unregister a per-channel agent instance.
-- `/lifecycle` (spec inline in `router.ts`) - show or toggle the startup and shutdown
-  notification banners for a channel.
+- `/lifecycle` (`lifecycle-command.ts`, `LIFECYCLE_COMMAND_SPEC`) - show or toggle the
+  startup and shutdown notification banners for a channel.
 - `/secret` (`secret-command.ts`, `SECRET_COMMAND_SPEC`) - hand the channel's agent a
   sensitive value through a modal popup. The value never appears in the channel or logs.
 - `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, or remove
@@ -25,6 +25,14 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   Debug-category embed listing every subcommand alphabetically, overflowing across extra
   embeds when it exceeds Discord's per-embed limits. Every reply is ephemeral, so internal
   tools never surface to regular users in the slash picker or the channel.
+
+These five (six counting the `/conn` alias) are the only slash commands the bot should
+expose. On startup `startRouter` registers them with a single bulk-overwrite
+`PUT /applications/{id}/commands` carrying exactly these specs. The `PUT` replaces the
+application's whole global command list atomically, so any stale command from an older
+build (or a built-in command ever deployed under the same bot) is removed, and no command
+can end up registered twice. A `POST` per command would only ever add-or-upsert and could
+never prune, which is how non-custom commands used to accumulate in the picker.
 
 ## Slash versus Text Dispatch
 

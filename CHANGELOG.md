@@ -12,6 +12,13 @@ Docs: https://docs.openclaw.ai
   memory-lancedb) along with their docs, skills, labeler entries, and lockfile packages.
   Discord, memory-core, the other built-in channel plugins, and the provider auth plugins
   stay.
+- Discord router: slash commands are now registered with a single bulk-overwrite
+  `PUT /applications/{id}/commands` carrying exactly the fork's own commands (`/channel`,
+  `/lifecycle`, `/secret`, `/debug`, `/connections` with its `/conn` alias). This prunes
+  any stale or built-in commands left registered under the bot and makes registration
+  idempotent, so a command can no longer appear twice in the picker. Registration
+  previously used an additive `POST` per command, which could never remove commands that
+  were no longer ours.
 - Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
   non-owner gets the same "not authorized to use this channel's agent" notice a plain
   message earns, delivered as an ephemeral reply only they can see (the notice wording

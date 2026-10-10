@@ -47,6 +47,7 @@ import {
   handleModalSubmit,
   handleSlashInteraction,
 } from "./gateway-events.js";
+import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
@@ -85,80 +86,31 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
   }
 
-  // Register slash commands
+  // Register slash commands.
+  //
+  // One PUT bulk-overwrites the application's entire global command list in a
+  // single atomic call, so the registered set is exactly the custom commands we
+  // ship here and nothing else. This is deliberately a PUT, not a series of
+  // POSTs: POST only ever creates-or-upserts by name, so it can never remove a
+  // command that used to be registered (an older build's command, or any
+  // built-in command deployed under this same bot). Those orphans would linger
+  // in the picker forever. PUT also makes registration idempotent, so a command
+  // can never appear twice for this application.
+  const commandSpecs = [
+    LIFECYCLE_COMMAND_SPEC,
+    CHANNEL_COMMAND_SPEC,
+    SECRET_COMMAND_SPEC,
+    DEBUG_COMMAND_SPEC,
+    ...CONNECTIONS_COMMAND_SPECS,
+  ];
   await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
+    method: "PUT",
     headers: {
       Authorization: `Bot ${discordToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      name: "lifecycle",
-      description: "Show or set startup/shutdown notification messages",
-      type: 1,
-      options: [
-        {
-          name: "setting",
-          description: "on, off, or omit to see current status",
-          type: 3, // STRING
-          required: false,
-          choices: [
-            { name: "on", value: "on" },
-            { name: "off", value: "off" },
-          ],
-        },
-      ],
-    }),
-  }).catch((err) =>
-    runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
-  );
-
-  // Register the /channel management command (register/status/unregister).
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(CHANNEL_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /channel command: ${String(err)}`));
-
-  // Register the /secret command: hand the channel's agent a sensitive value
-  // privately (collected via a modal, never shown in the channel).
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(SECRET_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
-
-  // Register the /debug command: an admin-only console whose subcommands are
-  // parsed from a single free-text option (see debug-command.ts), so internal
-  // tools stay out of the public slash-command picker.
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(DEBUG_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /debug command: ${String(err)}`));
-
-  // Register the /connections command plus its /conn alias (list/add/remove).
-  for (const spec of CONNECTIONS_COMMAND_SPECS) {
-    await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bot ${discordToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(spec),
-    }).catch((err) =>
-      runtime.error(`[router] failed to register /${spec.name} command: ${String(err)}`),
-    );
-  }
+    body: JSON.stringify(commandSpecs),
+  }).catch((err) => runtime.error(`[router] failed to register slash commands: ${String(err)}`));
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
