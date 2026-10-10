@@ -57,6 +57,45 @@ import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
 /**
+ * PUT a JSON body to a Discord application-command endpoint and surface a non-OK
+ * response. `fetch` resolves normally for 4xx/5xx replies and only rejects on a
+ * transport error, so without the `response.ok` check a rejected overwrite (401,
+ * 403, 429, 5xx) would pass silently and leave the previous command set in
+ * place. Both failure modes are logged with `label` for context; returns true
+ * only when Discord accepted the overwrite. Non-fatal by design: a registration
+ * hiccup must not stop the router from routing messages, but it must be loud.
+ */
+async function putDiscordCommands(params: {
+  url: string;
+  discordToken: string;
+  body: string;
+  label: string;
+  runtime: RouterRuntime;
+}): Promise<boolean> {
+  try {
+    const response = await fetch(params.url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${params.discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: params.body,
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      params.runtime.error(
+        `[router] ${params.label} failed: HTTP ${response.status}${detail ? ` ${detail}` : ""}`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    params.runtime.error(`[router] ${params.label} failed: ${String(err)}`);
+    return false;
+  }
+}
+
+/**
  * Clear every guild-scoped slash command for one guild (an atomic PUT of an
  * empty list). This fork registers its commands only as global commands, so a
  * guild-scoped command is always a stale leftover (an older build, or a one-off
@@ -72,16 +111,13 @@ export async function clearGuildScopedCommands(
   guildId: string,
   runtime: RouterRuntime,
 ): Promise<void> {
-  await fetch(`${DISCORD_API}/applications/${applicationId}/guilds/${guildId}/commands`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
+  await putDiscordCommands({
+    url: `${DISCORD_API}/applications/${applicationId}/guilds/${guildId}/commands`,
+    discordToken,
     body: "[]",
-  }).catch((err) =>
-    runtime.error(`[router] failed to clear guild ${guildId} slash commands: ${String(err)}`),
-  );
+    label: `guild ${guildId} slash command clear`,
+    runtime,
+  });
 }
 
 /**
@@ -131,14 +167,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     DEBUG_COMMAND_SPEC,
     ...CONNECTIONS_COMMAND_SPECS,
   ];
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
+  await putDiscordCommands({
+    url: `${DISCORD_API}/applications/${applicationId}/commands`,
+    discordToken,
     body: JSON.stringify(commandSpecs),
-  }).catch((err) => runtime.error(`[router] failed to register slash commands: ${String(err)}`));
+    label: "slash command registration",
+    runtime,
+  });
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
