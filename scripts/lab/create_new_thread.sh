@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create a numbered end-to-end testing thread in the OpenClaw Lab server.
 #
-# Usage: scripts/lab/create_new_thread.sh <title> [description]
+# Usage: scripts/lab/create_new_thread.sh <title> [description] [--no-members]
 
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
