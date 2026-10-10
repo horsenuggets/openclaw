@@ -47,6 +47,7 @@ import {
   handleModalSubmit,
   handleSlashInteraction,
 } from "./gateway-events.js";
+import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
@@ -54,6 +55,109 @@ import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
+
+/**
+ * PUT a JSON body to a Discord application-command endpoint and surface a non-OK
+ * response. `fetch` resolves normally for 4xx/5xx replies and only rejects on a
+ * transport error, so without the `response.ok` check a rejected overwrite (401,
+ * 403, 429, 5xx) would pass silently and leave the previous command set in
+ * place. Both failure modes are logged with `label` for context; returns true
+ * only when Discord accepted the overwrite. Non-fatal by design: a registration
+ * hiccup must not stop the router from routing messages, but it must be loud.
+ */
+async function putDiscordCommands(params: {
+  url: string;
+  discordToken: string;
+  body: string;
+  label: string;
+  runtime: RouterRuntime;
+}): Promise<boolean> {
+  try {
+    const response = await fetch(params.url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${params.discordToken}`,
+        "Content-Type": "application/json",
+      },
+      body: params.body,
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      params.runtime.error(
+        `[router] ${params.label} failed: HTTP ${response.status}${detail ? ` ${detail}` : ""}`,
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    params.runtime.error(`[router] ${params.label} failed: ${String(err)}`);
+    return false;
+  }
+}
+
+/**
+ * The complete set of slash commands this fork owns, in registration order. The
+ * global command list is overwritten with exactly this set, so adding a command
+ * here (and nowhere else) is all it takes to register it, and anything not in
+ * this array is pruned from the picker.
+ */
+export const ROUTER_COMMAND_SPECS = [
+  LIFECYCLE_COMMAND_SPEC,
+  CHANNEL_COMMAND_SPEC,
+  SECRET_COMMAND_SPEC,
+  DEBUG_COMMAND_SPEC,
+  ...CONNECTIONS_COMMAND_SPECS,
+];
+
+/**
+ * Register our slash commands as the application's entire global command list
+ * with a single bulk-overwrite PUT. This is deliberately a PUT, not a series of
+ * POSTs: POST only ever creates-or-upserts by name, so it can never remove a
+ * command that used to be registered (an older build's command, or any built-in
+ * command deployed under this same bot). Those orphans would linger in the
+ * picker forever. PUT also makes registration idempotent, so a command can never
+ * appear twice for this application. Returns true when Discord accepted it.
+ */
+export async function registerGlobalCommands(
+  applicationId: string,
+  discordToken: string,
+  runtime: RouterRuntime,
+): Promise<boolean> {
+  return putDiscordCommands({
+    url: `${DISCORD_API}/applications/${applicationId}/commands`,
+    discordToken,
+    body: JSON.stringify(ROUTER_COMMAND_SPECS),
+    label: "slash command registration",
+    runtime,
+  });
+}
+
+/**
+ * Clear every guild-scoped slash command for one guild (an atomic PUT of an
+ * empty list). This fork registers its commands only as global commands, so a
+ * guild-scoped command is always a stale leftover (an older build, or a one-off
+ * manual registration) that Discord renders as a DUPLICATE next to the global
+ * one in that guild's picker. Clearing per guild on startup self-heals those
+ * leftovers and enforces the invariant that global is the only source. Empty on
+ * a guild with no guild-scoped commands is a no-op, so this is safe to run every
+ * time. Returns true when Discord accepted the overwrite, so the caller can
+ * retry on a transient failure instead of treating the guild as permanently
+ * cleared.
+ */
+export async function clearGuildScopedCommands(
+  applicationId: string,
+  discordToken: string,
+  guildId: string,
+  runtime: RouterRuntime,
+): Promise<boolean> {
+  return putDiscordCommands({
+    url: `${DISCORD_API}/applications/${applicationId}/guilds/${guildId}/commands`,
+    discordToken,
+    body: "[]",
+    label: `guild ${guildId} slash command clear`,
+    runtime,
+  });
+}
 
 /**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
@@ -66,7 +170,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const appIdResponse = (await fetch(`${DISCORD_API}/applications/@me`, {
     headers: { Authorization: `Bot ${discordToken}` },
   }).then((r) => r.json())) as { id?: string };
-  const applicationId = appIdResponse?.id;
+  const applicationId: string = appIdResponse?.id ?? "";
   if (!applicationId) {
     throw new Error("Failed to resolve Discord application ID");
   }
@@ -85,80 +189,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
   }
 
-  // Register slash commands
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: "lifecycle",
-      description: "Show or set startup/shutdown notification messages",
-      type: 1,
-      options: [
-        {
-          name: "setting",
-          description: "on, off, or omit to see current status",
-          type: 3, // STRING
-          required: false,
-          choices: [
-            { name: "on", value: "on" },
-            { name: "off", value: "off" },
-          ],
-        },
-      ],
-    }),
-  }).catch((err) =>
-    runtime.error(`[router] failed to register /lifecycle command: ${String(err)}`),
-  );
-
-  // Register the /channel management command (register/status/unregister).
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(CHANNEL_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /channel command: ${String(err)}`));
-
-  // Register the /secret command: hand the channel's agent a sensitive value
-  // privately (collected via a modal, never shown in the channel).
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(SECRET_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
-
-  // Register the /debug command: an admin-only console whose subcommands are
-  // parsed from a single free-text option (see debug-command.ts), so internal
-  // tools stay out of the public slash-command picker.
-  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${discordToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(DEBUG_COMMAND_SPEC),
-  }).catch((err) => runtime.error(`[router] failed to register /debug command: ${String(err)}`));
-
-  // Register the /connections command plus its /conn alias (list/add/remove).
-  for (const spec of CONNECTIONS_COMMAND_SPECS) {
-    await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bot ${discordToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(spec),
-    }).catch((err) =>
-      runtime.error(`[router] failed to register /${spec.name} command: ${String(err)}`),
-    );
-  }
+  // Register exactly our slash commands as the global command list (see
+  // registerGlobalCommands for why this is a single bulk-overwrite PUT).
+  await registerGlobalCommands(applicationId, discordToken, runtime);
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -292,6 +325,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // message would look "unanswered" and be silently re-run on every reconnect.
   // A process restart legitimately re-attempts once (the set starts empty).
   const recoveredMessageIds = new Set<string>();
+
+  // Guilds whose stale guild-scoped slash commands this process has already
+  // cleared, so a reconnect (which re-sends GUILD_CREATE / a fresh READY guild
+  // list) does not re-issue the clear for guilds we have already swept.
+  const guildCommandsCleared = new Set<string>();
 
   // --- /channel command wiring ---
   // User/bot ids (comma-separated OPENCLAW_ADMIN_OVERRIDE_IDS) granted admin +
@@ -770,6 +808,30 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             resumeGatewayUrl = d.resume_gateway_url;
             const botUser = d.user;
             runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
+
+            // Sweep away any stale guild-scoped commands so each of our commands
+            // exists only once (as a global command) in every guild's picker.
+            // READY carries the bot's guild list (ids present even while the
+            // guild is still "unavailable"). Mark a guild done in the Set only
+            // after Discord accepts the clear: adding it up front dedupes the
+            // concurrent clears within one READY burst, but a transient failure
+            // drops it back so the next READY (e.g. after a reconnect) retries
+            // rather than skipping the guild for the rest of the process.
+            const readyGuilds = Array.isArray(d.guilds) ? d.guilds : [];
+            for (const guild of readyGuilds) {
+              const guildId = typeof guild?.id === "string" ? guild.id : undefined;
+              if (!guildId || guildCommandsCleared.has(guildId)) {
+                continue;
+              }
+              guildCommandsCleared.add(guildId);
+              void clearGuildScopedCommands(applicationId, discordToken, guildId, runtime).then(
+                (cleared) => {
+                  if (!cleared) {
+                    guildCommandsCleared.delete(guildId);
+                  }
+                },
+              );
+            }
 
             // Lifecycle messages ("Back online") handled by health-monitor sidecar.
 

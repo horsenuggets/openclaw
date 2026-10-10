@@ -14,6 +14,25 @@ export type LifecycleCommandResult = {
   state: CommandResultState;
 };
 
+/** Slash-command registration body for Discord. */
+export const LIFECYCLE_COMMAND_SPEC = {
+  name: "lifecycle",
+  description: "Show or set startup/shutdown notification messages",
+  type: 1, // CHAT_INPUT
+  options: [
+    {
+      name: "setting",
+      description: "on, off, or omit to see current status",
+      type: 3, // STRING
+      required: false,
+      choices: [
+        { name: "on", value: "on" },
+        { name: "off", value: "off" },
+      ],
+    },
+  ],
+};
+
 const SEE = "You will see startup/shutdown notification messages in this channel.";
 const NO_SEE = "You will no longer see startup/shutdown notification messages in this channel.";
 
