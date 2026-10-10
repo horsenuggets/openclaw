@@ -34,6 +34,15 @@ Docs: https://docs.openclaw.ai
   the recorded owner may use the text form there), and a pasted token is scrubbed from the
   channel before any early return so it cannot linger when the command errors out; if the
   scrub fails the reply tells the user to delete the message by hand.
+- Discord: new admin-only `/debug` command (`debug-command.ts`) exposes internal debugging
+  subcommands behind a single free-text option rather than registering each as its own
+  slash command, so they stay out of the public picker. The input is parsed by our own
+  quote-aware command-string parser (for example `echo "hello world"`), and every reply is
+  ephemeral. It ships with `echo` (sends the raw text back as an individual message) and
+  `help` (also the empty-input default), which renders a Debug-category embed listing
+  every subcommand alphabetically and overflows across additional embeds when it exceeds
+  Discord's per-embed limits. Access is gated on the admin role (`whitelist.isAdmin`), not
+  channel ownership.
 - In-box command policy: the auto-reply pipeline now enables no slash commands by default
   (`src/auto-reply/command-policy.ts`). A disabled command behaves exactly like an unknown
   `/word` and reaches the model as plain text across every surface: native registration,

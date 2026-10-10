@@ -447,6 +447,28 @@ export async function editInteractionEmbedReply(
   });
 }
 
+/**
+ * Edit an interaction's original (deferred) reply with plain text content,
+ * clearing any embeds and components. Used by `/debug` for subcommands whose
+ * output is raw text (e.g. `echo`) rather than a category embed. The deferred
+ * response set the ephemeral flag, so this edit stays ephemeral too.
+ */
+export async function editInteractionContentReply(
+  applicationId: string,
+  interactionToken: string,
+  content: string,
+): Promise<{ ok: boolean; status: number }> {
+  const resp = await fetch(
+    `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, embeds: [], components: [] }),
+    },
+  );
+  return { ok: resp.ok, status: resp.status };
+}
+
 /** Cache CDN URLs from the send response for the icons we just uploaded. */
 async function cacheUploadedIcons(
   resp: Response,

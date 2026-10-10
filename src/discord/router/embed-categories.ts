@@ -12,6 +12,7 @@ import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 export type EmbedCategoryKey =
   | "commandResult"
   | "connections"
+  | "debug"
   | "general"
   | "log"
   | "registration"
@@ -46,6 +47,7 @@ export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
   system: { footerText: "System", icon: "injected-system-prompt.png", color: 0x80ff80 },
   connections: { footerText: "Connections", icon: "connections.png", color: 0xc080ff },
   secrets: { footerText: "Secrets", icon: "secrets.png", color: 0xa08060 },
+  debug: { footerText: "Debug", icon: "debug.png", color: 0xff80e0 },
 };
 
 /**

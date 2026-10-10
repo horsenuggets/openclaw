@@ -18,11 +18,13 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
+import { DEBUG_COMMAND_SPEC, runDebugCommand } from "./debug-command.js";
 import {
   DISCORD_API,
   discordDeleteMessage,
   discordSendEphemeral,
   discordSendReply,
+  editInteractionContentReply,
   editInteractionEmbedReply,
 } from "./discord-api.js";
 import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
@@ -74,6 +76,8 @@ export type GatewayContext = {
    */
   unauthorizedNoticeEnabled: boolean;
   describeInstance: (channelId: string) => InstanceStatus | null;
+  /** True when the user holds the admin role (or override id). Gates `/debug`. */
+  isAdmin: (userId: string) => Promise<boolean>;
   channelCommandDeps: ChannelCommandDeps;
   connectCommandDeps: ConnectCommandDeps;
   /** Tear an instance down through the same provisioning path as unregister. */
@@ -487,6 +491,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     channelCommandDeps,
     connectCommandDeps,
     describeInstance,
+    isAdmin,
   } = ctx;
 
   const interactionData = d.data;
@@ -565,6 +570,59 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       },
     );
   };
+
+  // The /debug command runs an admin-only internal subcommand parsed from its
+  // single free-text `command` option. Gating is purely on admin identity (not
+  // channel ownership), and every reply is ephemeral. Defer first because the
+  // admin check can hit the Discord role API and exceed the ~3s window.
+  if (interactionData?.name === DEBUG_COMMAND_SPEC.name) {
+    const userId = d.member?.user?.id ?? d.user?.id ?? "";
+    const commandInput = String(
+      (interactionData.options as Array<{ name: string; value: string }> | undefined)?.find(
+        (o) => o.name === "command",
+      )?.value ?? "",
+    );
+    void (async () => {
+      try {
+        const deferResp = await fetch(
+          `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+          },
+        );
+        if (!deferResp.ok) {
+          runtime.error(`[router] debug defer failed (${deferResp.status})`);
+          return;
+        }
+        if (!(await isAdmin(userId))) {
+          runtime.log(`[router] denied /debug from ${userId} (not an admin)`);
+          await editInteractionContentReply(
+            applicationId,
+            interactionToken,
+            "You are not authorized to use `/debug`.",
+          );
+          return;
+        }
+        const result = runDebugCommand(commandInput);
+        const res =
+          result.kind === "embeds"
+            ? await editInteractionEmbedReply(applicationId, interactionToken, {
+                embeds: result.embeds,
+                attachments: result.attachments,
+              })
+            : await editInteractionContentReply(applicationId, interactionToken, result.content);
+        if (!res.ok) {
+          runtime.error(`[router] debug command result failed (${res.status})`);
+        }
+        runtime.log(`[router] /debug from ${userId}: ${commandInput.slice(0, 60) || "(help)"}`);
+      } catch (err) {
+        runtime.error(`[router] debug command failed: ${String(err)}`);
+      }
+    })();
+    return;
+  }
 
   // The /secret command opens a modal (popup) so the secret value is entered
   // privately and never appears in the channel. The submission arrives later as
