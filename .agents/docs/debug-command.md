@@ -131,4 +131,5 @@ notice, so a new subcommand only needs its registry entry plus `run`.
   replies post in-channel (visible), unlike the ephemeral slash path. A non-admin's
   `/debug ...` text gets the same permission-denied embed. The `secrettest` value is
   redacted from the router log (`debugTextCommandHasSecret`) even though it stays visible
-  in the channel.
+  in the channel. If reconnect recovery finds an unanswered plaintext `secrettest`
+  command, it skips it rather than logging or routing the value.

@@ -917,6 +917,47 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
   });
 
+  it("skips recovery of plaintext /debug secrettest commands without logging the value", async () => {
+    const testSecret = "test-secret-for-recovery";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: "secrettest-recovery",
+                author: { id: OWNER, bot: false },
+                content: `/debug secrettest ${testSecret} my-name`,
+              },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("skipping recovery") && l.includes("secrettest"))).toBe(
+      true,
+    );
+    expect(logs.some((l) => l.includes(testSecret))).toBe(false);
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+    expect(logs.some((l) => l.includes("routing message from"))).toBe(false);
+  });
+
   it("still recovers a message left beneath a genuine lifecycle banner", async () => {
     // Guard against over-fixing: a real "*Back online.*" banner is NOT a reply,
     // so a user message beneath it is genuinely unanswered and must be recovered.

@@ -27,7 +27,7 @@ import {
 } from "./connections-store.js";
 import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
-import { DEBUG_COMMAND_SPEC } from "./debug-command.js";
+import { DEBUG_COMMAND_SPEC, debugTextCommandHasSecret } from "./debug-command.js";
 import {
   DISCORD_API,
   discordSend,
@@ -1052,7 +1052,8 @@ export async function handleChannelDeleted(
 
 /**
  * Check each onboarded user's DM for unanswered messages.
- * If the most recent message is from the user (not the bot), route it to the agent.
+ * If the most recent message is from the user (not the bot), route it to the agent,
+ * except plaintext `/debug secrettest` commands, which must never be replayed.
  */
 async function recoverUnansweredMessages(
   discordToken: string,
@@ -1180,6 +1181,12 @@ async function recoverUnansweredMessages(
       }
       const content = lastUserMsg.content?.trim();
       const msgAttachments = lastUserMsg.attachments ?? [];
+      if (content && debugTextCommandHasSecret(content)) {
+        runtime.log(
+          `[router] skipping recovery for ${channelId}: plaintext /debug secrettest command`,
+        );
+        continue;
+      }
       if (!content && msgAttachments.length === 0) {
         continue;
       }
