@@ -9,9 +9,10 @@ would otherwise see and try them.
 
 All of it lives under `src/discord/router/`:
 
-- `debug-command.ts` - the parser, the subcommand registry, and the help builder. This
-  module is transport-agnostic: it never touches Discord, it just turns a command string
-  into a `DebugResult`.
+- `debug-command.ts` - the parser, the subcommand registry, and the help builder. It
+  performs no Discord I/O; it just turns a command string into a `DebugResult`. That
+  result is still Discord-shaped, though: it carries embed payloads plus attachment names,
+  or raw message content.
 - `gateway-events.ts` (`handleSlashInteraction`) - the router adapter that admin-gates the
   interaction, defers it ephemerally, runs the command, and renders the result.
 - `router.ts` - registers `DEBUG_COMMAND_SPEC` with Discord on startup.

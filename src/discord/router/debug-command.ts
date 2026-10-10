@@ -8,11 +8,13 @@
  * debugging tools freely without exposing them to regular users in the slash
  * command picker.
  *
- * This module is transport-agnostic: it only parses the command string, runs
+ * This module performs no Discord I/O: it only parses the command string, runs
  * the matched subcommand, and returns a {@link DebugResult} describing what to
- * reply with. The router adapter in gateway-events.ts gates on admin, defers the
- * interaction ephemerally, and renders the result. Everything the command
- * produces is delivered ephemerally, so debug output never leaks to the channel.
+ * reply with. That result is still Discord-shaped, though (embed payloads and
+ * attachment names, or raw message content). The router adapter in
+ * gateway-events.ts gates on admin, defers the interaction ephemerally, and
+ * renders the result. Everything the command produces is delivered ephemerally,
+ * so debug output never leaks to the channel.
  */
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
