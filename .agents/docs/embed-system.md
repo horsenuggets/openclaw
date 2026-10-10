@@ -7,8 +7,8 @@ notifications. All of this is under `src/discord/router/`.
 
 `embed-categories.ts` defines the embed styling. Every embed belongs to one category, and
 the category is the single source of truth for the footer text, default icon filename, and
-accent color. The categories are `commandResult`, `connections`, `general`, `log`,
-`registration`, `secrets`, and `system` (`EMBED_CATEGORIES`). There is no automatic
+accent color. The categories are `commandResult`, `connections`, `debug`, `general`,
+`log`, `registration`, `secrets`, and `system` (`EMBED_CATEGORIES`). There is no automatic
 classifier » Each builder passes its `category` explicitly to `buildEmbed`, which returns
 `{ embed, attachments }`, where `attachments` are the icon filenames referenced via
 `attachment://`. Command-result embeds additionally pick a state icon (`default` /
@@ -16,8 +16,18 @@ classifier » Each builder passes its `category` explicitly to `buildEmbed`, whi
 
 Specific builders » `buildWelcomeEmbed` (`onboarding.ts`), `buildLogEmbed`
 (`log-embed.ts`), the `/secret` embeds (`secret-command.ts`), the `/connections` embeds
-(`connect-commands.ts`), and the registration and command-result embeds
-(`channel-commands.ts`, `gateway-events.ts`).
+(`connect-commands.ts`), the `/debug` help and notice embeds (`debug-command.ts`), and the
+registration and command-result embeds (`channel-commands.ts`, `gateway-events.ts`).
+
+`buildDebugHelpEmbeds` (`debug-command.ts`) is the one builder that returns multiple
+embeds. It respects two distinct Discord limits: each embed holds at most 25 fields (a
+per-embed cap), while the combined text of all embeds in the message (title +
+description + every field name/value + footer) must stay under 6000 characters (a
+per-message cap, not per-embed) across at most 10 embeds. It packs fields across several
+embeds accordingly, keeping the title and description on the first, plain fields in the
+middle, and the footer and timestamp on the last; if either limit is hit it stops and
+appends a truncation note field so the message still renders. It builds the embed objects
+directly (rather than via `buildEmbed`) so the non-last embeds can omit the footer.
 
 ## Icon Assets
 

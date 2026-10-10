@@ -27,6 +27,7 @@ import {
 } from "./connections-store.js";
 import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
+import { DEBUG_COMMAND_SPEC } from "./debug-command.js";
 import {
   DISCORD_API,
   discordSend,
@@ -132,6 +133,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     },
     body: JSON.stringify(SECRET_COMMAND_SPEC),
   }).catch((err) => runtime.error(`[router] failed to register /secret command: ${String(err)}`));
+
+  // Register the /debug command: an admin-only console whose subcommands are
+  // parsed from a single free-text option (see debug-command.ts), so internal
+  // tools stay out of the public slash-command picker.
+  await fetch(`${DISCORD_API}/applications/${applicationId}/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(DEBUG_COMMAND_SPEC),
+  }).catch((err) => runtime.error(`[router] failed to register /debug command: ${String(err)}`));
 
   // Register the /connections command plus its /conn alias (list/add/remove).
   for (const spec of CONNECTIONS_COMMAND_SPECS) {
@@ -609,6 +622,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     ownerGatedBotIds,
     unauthorizedNoticeEnabled,
     describeInstance,
+    isAdmin: whitelist.isAdmin,
     channelCommandDeps,
     connectCommandDeps,
     cleanupDeletedChannel,

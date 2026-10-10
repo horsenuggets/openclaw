@@ -16,6 +16,15 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
 - `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, or remove
   external accounts (Todoist, Notion, GitHub by pasted token; Google is coming soon) for
   the channel's agent. See [sandbox-and-permissions.md](sandbox-and-permissions.md).
+- `/debug` (`debug-command.ts`, `DEBUG_COMMAND_SPEC`) - an admin-only console for
+  inspecting internal state. Rather than registering each tool as its own slash command,
+  the subcommand is entered as free text into a single `command` option (for example
+  `echo "hello world"`) and parsed by our own quote-aware command-string parser
+  (`tokenizeDebugCommand` / `parseDebugCommand`). Subcommands live in `DEBUG_SUBCOMMANDS`
+  (currently `echo` and `help`); `help` (also the empty-input default) renders a
+  Debug-category embed listing every subcommand alphabetically, overflowing across extra
+  embeds when it exceeds Discord's per-embed limits. Every reply is ephemeral, so internal
+  tools never surface to regular users in the slash picker or the channel.
 
 ## Slash versus Text Dispatch
 
@@ -45,6 +54,12 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   `.onboarding.json`) may use them. Denials go through the shared unauthorized notice
   (`unauthorized-notice.ts`), which is an ephemeral reply for interactions and a threaded
   log embed for plain messages.
+- `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
+  `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
+  state rather than one channel's agent. A non-admin gets an ephemeral "not authorized"
+  reply. The handler defers ephemerally first (the admin check can hit the Discord role
+  API), then edits the original reply with either embeds (`help` / notices) or raw content
+  (`echo`).
 - Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.
@@ -58,8 +73,9 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
 
 Inside each agent box, `src/auto-reply/command-policy.ts` gates in-session `/word`
 commands. `ENABLED_COMMAND_KEYS` is intentionally empty » This fork owns `/channel`,
-`/lifecycle`, `/secret`, and `/connections` host-side in the router, so inside the box no
-in-session command is enabled and any such text reaches the model as plain content.
+`/lifecycle`, `/secret`, `/connections`, and `/debug` host-side in the router, so inside
+the box no in-session command is enabled and any such text reaches the model as plain
+content.
 
 ## Registration Flow
 
