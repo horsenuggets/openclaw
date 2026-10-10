@@ -107,6 +107,12 @@ name ("call me Alexander") and check the reply says "alexander"; ask for a web s
 across all turns. Keep the finished driver in gitignored `.prod-mirror/` as evidence (e.g.
 `.prod-mirror/e2e-tone.mjs`).
 
+For organizing scratch scenarios on the Lab server itself (not the DinD rig),
+`scripts/lab/create_new_thread.sh` creates a dated `Testing` day channel and a numbered
+thread for each scenario, and the sibling `scripts/lab` scripts archive expired days into
+the `Archive NNNN` categories. Those scripts talk to the Lab server as the Mirror bot and
+read their ids from env; see each script's header for usage.
+
 ## Gotchas and Cleanup
 
 - Single-box contention is the main failure mode. Every registered channel leaves a

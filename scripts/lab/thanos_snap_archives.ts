@@ -18,15 +18,16 @@ import { confirmDestructive } from "./prompt.js";
 async function thanosSnapArchives(): Promise<void> {
   const client = new LabDiscord();
   const ids = await collectArchiveChannelIds(client);
-  if (ids.length === 0) {
-    await tidyArchives(client);
-    console.log("No archived channels to snap.");
-    return;
-  }
   const doomed = pickHalf(ids);
   if (doomed.length === 0) {
+    // Nothing to delete, but still honor the promised tidy so any empty or
+    // non-contiguously named archive categories get cleaned up.
     await tidyArchives(client);
-    console.log("Only one archived channel; nothing to snap.");
+    console.log(
+      ids.length === 0
+        ? "No archived channels to snap."
+        : "Only one archived channel; nothing to snap.",
+    );
     return;
   }
   if (

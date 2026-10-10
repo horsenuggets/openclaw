@@ -43,7 +43,8 @@ export function loadLabConfig(env: NodeJS.ProcessEnv = process.env): LabConfig {
   if (!token) {
     throw new Error(
       "Missing OPENCLAW_MIRROR_DISCORD_TOKEN (the OpenClaw Mirror bot token). " +
-        "Set it in .env; the Lab scripts never use the prod DISCORD_BOT_TOKEN.",
+        "Set it, or the Mirror bot's DISCORD_BOT_TOKEN in .env.mirror (see " +
+        ".env.template); the Lab scripts never use the prod DISCORD_BOT_TOKEN.",
     );
   }
   if (!guildId) {
