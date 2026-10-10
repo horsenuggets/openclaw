@@ -16,21 +16,19 @@
  *
  * Thread numbering reads the current max and adds one, so near-simultaneous or
  * rapid back-to-back runs could read the same max and create threads out of
- * order or with duplicate numbers. To keep numbering in order, the lock is taken
- * BEFORE the day channel is discovered/created and the whole discover -> number
- * -> create sequence runs inside it (so two first-of-day runs cannot each create
- * a duplicate day channel and both number from 0001). Consecutive creations are
- * spaced at least 3 seconds apart (a debounce). A sibling file records the
- * last-creation timestamp (written the instant the thread exists). The lockfile
- * carries an owner token and its mtime is refreshed by a heartbeat while held, so
- * a waiter only steals a lock whose owner has actually died, and a releasing
- * process only removes a lock it still owns.
+ * order or with duplicate numbers. To keep numbering in order, a cross-process
+ * lock (proper-lockfile) is taken BEFORE any shared-guild mutation, and the whole
+ * archive -> discover -> number -> create sequence runs inside it (so two
+ * first-of-day runs cannot each create a duplicate day channel and both number
+ * from 0001). Consecutive creations are also spaced at least 3 seconds apart (a
+ * debounce), using a sibling file that records the last-creation timestamp
+ * (written the instant the thread exists).
  */
 
-import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import lockfile from "proper-lockfile";
 import { archiveExpiredTestingDays } from "./archive_old_threads.js";
 import { ChannelType, LabDiscord } from "./discord.js";
 import {
@@ -57,18 +55,16 @@ const MEMBER_ADD_PACE_MS = 200;
 /** Minimum spacing between consecutive thread creations, to keep numbering in order. */
 const THREAD_DEBOUNCE_MS = 3000;
 
-/** Poll interval while waiting to acquire the cross-process lock. */
-const LOCK_POLL_MS = 100;
-
-/** While held, the lock's mtime is refreshed this often to prove liveness. */
-const LOCK_HEARTBEAT_MS = 2000;
-
 /**
- * A lock whose mtime has not advanced within this window is treated as stale (its
- * owner crashed) and may be stolen. It must exceed LOCK_HEARTBEAT_MS so a live
- * owner mid-operation is never mistaken for a dead one.
+ * Cross-process lock options (proper-lockfile). The library keeps the lock fresh
+ * while held and only treats one abandoned by a crashed owner as stale after
+ * `stale` ms; waiters retry with backoff. Ownership and stale takeover are handled
+ * by the library, so there is no hand-rolled steal path to race on.
  */
-const LOCK_STALE_MS = 10_000;
+const LOCK_OPTIONS = {
+  stale: 30_000,
+  retries: { retries: 10, factor: 2, minTimeout: 100, maxTimeout: 10_000, randomize: true },
+} as const;
 
 /**
  * Remaining milliseconds to wait before the next creation so that consecutive
@@ -84,105 +80,6 @@ export function remainingDebounceMs(
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** A held cross-process lock: its file, our owner token, and the heartbeat timer. */
-type Lock = { path: string; token: string; heartbeat: ReturnType<typeof setInterval> };
-
-/**
- * Acquire a cross-process lock by atomically creating a lockfile (O_EXCL) that
- * carries a unique owner token. Poll until free; steal a lock only if its owner
- * stopped refreshing the mtime for longer than LOCK_STALE_MS (i.e. it crashed).
- * While held, a heartbeat refreshes the mtime so a live owner is never stolen
- * from, even during a slow, rate-limited Discord scan.
- */
-async function acquireLock(lockPath: string): Promise<Lock> {
-  const token = `${process.pid}-${randomUUID()}`;
-  const stealPath = `${lockPath}.steal`;
-  for (;;) {
-    try {
-      fs.writeFileSync(lockPath, token, { flag: "wx" });
-      const heartbeat = setInterval(() => {
-        try {
-          const now = new Date();
-          fs.utimesSync(lockPath, now, now);
-        } catch {
-          // The lock file vanished; nothing to refresh.
-        }
-      }, LOCK_HEARTBEAT_MS);
-      heartbeat.unref();
-      return { path: lockPath, token, heartbeat };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw err;
-      }
-      reclaimIfStale(lockPath, stealPath, token);
-      await sleep(LOCK_POLL_MS);
-    }
-  }
-}
-
-/**
- * Reclaim the lock only if it is stale, serializing the check-and-remove behind a
- * short-lived steal lock and RE-checking staleness while holding it. Two waiters
- * can therefore never both delete the lock: whichever wins the steal lock removes
- * the stale file, and the other then sees either no lock or a fresh one under the
- * mutex and backs off. A crashed reclaimer's steal lock is itself reclaimed by
- * mtime, so the steal path cannot deadlock.
- */
-function reclaimIfStale(lockPath: string, stealPath: string, token: string): void {
-  try {
-    if (Date.now() - fs.statSync(lockPath).mtimeMs <= LOCK_STALE_MS) {
-      return;
-    }
-  } catch {
-    return; // The lock vanished between our open and stat; just retry.
-  }
-  try {
-    fs.writeFileSync(stealPath, token, { flag: "wx" });
-  } catch (err) {
-    // Another waiter is already reclaiming. Only clear its steal lock if the
-    // reclaimer itself died (its steal lock went stale); otherwise leave it be.
-    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-      // Reclamation takes microseconds, so a steal lock older than LOCK_STALE_MS
-      // means its holder crashed. Capture it atomically with a rename (exactly one
-      // waiter wins; the rest get ENOENT) before removing it, so the removal
-      // itself is not a check-then-delete race.
-      try {
-        if (Date.now() - fs.statSync(stealPath).mtimeMs > LOCK_STALE_MS) {
-          const captured = `${stealPath}.${token}`;
-          fs.renameSync(stealPath, captured);
-          fs.rmSync(captured, { force: true });
-        }
-      } catch {
-        // Lost the capture race or the steal lock vanished; nothing to do.
-      }
-    }
-    return;
-  }
-  try {
-    // Re-check under mutual exclusion: remove the lock only if it is STILL stale,
-    // so a lock another waiter just refreshed or recreated is never deleted.
-    if (Date.now() - fs.statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
-      fs.rmSync(lockPath, { force: true });
-    }
-  } catch {
-    // The lock already went away.
-  } finally {
-    fs.rmSync(stealPath, { force: true });
-  }
-}
-
-/** Release a lock: stop the heartbeat and remove the file only if we still own it. */
-function releaseLock(lock: Lock): void {
-  clearInterval(lock.heartbeat);
-  try {
-    if (fs.readFileSync(lock.path, "utf8") === lock.token) {
-      fs.rmSync(lock.path, { force: true });
-    }
-  } catch {
-    // Already gone.
-  }
-}
 
 /** Read the recorded last-creation timestamp (epoch ms), or null if absent/invalid. */
 function readLastMs(lastPath: string): number | null {
@@ -255,9 +152,11 @@ async function createNewThread(): Promise<void> {
   // the one critical section (two first-of-day runs cannot both create a
   // duplicate YYYY-MM-DD channel or the same Archive category). Member adds run
   // afterwards, outside the lock.
-  const lockPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.lock`);
+  const lockTarget = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.lock`);
   const lastPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.last`);
-  const lock = await acquireLock(lockPath);
+  // proper-lockfile locks an existing path, so ensure the target file is present.
+  fs.closeSync(fs.openSync(lockTarget, "a"));
+  const release = await lockfile.lock(lockTarget, LOCK_OPTIONS);
   let threadId: string | undefined;
   try {
     await archiveExpiredTestingDays(client);
@@ -316,7 +215,7 @@ async function createNewThread(): Promise<void> {
     console.log(`https://discord.com/channels/${client.guildId}/${thread.id}`);
     threadId = thread.id;
   } finally {
-    releaseLock(lock);
+    await release();
   }
 
   if (threadId) {
