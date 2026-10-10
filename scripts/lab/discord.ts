@@ -30,6 +30,9 @@ export type DiscordChannel = {
   position?: number;
 };
 
+/** The subset of guild-member fields the Lab scripts read. */
+export type DiscordMember = { user?: { id: string; bot?: boolean } };
+
 export type LabConfig = { token: string; guildId: string };
 
 /**
@@ -139,6 +142,39 @@ export class LabDiscord {
         return out;
       }
       before = body.threads[body.threads.length - 1]?.id;
+    }
+  }
+
+  /**
+   * All members of the Lab guild, following the `after` cursor across pages.
+   * Requires the Server Members privileged intent to be enabled for the bot; if
+   * it is not, Discord returns 403 and this throws.
+   */
+  async listGuildMembers(): Promise<DiscordMember[]> {
+    const out: DiscordMember[] = [];
+    let after = "0";
+    for (;;) {
+      const page = await this.json<DiscordMember[]>(
+        `${API}/guilds/${this.guildId}/members?limit=1000&after=${after}`,
+      );
+      out.push(...page);
+      const last = page.at(-1)?.user?.id;
+      if (page.length < 1000 || !last) {
+        return out;
+      }
+      after = last;
+    }
+  }
+
+  /** Add a user to a thread. Idempotent: an already-present member returns 204. */
+  async addThreadMember(threadId: string, userId: string): Promise<void> {
+    const resp = await this.request(`${API}/channels/${threadId}/thread-members/${userId}`, {
+      method: "PUT",
+    });
+    if (!resp.ok) {
+      throw new Error(
+        `add member ${userId} to thread ${threadId} failed: ${resp.status} ${await resp.text()}`,
+      );
     }
   }
 

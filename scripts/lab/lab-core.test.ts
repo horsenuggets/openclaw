@@ -10,6 +10,7 @@ import {
   dateChannelAgeDays,
   dateChannelName,
   formatThreadNumber,
+  humanMemberIds,
   isArchiveCategoryName,
   isDateChannelExpired,
   isDateChannelName,
@@ -149,6 +150,26 @@ describe("pickHalf", () => {
     // rng returns the last index each call, so it removes from the end.
     const almostOne = 0.999999;
     expect(pickHalf(["a", "b", "c", "d"], () => almostOne)).toEqual(["d", "c"]);
+  });
+});
+
+describe("humanMemberIds", () => {
+  it("returns non-bot member ids and drops bots and member-less entries", () => {
+    const members = [
+      { user: { id: "1" } },
+      { user: { id: "2", bot: true } },
+      { user: { id: "3", bot: false } },
+      {},
+    ];
+    expect(humanMemberIds(members)).toEqual(["1", "3"]);
+  });
+
+  it("de-duplicates repeated ids", () => {
+    expect(humanMemberIds([{ user: { id: "7" } }, { user: { id: "7" } }])).toEqual(["7"]);
+  });
+
+  it("returns an empty list for no members", () => {
+    expect(humanMemberIds([])).toEqual([]);
   });
 });
 

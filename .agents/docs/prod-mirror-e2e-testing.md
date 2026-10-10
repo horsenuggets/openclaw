@@ -111,7 +111,7 @@ For organizing scratch scenarios on the Lab server itself (not the DinD rig),
 `scripts/lab/create_new_thread.sh` creates a dated `Testing` day channel and a numbered
 thread for each scenario, and the sibling `scripts/lab` scripts archive expired days into
 the `Archive NNNN` categories. Those scripts talk to the Lab server as the Mirror bot and
-read their ids from env; see each script's header for usage.
+read their ids from env; see `.agents/docs/lab-server.md` for the full workflow.
 
 ## Gotchas and Cleanup
 

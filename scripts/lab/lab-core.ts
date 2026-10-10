@@ -162,6 +162,23 @@ export function pickHalf<T>(items: readonly T[], rng: () => number = Math.random
   return removed;
 }
 
+/**
+ * The de-duplicated ids of every non-bot member in a guild member list. Bots are
+ * skipped because they cannot meaningfully participate in a thread (and the Lab
+ * bot that creates the thread is already a member).
+ */
+export function humanMemberIds(
+  members: ReadonlyArray<{ user?: { id: string; bot?: boolean } }>,
+): string[] {
+  const ids = new Set<string>();
+  for (const member of members) {
+    if (member.user && !member.user.bot) {
+      ids.add(member.user.id);
+    }
+  }
+  return [...ids];
+}
+
 /** The intro embed posted when a new Testing day channel is created. */
 export function buildDateChannelEmbed(now: Date): LabEmbed {
   const name = dateChannelName(now);

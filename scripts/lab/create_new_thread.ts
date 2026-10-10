@@ -2,12 +2,17 @@
  * Create a numbered end-to-end testing thread in the OpenClaw Lab server.
  *
  * Usage (via the wrapper, which loads the Lab env):
- *   scripts/lab/create_new_thread.sh <title> [description]
+ *   scripts/lab/create_new_thread.sh <title> [description] [--no-members]
  *
  * A Testing day channel named `YYYY-MM-DD` (local time) is created on demand with
  * its intro embed, then a thread `NNNN-<slug>` is added (numbered sequentially
  * within the day) and a confirmation embed is posted inside it. Expired Testing
  * days are archived first via archive_old_threads.
+ *
+ * By default every non-bot member of the Lab server is added to the new thread as
+ * a follow-up so all testers see it; pass `--no-members` to skip that. Auto-adding
+ * needs the Mirror bot's Server Members privileged intent; without it the add is
+ * skipped with a warning and the thread is still created.
  *
  * Thread numbering reads the current max and adds one, so it assumes a single
  * operator: this is a manual test-server helper, not a concurrent service, and
@@ -22,6 +27,7 @@ import {
   buildThreadConfirmEmbed,
   buildThreadName,
   dateChannelName,
+  humanMemberIds,
   nextThreadNumber,
   sanitizeThreadName,
   TESTING_CATEGORY,
@@ -34,10 +40,52 @@ const THREAD_AUTO_ARCHIVE_MINUTES = 10080;
 /** Descriptions longer than this are rejected before any Discord work. */
 const MAX_DESCRIPTION = 1000;
 
+/** Pause between thread-member adds, to stay friendly to Discord's rate limits. */
+const MEMBER_ADD_PACE_MS = 200;
+
+/**
+ * Add every non-bot Lab member to the thread. Failures (most often the Server
+ * Members intent being disabled) warn rather than throw, so a created thread is
+ * never lost over an optional follow-up step.
+ */
+async function addEveryoneToThread(client: LabDiscord, threadId: string): Promise<void> {
+  let ids: string[];
+  try {
+    ids = humanMemberIds(await client.listGuildMembers());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Skipped adding members: ${message}`);
+    // The intent hint only applies to a 403 (listing blocked); other failures
+    // (auth, network, rate limits, 5xx) are unrelated to the intent setting.
+    if (/\b403\b/.test(message)) {
+      console.warn("Enable the Mirror bot's Server Members intent to auto-add members.");
+    }
+    return;
+  }
+  // Add each member independently: one bad id (invalid or inaccessible between
+  // listing and insertion) must not abort the rest or fail the whole command.
+  let added = 0;
+  let failed = 0;
+  for (const id of ids) {
+    try {
+      await client.addThreadMember(threadId, id);
+      added += 1;
+    } catch (err) {
+      failed += 1;
+      console.warn(`Could not add member ${id}: ${err instanceof Error ? err.message : err}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, MEMBER_ADD_PACE_MS));
+  }
+  const suffix = failed > 0 ? ` (${failed} failed)` : "";
+  console.log(`Added ${added} ${added === 1 ? "member" : "members"} to the thread${suffix}.`);
+}
+
 async function createNewThread(): Promise<void> {
-  const [title, description] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const addMembers = !args.includes("--no-members");
+  const [title, description] = args.filter((arg) => arg !== "--no-members");
   if (!title) {
-    throw new Error("Usage: create_new_thread.sh <title> [description]");
+    throw new Error("Usage: create_new_thread.sh <title> [description] [--no-members]");
   }
   if (description && description.length > MAX_DESCRIPTION) {
     throw new Error(
@@ -98,6 +146,10 @@ async function createNewThread(): Promise<void> {
 
   console.log(`Created thread "${threadName}" in #${todayName}.`);
   console.log(`https://discord.com/channels/${client.guildId}/${thread.id}`);
+
+  if (addMembers) {
+    await addEveryoneToThread(client, thread.id);
+  }
 }
 
 createNewThread().catch((err: unknown) => {
