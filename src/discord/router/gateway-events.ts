@@ -29,7 +29,6 @@ import {
 } from "./discord-api.js";
 import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
-import { buildLogEmbed } from "./log-embed.js";
 import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -42,7 +41,13 @@ import {
   sanitizeSecretName,
   secretReminderMessage,
 } from "./secret-command.js";
-import { buildUnauthorizedNoticeText, replyUnauthorizedEphemeral } from "./unauthorized-notice.js";
+import {
+  buildMissingPermissionText,
+  buildPermissionDeniedEmbed,
+  buildUnauthorizedNoticeText,
+  denyInteractionEphemeral,
+  replyUnauthorizedEphemeral,
+} from "./unauthorized-notice.js";
 
 /**
  * The closed-over router state a gateway DISPATCH handler needs. Assembled once
@@ -337,7 +342,9 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
             }
           }
           if (unauthorizedNoticeEnabled) {
-            const embed = buildLogEmbed(buildUnauthorizedNoticeText(channelId, status?.ownerId));
+            const embed = buildPermissionDeniedEmbed(
+              buildUnauthorizedNoticeText(channelId, status?.ownerId),
+            );
             void discordSendReply(
               discordToken,
               channelId,
@@ -454,7 +461,9 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
         if (unauthorizedNoticeEnabled) {
-          const embed = buildLogEmbed(buildUnauthorizedNoticeText(channelId, status?.ownerId));
+          const embed = buildPermissionDeniedEmbed(
+            buildUnauthorizedNoticeText(channelId, status?.ownerId),
+          );
           // A plain user message carries no interaction token, so a true
           // ephemeral reply is impossible. Post a persistent Log embed threaded
           // under the offending message instead. Suppress all mentions so the
@@ -598,14 +607,17 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         }
         if (!(await isAdmin(userId))) {
           runtime.log(`[router] denied /debug from ${userId} (not an admin)`);
-          const denial = await editInteractionContentReply(
+          // Deny with the shared permission embed (the interaction is already
+          // deferred above), so /debug refuses access the same way every other
+          // slash command does instead of a bespoke plain-text reply.
+          await denyInteractionEphemeral({
             applicationId,
+            interactionId,
             interactionToken,
-            "You are not authorized to use `/debug`.",
-          );
-          if (!denial.ok) {
-            runtime.error(`[router] debug denial reply failed (${denial.status})`);
-          }
+            notice: buildMissingPermissionText(DEBUG_COMMAND_SPEC.name),
+            runtime,
+            alreadyDeferred: true,
+          });
           return;
         }
         const result = runDebugCommand(commandInput);
