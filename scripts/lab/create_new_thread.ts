@@ -53,17 +53,31 @@ async function addEveryoneToThread(client: LabDiscord, threadId: string): Promis
   try {
     ids = humanMemberIds(await client.listGuildMembers());
   } catch (err) {
-    console.warn(`Skipped adding members: ${err instanceof Error ? err.message : err}`);
-    console.warn("Enable the Mirror bot's Server Members intent to auto-add members.");
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Skipped adding members: ${message}`);
+    // The intent hint only applies to a 403 (listing blocked); other failures
+    // (auth, network, rate limits, 5xx) are unrelated to the intent setting.
+    if (/\b403\b/.test(message)) {
+      console.warn("Enable the Mirror bot's Server Members intent to auto-add members.");
+    }
     return;
   }
+  // Add each member independently: one bad id (invalid or inaccessible between
+  // listing and insertion) must not abort the rest or fail the whole command.
   let added = 0;
+  let failed = 0;
   for (const id of ids) {
-    await client.addThreadMember(threadId, id);
-    added += 1;
+    try {
+      await client.addThreadMember(threadId, id);
+      added += 1;
+    } catch (err) {
+      failed += 1;
+      console.warn(`Could not add member ${id}: ${err instanceof Error ? err.message : err}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, MEMBER_ADD_PACE_MS));
   }
-  console.log(`Added ${added} ${added === 1 ? "member" : "members"} to the thread.`);
+  const suffix = failed > 0 ? ` (${failed} failed)` : "";
+  console.log(`Added ${added} ${added === 1 ? "member" : "members"} to the thread${suffix}.`);
 }
 
 async function createNewThread(): Promise<void> {
