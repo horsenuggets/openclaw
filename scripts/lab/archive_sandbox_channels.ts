@@ -23,15 +23,19 @@ async function archiveSandboxChannels(): Promise<void> {
     console.log(`No "${SANDBOX_CATEGORY}" category found.`);
     return;
   }
-  const ids = channels
-    .filter((c) => c.parent_id === sandbox.id && c.type !== ChannelType.GuildCategory)
-    .map((c) => c.id);
-  if (ids.length === 0) {
+  const targets = channels.filter(
+    (c) => c.parent_id === sandbox.id && c.type !== ChannelType.GuildCategory,
+  );
+  if (targets.length === 0) {
     console.log("No Sandbox channels to archive.");
     return;
   }
-  await tidyArchives(client, { include: ids });
-  console.log(`Archived ${ids.length} Sandbox ${ids.length === 1 ? "channel" : "channels"}.`);
+  for (const c of targets) {
+    console.log(`Archiving "${c.name}" (${c.id}).`);
+  }
+  await tidyArchives(client, { include: targets.map((c) => c.id) });
+  const count = targets.length;
+  console.log(`Archived ${count} Sandbox ${count === 1 ? "channel" : "channels"}.`);
 }
 
 archiveSandboxChannels().catch((err: unknown) => {

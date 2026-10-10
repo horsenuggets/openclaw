@@ -15,6 +15,7 @@ import { LabDiscord } from "./discord.js";
 
 async function main(): Promise<void> {
   const client = new LabDiscord();
+  console.log("Tidying archive categories.");
   await tidyArchives(client);
   console.log("Tidied archive categories.");
 }

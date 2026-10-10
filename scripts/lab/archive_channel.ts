@@ -27,6 +27,7 @@ async function archiveChannel(): Promise<void> {
   if (target.type === ChannelType.GuildCategory) {
     throw new Error(`${channelId} is a category, not a channel.`);
   }
+  console.log(`Archiving "${target.name}" (${channelId}).`);
   await tidyArchives(client, { include: [channelId] });
   console.log(`Archived channel ${channelId}.`);
 }
