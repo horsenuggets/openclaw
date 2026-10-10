@@ -1,14 +1,14 @@
 /**
- * Archive every Testing day channel in the OpenClaw Lab server, regardless of
- * age.
+ * Archive every channel in the Testing category of the OpenClaw Lab server,
+ * regardless of age.
  *
  * Usage (via the wrapper, which loads the Lab env):
  *   scripts/lab/archive_all_threads.sh
  *
- * Unlike archive_old_threads (which only sweeps days older than 7 days), this
- * moves all Testing day channels (and their threads) into the archive
- * categories (`Archive NNNN`) via tidyArchives. Use when clearing out the whole
- * Testing category.
+ * Unlike archive_old_threads (which only sweeps day text channels older than 7
+ * days), this moves EVERY non-category channel under Testing (and its threads)
+ * into the archive categories (`Archive NNNN`) via tidyArchives, including any
+ * non-date-named channel. Use it to clear out the whole Testing category at once.
  */
 
 import { tidyArchives } from "./archives.js";
