@@ -34,6 +34,14 @@ build (or a built-in command ever deployed under the same bot) is removed, and n
 can end up registered twice. A `POST` per command would only ever add-or-upsert and could
 never prune, which is how non-custom commands used to accumulate in the picker.
 
+We only ever register global commands. On each gateway `READY`, the router also clears
+guild-scoped commands for every guild it is in (`clearGuildScopedCommands`, a
+`PUT .../guilds/{id}/commands` with an empty list, once per guild per process). A
+guild-scoped command is always a stale leftover (an older build or a one-off manual
+registration), and Discord would render it as a duplicate next to the global one in that
+guild's picker, so clearing it self-heals the duplicate and keeps global the single source
+of truth.
+
 ## Slash versus Text Dispatch
 
 Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...

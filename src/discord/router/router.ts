@@ -57,6 +57,34 @@ import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
 
 /**
+ * Clear every guild-scoped slash command for one guild (an atomic PUT of an
+ * empty list). This fork registers its commands only as global commands, so a
+ * guild-scoped command is always a stale leftover (an older build, or a one-off
+ * manual registration) that Discord renders as a DUPLICATE next to the global
+ * one in that guild's picker. Clearing per guild on startup self-heals those
+ * leftovers and enforces the invariant that global is the only source. Empty on
+ * a guild with no guild-scoped commands is a no-op, so this is safe to run every
+ * time.
+ */
+export async function clearGuildScopedCommands(
+  applicationId: string,
+  discordToken: string,
+  guildId: string,
+  runtime: RouterRuntime,
+): Promise<void> {
+  await fetch(`${DISCORD_API}/applications/${applicationId}/guilds/${guildId}/commands`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bot ${discordToken}`,
+      "Content-Type": "application/json",
+    },
+    body: "[]",
+  }).catch((err) =>
+    runtime.error(`[router] failed to clear guild ${guildId} slash commands: ${String(err)}`),
+  );
+}
+
+/**
  * Start the Discord router using raw WebSocket connection to Discord gateway.
  * Listens for DMs and forwards them to per-user Docker containers via gateway API.
  */
@@ -67,7 +95,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const appIdResponse = (await fetch(`${DISCORD_API}/applications/@me`, {
     headers: { Authorization: `Bot ${discordToken}` },
   }).then((r) => r.json())) as { id?: string };
-  const applicationId = appIdResponse?.id;
+  const applicationId: string = appIdResponse?.id ?? "";
   if (!applicationId) {
     throw new Error("Failed to resolve Discord application ID");
   }
@@ -244,6 +272,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // message would look "unanswered" and be silently re-run on every reconnect.
   // A process restart legitimately re-attempts once (the set starts empty).
   const recoveredMessageIds = new Set<string>();
+
+  // Guilds whose stale guild-scoped slash commands this process has already
+  // cleared, so a reconnect (which re-sends GUILD_CREATE / a fresh READY guild
+  // list) does not re-issue the clear for guilds we have already swept.
+  const guildCommandsCleared = new Set<string>();
 
   // --- /channel command wiring ---
   // User/bot ids (comma-separated OPENCLAW_ADMIN_OVERRIDE_IDS) granted admin +
@@ -722,6 +755,20 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             resumeGatewayUrl = d.resume_gateway_url;
             const botUser = d.user;
             runtime.log(`[router] logged in as ${botUser?.id ?? "unknown"} (${botUser?.username})`);
+
+            // Sweep away any stale guild-scoped commands so each of our commands
+            // exists only once (as a global command) in every guild's picker.
+            // READY carries the bot's guild list (ids present even while the
+            // guild is still "unavailable"); clear each one once per process.
+            const readyGuilds = Array.isArray(d.guilds) ? d.guilds : [];
+            for (const guild of readyGuilds) {
+              const guildId = typeof guild?.id === "string" ? guild.id : undefined;
+              if (!guildId || guildCommandsCleared.has(guildId)) {
+                continue;
+              }
+              guildCommandsCleared.add(guildId);
+              void clearGuildScopedCommands(applicationId, discordToken, guildId, runtime);
+            }
 
             // Lifecycle messages ("Back online") handled by health-monitor sidecar.
 

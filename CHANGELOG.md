@@ -16,9 +16,11 @@ Docs: https://docs.openclaw.ai
   `PUT /applications/{id}/commands` carrying exactly the fork's own commands (`/channel`,
   `/lifecycle`, `/secret`, `/debug`, `/connections` with its `/conn` alias). This prunes
   any stale or built-in commands left registered under the bot and makes registration
-  idempotent, so a command can no longer appear twice in the picker. Registration
-  previously used an additive `POST` per command, which could never remove commands that
-  were no longer ours.
+  idempotent. Registration previously used an additive `POST` per command, which could
+  never remove commands that were no longer ours. The router also clears any guild-scoped
+  commands on startup (we only ever register global commands), so a stale guild-scoped
+  command can no longer appear as a duplicate alongside its global twin in a server's
+  picker.
 - Discord router: `/lifecycle` and `/secret` in a guild channel are now owner-gated. A
   non-owner gets the same "not authorized to use this channel's agent" notice a plain
   message earns, delivered as an ephemeral reply only they can see (the notice wording
