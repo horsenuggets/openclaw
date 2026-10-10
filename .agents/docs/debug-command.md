@@ -30,11 +30,15 @@ Invoke `/debug` in Discord and type the subcommand into the `command` option, fo
 
 Behavior worth knowing:
 
-- Admin only. Access is gated on the admin role via `whitelist.isAdmin` (the
+- Admin only. Access is gated on admin via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), NOT on channel ownership, because debug tools inspect
-  global state rather than one channel's agent. Admin is the auth-guild admin role
-  (`OPENCLAW_ADMIN_ROLE_ID`) or an override id (`OPENCLAW_ADMIN_OVERRIDE_IDS`); both fail
-  closed. A non-admin gets an ephemeral "not authorized" reply.
+  global state rather than one channel's agent. In production, admin means holding the
+  auth-guild admin role (`OPENCLAW_ADMIN_ROLE_ID`); with no role configured, nobody is
+  admin (fail closed). `OPENCLAW_ADMIN_OVERRIDE_IDS` is a separate, test/lab-only escape
+  hatch: listed ids are accepted unconditionally, before any auth-guild role lookup, for
+  rigs whose bot is not a member of the auth server. Do not use the override to grant
+  `/debug` in production; add the real role there instead. A non-admin gets an ephemeral
+  "not authorized" reply.
 - Every reply is ephemeral (only the invoker sees it), so debug output never leaks into
   the channel.
 - Usable anywhere (guild channels, bot DMs, group DMs: `contexts: [0, 1, 2]`) since the
@@ -62,8 +66,10 @@ Subcommands are defined inside `debug-command.ts` and registered in the
 2. Add it to `DEBUG_SUBCOMMANDS`. `help` auto-lists every entry alphabetically, so there
    is nothing else to wire up for it to appear.
 3. Return the right `DebugResult` kind:
-   - `{ kind: "content", content }` for raw text with no embed (like `echo`). Content is
-     clamped to Discord's 2000-char message limit.
+   - `{ kind: "content", content }` for raw text with no embed (like `echo`). The router
+     sends this content unchanged, so each content-producing subcommand must clamp its own
+     output to Discord's 2000-char message limit (for example via the in-module `clamp`
+     helper, as `echo` does); there is no automatic clamp in the dispatcher or the sender.
    - `{ kind: "embeds", embeds, attachments }` for rich output. For a simple one-embed
      notice use the in-module `debugNotice(title, description)` helper, which builds a
      Debug-category embed and returns the result for you.
