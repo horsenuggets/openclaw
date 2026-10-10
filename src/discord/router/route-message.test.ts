@@ -134,3 +134,44 @@ describe("routeMessage payload delivery", () => {
     expect(discordSend).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("routeMessage error handling", () => {
+  function routeFailing(systemTurn?: boolean) {
+    (callGatewaySimple as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error(
+        "gateway connection failed: WebSocket connection to 'ws://127.0.0.1:18999/' failed: Connection ended",
+      ),
+    );
+    return routeMessage({
+      authorId: "u1",
+      channelId: "c1",
+      messageContent: "hi",
+      instance,
+      discordToken: "tok",
+      runtime,
+      agentTimeoutMs: 1000,
+      systemTurn,
+    });
+  }
+
+  // A cold-start kick failure must stay silent: the user sent no message, the
+  // Registration Success card already posted, and their real first message will
+  // drive onboarding, so a "something went wrong" embed would be misleading.
+  it("does not post any embed when a system turn (onboarding kick) fails", async () => {
+    const result = await routeFailing(true);
+    expect(result).toBe(false);
+    expect(sendEmbedMessage).not.toHaveBeenCalled();
+    expect(discordSend).not.toHaveBeenCalled();
+  });
+
+  // A real user turn still gets a notice; a dropped connection is classified as
+  // connection-refused, so it uses the "agent is not running" copy.
+  it("posts the connection-refused notice when a real user turn fails", async () => {
+    await routeFailing(false);
+    expect(sendEmbedMessage).toHaveBeenCalledTimes(1);
+    const message = (sendEmbedMessage as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+      embeds: { description?: string }[];
+    };
+    expect(message.embeds[0].description).toContain("not running");
+  });
+});

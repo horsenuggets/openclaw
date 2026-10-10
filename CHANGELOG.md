@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: the onboarding kick no longer leaks a "Something went wrong processing
+  your message" error under a fresh "Registration Success" card. The kick's readiness gate
+  now waits for the agent gateway's real WebSocket handshake (`probeGatewayReady`) instead
+  of a bare TCP connect, which a just-created container accepts before its ws handler
+  serves; a failing system turn is also silenced (the owner's first message drives
+  onboarding anyway), and cold-start connection resets (`ECONNRESET` / "Connection ended"
+  / "socket hang up") are classified as connection failures rather than generic errors.
 - Discord router: every slash-command permission denial now renders the same ephemeral
   embed. The unauthorized notice was centralized in `unauthorized-notice.ts`
   (`buildPermissionDeniedEmbed` plus `denyInteractionEphemeral`, with a channel-ownership
