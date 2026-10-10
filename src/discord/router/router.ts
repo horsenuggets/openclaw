@@ -96,6 +96,43 @@ async function putDiscordCommands(params: {
 }
 
 /**
+ * The complete set of slash commands this fork owns, in registration order. The
+ * global command list is overwritten with exactly this set, so adding a command
+ * here (and nowhere else) is all it takes to register it, and anything not in
+ * this array is pruned from the picker.
+ */
+export const ROUTER_COMMAND_SPECS = [
+  LIFECYCLE_COMMAND_SPEC,
+  CHANNEL_COMMAND_SPEC,
+  SECRET_COMMAND_SPEC,
+  DEBUG_COMMAND_SPEC,
+  ...CONNECTIONS_COMMAND_SPECS,
+];
+
+/**
+ * Register our slash commands as the application's entire global command list
+ * with a single bulk-overwrite PUT. This is deliberately a PUT, not a series of
+ * POSTs: POST only ever creates-or-upserts by name, so it can never remove a
+ * command that used to be registered (an older build's command, or any built-in
+ * command deployed under this same bot). Those orphans would linger in the
+ * picker forever. PUT also makes registration idempotent, so a command can never
+ * appear twice for this application. Returns true when Discord accepted it.
+ */
+export async function registerGlobalCommands(
+  applicationId: string,
+  discordToken: string,
+  runtime: RouterRuntime,
+): Promise<boolean> {
+  return putDiscordCommands({
+    url: `${DISCORD_API}/applications/${applicationId}/commands`,
+    discordToken,
+    body: JSON.stringify(ROUTER_COMMAND_SPECS),
+    label: "slash command registration",
+    runtime,
+  });
+}
+
+/**
  * Clear every guild-scoped slash command for one guild (an atomic PUT of an
  * empty list). This fork registers its commands only as global commands, so a
  * guild-scoped command is always a stale leftover (an older build, or a one-off
@@ -103,15 +140,17 @@ async function putDiscordCommands(params: {
  * one in that guild's picker. Clearing per guild on startup self-heals those
  * leftovers and enforces the invariant that global is the only source. Empty on
  * a guild with no guild-scoped commands is a no-op, so this is safe to run every
- * time.
+ * time. Returns true when Discord accepted the overwrite, so the caller can
+ * retry on a transient failure instead of treating the guild as permanently
+ * cleared.
  */
 export async function clearGuildScopedCommands(
   applicationId: string,
   discordToken: string,
   guildId: string,
   runtime: RouterRuntime,
-): Promise<void> {
-  await putDiscordCommands({
+): Promise<boolean> {
+  return putDiscordCommands({
     url: `${DISCORD_API}/applications/${applicationId}/guilds/${guildId}/commands`,
     discordToken,
     body: "[]",
@@ -150,30 +189,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     runtime.log(`  channel ${channelId} → localhost:${inst.port}`);
   }
 
-  // Register slash commands.
-  //
-  // One PUT bulk-overwrites the application's entire global command list in a
-  // single atomic call, so the registered set is exactly the custom commands we
-  // ship here and nothing else. This is deliberately a PUT, not a series of
-  // POSTs: POST only ever creates-or-upserts by name, so it can never remove a
-  // command that used to be registered (an older build's command, or any
-  // built-in command deployed under this same bot). Those orphans would linger
-  // in the picker forever. PUT also makes registration idempotent, so a command
-  // can never appear twice for this application.
-  const commandSpecs = [
-    LIFECYCLE_COMMAND_SPEC,
-    CHANNEL_COMMAND_SPEC,
-    SECRET_COMMAND_SPEC,
-    DEBUG_COMMAND_SPEC,
-    ...CONNECTIONS_COMMAND_SPECS,
-  ];
-  await putDiscordCommands({
-    url: `${DISCORD_API}/applications/${applicationId}/commands`,
-    discordToken,
-    body: JSON.stringify(commandSpecs),
-    label: "slash command registration",
-    runtime,
-  });
+  // Register exactly our slash commands as the global command list (see
+  // registerGlobalCommands for why this is a single bulk-overwrite PUT).
+  await registerGlobalCommands(applicationId, discordToken, runtime);
 
   // Get gateway URL
   const gatewayInfo = (await fetch(`${DISCORD_API}/gateway/bot`, {
@@ -794,7 +812,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
             // Sweep away any stale guild-scoped commands so each of our commands
             // exists only once (as a global command) in every guild's picker.
             // READY carries the bot's guild list (ids present even while the
-            // guild is still "unavailable"); clear each one once per process.
+            // guild is still "unavailable"). Mark a guild done in the Set only
+            // after Discord accepts the clear: adding it up front dedupes the
+            // concurrent clears within one READY burst, but a transient failure
+            // drops it back so the next READY (e.g. after a reconnect) retries
+            // rather than skipping the guild for the rest of the process.
             const readyGuilds = Array.isArray(d.guilds) ? d.guilds : [];
             for (const guild of readyGuilds) {
               const guildId = typeof guild?.id === "string" ? guild.id : undefined;
@@ -802,7 +824,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
                 continue;
               }
               guildCommandsCleared.add(guildId);
-              void clearGuildScopedCommands(applicationId, discordToken, guildId, runtime);
+              void clearGuildScopedCommands(applicationId, discordToken, guildId, runtime).then(
+                (cleared) => {
+                  if (!cleared) {
+                    guildCommandsCleared.delete(guildId);
+                  }
+                },
+              );
             }
 
             // Lifecycle messages ("Back online") handled by health-monitor sidecar.
