@@ -22,7 +22,6 @@ import {
   DEBUG_COMMAND_SPEC,
   type DebugResult,
   debugSubcommandLabel,
-  debugTextCommandHasSecret,
   parseDebugTextCommand,
   runDebugCommand,
 } from "./debug-command.js";
@@ -249,16 +248,18 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     const refAuthor = ref.author?.username ?? "unknown";
     const rawRef = (ref.content ?? "").slice(0, 500);
     // The referenced message may itself carry a secret: a token-bearing
-    // `/connections add`, or a `/debug secrettest` command (notably the bot's own
-    // ack is a reply to that command, so Discord echoes it back with the command
-    // in `referenced_message`). Redact either so the value is not forwarded into
-    // the agent transcript or the fallback log below.
+    // `/connections add`, or any `/debug` command (its args can be a pasted
+    // credential, and the bot's own ack is a reply to a `/debug secrettest`, so
+    // Discord echoes that command back in `referenced_message`). Reduce a `/debug`
+    // to just its sanitized subcommand label, matching `debugSubcommandLabel`, so
+    // no raw debug input is forwarded into the agent transcript or the log below.
     const refParsed = parseConnectTextCommand(rawRef);
+    const refDebug = parseDebugTextCommand(rawRef);
     const refContent =
       refParsed && connectTextCommandHasToken(refParsed)
         ? "/connections add <redacted>"
-        : debugTextCommandHasSecret(rawRef)
-          ? "/debug secrettest <redacted>"
+        : refDebug !== null
+          ? `/debug ${debugSubcommandLabel(refDebug)}`
           : rawRef;
     if (refContent) {
       content = `[Replying to ${refAuthor}: "${refContent}"]\n${content}`;
@@ -276,11 +277,13 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     if (parsed && connectTextCommandHasToken(parsed)) {
       return "/connections add <redacted>";
     }
-    // `/debug secrettest <value>` carries the test secret in the message body.
-    // It is deliberately visible in the channel, but router logs persist
-    // separately, so keep the value out of them.
-    if (debugTextCommandHasSecret(messageContent)) {
-      return "/debug secrettest <redacted>";
+    // Any `/debug` command: its args can be a secret (a `secrettest` value, or a
+    // credential accidentally pasted as an unknown subcommand). Router logs
+    // persist separately from the channel, so log only the sanitized subcommand
+    // label, never the raw input, matching the slash path's `debugSubcommandLabel`.
+    const debugInput = parseDebugTextCommand(messageContent);
+    if (debugInput !== null) {
+      return `/debug ${debugSubcommandLabel(debugInput)}`;
     }
     return content.slice(0, 60);
   })();

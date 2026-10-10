@@ -129,7 +129,10 @@ notice, so a new subcommand only needs its registry entry plus `run`.
   automation/tester bot that cannot invoke slash commands can still drive `/debug`. It
   runs the same `runDebugCommand`, but because a bot cannot send a true ephemeral, its
   replies post in-channel (visible), unlike the ephemeral slash path. A non-admin's
-  `/debug ...` text gets the same permission-denied embed. The `secrettest` value is
-  redacted from the router log (`debugTextCommandHasSecret`) even though it stays visible
-  in the channel. If reconnect recovery finds an unanswered plaintext `secrettest`
-  command, it skips it rather than logging or routing the value.
+  `/debug ...` text gets the same permission-denied embed. Any `/debug` text (and a
+  `/debug` referenced in a reply) is reduced to just its sanitized subcommand label
+  (`debugSubcommandLabel`) before it reaches the router log, so neither a `secrettest`
+  value nor a credential pasted as an unknown subcommand is ever persisted there (the
+  `secrettest` value still stays visible in the channel by design). If reconnect recovery
+  finds an unanswered plaintext `secrettest` command (`debugTextCommandHasSecret`), it
+  skips it rather than logging or routing the value.

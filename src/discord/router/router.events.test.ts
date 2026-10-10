@@ -307,6 +307,40 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("content=/connections add <redacted>"))).toBe(true);
   });
 
+  it("logs only the sanitized subcommand label for any /debug command", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // A credential pasted as an unknown /debug subcommand (or a secrettest value)
+    // must never land in the persistent log: only the sanitized label is kept.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "debug-log-msg-1",
+      author: { id: "444444444444444444" },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/debug sk-SUPERSECRETCREDENTIAL",
+      attachments: [],
+    });
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "debug-log-msg-2",
+      author: { id: "444444444444444444" },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/debug secrettest sk-ANOTHERSECRET my-name",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("sk-SUPERSECRETCREDENTIAL"))).toBe(false);
+    expect(logs.some((l) => l.includes("sk-ANOTHERSECRET"))).toBe(false);
+    expect(logs.some((l) => l.includes("content=/debug (unknown)"))).toBe(true);
+    expect(logs.some((l) => l.includes("content=/debug secrettest"))).toBe(true);
+  });
+
   it("detects, redacts, and scrubs a token command sent as a reply", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
