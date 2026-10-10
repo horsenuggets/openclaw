@@ -17,8 +17,13 @@ import { confirmDestructive } from "./prompt.js";
 
 async function thanosSnapArchives(): Promise<void> {
   const client = new LabDiscord();
+  // Map ids to names so the deletion log reads channel names, not bare ids.
+  const channels = await client.listGuildChannels();
+  const nameById = new Map(channels.map((c) => [c.id, c.name]));
   const ids = await collectArchiveChannelIds(client);
+  console.log(`Found ${ids.length} archived ${ids.length === 1 ? "channel" : "channels"}.`);
   const doomed = pickHalf(ids);
+  console.log(`Selected ${doomed.length} for deletion.`);
   if (doomed.length === 0) {
     // Nothing to delete, but still honor the promised tidy so any empty or
     // non-contiguously named archive categories get cleaned up.
@@ -38,6 +43,9 @@ async function thanosSnapArchives(): Promise<void> {
   ) {
     console.log("Aborted. Re-run with --yes to confirm.");
     return;
+  }
+  for (const id of doomed) {
+    console.log(`Deleting "${nameById.get(id) ?? id}" (${id}).`);
   }
   await deleteChannels(client, doomed);
   await tidyArchives(client);

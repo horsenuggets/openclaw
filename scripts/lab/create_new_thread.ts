@@ -14,12 +14,19 @@
  * needs the Mirror bot's Server Members privileged intent; without it the add is
  * skipped with a warning and the thread is still created.
  *
- * Thread numbering reads the current max and adds one, so it assumes a single
- * operator: this is a manual test-server helper, not a concurrent service, and
- * two simultaneous runs for the same day could pick the same number. Discord has
- * no atomic name reservation, so a lock is deliberately out of scope here.
+ * Thread numbering reads the current max and adds one, so near-simultaneous or
+ * rapid back-to-back runs could read the same max and create threads out of
+ * order or with duplicate numbers. To keep numbering in order, the whole
+ * read-max -> create sequence is serialized with a cross-process lockfile and
+ * consecutive creations are spaced at least 3 seconds apart (a debounce). A
+ * sibling file records the last-creation timestamp used to compute the wait, and
+ * a stale lock (older than the safety timeout) is cleared so a crashed run can
+ * never deadlock future ones.
  */
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { archiveExpiredTestingDays } from "./archive_old_threads.js";
 import { ChannelType, LabDiscord } from "./discord.js";
 import {
@@ -42,6 +49,70 @@ const MAX_DESCRIPTION = 1000;
 
 /** Pause between thread-member adds, to stay friendly to Discord's rate limits. */
 const MEMBER_ADD_PACE_MS = 200;
+
+/** Minimum spacing between consecutive thread creations, to keep numbering in order. */
+const THREAD_DEBOUNCE_MS = 3000;
+
+/** Poll interval while waiting to acquire the cross-process lock. */
+const LOCK_POLL_MS = 100;
+
+/** A lockfile older than this (by mtime) is treated as stale and removed. */
+const LOCK_STALE_MS = 30_000;
+
+/**
+ * Remaining milliseconds to wait before the next creation so that consecutive
+ * creations are spaced by at least `intervalMs`. A `null` last timestamp (no
+ * prior creation recorded) means no wait.
+ */
+export function remainingDebounceMs(
+  lastMs: number | null,
+  nowMs: number,
+  intervalMs: number,
+): number {
+  return lastMs === null ? 0 : Math.max(0, intervalMs - (nowMs - lastMs));
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Acquire a cross-process lock by atomically creating a lockfile (O_EXCL). Poll
+ * until it is free, clearing a stale lock (older than LOCK_STALE_MS) so a crashed
+ * run cannot deadlock future ones.
+ */
+async function acquireLock(lockPath: string): Promise<void> {
+  for (;;) {
+    try {
+      const fd = fs.openSync(lockPath, "wx");
+      fs.closeSync(fd);
+      return;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw err;
+      }
+      // Lock is held; drop it if it is stale, otherwise wait and retry.
+      try {
+        const age = Date.now() - fs.statSync(lockPath).mtimeMs;
+        if (age > LOCK_STALE_MS) {
+          fs.rmSync(lockPath, { force: true });
+          continue;
+        }
+      } catch {
+        // The holder released the lock between our open and stat; just retry.
+      }
+      await sleep(LOCK_POLL_MS);
+    }
+  }
+}
+
+/** Read the recorded last-creation timestamp (epoch ms), or null if absent/invalid. */
+function readLastMs(lastPath: string): number | null {
+  try {
+    const value = Number.parseInt(fs.readFileSync(lastPath, "utf8").trim(), 10);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Add every non-bot Lab member to the thread. Failures (most often the Server
@@ -125,24 +196,44 @@ async function createNewThread(): Promise<void> {
     await client.sendEmbed(dayChannel.id, buildDateChannelEmbed(now), [TESTING_FOOTER_ICON]);
   }
 
-  // Number the new thread one past the highest existing number for the day,
-  // counting both active and archived threads so numbers never collide.
-  const [active, archived] = await Promise.all([
-    client.listActiveThreads(),
-    client.listArchivedPublicThreads(dayChannel.id),
-  ]);
-  const existing = [...active.filter((t) => t.parent_id === dayChannel.id), ...archived];
-  const number = nextThreadNumber(existing.map((t) => t.name));
-  const threadName = buildThreadName(number, slug);
+  // Serialize the read-max -> create sequence across processes with a lockfile,
+  // and space consecutive creations at least THREAD_DEBOUNCE_MS apart so rapid
+  // back-to-back runs cannot read the same max and create threads out of order.
+  const lockPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.lock`);
+  const lastPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.last`);
+  await acquireLock(lockPath);
+  let thread: Awaited<ReturnType<LabDiscord["createThread"]>>;
+  let threadName: string;
+  try {
+    const wait = remainingDebounceMs(readLastMs(lastPath), Date.now(), THREAD_DEBOUNCE_MS);
+    if (wait > 0) {
+      console.log(`Waiting ${wait}ms to space thread creation.`);
+      await sleep(wait);
+    }
 
-  const thread = await client.createThread(dayChannel.id, {
-    name: threadName,
-    type: ChannelType.PublicThread,
-    auto_archive_duration: THREAD_AUTO_ARCHIVE_MINUTES,
-  });
-  await client.sendEmbed(thread.id, buildThreadConfirmEmbed(threadName, description, now), [
-    TESTING_FOOTER_ICON,
-  ]);
+    // Number the new thread one past the highest existing number for the day,
+    // counting both active and archived threads so numbers never collide.
+    const [active, archived] = await Promise.all([
+      client.listActiveThreads(),
+      client.listArchivedPublicThreads(dayChannel.id),
+    ]);
+    const existing = [...active.filter((t) => t.parent_id === dayChannel.id), ...archived];
+    const number = nextThreadNumber(existing.map((t) => t.name));
+    threadName = buildThreadName(number, slug);
+
+    thread = await client.createThread(dayChannel.id, {
+      name: threadName,
+      type: ChannelType.PublicThread,
+      auto_archive_duration: THREAD_AUTO_ARCHIVE_MINUTES,
+    });
+    await client.sendEmbed(thread.id, buildThreadConfirmEmbed(threadName, description, now), [
+      TESTING_FOOTER_ICON,
+    ]);
+
+    fs.writeFileSync(lastPath, String(Date.now()));
+  } finally {
+    fs.rmSync(lockPath, { force: true });
+  }
 
   console.log(`Created thread "${threadName}" in #${todayName}.`);
   console.log(`https://discord.com/channels/${client.guildId}/${thread.id}`);
@@ -152,7 +243,10 @@ async function createNewThread(): Promise<void> {
   }
 }
 
-createNewThread().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Only run when invoked directly (not when imported by the test file).
+if (import.meta.main) {
+  createNewThread().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

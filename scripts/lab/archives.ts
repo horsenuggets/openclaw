@@ -32,6 +32,7 @@ export interface ArchiveClient {
     parent_id?: string | null;
   }): Promise<DiscordChannel>;
   modifyChannel(channelId: string, body: Record<string, unknown>): Promise<DiscordChannel>;
+  modifyChannelPositions(entries: Array<{ id: string; position: number }>): Promise<void>;
   deleteChannel(channelId: string): Promise<void>;
 }
 
@@ -57,6 +58,35 @@ function archiveCategories(channels: DiscordChannel[]): DiscordChannel[] {
   return channels
     .filter((c) => c.type === ChannelType.GuildCategory && archiveCategoryIndex(c.name) !== null)
     .toSorted((a, b) => archiveCategoryIndex(a.name)! - archiveCategoryIndex(b.name)!);
+}
+
+/**
+ * Plan the category positions that keep the `Archive NNNN` categories ordered by
+ * their number and sitting after every non-archive category. Pure: it only reads
+ * the given channels and returns the position updates needed (an entry per
+ * archive category whose target position differs from its current one), so an
+ * already-correct layout yields an empty array.
+ */
+export function planArchiveCategoryOrder(
+  channels: DiscordChannel[],
+): Array<{ id: string; position: number }> {
+  const categories = channels.filter((c) => c.type === ChannelType.GuildCategory);
+  const nonArchive = categories.filter((c) => archiveCategoryIndex(c.name) === null);
+  const maxNonArchivePos = nonArchive.length
+    ? Math.max(...nonArchive.map((c) => c.position ?? 0))
+    : -1;
+  const archive = categories
+    .filter((c) => archiveCategoryIndex(c.name) !== null)
+    .toSorted((a, b) => archiveCategoryIndex(a.name)! - archiveCategoryIndex(b.name)!);
+
+  const updates: Array<{ id: string; position: number }> = [];
+  archive.forEach((cat, i) => {
+    const target = maxNonArchivePos + 1 + i;
+    if ((cat.position ?? 0) !== target) {
+      updates.push({ id: cat.id, position: target });
+    }
+  });
+  return updates;
 }
 
 /** Non-category children of a category, in display order. */
@@ -92,12 +122,27 @@ export async function collectArchiveChannelIds(client: ArchiveClient): Promise<s
  */
 export async function tidyArchives(
   client: ArchiveClient,
-  options: { include?: string[]; paceMs?: number } = {},
+  options: { include?: string[]; paceMs?: number; verbose?: boolean } = {},
 ): Promise<void> {
   const paceMs = options.paceMs ?? DEFAULT_PACE_MS;
+  const verbose = options.verbose ?? true;
+  const log = (msg: string) => {
+    if (verbose) {
+      console.log(msg);
+    }
+  };
+  const plural = (n: number, singular: string, pluralForm: string) =>
+    n === 1 ? singular : pluralForm;
+
   const channels = await client.listGuildChannels();
   const byId = new Map(channels.map((c) => [c.id, c]));
   const cats = archiveCategories(channels);
+
+  const existingCount = cats.reduce((sum, cat) => sum + childrenOf(channels, cat.id).length, 0);
+  log(
+    `Scanning archives: found ${existingCount} ${plural(existingCount, "channel", "channels")} ` +
+      `across ${cats.length} ${plural(cats.length, "category", "categories")}.`,
+  );
 
   // Current archived channels in order, then the newly included ones (that exist
   // and are not already archived).
@@ -109,31 +154,45 @@ export async function tidyArchives(
       seen.add(child.id);
     }
   }
+  let includedCount = 0;
   for (const id of options.include ?? []) {
     if (!seen.has(id) && byId.has(id)) {
       flat.push(id);
       seen.add(id);
+      includedCount++;
     }
+  }
+  if (includedCount > 0) {
+    log(`Including ${includedCount} ${plural(includedCount, "channel", "channels")} to archive.`);
   }
 
   const groups = chunk(flat, CHANNELS_PER_CATEGORY);
+  log(
+    `Repacking ${flat.length} ${plural(flat.length, "channel", "channels")} into ` +
+      `${groups.length} ${plural(groups.length, "category", "categories")}.`,
+  );
 
   // Ensure exactly groups.length archive categories, reusing existing ones and
   // normalizing their names to the contiguous Archive NNNN sequence.
   const categoryIds: string[] = [];
+  const categoryName = new Map<string, string>();
   for (let i = 0; i < groups.length; i++) {
     const want = archiveCategoryName(i + 1);
     if (i < cats.length) {
       const cat = cats[i];
       if (cat.name !== want) {
+        log(`Renaming "${cat.name}" to "${want}".`);
         await client.modifyChannel(cat.id, { name: want });
         await pace(paceMs);
       }
       categoryIds.push(cat.id);
+      categoryName.set(cat.id, want);
     } else {
+      log(`Creating category "${want}".`);
       const created = await client.createChannel({ name: want, type: ChannelType.GuildCategory });
       await pace(paceMs);
       categoryIds.push(created.id);
+      categoryName.set(created.id, want);
     }
   }
 
@@ -159,6 +218,10 @@ export async function tidyArchives(
     let progressed = false;
     for (const move of pending) {
       try {
+        log(
+          `Moving "${byId.get(move.id)?.name ?? move.id}" to ` +
+            `"${categoryName.get(move.target) ?? move.target}".`,
+        );
         await client.modifyChannel(move.id, { parent_id: move.target });
         progressed = true;
         await pace(paceMs);
@@ -178,7 +241,20 @@ export async function tidyArchives(
 
   // Delete any archive categories beyond what we need; they are now empty.
   for (let i = groups.length; i < cats.length; i++) {
+    log(`Removing empty category "${cats[i].name}".`);
     await client.deleteChannel(cats[i].id);
+    await pace(paceMs);
+  }
+
+  // Finally, keep the archive categories ordered by number and placed after the
+  // non-archive categories.
+  const current = await client.listGuildChannels();
+  const updates = planArchiveCategoryOrder(current);
+  if (updates.length > 0) {
+    log(
+      `Reordering ${updates.length} archive ${plural(updates.length, "category", "categories")}.`,
+    );
+    await client.modifyChannelPositions(updates);
     await pace(paceMs);
   }
 }
