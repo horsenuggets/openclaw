@@ -130,7 +130,18 @@ export type RouterErrorKind = "connection-refused" | "auth" | "timeout" | "gener
  * generic "try again") rather than falling through to "generic".
  */
 export function classifyRouterError(errMsg: string): RouterErrorKind {
-  if (errMsg.includes("ECONNREFUSED")) {
+  // ECONNREFUSED means the agent gateway is not listening at all. ECONNRESET /
+  // "Connection ended" / "socket hang up" mean the gateway accepted the TCP
+  // connection and then dropped it, which happens during a cold start (the
+  // container binds its port before its ws handler serves) or when the agent
+  // dies mid-turn. All of these mean "the agent is not reachable right now", so
+  // they share the connection-refused notice rather than the generic one.
+  if (
+    errMsg.includes("ECONNREFUSED") ||
+    errMsg.includes("ECONNRESET") ||
+    errMsg.includes("Connection ended") ||
+    errMsg.includes("socket hang up")
+  ) {
     return "connection-refused";
   }
   if (

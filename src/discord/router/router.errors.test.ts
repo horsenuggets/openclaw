@@ -70,6 +70,19 @@ describe("classifyRouterError", () => {
     expect(classifyRouterError("connect ECONNREFUSED 127.0.0.1:18796")).toBe("connection-refused");
   });
 
+  // A cold-start ws drop (container bound its TCP port before the ws handler
+  // served) and a mid-turn agent death both reset the connection; they share
+  // the connection-refused notice, not the generic "try again".
+  it("classifies connection resets as connection-refused", () => {
+    expect(
+      classifyRouterError(
+        "gateway connection failed: WebSocket connection to 'ws://127.0.0.1:18790/' failed: Connection ended",
+      ),
+    ).toBe("connection-refused");
+    expect(classifyRouterError("read ECONNRESET")).toBe("connection-refused");
+    expect(classifyRouterError("Error: socket hang up")).toBe("connection-refused");
+  });
+
   it("classifies timeouts", () => {
     expect(classifyRouterError("agent timeout after 60000ms")).toBe("timeout");
     expect(classifyRouterError("ETIMEDOUT")).toBe("timeout");

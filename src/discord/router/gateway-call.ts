@@ -34,6 +34,77 @@ export type CallGatewayOpts = {
   timeoutMs?: number;
 };
 
+/** Build the OpenClaw gateway `connect` handshake request (protocol v3). */
+function buildConnectRequest(connectId: string, version: string, token?: string): string {
+  return JSON.stringify({
+    type: "req",
+    id: connectId,
+    method: "connect",
+    params: {
+      minProtocol: 3,
+      maxProtocol: 3,
+      client: {
+        id: "cli",
+        version,
+        platform: "linux",
+        mode: "backend",
+        instanceId: randomUUID(),
+      },
+      caps: [],
+      auth: token ? { token } : undefined,
+      role: "operator",
+      scopes: ["operator.admin"],
+    },
+  });
+}
+
+/**
+ * Readiness probe for the onboarding kick. A bare TCP connect (`probePort`) can
+ * report ready before the agent gateway's WebSocket upgrade handler is actually
+ * serving: a freshly created container binds its TCP listener first, so the
+ * socket accepts and is then reset ("Connection ended") when the real routed
+ * turn runs. This opens a ws and sends the gateway `connect` handshake; any
+ * response to it (even an auth rejection) proves the ws handler is serving and
+ * can accept the real, tokened turn. Only a connection-level failure (reset,
+ * close, or timeout before any response) counts as not-ready. The probe is
+ * deliberately tokenless: it tests reachability, not authorization.
+ */
+export function probeGatewayReady(port: number, timeoutMs = 2000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const connectId = randomUUID();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    const done = (ready: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {}
+      resolve(ready);
+    };
+    ws.on("open", () => ws.send(buildConnectRequest(connectId, "router-probe")));
+    ws.on("message", (raw: Buffer) => {
+      let msg: Record<string, unknown>;
+      try {
+        msg = JSON.parse(raw.toString());
+      } catch {
+        return;
+      }
+      // Any response to our connect (ok or an auth error) means the gateway is
+      // serving the protocol, so the real tokened turn can proceed.
+      if (msg.type === "res" && msg.id === connectId) {
+        done(true);
+      }
+    });
+    ws.on("error", () => done(false));
+    ws.on("close", () => done(false));
+    const timer = setTimeout(() => done(false), timeoutMs);
+  });
+}
+
 /**
  * Connect to a gateway container via WebSocket, send a connect handshake,
  * then send the actual request and wait for the final response.
@@ -66,28 +137,7 @@ export async function callGatewaySimple<T = AgentResult>(opts: CallGatewayOpts):
 
     ws.on("open", () => {
       // Send connect handshake (OpenClaw gateway protocol)
-      ws.send(
-        JSON.stringify({
-          type: "req",
-          id: connectId,
-          method: "connect",
-          params: {
-            minProtocol: 3,
-            maxProtocol: 3,
-            client: {
-              id: "cli",
-              version: "router",
-              platform: "linux",
-              mode: "backend",
-              instanceId: randomUUID(),
-            },
-            caps: [],
-            auth: opts.token ? { token: opts.token } : undefined,
-            role: "operator",
-            scopes: ["operator.admin"],
-          },
-        }),
-      );
+      ws.send(buildConnectRequest(connectId, "router", opts.token));
     });
 
     ws.on("message", (raw: Buffer) => {

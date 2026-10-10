@@ -400,6 +400,17 @@ export async function routeMessage(params: {
     const errMsg = String(err);
     runtime.error(`[router] error for channel ${channelId}: ${errMsg}`);
 
+    // A system turn (the onboarding kick) carries no human message, so a failure
+    // must never post a user-facing "your message failed" embed under the fresh
+    // Registration Success card. The welcome card and greeting are driven by the
+    // owner's real first message instead (BOOTSTRAP.md is still present), so
+    // staying silent here is correct. This also swallows the transient
+    // cold-start ws drop ("Connection ended") where the agent gateway accepted
+    // the TCP connection before its ws handler was serving.
+    if (params.systemTurn) {
+      return false;
+    }
+
     const sendLog = (text: string): Promise<void> => {
       const log = buildLogEmbed(text);
       return sendEmbedMessage(discordToken, channelId, {

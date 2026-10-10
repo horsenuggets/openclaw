@@ -37,7 +37,7 @@ import {
 } from "./discord-api.js";
 import { buildEmbed } from "./embed-categories.js";
 import { initAppEmojis } from "./emojis.js";
-import { callGatewaySimple } from "./gateway-call.js";
+import { callGatewaySimple, probeGatewayReady } from "./gateway-call.js";
 import {
   type GatewayContext,
   handleChannelDelete,
@@ -539,7 +539,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         ownerId,
         instance,
         slot: channelQueue,
-        probe: (port) => probePort(port),
+        // Use the full ws handshake, not a bare TCP connect: a freshly created
+        // container accepts TCP before its gateway ws handler serves, so a TCP
+        // probe would green-light the kick too early and the routed turn would
+        // hit a "Connection ended" reset.
+        probe: (port) => probeGatewayReady(port),
         runtime,
         route: ({ channelId: cId, ownerId: oId, instance: inst, systemTurn }) =>
           routeMessage({

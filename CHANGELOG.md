@@ -11,9 +11,17 @@ Docs: https://docs.openclaw.ai
   as a plain message). Added a `secrettest <value> [name]` debug subcommand that hands the
   channel's agent a secret like `/secret`, but with the value passed as plaintext for
   testing (the ack loudly flags that it is visible in the channel and must never carry a
-  real secret). `/channel unregister` now accepts more confirm arguments (`confirm`,
-  `yes`, `force`, `--yes`, `-y`, `confirm:yes`) to skip the confirmation button, and the
-  button label reads "Confirm Unregister".
+  real secret); reconnect recovery skips an unanswered plaintext `secrettest` rather than
+  replaying or logging the value. `/channel unregister` now accepts more confirm arguments
+  (`confirm`, `yes`, `force`, `--yes`, `-y`, `confirm:yes`) to skip the confirmation
+  button, and the button label reads "Confirm Unregister".
+- Discord router: the onboarding kick no longer leaks a "Something went wrong processing
+  your message" error under a fresh "Registration Success" card. The kick's readiness gate
+  now waits for the agent gateway's real WebSocket handshake (`probeGatewayReady`) instead
+  of a bare TCP connect, which a just-created container accepts before its ws handler
+  serves; a failing system turn is also silenced (the owner's first message drives
+  onboarding anyway), and cold-start connection resets (`ECONNRESET` / "Connection ended"
+  / "socket hang up") are classified as connection failures rather than generic errors.
 - Discord router: every slash-command permission denial now renders the same ephemeral
   embed. The unauthorized notice was centralized in `unauthorized-notice.ts`
   (`buildPermissionDeniedEmbed` plus `denyInteractionEphemeral`, with a channel-ownership
