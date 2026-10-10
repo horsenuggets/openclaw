@@ -45,8 +45,10 @@ the production bot or server:
 - `OPENCLAW_LAB_GUILD_ID` - the OpenClaw Lab server id, set in `.env.mirror` (see
   `.env.template`).
 
-The `.sh` wrappers source `.env` then `.env.mirror`, so a value exported on the command
-line (for example `OPENCLAW_MIRROR_DISCORD_TOKEN=... scripts/lab/...`) wins.
+The `.sh` wrappers source `.env` then `.env.mirror`. A caller-exported
+`OPENCLAW_MIRROR_DISCORD_TOKEN` is preserved and wins over the env files; other values
+(including `OPENCLAW_LAB_GUILD_ID`) are taken from the env files, so set the guild id in
+`.env.mirror` rather than expecting a command-line override to stick.
 
 Auto-adding members to new threads additionally needs the Mirror bot's **Server Members**
 privileged intent (enabled in the Discord developer portal). Without it the add is skipped
