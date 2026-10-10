@@ -97,19 +97,30 @@ function readLastMs(lastPath: string): number | null {
  * never lost over an optional follow-up step.
  */
 async function addEveryoneToThread(client: LabDiscord, threadId: string): Promise<void> {
+  // Verbose by design: this follow-up step can fail transiently (a rate-limited
+  // or flaky member listing abandons the auto-add for ALL humans), so every
+  // outcome is narrated. A quiet one-line skip was easy to miss, especially when
+  // the command's output is piped through a filter, which hid a real miss before.
   let ids: string[];
   try {
+    console.log("Auto-add: listing Lab members...");
     ids = humanMemberIds(await client.listGuildMembers());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`Skipped adding members: ${message}`);
-    // The intent hint only applies to a 403 (listing blocked); other failures
-    // (auth, network, rate limits, 5xx) are unrelated to the intent setting.
+    // Loud and explicit: the whole auto-add is abandoned here, so NO humans were
+    // added. The intent hint only applies to a 403 (listing blocked); other
+    // failures (auth, network, rate limits, 5xx) are unrelated to the intent.
+    console.warn(`Auto-add: SKIPPED, could not list members (no humans added): ${message}`);
     if (/\b403\b/.test(message)) {
-      console.warn("Enable the Mirror bot's Server Members intent to auto-add members.");
+      console.warn("Auto-add: enable the Mirror bot's Server Members intent to auto-add members.");
     }
     return;
   }
+  console.log(
+    ids.length > 0
+      ? `Auto-add: ${ids.length} non-bot member(s) to add: ${ids.join(", ")}.`
+      : "Auto-add: no non-bot members found to add.",
+  );
   // Add each member independently: one bad id (invalid or inaccessible between
   // listing and insertion) must not abort the rest or fail the whole command.
   let added = 0;
@@ -118,14 +129,17 @@ async function addEveryoneToThread(client: LabDiscord, threadId: string): Promis
     try {
       await client.addThreadMember(threadId, id);
       added += 1;
+      console.log(`Auto-add: + ${id}`);
     } catch (err) {
       failed += 1;
-      console.warn(`Could not add member ${id}: ${err instanceof Error ? err.message : err}`);
+      console.warn(`Auto-add: ! could not add ${id}: ${err instanceof Error ? err.message : err}`);
     }
     await new Promise((resolve) => setTimeout(resolve, MEMBER_ADD_PACE_MS));
   }
   const suffix = failed > 0 ? ` (${failed} failed)` : "";
-  console.log(`Added ${added} ${added === 1 ? "member" : "members"} to the thread${suffix}.`);
+  console.log(
+    `Auto-add: added ${added} ${added === 1 ? "member" : "members"} to the thread${suffix}.`,
+  );
 }
 
 async function createNewThread(): Promise<void> {

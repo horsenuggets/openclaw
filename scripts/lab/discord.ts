@@ -90,16 +90,20 @@ export class LabDiscord {
       headers["Content-Type"] = "application/json";
       body = JSON.stringify(options.json);
     }
+    const method = options.method ?? "GET";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const resp = await fetch(url, { method: options.method ?? "GET", headers, body });
+      const resp = await fetch(url, { method, headers, body });
       if (resp.status !== 429) {
         return resp;
       }
       const info = (await resp.json().catch(() => ({}))) as { retry_after?: number };
       const waitMs = Math.ceil((info.retry_after ?? 1) * 1000) + 250;
+      // Surface rate limiting so a slow or skipped step is traceable rather than
+      // silently waited out (e.g. during rapid back-to-back thread creation).
+      console.warn(`Rate limited (429) on ${method} ${url}; waiting ${waitMs}ms before retry.`);
       await new Promise((r) => setTimeout(r, waitMs));
     }
-    return fetch(url, { method: options.method ?? "GET", headers, body });
+    return fetch(url, { method, headers, body });
   }
 
   private async json<T>(url: string, options: RequestOptions = {}): Promise<T> {
