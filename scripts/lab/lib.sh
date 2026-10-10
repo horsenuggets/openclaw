@@ -19,6 +19,9 @@ _LAB_CALLER_MIRROR_TOKEN="${OPENCLAW_MIRROR_DISCORD_TOKEN:-}"
 set -a
 # shellcheck disable=SC1091
 [ -f "$LAB_ROOT_DIR/.env" ] && . "$LAB_ROOT_DIR/.env"
+set +a
+_LAB_BASE_DISCORD_TOKEN="${DISCORD_BOT_TOKEN:-}"
+set -a
 # shellcheck disable=SC1091
 [ -f "$_LAB_MIRROR_ENV" ] && . "$_LAB_MIRROR_ENV"
 set +a
@@ -44,4 +47,10 @@ if [ -z "${OPENCLAW_MIRROR_DISCORD_TOKEN:-}" ] && [ -f "$_LAB_MIRROR_ENV" ]; the
     printf '%s' "${DISCORD_BOT_TOKEN:-}"
   )"
   export OPENCLAW_MIRROR_DISCORD_TOKEN
+fi
+
+if [ -z "${OPENCLAW_MIRROR_DISCORD_TOKEN:-}" ] ||
+  [ "$OPENCLAW_MIRROR_DISCORD_TOKEN" = "$_LAB_BASE_DISCORD_TOKEN" ]; then
+  echo "Error: the Lab Mirror bot token must be set and differ from the production DISCORD_BOT_TOKEN in .env." >&2
+  return 1
 fi
