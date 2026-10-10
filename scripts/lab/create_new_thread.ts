@@ -143,12 +143,18 @@ function reclaimIfStale(lockPath: string, stealPath: string, token: string): voi
     // Another waiter is already reclaiming. Only clear its steal lock if the
     // reclaimer itself died (its steal lock went stale); otherwise leave it be.
     if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      // Reclamation takes microseconds, so a steal lock older than LOCK_STALE_MS
+      // means its holder crashed. Capture it atomically with a rename (exactly one
+      // waiter wins; the rest get ENOENT) before removing it, so the removal
+      // itself is not a check-then-delete race.
       try {
         if (Date.now() - fs.statSync(stealPath).mtimeMs > LOCK_STALE_MS) {
-          fs.rmSync(stealPath, { force: true });
+          const captured = `${stealPath}.${token}`;
+          fs.renameSync(stealPath, captured);
+          fs.rmSync(captured, { force: true });
         }
       } catch {
-        // The steal lock vanished; nothing to do.
+        // Lost the capture race or the steal lock vanished; nothing to do.
       }
     }
     return;
@@ -243,19 +249,19 @@ async function createNewThread(): Promise<void> {
 
   const client = new LabDiscord();
 
-  // Archive expired Testing days before anything new. This runs outside the lock
-  // since it does not affect today's numbering.
-  await archiveExpiredTestingDays(client);
-
-  // Take the guild lock BEFORE discovering/creating the day channel so two
-  // first-of-day runs cannot both create a duplicate YYYY-MM-DD channel and both
-  // number from 0001. The debounce wait, discovery, numbering, and creation all
-  // happen inside the lock; member adds run afterwards (outside it).
+  // Take the guild lock BEFORE any shared-guild mutation so concurrent runs are
+  // fully serialized: the expired-day archiving, the debounce wait, the day
+  // channel discovery/creation, numbering, and thread creation all happen inside
+  // the one critical section (two first-of-day runs cannot both create a
+  // duplicate YYYY-MM-DD channel or the same Archive category). Member adds run
+  // afterwards, outside the lock.
   const lockPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.lock`);
   const lastPath = path.join(os.tmpdir(), `openclaw-lab-${client.guildId}.last`);
   const lock = await acquireLock(lockPath);
   let threadId: string | undefined;
   try {
+    await archiveExpiredTestingDays(client);
+
     const wait = remainingDebounceMs(readLastMs(lastPath), Date.now(), THREAD_DEBOUNCE_MS);
     if (wait > 0) {
       console.log(`Waiting ${wait}ms to space thread creation.`);
