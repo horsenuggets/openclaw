@@ -11,7 +11,7 @@
  * category left empty.
  */
 
-import { ChannelType, type DiscordChannel, type LabDiscord } from "./discord.js";
+import { ChannelType, type DiscordChannel } from "./discord.js";
 import {
   archiveCategoryIndex,
   archiveCategoryName,
@@ -19,11 +19,33 @@ import {
   CHANNELS_PER_CATEGORY,
 } from "./lab-core.js";
 
-/** A brief pause between mutations to stay friendly to Discord's rate limits. */
-const PACE_MS = 300;
+/**
+ * The subset of the Discord client the archive helpers need. Narrowing to this
+ * interface (which LabDiscord satisfies) lets tests drive the logic with an
+ * in-memory fake.
+ */
+export interface ArchiveClient {
+  listGuildChannels(): Promise<DiscordChannel[]>;
+  createChannel(body: {
+    name: string;
+    type: number;
+    parent_id?: string | null;
+  }): Promise<DiscordChannel>;
+  modifyChannel(channelId: string, body: Record<string, unknown>): Promise<DiscordChannel>;
+  deleteChannel(channelId: string): Promise<void>;
+}
 
-function pace(): Promise<void> {
-  return new Promise((r) => setTimeout(r, PACE_MS));
+/** Whether an error is Discord's "category is full" (max 50 channels) rejection. */
+function isCategoryFullError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b30035\b/.test(message) || /maximum number of channels/i.test(message);
+}
+
+/** Default pause between mutations, to stay friendly to Discord's rate limits. */
+const DEFAULT_PACE_MS = 300;
+
+function pace(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
 }
 
 function byPosition(a: DiscordChannel, b: DiscordChannel): number {
@@ -45,7 +67,7 @@ function childrenOf(channels: DiscordChannel[], categoryId: string): DiscordChan
 }
 
 /** Ids of every channel currently sitting in an archive category. */
-export async function collectArchiveChannelIds(client: LabDiscord): Promise<string[]> {
+export async function collectArchiveChannelIds(client: ArchiveClient): Promise<string[]> {
   const channels = await client.listGuildChannels();
   const ids: string[] = [];
   for (const cat of archiveCategories(channels)) {
@@ -62,14 +84,17 @@ export async function collectArchiveChannelIds(client: LabDiscord): Promise<stri
  * an expired Testing day) are appended. The result is contiguous `Archive NNNN`
  * categories of up to 50 channels each, with no empty category left behind.
  *
- * Moves are done in two phases — first detach every channel that must move
- * (parent_id = null), then attach it to its target — so a category is never
- * transiently pushed past Discord's 50-channel ceiling during the shuffle.
+ * Each channel is moved straight to its destination category; a move that would
+ * momentarily exceed Discord's 50-channel ceiling is deferred and retried once
+ * another move frees a slot. Channels are never parked parentless, so a failure
+ * mid-repack leaves every channel inside an archive category rather than
+ * orphaned outside it.
  */
 export async function tidyArchives(
-  client: LabDiscord,
-  options: { include?: string[] } = {},
+  client: ArchiveClient,
+  options: { include?: string[]; paceMs?: number } = {},
 ): Promise<void> {
+  const paceMs = options.paceMs ?? DEFAULT_PACE_MS;
   const channels = await client.listGuildChannels();
   const byId = new Map(channels.map((c) => [c.id, c]));
   const cats = archiveCategories(channels);
@@ -102,12 +127,12 @@ export async function tidyArchives(
       const cat = cats[i];
       if (cat.name !== want) {
         await client.modifyChannel(cat.id, { name: want });
-        await pace();
+        await pace(paceMs);
       }
       categoryIds.push(cat.id);
     } else {
       const created = await client.createChannel({ name: want, type: ChannelType.GuildCategory });
-      await pace();
+      await pace(paceMs);
       categoryIds.push(created.id);
     }
   }
@@ -123,28 +148,49 @@ export async function tidyArchives(
     }
   }
 
-  // Phase 1: detach movers so their target categories have room.
-  for (const move of moves) {
-    await client.modifyChannel(move.id, { parent_id: null });
-    await pace();
-  }
-  // Phase 2: attach each mover to its destination category.
-  for (const move of moves) {
-    await client.modifyChannel(move.id, { parent_id: move.target });
-    await pace();
+  // Apply the moves directly to their destination category, deferring any that
+  // momentarily hit Discord's 50-channel ceiling and retrying once other moves
+  // have freed a slot. Channels are never parked parentless, so a crash or
+  // network failure mid-repack leaves every channel inside an archive category
+  // (where the next run re-discovers it) rather than orphaned outside it.
+  let pending = moves;
+  while (pending.length > 0) {
+    const deferred: typeof moves = [];
+    let progressed = false;
+    for (const move of pending) {
+      try {
+        await client.modifyChannel(move.id, { parent_id: move.target });
+        progressed = true;
+        await pace(paceMs);
+      } catch (err) {
+        if (isCategoryFullError(err)) {
+          deferred.push(move);
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!progressed) {
+      throw new Error("Archive repack is stuck: every remaining channel targets a full category.");
+    }
+    pending = deferred;
   }
 
   // Delete any archive categories beyond what we need; they are now empty.
   for (let i = groups.length; i < cats.length; i++) {
     await client.deleteChannel(cats[i].id);
-    await pace();
+    await pace(paceMs);
   }
 }
 
 /** Delete the given channels, pacing between calls. */
-export async function deleteChannels(client: LabDiscord, ids: string[]): Promise<void> {
+export async function deleteChannels(
+  client: ArchiveClient,
+  ids: string[],
+  paceMs: number = DEFAULT_PACE_MS,
+): Promise<void> {
   for (const id of ids) {
     await client.deleteChannel(id);
-    await pace();
+    await pace(paceMs);
   }
 }
