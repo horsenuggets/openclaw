@@ -162,6 +162,7 @@ describe("embed builders", () => {
     expect(embed.footer).toEqual({ text: "Testing", icon_url: "attachment://testing.png" });
     expect(embed.timestamp).toBe(now.toISOString());
     expect(embed.description).toContain(`archived after **${ARCHIVE_THRESHOLD_DAYS} days**`);
+    expect(embed.description).toContain('scripts/lab/create_new_thread.sh "scenario title"');
   });
 
   it("builds the thread confirmation embed with a description", () => {

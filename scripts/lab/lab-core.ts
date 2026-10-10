@@ -172,7 +172,8 @@ export function buildDateChannelEmbed(now: Date): LabEmbed {
     `archived after **${ARCHIVE_THRESHOLD_DAYS} days**.\n\nFor organization purposes, ` +
     "__Testing__ text channels cannot be registered; only __Testing__ *threads* can. " +
     "__Sandbox__ text channels can be registered though!\n\nTo create a new thread, " +
-    "simply run the following...\n```sh\nscripts/lab/create_new_thread.sh\n```";
+    "simply run the following...\n```sh\n" +
+    'scripts/lab/create_new_thread.sh "scenario title"\n```';
   return {
     title: `#${name}`,
     description,
