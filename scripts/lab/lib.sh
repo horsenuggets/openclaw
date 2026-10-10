@@ -10,12 +10,23 @@ _LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAB_ROOT_DIR="$(cd "$_LAB_DIR/../.." && pwd)"
 _LAB_MIRROR_ENV="$LAB_ROOT_DIR/.env.mirror"
 
+# Preserve a caller-exported mirror token before sourcing the env files: .env (or
+# .env.mirror) may also assign OPENCLAW_MIRROR_DISCORD_TOKEN, which would
+# otherwise clobber an explicit `OPENCLAW_MIRROR_DISCORD_TOKEN=... scripts/lab/...`
+# override. Restored after the load so the caller always wins.
+_LAB_CALLER_MIRROR_TOKEN="${OPENCLAW_MIRROR_DISCORD_TOKEN:-}"
+
 set -a
 # shellcheck disable=SC1091
 [ -f "$LAB_ROOT_DIR/.env" ] && . "$LAB_ROOT_DIR/.env"
 # shellcheck disable=SC1091
 [ -f "$_LAB_MIRROR_ENV" ] && . "$_LAB_MIRROR_ENV"
 set +a
+
+if [ -n "$_LAB_CALLER_MIRROR_TOKEN" ]; then
+  OPENCLAW_MIRROR_DISCORD_TOKEN="$_LAB_CALLER_MIRROR_TOKEN"
+  export OPENCLAW_MIRROR_DISCORD_TOKEN
+fi
 
 # The mirror overlay convention (see .env.template and scripts/sync-app-emojis.sh)
 # stores the Mirror bot token as DISCORD_BOT_TOKEN, overriding the base prod
