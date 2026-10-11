@@ -188,32 +188,6 @@ const GROUP_DM_CHANNEL_TYPE = 3;
  */
 const BUTTON_ACK_TIMEOUT_MS = 10_000;
 
-/**
- * Upper bound for each unregister follow-up edit (interim/final message PATCH) and
- * for the teardown itself, used to cap the awaits that run while the in-flight
- * guard is held. Without a bound, a single stalled PATCH (editInteractionEmbedReply
- * has no timeout) would prevent the next step and leave the guard set forever, so a
- * later re-registration's clicks would all be acked-and-ignored. Generous because
- * the real teardown (container stop + rename) can legitimately take a while.
- */
-const BUTTON_EDIT_TIMEOUT_MS = 60_000;
-
-/**
- * Resolve `work` but give up after `ms`, logging via `onTimeout` so a stalled
- * network call cannot block the caller (e.g. pin the unregister in-flight guard).
- * The underlying promise is left to settle on its own; we only stop awaiting it.
- */
-function withTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => void): Promise<T | void> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(() => {
-      onTimeout();
-      resolve();
-    }, ms);
-  });
-  return Promise.race([work.finally(() => clearTimeout(timer)), timeout]);
-}
-
 /** CHANNEL_DELETE / THREAD_DELETE dispatch payload fields. */
 type ChannelDeleteData = { id?: string };
 
@@ -863,6 +837,11 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       )?.value ?? "",
     );
     void (async () => {
+      // Set once the ephemeral toggle has persisted a new value that has NOT yet
+      // been confirmed by a successful defer; invoked by the catch so a thrown or
+      // aborted defer request rolls the preference back (a non-ok response is
+      // handled inline). Cleared on a successful defer.
+      let rollbackEphemeralOnError: (() => void) | null = null;
       try {
         // Authorize BEFORE the first interaction response. Discord fixes a reply's
         // ephemerality at defer time and an ephemeral reply cannot be made public
@@ -919,6 +898,25 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
             toggledEphemeralFrom = currentEphemeral;
           }
         }
+        // Roll the ephemeral toggle back to its prior value. The toggle persisted
+        // before deferring so the defer flag could match the new value; if the defer
+        // never succeeds (a non-ok response OR a thrown/aborted request), the command
+        // visibly failed with no confirmation, so a `ephemeral off` must not silently
+        // leave the channel public and expose later output. Declared before the defer
+        // so the outer catch can also invoke it; cleared once the defer succeeds.
+        const rollbackEphemeral = (): void => {
+          if (toggledEphemeralFrom !== null && interactionChannelId) {
+            if (!setEphemeralCommands(instancesDir, interactionChannelId, toggledEphemeralFrom)) {
+              runtime.error(
+                `[router] failed to roll back ephemeral preference for channel ${interactionChannelId} after a failed defer`,
+              );
+            }
+            toggledEphemeralFrom = null;
+          }
+        };
+        // Expose the rollback to the catch so a thrown/aborted defer also undoes the
+        // persisted toggle (cleared below once the defer is accepted).
+        rollbackEphemeralOnError = rollbackEphemeral;
         const deferResp = await fetch(
           `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
           {
@@ -929,20 +927,13 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         );
         if (!deferResp.ok) {
           runtime.error(`[router] debug defer failed (${deferResp.status})`);
-          // The ephemeral toggle persisted before deferring so the defer flag could
-          // match the new value; but Discord rejected the ack, so the command
-          // visibly failed and no confirmation lands. Roll the preference back to its
-          // prior value so a rejected `ephemeral off` does not silently leave the
-          // channel public and expose later command output.
-          if (toggledEphemeralFrom !== null && interactionChannelId) {
-            if (!setEphemeralCommands(instancesDir, interactionChannelId, toggledEphemeralFrom)) {
-              runtime.error(
-                `[router] failed to roll back ephemeral preference for channel ${interactionChannelId} after a rejected defer`,
-              );
-            }
-          }
+          rollbackEphemeral();
           return;
         }
+        // Defer accepted: the toggle legitimately stuck, so stop tracking a rollback
+        // (both the inline path and the catch below).
+        toggledEphemeralFrom = null;
+        rollbackEphemeralOnError = null;
         // `secrettest` delivers a secret to the channel's agent and acks with a
         // single embed; `ephemeral` edits in the embed built (and persisted)
         // before the defer; everything else renders its own embeds or raw content.
@@ -985,6 +976,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         runtime.log(`[router] /debug from ${userId}: ${debugSubcommandLabel(commandInput)}`);
       } catch (err) {
         runtime.error(`[router] debug command failed: ${String(err)}`);
+        // A thrown/aborted defer (before it was confirmed) must still undo a
+        // persisted ephemeral toggle, so a failed `ephemeral off` cannot leave the
+        // channel public.
+        rollbackEphemeralOnError?.();
       }
     })();
     return;
@@ -1546,28 +1541,23 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         // (editing the already-acked message), then edit again with the final
         // result after teardown completes. The guard was claimed synchronously
         // above, so no concurrent click can enter teardown or render cancellation.
-        // Each await is bounded so a stalled PATCH or teardown cannot pin the guard
-        // (which the finally releases); the operations still complete on their own.
-        await withTimeout(editMessage(outcome.interim), BUTTON_EDIT_TIMEOUT_MS, () =>
-          runtime.error(`[router] unregister interim edit timed out for ${parsed.channelId}`),
-        );
-        const final = await withTimeout(outcome.perform(), BUTTON_EDIT_TIMEOUT_MS, () =>
-          runtime.error(`[router] unregister teardown timed out for ${parsed.channelId}`),
-        );
-        if (final) {
-          await withTimeout(editMessage(final), BUTTON_EDIT_TIMEOUT_MS, () =>
-            runtime.error(`[router] unregister final edit timed out for ${parsed.channelId}`),
-          );
-        }
+        // Await each step to settlement (no artificial timeout) and hold the guard
+        // the whole time: merely timing out would leave the destructive perform()
+        // running after the guard was released (a second dialog could start another
+        // teardown) and let a late interim PATCH overwrite the final result. The
+        // operations are already bounded at their edges — the host purge is
+        // detached and SIGKILL-capped, and the edit/ack fetches hit Discord — so the
+        // guard cannot be pinned forever.
+        await editMessage(outcome.interim);
+        const final = await outcome.perform();
+        await editMessage(final);
         return;
       }
       // cancelled / denied / notRegistered: a single message replacement. The
       // interaction is already acked (type 6 above), so just edit the message (the
       // editor uploads the embed's icon, which may differ from the one already on
       // the message, e.g. the Log denial icon).
-      await withTimeout(editMessage(outcome.update), BUTTON_EDIT_TIMEOUT_MS, () =>
-        runtime.error(`[router] unregister edit timed out for ${parsed.channelId}`),
-      );
+      await editMessage(outcome.update);
     } finally {
       // Release the guard this handler claimed. For a confirm teardown this runs
       // after perform() completes (so the window stays held for the whole purge);

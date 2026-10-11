@@ -49,15 +49,18 @@ instances tree is mounted read-only (only `shared/auth` is writable), so writing
 connections are not currently persisted or materialized into the boxes in production.
 Treat the connection store as best-effort until that mount is made writable.
 
-The `/connections` slash-command reply is ephemeral (it defers with `flags: 64`). The
-text-command fallback is public because Discord message replies cannot be ephemeral, and
-that public output is acceptable by design » it never contains the secret token (scrubbed
-from input and never echoed), only the validated account label and which services are
-connected, and the command is owner-gated so it is the owner self-disclosing. So do not
-force the public text fallback to be ephemeral for privacy, and do not drop the ephemeral
-`flags: 64` from the slash path either. See the gating in
-[command-system.md](command-system.md), and still fix genuine issues such as token leaks
-or mis-reported storage errors.
+The `/connections` slash-command reply is ephemeral by default, but — like `/debug` and
+`/lifecycle` — it now honors the per-channel `ephemeralCommands` preference: a channel set
+public via `/debug ephemeral off` defers its output with `flags: 0` so the result persists
+for inspection during testing (see the preference carve-out in
+[command-system.md](command-system.md)). That public output is acceptable by design » it
+never contains the secret token (scrubbed from input and never echoed), only the validated
+account label and which services are connected, and the command is owner-gated so it is
+the owner self-disclosing. The text-command fallback is likewise public (Discord message
+replies cannot be ephemeral) for the same reason. So do not force the public text fallback
+to be ephemeral for privacy. Permission DENIALS, however, are always ephemeral regardless
+of the preference. See the gating in [command-system.md](command-system.md), and still fix
+genuine issues such as token leaks or mis-reported storage errors.
 
 ## Pitfalls
 

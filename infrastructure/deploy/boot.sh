@@ -130,9 +130,16 @@ mkdir -p "$INSTANCES_DIR/shared/preferences"
 
 # Reap any orphaned purge tombstones (.purging-*) left by a destructive unregister
 # whose rm -rf was interrupted (e.g. the provisioner's 120s SIGKILL). The channel
-# was already unregistered by the atomic rename, so only dead data remains; clean
-# it before scanning for live instances so a partial wipe never lingers.
-~/deploy/bin/openclawctl sweep-tombstones || true
+# was already unregistered by the atomic rename, so only dead data remains, and the
+# instance scan below ignores `.purging-*`, so this need not finish before boot
+# proceeds. Run it DETACHED (setsid/nohup): a tombstone can be large (that is why
+# the original wipe was detached), so replaying rm -rf inline here could delay every
+# service for minutes on reboot/deploy.
+if command -v setsid >/dev/null 2>&1; then
+  setsid ~/deploy/bin/openclawctl sweep-tombstones >/dev/null 2>&1 < /dev/null &
+else
+  nohup ~/deploy/bin/openclawctl sweep-tombstones >/dev/null 2>&1 < /dev/null &
+fi
 
 # Each instance owns its port as a `.port` dotfile in its own directory, so
 # there is no central ports.json to read or reconcile. Discover channels by

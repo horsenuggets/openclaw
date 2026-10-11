@@ -165,3 +165,42 @@ it("rolls back the ephemeral toggle when the defer ack is rejected", async () =>
     vi.unstubAllGlobals();
   }
 });
+
+it("rolls back the ephemeral toggle when the defer request throws", async () => {
+  // Same as above, but the defer fetch THROWS (transport error / abort) rather than
+  // returning a non-ok response: it rejects into the outer catch after the toggle
+  // already persisted, so the catch must still roll the preference back.
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (typeof url === "string" && url.includes("/callback")) {
+        throw new Error("network down");
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    }) as unknown as typeof fetch,
+  );
+  try {
+    const ctx = {
+      applicationId: "app",
+      runtime,
+      instancesDir,
+      instances: new Map(),
+      channelQueue: new Map(),
+      channelGuild: new Map<string, string>(),
+      isAdmin: async () => true,
+    } as unknown as GatewayContext;
+    handleSlashInteraction(ctx, {
+      id: "int1",
+      channel_id: CHANNEL,
+      token: "tok",
+      channel: { type: 0 },
+      guild_id: "987654321098765432",
+      data: { name: "debug", options: [{ name: "command", value: "ephemeral off" }] },
+      user: { id: "u1" },
+    } as never);
+    await vi.waitFor(() => expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
