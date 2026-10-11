@@ -1027,7 +1027,11 @@ purge_locked() {
   # instances tree is mounted read-only). A tiny file, so delete it inline. Without
   # this a purge would leave stale lifecycle/ephemeral settings to be resurrected on
   # re-registration. Best-effort (the channel is already unregistered).
-  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json" 2>/dev/null || true
+  # Remove both the final file and any leftover write-temp (writeUserPreferences
+  # writes `.json.tmp` then renames; a crash between can orphan the temp), so the
+  # full wipe retains no per-channel preference metadata.
+  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json" \
+    "${INSTANCES_DIR:?}/shared/preferences/$channelId.json.tmp" 2>/dev/null || true
   # Delete the tombstone in a FULLY DETACHED child (new session via setsid, or nohup
   # as a fallback) and return success immediately. The rm -rf is the only slow step
   # and the only one that can be mid-flight when the provisioner's 120s timeout

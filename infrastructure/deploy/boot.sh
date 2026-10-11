@@ -187,28 +187,31 @@ else
     # the subshell boundary.
     (
       flock 8
-      # Only start instances adopted into the token-free layout (marker written by
+      # Backfill a registration token for ANY instance missing one, BEFORE the
+      # layout-only skip below. The router loads any snowflake dir with a valid
+      # `.port` regardless of `.token-free`, so even a legacy instance is
+      # unregisterable and must carry a token for the host-atomic stale-purge guard
+      # (purge's expectedRegToken check) to apply. Write it inline here rather than
+      # calling `openclawctl ensure-reg-token`: we already hold the fd-8 lifecycle
+      # lock for this channel, and that subcommand would try to re-acquire the same
+      # lock in a child process and deadlock. Mint only if absent (never rotate a
+      # live token). Atomic write+rename. Only needs the channel dir to exist.
+      if [ -d "$INSTANCES_DIR/$channelId" ] && [ ! -s "$INSTANCES_DIR/$channelId/.reg-token" ]; then
+        reg_token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
+        [ -n "$reg_token" ] || reg_token="$(date +%s)$$"
+        printf '%s' "$reg_token" > "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$"
+        mv "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$" "$INSTANCES_DIR/$channelId/.reg-token"
+      fi
+      # Only START instances adopted into the token-free layout (marker written by
       # openclawctl prepare_instance_dirs). A pre-existing instance without it would
-      # mount the new read-only-config / /state layout and crash-loop, so skip it
-      # with a re-register hint instead. Migrating legacy instances is a follow-up.
+      # mount the new read-only-config / /state layout and crash-loop, so skip
+      # STARTING it with a re-register hint instead (the token above is still minted
+      # so it stays safely unregisterable). Migrating legacy instances is a follow-up.
       if [ ! -f "$INSTANCES_DIR/$channelId/.token-free" ]; then
         echo "Skipping channel $channelId: legacy layout (no .token-free marker)." >&2
         echo "  Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
         echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
         exit 0
-      fi
-      # Backfill a registration token for instances registered before tokens
-      # existed, so the host-atomic stale-purge guard (purge's expectedRegToken
-      # check) applies to them after a deploy too. Write it inline here rather than
-      # calling `openclawctl ensure-reg-token`: we already hold the fd-8 lifecycle
-      # lock for this channel, and that subcommand would try to re-acquire the same
-      # lock in a child process and deadlock. Mint only if absent (never rotate a
-      # live token). Atomic write+rename.
-      if [ ! -s "$INSTANCES_DIR/$channelId/.reg-token" ]; then
-        reg_token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
-        [ -n "$reg_token" ] || reg_token="$(date +%s)$$"
-        printf '%s' "$reg_token" > "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$"
-        mv "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$" "$INSTANCES_DIR/$channelId/.reg-token"
       fi
       # Re-read the current .port NOW that we hold the lock. `port` was captured in
       # ASSIGNMENTS before the lock, so a purge + re-register that ran while we

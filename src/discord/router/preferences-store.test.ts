@@ -173,13 +173,17 @@ it("setEphemeralCommands returns false when the write fails", () => {
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(false);
 });
 
-it("removeUserPreferences hard-deletes the file, leaving no tombstone", () => {
+it("removeUserPreferences hard-deletes the file and any write-temp, leaving no tombstone", () => {
   writeUserPreferences(instancesDir, CHANNEL, { ephemeralCommands: false });
   const file = userPreferencesPath(instancesDir, CHANNEL);
+  // Simulate a crash that orphaned a write-temp (writeUserPreferences uses .tmp).
+  fs.writeFileSync(`${file}.tmp`, "{}");
   expect(fs.existsSync(file)).toBe(true);
   removeUserPreferences(instancesDir, CHANNEL);
-  // No file remains (unlike clearUserPreferences, which writes an empty tombstone).
+  // Neither the final file nor the temp remains (unlike clearUserPreferences, which
+  // writes an empty tombstone).
   expect(fs.existsSync(file)).toBe(false);
-  // Idempotent: removing again on an absent file is fine.
+  expect(fs.existsSync(`${file}.tmp`)).toBe(false);
+  // Idempotent: removing again on absent files is fine.
   expect(() => removeUserPreferences(instancesDir, CHANNEL)).not.toThrow();
 });

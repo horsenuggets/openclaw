@@ -106,9 +106,13 @@ export function clearUserPreferences(instancesDir: string, channelId: string): v
  * too and a plain delete cannot resurrect a stale setting. Idempotent: a missing
  * file is fine. Unlike {@link clearUserPreferences} it does not leave an empty
  * tombstone, so the promised "all data removed" wipe really removes everything.
+ * Also removes the `.tmp` write-temp {@link writeUserPreferences} uses, which a
+ * crash between write and rename can orphan, so no per-channel metadata survives.
  */
 export function removeUserPreferences(instancesDir: string, channelId: string): void {
-  fs.rmSync(userPreferencesPath(instancesDir, channelId), { force: true });
+  const file = userPreferencesPath(instancesDir, channelId);
+  fs.rmSync(file, { force: true });
+  fs.rmSync(`${file}.tmp`, { force: true });
 }
 
 /**
