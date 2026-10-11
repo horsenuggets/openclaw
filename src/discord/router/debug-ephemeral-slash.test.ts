@@ -14,7 +14,7 @@ import type { GatewayContext } from "./gateway-events.js";
 import type { RouterRuntime } from "./types.js";
 import { editInteractionEmbedReply } from "./discord-api.js";
 import { handleSlashInteraction } from "./gateway-events.js";
-import { setEphemeralCommands } from "./preferences-store.js";
+import { readEphemeralCommands, setEphemeralCommands } from "./preferences-store.js";
 
 const CHANNEL = "123456789012345678";
 const runtime = { log: () => {}, error: () => {} } as unknown as RouterRuntime;
@@ -121,4 +121,47 @@ it("defers ephemeral for a failed `ephemeral off` so the did-not-stick reply sta
   const { callbacks } = await runDebugSlash({ command: "ephemeral off", isAdmin: true });
   expect(callbacks[0]?.type).toBe(5);
   expect(callbacks[0]?.data?.flags).toBe(64);
+});
+
+it("rolls back the ephemeral toggle when the defer ack is rejected", async () => {
+  // Channel starts private (default). `ephemeral off` persists the public value
+  // before deferring (so the defer flag matches), but if Discord rejects the defer
+  // (4xx/5xx) the command visibly failed and no reply lands — so the preference
+  // must be rolled back to private rather than silently leaving the channel public.
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      // Reject only the interaction defer callback.
+      if (typeof url === "string" && url.includes("/callback")) {
+        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    }) as unknown as typeof fetch,
+  );
+  try {
+    const ctx = {
+      applicationId: "app",
+      runtime,
+      instancesDir,
+      instances: new Map(),
+      channelQueue: new Map(),
+      channelGuild: new Map<string, string>(),
+      isAdmin: async () => true,
+    } as unknown as GatewayContext;
+    handleSlashInteraction(ctx, {
+      id: "int1",
+      channel_id: CHANNEL,
+      token: "tok",
+      channel: { type: 0 },
+      guild_id: "987654321098765432",
+      data: { name: "debug", options: [{ name: "command", value: "ephemeral off" }] },
+      user: { id: "u1" },
+    } as never);
+    // The toggle persisted "public" then rolled back to the private default after
+    // the rejected defer.
+    await vi.waitFor(() => expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true));
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

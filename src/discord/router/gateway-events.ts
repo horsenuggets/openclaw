@@ -188,6 +188,32 @@ const GROUP_DM_CHANNEL_TYPE = 3;
  */
 const BUTTON_ACK_TIMEOUT_MS = 10_000;
 
+/**
+ * Upper bound for each unregister follow-up edit (interim/final message PATCH) and
+ * for the teardown itself, used to cap the awaits that run while the in-flight
+ * guard is held. Without a bound, a single stalled PATCH (editInteractionEmbedReply
+ * has no timeout) would prevent the next step and leave the guard set forever, so a
+ * later re-registration's clicks would all be acked-and-ignored. Generous because
+ * the real teardown (container stop + rename) can legitimately take a while.
+ */
+const BUTTON_EDIT_TIMEOUT_MS = 60_000;
+
+/**
+ * Resolve `work` but give up after `ms`, logging via `onTimeout` so a stalled
+ * network call cannot block the caller (e.g. pin the unregister in-flight guard).
+ * The underlying promise is left to settle on its own; we only stop awaiting it.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => void): Promise<T | void> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      resolve();
+    }, ms);
+  });
+  return Promise.race([work.finally(() => clearTimeout(timer)), timeout]);
+}
+
 /** CHANNEL_DELETE / THREAD_DELETE dispatch payload fields. */
 type ChannelDeleteData = { id?: string };
 
@@ -873,9 +899,13 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         // defers with the channel's current preference. The persisted embed is
         // reused for the edit below so the write runs exactly once.
         let prebuiltEphemeral: BuiltEmbed | null = null;
-        let deferEphemeral = interactionChannelId
+        const currentEphemeral = interactionChannelId
           ? readEphemeralCommands(instancesDir, interactionChannelId)
           : true;
+        let deferEphemeral = currentEphemeral;
+        // Track whether the ephemeral toggle actually changed the stored value, so a
+        // failed defer can roll it back (see below).
+        let toggledEphemeralFrom: boolean | null = null;
         if (result.kind === "ephemeral") {
           const applied = applyDebugEphemeral(
             instancesDir,
@@ -885,6 +915,9 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           );
           prebuiltEphemeral = applied.embed;
           deferEphemeral = applied.effectiveEphemeral;
+          if (applied.effectiveEphemeral !== currentEphemeral) {
+            toggledEphemeralFrom = currentEphemeral;
+          }
         }
         const deferResp = await fetch(
           `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
@@ -896,6 +929,18 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         );
         if (!deferResp.ok) {
           runtime.error(`[router] debug defer failed (${deferResp.status})`);
+          // The ephemeral toggle persisted before deferring so the defer flag could
+          // match the new value; but Discord rejected the ack, so the command
+          // visibly failed and no confirmation lands. Roll the preference back to its
+          // prior value so a rejected `ephemeral off` does not silently leave the
+          // channel public and expose later command output.
+          if (toggledEphemeralFrom !== null && interactionChannelId) {
+            if (!setEphemeralCommands(instancesDir, interactionChannelId, toggledEphemeralFrom)) {
+              runtime.error(
+                `[router] failed to roll back ephemeral preference for channel ${interactionChannelId} after a rejected defer`,
+              );
+            }
+          }
           return;
         }
         // `secrettest` delivers a secret to the channel's agent and acks with a
@@ -1501,16 +1546,28 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         // (editing the already-acked message), then edit again with the final
         // result after teardown completes. The guard was claimed synchronously
         // above, so no concurrent click can enter teardown or render cancellation.
-        await editMessage(outcome.interim);
-        const final = await outcome.perform();
-        await editMessage(final);
+        // Each await is bounded so a stalled PATCH or teardown cannot pin the guard
+        // (which the finally releases); the operations still complete on their own.
+        await withTimeout(editMessage(outcome.interim), BUTTON_EDIT_TIMEOUT_MS, () =>
+          runtime.error(`[router] unregister interim edit timed out for ${parsed.channelId}`),
+        );
+        const final = await withTimeout(outcome.perform(), BUTTON_EDIT_TIMEOUT_MS, () =>
+          runtime.error(`[router] unregister teardown timed out for ${parsed.channelId}`),
+        );
+        if (final) {
+          await withTimeout(editMessage(final), BUTTON_EDIT_TIMEOUT_MS, () =>
+            runtime.error(`[router] unregister final edit timed out for ${parsed.channelId}`),
+          );
+        }
         return;
       }
       // cancelled / denied / notRegistered: a single message replacement. The
       // interaction is already acked (type 6 above), so just edit the message (the
       // editor uploads the embed's icon, which may differ from the one already on
       // the message, e.g. the Log denial icon).
-      await editMessage(outcome.update);
+      await withTimeout(editMessage(outcome.update), BUTTON_EDIT_TIMEOUT_MS, () =>
+        runtime.error(`[router] unregister edit timed out for ${parsed.channelId}`),
+      );
     } finally {
       // Release the guard this handler claimed. For a confirm teardown this runs
       // after perform() completes (so the window stays held for the whole purge);
