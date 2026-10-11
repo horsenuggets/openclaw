@@ -491,16 +491,24 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
             }
           }
           if (unauthorizedNoticeEnabled) {
-            const embed = buildPermissionDeniedEmbed(
-              buildUnauthorizedNoticeText(channelId, status?.ownerId),
-            );
-            void discordSendReply(
-              discordToken,
-              channelId,
-              commandMessageId,
-              { embeds: [embed.embed], attachments: embed.attachments },
-              { parse: [], replied_user: false },
-            );
+            // Coalesce through the SAME per-user+channel debouncer the
+            // conversational denial uses (identical notice text/embed), so a
+            // non-owner spamming `/connections` gets one immediate reply then at
+            // most one per window, not a reply per command. The latest offending
+            // message id is captured per send so the batched reply threads under it.
+            const offendingId = commandMessageId;
+            unauthorizedNoticeDebouncer.trigger(`${channelId}:${authorId}`, () => {
+              const embed = buildPermissionDeniedEmbed(
+                buildUnauthorizedNoticeText(channelId, status?.ownerId),
+              );
+              void discordSendReply(
+                discordToken,
+                channelId,
+                offendingId,
+                { embeds: [embed.embed], attachments: embed.attachments },
+                { parse: [], replied_user: false },
+              );
+            });
           }
           return;
         }
@@ -1399,22 +1407,19 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     return;
   }
 
-  // Claim the in-flight guard SYNCHRONOUSLY, at the moment the click is received,
-  // BEFORE awaiting anything (even the ack). The handlers for two different clicks
-  // interleave only at `await` points, so a guard claimed before the first await
-  // cannot be bypassed by a later click's handler: once a Confirm is in flight,
-  // any subsequent click (including a Cancel whose callback Discord happens to
-  // complete first) sees the guard set and is ignored. A guard claimed only after
-  // `await ack` would leave exactly the window a quick Cancel could slip through.
-  //
-  // - If a teardown is already in flight for this channel, ignore EVERY further
-  //   click (confirm/cancel/anything): it would otherwise edit the message to a
-  //   stale state (e.g. "cancelled") that could land after the final result. The
-  //   click is still acked below so the interaction never expires.
-  // - Otherwise, a confirm click claims the guard now. parsed.kind comes from the
-  //   custom_id, so this is all synchronous.
+  // Claim the in-flight guard SYNCHRONOUSLY for the FIRST valid-initiator click of
+  // EITHER kind, at the moment the click is received, BEFORE awaiting anything
+  // (even the ack). Two click handlers interleave only at `await` points, so a
+  // guard claimed before the first await cannot be bypassed by a later click:
+  // whichever click (confirm OR cancel) arrives first wins and runs to completion;
+  // any other click for the same channel sees the guard set and is ignored. This
+  // must cover cancel too: a Cancel that only deferred (type 6) and then awaited
+  // its callback could otherwise be overtaken by a quick Confirm that claimed the
+  // guard and purged, while the Cancel later edited the message to "cancelled".
+  // The ignored click is still acked below so the interaction never expires.
+  // parsed.channelId comes from the custom_id, so this is all synchronous.
   const alreadyInFlight = unregisterInFlight.has(parsed.channelId);
-  const claimedInFlight = !alreadyInFlight && parsed.kind === "confirm";
+  const claimedInFlight = !alreadyInFlight;
   if (claimedInFlight) {
     unregisterInFlight.add(parsed.channelId);
   }
@@ -1471,10 +1476,10 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
       // the message, e.g. the Log denial icon).
       await editMessage(outcome.update);
     } finally {
-      // Release the guard for a confirm-kind click. For a real teardown this runs
+      // Release the guard this handler claimed. For a confirm teardown this runs
       // after perform() completes (so the window stays held for the whole purge);
-      // for a confirm custom_id that decideUnregisterClick downgraded to
-      // denied/notRegistered, it frees the channel so a later legitimate attempt
+      // for a cancel, or a confirm downgraded to denied/notRegistered, it frees the
+      // channel once the single message edit is done so a later legitimate attempt
       // is not permanently blocked.
       if (claimedInFlight) {
         unregisterInFlight.delete(parsed.channelId);

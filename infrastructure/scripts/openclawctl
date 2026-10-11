@@ -941,28 +941,34 @@ purge_locked() {
 
   # Make the destructive wipe atomic and interrupt-safe: RENAME the instance dir to
   # a tombstone FIRST (a single rename, effectively instantaneous), then rm -rf the
-  # tombstone. The rename is what unregisters the channel (its .port goes with it,
-  # so the port is freed and the registration disappears the moment the rename
-  # returns). If the provisioner's 120s SIGKILL lands during the slow rm -rf, the
-  # channel is already gone and only an orphaned tombstone (.purging-*) remains,
-  # which sweep_purge_tombstones reaps on the next boot/startup — never a
-  # half-deleted live instance. require_channel_id already constrained channelId to
-  # a snowflake, so these paths cannot escape INSTANCES_DIR.
+  # tombstone. The rename is the COMMIT POINT: it unregisters the channel (its .port
+  # goes with it, so the port is freed and the registration disappears the instant
+  # the rename returns). require_channel_id already constrained channelId to a
+  # snowflake, so these paths cannot escape INSTANCES_DIR.
   echo "Wiping instance data and freeing port..."
   local tombstone="${INSTANCES_DIR:?}/.purging-$channelId.$$"
   if [ -d "${INSTANCES_DIR:?}/$channelId" ]; then
-    mv "${INSTANCES_DIR:?}/$channelId" "$tombstone"
-    rm -rf "$tombstone"
+    # A failed rename means nothing was committed — report failure so the router
+    # keeps the instance and the operator can retry.
+    if ! mv "${INSTANCES_DIR:?}/$channelId" "$tombstone"; then
+      echo "Error: could not rename instance dir for teardown; instance left intact." >&2
+      return 1
+    fi
   fi
+  # Past the commit point the channel IS unregistered, so everything below is
+  # best-effort cleanup of already-dead data and MUST NOT turn into a reported
+  # failure: a failure here would make the router skip reloadInstances and keep
+  # routing to the now-missing instance (its container and live dir are gone). A
+  # slow rm -rf that the provisioner's SIGKILL interrupts leaves only an orphaned
+  # .purging-* tombstone, which sweep_purge_tombstones reaps on the next boot.
+  rm -rf "$tombstone" 2>/dev/null || true
   # Also remove the channel's router-owned preferences, which live OUTSIDE the
   # instance dir (under shared/preferences so the router can write them even when
   # the instances tree is mounted read-only). Without this a purge would leave the
-  # old lifecycle/ephemeral settings behind to be resurrected on re-registration,
-  # contradicting the "all data removed" promise. The router also clears this on
-  # unregister, but doing it here guarantees the host teardown is genuinely
-  # complete even if the router's own cleanup is unavailable. (A tiny JSON file, so
-  # no atomic-rename dance is warranted.)
-  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json"
+  # old lifecycle/ephemeral settings behind to be resurrected on re-registration.
+  # The router also clears this on unregister; doing it here too keeps the host
+  # teardown complete. Best-effort for the same reason as above.
+  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json" 2>/dev/null || true
   echo "Done. Channel $channelId fully removed (container, port, and data)."
 }
 
