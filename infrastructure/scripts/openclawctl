@@ -128,6 +128,16 @@ get_reg_token() {
   tr -d '[:space:]' < "$file" 2>/dev/null || true
 }
 
+# Ensure a channel has a registration token, minting one only if absent. Used to
+# backfill instances registered before tokens existed so the host-atomic
+# stale-purge guard applies to them too. Callers run it under the lifecycle lock.
+ensure_reg_token() {
+  local channelId="$1"
+  [ -d "$INSTANCES_DIR/$channelId" ] || return 0
+  [ -s "$(reg_token_file "$channelId")" ] && return 0
+  write_reg_token "$channelId" > /dev/null
+}
+
 # Write a fresh random registration token for a channel (atomic write+rename).
 write_reg_token() {
   local channelId="$1" token dst tmp
@@ -1211,6 +1221,10 @@ case "${1:-}" in
   reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
   sweep-tombstones) sweep_purge_tombstones ;;
+  ensure-reg-token)
+    require_channel_id "${2:-}"
+    with_channel_lock "${2:-}" ensure_reg_token "${2:-}"
+    ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -1223,5 +1237,6 @@ case "${1:-}" in
     echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"
     echo "  sweep-tombstones        Reap orphaned purge tombstones (.purging-*)"
+    echo "  ensure-reg-token <id>   Mint a registration token if the channel lacks one"
     ;;
 esac

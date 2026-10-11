@@ -453,6 +453,38 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return key;
   };
 
+  // Host registration tokens, keyed by channel. Declared here so reloadInstances
+  // (below) can hydrate it from disk; populated authoritatively on register. The
+  // provisioner mints a fresh token per successful (re-)register (openclawctl's
+  // `.reg-token`). An unregister confirmation carries it so the host can refuse a
+  // purge whose token no longer matches (an atomic, under-the-lifecycle-lock guard
+  // against purging a replacement registration). Surfaced as the authoritative
+  // registrationNonce.
+  const hostRegTokens = new Map<string, string>();
+  // Read an instance's persisted host registration token from disk (empty/absent
+  // => undefined). Lets the router recover tokens across restarts and for
+  // registrations it did not create this session, so the host-atomic stale-purge
+  // guard is available then too (not only for registrations made this session).
+  const readHostRegToken = (instanceDir: string): string | undefined => {
+    try {
+      const raw = fs.readFileSync(path.join(instanceDir, ".reg-token"), "utf-8").trim();
+      return raw || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // Hydrate host registration tokens for the instances loaded at startup (the map
+  // is built from config before any reload), so the host-atomic stale-purge guard
+  // works immediately after a restart rather than only for registrations made this
+  // session.
+  for (const [id, inst] of instances) {
+    const token = readHostRegToken(inst.instanceDir);
+    if (token) {
+      hostRegTokens.set(id, token);
+    }
+  }
+
   // Reconcile the in-memory instance map with disk. The map is built once at
   // startup, so after the daemon creates/removes an instance we re-scan so the
   // channel becomes (or stops being) routable immediately, without a restart.
@@ -471,6 +503,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         if (!existing || existing.instanceDir !== inst.instanceDir) {
           connectionRegistrationKeys.set(id, nextConnectionRegistrationKey(id));
         }
+        // Hydrate the host registration token from disk so a post-restart (or
+        // pre-existing) registration still carries it on unregister. A register
+        // handler overwrites this with the freshly minted token; here we only fill
+        // from disk so a stale in-memory token is refreshed to the current one.
+        const diskToken = readHostRegToken(inst.instanceDir);
+        if (diskToken) {
+          hostRegTokens.set(id, diskToken);
+        }
       }
       const removed: string[] = [];
       for (const id of instances.keys()) {
@@ -481,6 +521,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       for (const id of removed) {
         instances.delete(id);
         connectionRegistrationKeys.delete(id);
+        hostRegTokens.delete(id);
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
@@ -515,14 +556,8 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           log: (message) => runtime.log(message),
         })
       : null;
-  // Host registration tokens, keyed by channel. The provisioner mints a fresh
-  // token per successful (re-)register (openclawctl's .reg-token); we record it so
-  // an unregister confirmation can carry it and the host can refuse a purge whose
-  // token no longer matches (an atomic, under-the-lifecycle-lock guard against
-  // purging a replacement registration). This is the authoritative per-
-  // registration nonce surfaced via channelCommandDeps.registrationNonce.
-  const hostRegTokens = new Map<string, string>();
   // Reconcile the instance map after any successful provisioning change.
+  // (hostRegTokens is declared above so reloadInstances can hydrate it from disk.)
   const provisioning: ProvisioningClient = daemonProvisioning
     ? {
         register: async (p) => {

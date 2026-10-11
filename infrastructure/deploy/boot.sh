@@ -197,6 +197,19 @@ else
         echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
         exit 0
       fi
+      # Backfill a registration token for instances registered before tokens
+      # existed, so the host-atomic stale-purge guard (purge's expectedRegToken
+      # check) applies to them after a deploy too. Write it inline here rather than
+      # calling `openclawctl ensure-reg-token`: we already hold the fd-8 lifecycle
+      # lock for this channel, and that subcommand would try to re-acquire the same
+      # lock in a child process and deadlock. Mint only if absent (never rotate a
+      # live token). Atomic write+rename.
+      if [ ! -s "$INSTANCES_DIR/$channelId/.reg-token" ]; then
+        reg_token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
+        [ -n "$reg_token" ] || reg_token="$(date +%s)$$"
+        printf '%s' "$reg_token" > "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$"
+        mv "$INSTANCES_DIR/$channelId/.reg-token.tmp.$$" "$INSTANCES_DIR/$channelId/.reg-token"
+      fi
       # Re-read the current .port NOW that we hold the lock. `port` was captured in
       # ASSIGNMENTS before the lock, so a purge + re-register that ran while we
       # waited could have changed it (or removed the channel entirely). Starting

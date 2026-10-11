@@ -1534,6 +1534,61 @@ describe("discord router channel-delete cleanup", () => {
     expect(unregisterCalls).toEqual([]);
   });
 
+  it("forwards the on-disk registration token as expectedRegToken on unregister", async () => {
+    // A real instance dir with a persisted .reg-token: the router hydrates it on
+    // reloadInstances and must carry it to the provisioner so the host can refuse a
+    // stale purge. Covers the post-restart case (hostRegTokens starts empty).
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-regtok-"));
+    fs.writeFileSync(path.join(dir, ".reg-token"), "host-tok-xyz");
+    let unregBody: { channelId?: string; expectedRegToken?: string } | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          unregBody = JSON.parse((init?.body as string) ?? "{}");
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes("/messages/@original")) {
+          return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start(dir);
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    // Force a reload so the router hydrates the on-disk token into hostRegTokens.
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:host-tok-xyz` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(unregBody?.expectedRegToken).toBe("host-tok-xyz");
+
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
   describe("owner gate on agent-facing slash commands", () => {
     const STRANGER = "444444444444444444";
     type Callback = { type: number; data?: { content?: string; flags?: number } };
