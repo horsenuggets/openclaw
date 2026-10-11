@@ -1341,9 +1341,12 @@ describe("discord router channel-delete cleanup", () => {
     }
     // Only one teardown ran despite two clicks.
     expect(unregisterCalls).toEqual([CHANNEL]);
-    // Both confirm clicks were still acknowledged (type 7 instant update) so
-    // neither interaction expires, even though the second is otherwise ignored.
-    expect(callbacks.filter((c) => c.type === 7).length).toBe(2);
+    // The first (claiming) confirm sends the instant type-7 processing update; the
+    // second (ignored, already-in-flight) confirm uses a message-neutral type-6 ack
+    // so it cannot overwrite the terminal result, yet still acks so it never
+    // expires. One type-7 and one type-6, two acks total.
+    expect(callbacks.filter((c) => c.type === 7).length).toBe(1);
+    expect(callbacks.filter((c) => c.type === 6).length).toBe(1);
 
     releaseUnregister?.();
     for (let i = 0; i < 5; i++) {

@@ -1424,21 +1424,23 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     unregisterInFlight.add(parsed.channelId);
   }
 
-  // Acknowledge this valid-initiator click up front, before any authorization.
-  // For a CONFIRM, use a type-7 UPDATE_MESSAGE carrying a generic "processing"
-  // state so the buttons vanish INSTANTLY (the second click then has nothing to
-  // click, on top of the in-flight guard above); it reuses the icon already on the
-  // message, so no re-upload. For a CANCEL, a type-6 deferred update is enough (it
-  // is immediately replaced by the "cancelled" edit below). Either way the ack
-  // satisfies Discord's ~3s deadline regardless of how long authorization and
-  // teardown take, and the owner-named interim/final states follow.
-  const ackBody =
-    parsed.kind === "confirm"
-      ? {
-          type: 7,
-          data: { embeds: buildUnregisterAckUpdate(parsed.channelId).embeds, components: [] },
-        }
-      : { type: 6 };
+  // Acknowledge this click up front, before any authorization. The type-7
+  // "processing" UPDATE_MESSAGE (which drops the buttons instantly) is sent ONLY by
+  // the confirm click that actually CLAIMED the guard. Every other click — a
+  // cancel, or any click that found a teardown already in flight — uses a type-6
+  // DEFERRED_UPDATE_MESSAGE, which does not modify the message. This matters for an
+  // ignored duplicate confirm: a type-7 from it could land AFTER the first
+  // handler's terminal edit and permanently overwrite the result with
+  // "Processing..."; a type-6 is message-neutral and cannot. Either ack satisfies
+  // Discord's ~3s deadline; the owner-named interim/final states follow from the
+  // claiming handler.
+  const sendsProcessingUpdate = claimedInFlight && parsed.kind === "confirm";
+  const ackBody = sendsProcessingUpdate
+    ? {
+        type: 7,
+        data: { embeds: buildUnregisterAckUpdate(parsed.channelId).embeds, components: [] },
+      }
+    : { type: 6 };
   const ack = fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

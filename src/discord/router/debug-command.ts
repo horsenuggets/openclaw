@@ -12,9 +12,12 @@
  * the matched subcommand, and returns a {@link DebugResult} describing what to
  * reply with. That result is still Discord-shaped, though (embed payloads and
  * attachment names, or raw message content). The router adapter in
- * gateway-events.ts gates on admin, defers the interaction ephemerally, and
- * renders the result. Everything the command produces is delivered ephemerally,
- * so debug output never leaks to the channel.
+ * gateway-events.ts gates on admin BEFORE deferring, then defers with the
+ * channel's resolved ephemeral flag and renders the result. Authorized debug
+ * output is ephemeral by default but honors the per-channel `ephemeralCommands`
+ * preference (toggled by the `ephemeral` subcommand), so a channel set public via
+ * `/debug ephemeral off` keeps results visible for inspection. Permission denials
+ * stay ephemeral regardless.
  */
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
@@ -387,7 +390,9 @@ export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
 /**
  * Parse and run a `/debug` command string. An empty string or `help` prints the
  * help embed; an unknown subcommand returns a Debug-category notice pointing at
- * `help`. The returned {@link DebugResult} is rendered ephemerally by the router.
+ * `help`. The returned {@link DebugResult} is rendered by the router, ephemerally
+ * by default but honoring the channel's `ephemeralCommands` preference (a channel
+ * set public via `/debug ephemeral off` sees results in-channel).
  */
 export function runDebugCommand(input: string): DebugResult {
   const { subcommand, args } = parseDebugCommand(input);

@@ -955,21 +955,29 @@ purge_locked() {
       return 1
     fi
   fi
-  # Past the commit point the channel IS unregistered, so everything below is
-  # best-effort cleanup of already-dead data and MUST NOT turn into a reported
-  # failure: a failure here would make the router skip reloadInstances and keep
-  # routing to the now-missing instance (its container and live dir are gone). A
-  # slow rm -rf that the provisioner's SIGKILL interrupts leaves only an orphaned
-  # .purging-* tombstone, which sweep_purge_tombstones reaps on the next boot.
-  rm -rf "$tombstone" 2>/dev/null || true
-  # Also remove the channel's router-owned preferences, which live OUTSIDE the
-  # instance dir (under shared/preferences so the router can write them even when
-  # the instances tree is mounted read-only). Without this a purge would leave the
-  # old lifecycle/ephemeral settings behind to be resurrected on re-registration.
-  # The router also clears this on unregister; doing it here too keeps the host
-  # teardown complete. Best-effort for the same reason as above.
+  # Remove the channel's router-owned preferences, which live OUTSIDE the instance
+  # dir (under shared/preferences so the router can write them even when the
+  # instances tree is mounted read-only). A tiny file, so delete it inline. Without
+  # this a purge would leave stale lifecycle/ephemeral settings to be resurrected on
+  # re-registration. Best-effort (the channel is already unregistered).
   rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json" 2>/dev/null || true
-  echo "Done. Channel $channelId fully removed (container, port, and data)."
+  # Delete the tombstone in a FULLY DETACHED child (new session via setsid, or nohup
+  # as a fallback) and return success immediately. The rm -rf is the only slow step
+  # and the only one that can be mid-flight when the provisioner's 120s timeout
+  # SIGKILLs openclawctl's process group: a foreground (or even plain-backgrounded)
+  # rm would die with the group, leaving the tombstone AND — worse — making this
+  # shell never return 0, so runCtl maps the killed process to a failure and the
+  # router skips reloadInstances, keeping the already-removed instance routable.
+  # Detaching the rm into its own session takes it out of the killed group, so the
+  # wipe completes regardless, and this shell returns 0 the instant the rename (the
+  # real commit) is done. sweep_purge_tombstones still reaps any tombstone whose
+  # detached rm was somehow interrupted (e.g. a host reboot) on the next boot.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null &
+  else
+    nohup rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null &
+  fi
+  echo "Done. Channel $channelId fully removed (container and port freed; data wipe detached)."
 }
 
 # Reap orphaned purge tombstones left by a purge whose rm -rf was interrupted
