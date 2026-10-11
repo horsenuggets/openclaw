@@ -16,9 +16,9 @@ export type EphemeralCommandOutcome =
   | { kind: "set"; newValue: boolean; description: string; state: CommandResultState };
 
 const ON =
-  "Command replies in this channel will be ephemeral, visible only to the person who ran them.";
+  "`/debug`, `/lifecycle`, and `/connections` replies in this channel will be ephemeral, visible only to the person who ran them (`/channel` and `/secret` are always ephemeral).";
 const OFF =
-  "Command replies in this channel will be posted normally so they stay visible for everyone.";
+  "`/debug`, `/lifecycle`, and `/connections` replies in this channel will be posted normally so they stay visible for everyone (`/channel` and `/secret` stay ephemeral).";
 
 export function resolveEphemeralCommand(
   current: boolean,

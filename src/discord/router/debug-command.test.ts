@@ -181,8 +181,9 @@ describe("buildDebugHelpEmbeds", () => {
       {
         name: "`ephemeral [on|off]`",
         value:
-          "Show or set whether this channel's command replies are ephemeral (omit the " +
-          "argument to see the current status).",
+          "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` " +
+          "replies are ephemeral (`/channel` and `/secret` always are). Omit the argument " +
+          "to see the current status.",
       },
       { name: "`help`", value: "Prints this help message." },
       {

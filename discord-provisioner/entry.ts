@@ -49,19 +49,45 @@ const READINESS_INTERVAL_MS = 500;
 /** Run openclawctl with the given args; resolve with its exit code and output. */
 function runCtl(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(OPENCLAWCTL_BIN, args, { env: process.env });
+    // Start openclawctl in its own process group (detached) so a timeout can kill
+    // the WHOLE group, not just the top-level bash process. openclawctl runs its
+    // lifecycle operations in a `( flock; ... )` subshell, a separate child; a
+    // plain child.kill would SIGKILL only the parent and orphan that subshell,
+    // which could then still acquire the lock and finish a purge (deleting the
+    // instance) long after we reported a timeout failure. Killing the group reaps
+    // the subshell too.
+    const child = spawn(OPENCLAWCTL_BIN, args, { env: process.env, detached: true });
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-    }, CTL_TIMEOUT_MS);
+    let settled = false;
+    const killGroup = (signal: NodeJS.Signals): void => {
+      if (child.pid === undefined) {
+        return;
+      }
+      try {
+        // Negative pid targets the whole process group (the detached child is its
+        // leader), so the flock subshell and any docker children die with it.
+        process.kill(-child.pid, signal);
+      } catch {
+        // Already gone (race with close); nothing to kill.
+      }
+    };
+    const timer = setTimeout(() => killGroup("SIGKILL"), CTL_TIMEOUT_MS);
     child.stdout.on("data", (d) => (stdout += String(d)));
     child.stderr.on("data", (d) => (stderr += String(d)));
     child.on("error", (err) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timer);
       resolve({ code: -1, stdout, stderr: `${stderr}${String(err)}` });
     });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timer);
       resolve({ code: code ?? -1, stdout, stderr });
     });

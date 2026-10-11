@@ -355,7 +355,7 @@ const ephemeralSubcommand: DebugSubcommand = {
   name: "ephemeral",
   usage: "ephemeral [on|off]",
   description:
-    "Show or set whether this channel's command replies are ephemeral (omit the argument to see the current status).",
+    "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` replies are ephemeral (`/channel` and `/secret` always are). Omit the argument to see the current status.",
   run: ({ args }) => {
     const resolved = resolveEphemeralArgs(args);
     if ("invalid" in resolved) {
