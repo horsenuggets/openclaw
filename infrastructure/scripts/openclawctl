@@ -870,6 +870,36 @@ cmd_remove() {
   echo "To delete data: rm -rf $INSTANCES_DIR/$channelId"
 }
 
+# Fully remove a channel: stop and delete its container, then wipe the whole
+# instance directory (which also frees its port, since the .port dotfile lives
+# inside it). Unlike `remove`, nothing is preserved. This backs the user-facing
+# `/channel unregister`, which promises a clean teardown so a re-register starts
+# from scratch rather than resurrecting old data. require_channel_id guarantees
+# the id is a 17-20 digit snowflake, so the rm path cannot escape INSTANCES_DIR.
+cmd_purge() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl purge <channelId>"
+    exit 1
+  fi
+  require_channel_id "$channelId"
+
+  # Hold the same lock reserve_port uses across the whole stop+wipe sequence, so a
+  # concurrent `add-*` for this channel cannot assign a fresh .port into the
+  # directory between our stop and the delete (which would strand a new container).
+  (
+    flock 9
+
+    echo "Stopping container for channel $channelId..."
+    stop_container "$channelId"
+
+    echo "Wiping instance data and freeing port..."
+    rm -rf "${INSTANCES_DIR:?}/$channelId"
+  ) 9>"$PORT_LOCK_FILE"
+
+  echo "Done. Channel $channelId fully removed (container, port, and data)."
+}
+
 cmd_restart() {
   local channelId="${1:-}"
   if [ -z "$channelId" ]; then
@@ -989,6 +1019,7 @@ case "${1:-}" in
   add-dm)      cmd_add_dm "${2:-}" ;;
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
+  purge)       cmd_purge "${2:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
   reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
@@ -998,7 +1029,8 @@ case "${1:-}" in
     echo "Commands:"
     echo "  add-dm <userId>         Register a DM channel for a Discord user"
     echo "  add-channel <channelId> Register a text channel"
-    echo "  remove <channelId>      Stop and deregister a channel"
+    echo "  remove <channelId>      Stop and deregister a channel (keeps its data)"
+    echo "  purge <channelId>       Stop, deregister, and wipe a channel's data"
     echo "  restart <channelId>     Restart a channel's container"
     echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"

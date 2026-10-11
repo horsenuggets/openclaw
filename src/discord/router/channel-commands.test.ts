@@ -4,8 +4,8 @@ import {
   type ChannelReplyPayload,
   type InstanceStatus,
   buildUnregisterCustomId,
+  decideUnregisterClick,
   handleChannelCommand,
-  handleUnregisterButtonClick,
   isUnregisterConfirmArg,
   parseChannelTextCommand,
   parseUnregisterCustomId,
@@ -142,6 +142,7 @@ function makeDeps(over: Partial<ChannelCommandDeps> = {}): ChannelCommandDeps {
     isWhitelisted: vi.fn(async () => true),
     isAdmin: vi.fn(async () => false),
     whitelistConfigured: () => true,
+    isSelf: () => false,
     describeInstance: () => null,
     provisioning: {
       register: vi.fn(async () => ({ ok: true, message: "registered" })),
@@ -377,6 +378,29 @@ describe("handleChannelCommand register", () => {
     );
   });
 
+  it("refuses to register the bot itself and names it an unavailable user", async () => {
+    const register = vi.fn();
+    const { ctx, replies } = makeCtx("register", ["<@888888888888888888>"], {
+      isDM: false,
+      userId: "ADMIN",
+    });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        isAdmin: async () => true,
+        isSelf: (id) => id === "888888888888888888",
+        provisioning: { register, unregister: vi.fn() },
+      }),
+    );
+    expect(register).not.toHaveBeenCalled();
+    const { embed } = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Unavailable User");
+    expect(embed.description).toContain("cannot be registered under <@888888888888888888>");
+    expect(embed.description).toContain("bot and cannot own an agent instance");
+    // Uses the yellow Channel Registration embed, not the Log permission embed.
+    expect(embed.footer?.text).toBe("Channel Registration");
+  });
+
   it("blocks register when the whitelist is not configured", async () => {
     const register = vi.fn();
     const { ctx, replies } = makeCtx("register", [], { isDM: true });
@@ -523,54 +547,73 @@ describe("handleChannelCommand unregister", () => {
   });
 });
 
-describe("handleUnregisterButtonClick", () => {
+describe("decideUnregisterClick", () => {
   const owned = (): InstanceStatus => ({ port: 1, ownerId: "U1", onboarded: true });
 
   it("ignores custom_ids that are not ours", async () => {
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: "other:C:U", clickerId: "U1" },
       makeDeps(),
     );
-    expect(result).toEqual({});
+    expect(result.kind).toBe("ignored");
   });
 
   it("rejects clicks from anyone but the initiator", async () => {
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U2" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
-    expect(result.ephemeral).toContain("isn't for you");
+    expect(result.kind).toBe("notForYou");
+    if (result.kind === "notForYou") {
+      expect(result.notice).toContain("isn't for you");
+    }
     expect(unregister).not.toHaveBeenCalled();
   });
 
-  it("unregisters and clears the buttons when the owner confirms", async () => {
+  it("defers teardown to perform() and shows an interim state on owner confirm", async () => {
     const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
+    expect(result.kind).toBe("confirm");
+    if (result.kind !== "confirm") {
+      return;
+    }
+    // Deciding must NOT run teardown; that happens only when perform() is called.
+    expect(unregister).not.toHaveBeenCalled();
+    expect(result.interim.components).toEqual([]);
+    expect(result.interim.embeds[0].description).toContain("Unregistering channel <#C1>");
+    expect(result.interim.embeds[0].description).toContain("<@U1>");
+
+    const final = await result.perform();
     expect(unregister).toHaveBeenCalledWith({ channelId: "C1" });
-    expect(result.update?.components).toEqual([]);
-    expect(result.update?.embeds[0].description).toContain("successfully unregistered");
+    expect(final.components).toEqual([]);
+    expect(final.embeds[0].description).toContain("successfully unregistered");
+    // The final wording reflects the full teardown (container, port, and data).
+    expect(final.embeds[0].description).toContain("data have been removed");
   });
 
   it("cancels without touching provisioning", async () => {
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: buildUnregisterCustomId("cancel", "C1", "U1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(result.update?.embeds[0].description).toContain("cancelled");
-    expect(result.update?.components).toEqual([]);
+    expect(result.kind).toBe("cancelled");
+    if (result.kind === "cancelled") {
+      expect(result.update.embeds[0].description).toContain("cancelled");
+      expect(result.update.components).toEqual([]);
+    }
   });
 
   it("re-checks permission at click time and blocks a non-owner initiator", async () => {
     // A stranger somehow holds a confirm id for themselves; they are neither
     // owner nor admin, so the click must not remove anything.
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: buildUnregisterCustomId("confirm", "C1", "STRANGER"), clickerId: "STRANGER" },
       makeDeps({
         describeInstance: owned,
@@ -579,9 +622,23 @@ describe("handleUnregisterButtonClick", () => {
       }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(result.update?.embeds[0].description).toContain(
-      "not authorized to use this channel's agent",
+    expect(result.kind).toBe("denied");
+    if (result.kind === "denied") {
+      expect(result.update.embeds[0].description).toContain(
+        "not authorized to use this channel's agent",
+      );
+      expect(result.update.embeds[0].description).toContain("<@U1>");
+    }
+  });
+
+  it("reports nothing to remove when the channel is already unregistered", async () => {
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U1" },
+      makeDeps({ describeInstance: () => null }),
     );
-    expect(result.update?.embeds[0].description).toContain("<@U1>");
+    expect(result.kind).toBe("notRegistered");
+    if (result.kind === "notRegistered") {
+      expect(result.update.embeds[0].description).toContain("nothing to remove");
+    }
   });
 });

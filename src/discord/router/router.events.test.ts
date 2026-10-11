@@ -1198,7 +1198,10 @@ describe("discord router channel-delete cleanup", () => {
     // role instead (member lookup returns the admin role id).
     process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
     process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
-    const callbacks: { type: number; data?: { content?: string } }[] = [];
+    const callbacks: {
+      type: number;
+      data?: { content?: string; components?: unknown; embeds?: { description?: string }[] };
+    }[] = [];
     const patches: { components?: unknown; embeds?: { description?: string }[] }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -1250,9 +1253,12 @@ describe("discord router channel-delete cleanup", () => {
       await vi.advanceTimersByTimeAsync(0);
     }
 
-    // Deferred update ack (type 6), then the instance was removed and the
-    // original confirmation message edited to the result with no buttons.
-    expect(callbacks.some((c) => c.type === 6)).toBe(true);
+    // Immediate UPDATE_MESSAGE ack (type 7) drops the buttons and shows the
+    // interim "unregistering..." state, then the instance is removed and the
+    // original confirmation message is edited to the final result (no buttons).
+    const interim = callbacks.find((c) => c.type === 7);
+    expect(interim?.data?.components).toEqual([]);
+    expect(interim?.data?.embeds?.[0]?.description).toContain("Unregistering channel");
     expect(unregisterCalls).toEqual([CHANNEL]);
     const patch = patches.at(-1);
     expect(patch?.components).toEqual([]);

@@ -81,7 +81,14 @@ export const DEBUG_COMMAND_SPEC = {
 export type DebugResult =
   | { kind: "embeds"; embeds: DiscordEmbed[]; attachments: string[] }
   | { kind: "content"; content: string }
-  | { kind: "secret"; name: string; value: string };
+  | { kind: "secret"; name: string; value: string }
+  /**
+   * The `ephemeral` toggle. `desired` is the requested value (true/false) or
+   * null for a bare status query. The router owns the persistence and rendering
+   * (it reads the current value, writes `desired`, and picks the embed), so this
+   * module stays free of I/O.
+   */
+  | { kind: "ephemeral"; desired: boolean | null };
 
 /** Inputs handed to a subcommand's `run`. */
 export type DebugRunContext = {
@@ -318,6 +325,67 @@ const secretTestSubcommand: DebugSubcommand = {
   },
 };
 
+/** Tokens accepted as "turn ephemeral on" and "turn it off", respectively. */
+const EPHEMERAL_ON_TOKENS = new Set(["on", "true", "enable", "enabled", "yes"]);
+const EPHEMERAL_OFF_TOKENS = new Set(["off", "false", "disable", "disabled", "no"]);
+
+/**
+ * Interpret the argument to `ephemeral`: no argument is a status query
+ * (`desired: null`), a recognized on/off token sets the value, and anything else
+ * is invalid. Shared by the subcommand and {@link peekDebugEphemeralDesired}.
+ */
+export function resolveEphemeralArgs(
+  args: string[],
+): { desired: boolean | null } | { invalid: string } {
+  const raw = args[0];
+  if (raw === undefined || raw === "") {
+    return { desired: null };
+  }
+  const token = raw.toLowerCase();
+  if (EPHEMERAL_ON_TOKENS.has(token)) {
+    return { desired: true };
+  }
+  if (EPHEMERAL_OFF_TOKENS.has(token)) {
+    return { desired: false };
+  }
+  return { invalid: raw };
+}
+
+const ephemeralSubcommand: DebugSubcommand = {
+  name: "ephemeral",
+  usage: "ephemeral [on|off]",
+  description:
+    "Show or set whether this channel's command replies are ephemeral (omit the argument to see the current status).",
+  run: ({ args }) => {
+    const resolved = resolveEphemeralArgs(args);
+    if ("invalid" in resolved) {
+      return debugNotice(
+        "Unknown Ephemeral Setting",
+        `\`${clamp(resolved.invalid, MAX_ECHOED_NAME_CHARS)}\` is not a valid setting. ` +
+          "Use `ephemeral on`, `ephemeral off`, or `ephemeral` on its own to see the current status.",
+      );
+    }
+    return { kind: "ephemeral", desired: resolved.desired };
+  },
+};
+
+/**
+ * Peek at what a `/debug ...` string would do to the ephemeral setting, without
+ * running it. Returns the boolean value an explicit on/off would set, or null
+ * when the command does not change the setting (any other subcommand, a bare
+ * status query, or an invalid argument). The slash handler uses this before it
+ * defers so the deferred reply's own ephemerality can already match the value
+ * the toggle is about to apply (Discord fixes ephemerality at defer time).
+ */
+export function peekDebugEphemeralDesired(input: string): boolean | null {
+  const { subcommand, args } = parseDebugCommand(input);
+  if (subcommand !== "ephemeral") {
+    return null;
+  }
+  const resolved = resolveEphemeralArgs(args);
+  return "desired" in resolved && typeof resolved.desired === "boolean" ? resolved.desired : null;
+}
+
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
@@ -328,6 +396,7 @@ const helpSubcommand: DebugSubcommand = {
 /** Every registered `/debug` subcommand. */
 export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
   echoSubcommand,
+  ephemeralSubcommand,
   secretTestSubcommand,
   helpSubcommand,
 ];

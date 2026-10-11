@@ -151,13 +151,19 @@ async function handleUnregister(body: UnregisterRequest): Promise<ProvisionRespo
   if (!isSnowflake(body.channelId)) {
     return { ok: false, message: "Invalid channel id." };
   }
-  const result = await runCtl(["remove", body.channelId]);
+  // `purge` (not `remove`): unregister is a full teardown. It stops and deletes
+  // the container, frees the port, and wipes the instance directory, so a later
+  // re-register starts clean rather than resurrecting old data.
+  const result = await runCtl(["purge", body.channelId]);
   if (result.code !== 0) {
-    console.error(`[provisioner] remove ${body.channelId} failed: ${result.stderr.trim()}`);
+    console.error(`[provisioner] purge ${body.channelId} failed: ${result.stderr.trim()}`);
     return { ok: false, message: "Failed to remove the instance. Check the provisioner logs." };
   }
-  console.log(`[provisioner] unregistered ${body.channelId}`);
-  return { ok: true, message: "Channel unregistered. The agent has been stopped (data is kept)." };
+  console.log(`[provisioner] unregistered and purged ${body.channelId}`);
+  return {
+    ok: true,
+    message: "Channel unregistered. The agent, its container, port, and data have been removed.",
+  };
 }
 
 function readJsonBody(req: http.IncomingMessage): Promise<unknown> {

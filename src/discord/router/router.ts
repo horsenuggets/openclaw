@@ -49,6 +49,7 @@ import {
 } from "./gateway-events.js";
 import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
+import { createNoticeDebouncer } from "./notice-debounce.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { clearUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
@@ -56,6 +57,9 @@ import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
+
+/** Window for coalescing repeated unauthorized-access notices to one reply. */
+const UNAUTHORIZED_NOTICE_DEBOUNCE_MS = 5000;
 
 /**
  * PUT a JSON body to a Discord application-command endpoint and surface a non-OK
@@ -382,6 +386,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const unauthorizedNoticeEnabled =
     parseBooleanValue(process.env.OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE) !== false;
 
+  // Coalesce the unauthorized notice per user+channel: the first offending
+  // message is answered immediately, then at most one reply per window while the
+  // spam continues, so a flood never earns a reply-per-message storm.
+  const unauthorizedNoticeDebouncer = createNoticeDebouncer({
+    windowMs: UNAUTHORIZED_NOTICE_DEBOUNCE_MS,
+  });
+
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
   const describeInstance = (channelId: string): InstanceStatus | null => {
@@ -531,6 +542,9 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     isWhitelisted: whitelist.isWhitelisted,
     isAdmin: whitelist.isAdmin,
     whitelistConfigured: whitelist.isConfigured,
+    // The bot's own user id equals its application id, so a channel registered
+    // to applicationId would be owned by the bot itself; refuse it up front.
+    isSelf: (userId) => userId === applicationId,
     describeInstance,
     // The router shares the host network, so the agent container's port is
     // reachable on loopback; a quick TCP connect tells `/channel status`
@@ -671,12 +685,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     discordToken,
     applicationId,
     runtime,
+    instancesDir: config.instancesDir,
     instances,
     channelQueue,
     channelGuild,
     allowedBotIds,
     ownerGatedBotIds,
     unauthorizedNoticeEnabled,
+    unauthorizedNoticeDebouncer,
+    unregisterInFlight: new Set<string>(),
     describeInstance,
     isAdmin: whitelist.isAdmin,
     channelCommandDeps,

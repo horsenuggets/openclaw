@@ -11,6 +11,13 @@ import path from "node:path";
 export type UserPreferences = {
   /** Show agent startup/shutdown lifecycle banners. Default: false. */
   lifecycleMessages?: boolean;
+  /**
+   * Whether this channel's slash-command replies are ephemeral (visible only to
+   * the caller). Default: true. Turning it off (e.g. via `/debug ephemeral off`)
+   * makes command results persist in-channel so they can be inspected during
+   * testing, where ephemeral replies otherwise vanish and cannot be verified.
+   */
+  ephemeralCommands?: boolean;
 };
 
 /**
@@ -90,4 +97,36 @@ export function writeUserPreferences(
  */
 export function clearUserPreferences(instancesDir: string, channelId: string): void {
   writeUserPreferences(instancesDir, channelId, {});
+}
+
+/**
+ * Whether a channel's slash-command replies should be ephemeral. Defaults to
+ * true (ephemeral) when unset, so commands stay private unless a tester opts the
+ * channel out via `/debug ephemeral off`. Read channel-keyed (not from an
+ * in-memory instance) because `/debug` runs on any channel, including ones with
+ * no registered instance.
+ */
+export function readEphemeralCommands(instancesDir: string, channelId: string): boolean {
+  return readUserPreferences(instancesDir, channelId).ephemeralCommands ?? true;
+}
+
+/**
+ * Persist a channel's ephemeral-command preference, preserving any other stored
+ * preferences. Returns whether the write succeeded so the caller can surface a
+ * failure (e.g. a read-only mount) rather than reporting a change that did not
+ * stick.
+ */
+export function setEphemeralCommands(
+  instancesDir: string,
+  channelId: string,
+  value: boolean,
+): boolean {
+  try {
+    const prefs: UserPreferences = { ...readUserPreferences(instancesDir, channelId) };
+    prefs.ephemeralCommands = value;
+    writeUserPreferences(instancesDir, channelId, prefs);
+    return true;
+  } catch {
+    return false;
+  }
 }

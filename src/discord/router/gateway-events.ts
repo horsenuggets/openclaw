@@ -1,12 +1,15 @@
 import type { ChannelQueue } from "./channel-queue.js";
 import type { InstanceConfig } from "./config.js";
+import type { NoticeDebouncer } from "./notice-debounce.js";
 import type { RouterRuntime } from "./types.js";
 import {
   type ChannelCommandDeps,
   type ChannelReplyPayload,
+  type DiscordActionRow,
+  type DiscordEmbed,
   type InstanceStatus,
+  decideUnregisterClick,
   handleChannelCommand,
-  handleUnregisterButtonClick,
   parseChannelTextCommand,
   parseUnregisterCustomId,
 } from "./channel-commands.js";
@@ -23,8 +26,10 @@ import {
   type DebugResult,
   debugSubcommandLabel,
   parseDebugTextCommand,
+  peekDebugEphemeralDesired,
   runDebugCommand,
 } from "./debug-command.js";
+import { resolveEphemeralCommand } from "./debug-ephemeral.js";
 import {
   DISCORD_API,
   discordDeleteMessage,
@@ -35,6 +40,8 @@ import {
 } from "./discord-api.js";
 import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
+import { buildLogEmbed } from "./log-embed.js";
+import { readEphemeralCommands, setEphemeralCommands } from "./preferences-store.js";
 import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -68,6 +75,8 @@ export type GatewayContext = {
   discordToken: string;
   applicationId: string;
   runtime: RouterRuntime;
+  /** Root of the instances tree; used to read/write channel-keyed preferences. */
+  instancesDir: string;
   instances: Map<string, InstanceConfig>;
   /** Per-channel queue that debounces, coalesces, and serializes inbound turns. */
   channelQueue: ChannelQueue;
@@ -87,6 +96,18 @@ export type GatewayContext = {
    * silently.
    */
   unauthorizedNoticeEnabled: boolean;
+  /**
+   * Coalesces the per-user "not authorized" notice so a non-owner spamming a
+   * channel gets one immediate reply then at most one per window, not a reply per
+   * message. Keyed by `channelId:userId`.
+   */
+  unauthorizedNoticeDebouncer: NoticeDebouncer;
+  /**
+   * Channels whose unregister is mid-flight from a confirm-button click, so a
+   * second click (a race before the buttons are dropped) is ignored rather than
+   * running teardown twice or surfacing a "not registered" message.
+   */
+  unregisterInFlight: Set<string>;
   describeInstance: (channelId: string) => InstanceStatus | null;
   /** True when the user holds the admin role (or override id). Gates `/debug`. */
   isAdmin: (userId: string) => Promise<boolean>;
@@ -203,6 +224,32 @@ function deliverDebugSecret(params: {
 }
 
 /**
+ * Apply a `/debug ephemeral` toggle for a channel and build its reply embed. A
+ * bare status query renders a plain Log embed; an on/off toggle persists the new
+ * value and renders a Command Result embed whose footer checkbox reflects it. A
+ * failed write (e.g. a read-only mount) is logged and still rendered as the
+ * attempted state, matching the /lifecycle persistence-failure handling's intent
+ * to surface rather than silently drop. Shared by the slash and text paths.
+ */
+function applyDebugEphemeral(
+  instancesDir: string,
+  channelId: string,
+  desired: boolean | null,
+  runtime: GatewayContext["runtime"],
+): BuiltEmbed {
+  const current = readEphemeralCommands(instancesDir, channelId);
+  const outcome = resolveEphemeralCommand(current, desired);
+  if (outcome.kind === "status") {
+    return buildLogEmbed(outcome.description);
+  }
+  if (!setEphemeralCommands(instancesDir, channelId, outcome.newValue)) {
+    runtime.error(`[router] failed to persist ephemeral preference for channel ${channelId}`);
+  }
+  runtime.log(`[router] /debug ephemeral for channel ${channelId}: ${outcome.state}`);
+  return buildCommandResultEmbed(outcome.description, outcome.state);
+}
+
+/**
  * Forward a user (or trusted bot) message to its channel's agent. Handles the
  * `/channel` management commands first (so they work before registration and
  * for bots), then the bot/empty filter, the registered-instance gate, text
@@ -213,12 +260,14 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     discordToken,
     applicationId,
     runtime,
+    instancesDir,
     instances,
     channelQueue,
     channelGuild,
     allowedBotIds,
     ownerGatedBotIds,
     unauthorizedNoticeEnabled,
+    unauthorizedNoticeDebouncer,
     describeInstance,
     channelCommandDeps,
     connectCommandDeps,
@@ -479,6 +528,10 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
             value: result.value,
           }),
         );
+      } else if (result.kind === "ephemeral") {
+        // Text replies are always in-channel (bots cannot send ephemerals), so
+        // the toggle only persists the preference for later slash replies here.
+        reply(applyDebugEphemeral(instancesDir, channelId, result.desired, runtime));
       } else if (result.kind === "embeds") {
         void discordSendReply(discordToken, channelId, commandMessageId, {
           embeds: result.embeds,
@@ -590,20 +643,27 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
           `[router] denied message from ${authorId} in channel ${channelId} (not the channel owner)`,
         );
         if (unauthorizedNoticeEnabled) {
-          const embed = buildPermissionDeniedEmbed(
-            buildUnauthorizedNoticeText(channelId, status?.ownerId),
-          );
           // A plain user message carries no interaction token, so a true
           // ephemeral reply is impossible. Post a persistent Log embed threaded
           // under the offending message instead. Suppress all mentions so the
-          // owner/author are never pinged, even under repeated denials.
-          void discordSendReply(
-            discordToken,
-            channelId,
-            d.id,
-            { embeds: [embed.embed], attachments: embed.attachments },
-            { parse: [], replied_user: false },
-          );
+          // owner/author are never pinged, even under repeated denials. Debounce
+          // per user+channel so a spammer gets one immediate reply then at most
+          // one per window, rather than a reply to every message. The message id
+          // is captured per send so the batched reply threads under the latest
+          // offense.
+          const offendingId = d.id;
+          unauthorizedNoticeDebouncer.trigger(`${channelId}:${authorId}`, () => {
+            const embed = buildPermissionDeniedEmbed(
+              buildUnauthorizedNoticeText(channelId, status?.ownerId),
+            );
+            void discordSendReply(
+              discordToken,
+              channelId,
+              offendingId,
+              { embeds: [embed.embed], attachments: embed.attachments },
+              { parse: [], replied_user: false },
+            );
+          });
         }
         return;
       }
@@ -624,6 +684,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
   const {
     applicationId,
     runtime,
+    instancesDir,
     instances,
     channelQueue,
     channelGuild,
@@ -645,17 +706,32 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     channelGuild.set(interactionChannelId, d.guild_id);
   }
 
-  // Helper to respond to interactions (always ephemeral). Accepts a
-  // plain string (content) or an embeds payload from a channel
-  // command; either way keeps the ephemeral flag (64).
+  // Discord fixes a reply's ephemerality when the interaction is first answered
+  // (the type-4 response or the type-5 defer), so every command reply derives its
+  // flags from the channel's `ephemeralCommands` preference up front. Default true
+  // keeps replies private; `/debug ephemeral off` flips a channel public so
+  // command output persists for inspection during testing. Returns 64 (ephemeral)
+  // or 0 (normal). Denials and the /secret modal intentionally stay ephemeral and
+  // do not use this.
+  const ephemeralFlags = (channelId: string | undefined): number => {
+    if (!channelId) {
+      return 64;
+    }
+    return readEphemeralCommands(instancesDir, channelId) ? 64 : 0;
+  };
+
+  // Helper to respond to interactions. Accepts a plain string (content) or an
+  // embeds payload from a channel command; either way carries the channel's
+  // resolved ephemeral flag.
   const respondToInteraction = (payload: ChannelReplyPayload) => {
+    const flags = ephemeralFlags(interactionChannelId);
     const data =
       typeof payload === "string"
-        ? { content: payload, flags: 64 }
+        ? { content: payload, flags }
         : {
             embeds: payload.embeds,
             ...(payload.components ? { components: payload.components } : {}),
-            flags: 64,
+            flags,
           };
     void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
       method: "POST",
@@ -712,8 +788,9 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
 
   // The /debug command runs an admin-only internal subcommand parsed from its
   // single free-text `command` option. Gating is purely on admin identity (not
-  // channel ownership), and every reply is ephemeral. Defer first because the
-  // admin check can hit the Discord role API and exceed the ~3s window.
+  // channel ownership). Replies are ephemeral by default, but honor the channel's
+  // `ephemeralCommands` preference. Defer first because the admin check can hit
+  // the Discord role API and exceed the ~3s window.
   if (interactionData?.name === DEBUG_COMMAND_SPEC.name) {
     const userId = d.member?.user?.id ?? d.user?.id ?? "";
     const commandInput = String(
@@ -721,6 +798,14 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         (o) => o.name === "command",
       )?.value ?? "",
     );
+    // `ephemeral on/off` changes the very preference that fixes this reply's
+    // ephemerality, and Discord locks that in at defer time, so resolve the
+    // *resulting* value before deferring: an explicit on/off uses the new value,
+    // everything else (including a bare status query) uses the current one.
+    const desiredEphemeral = peekDebugEphemeralDesired(commandInput);
+    const resultingEphemeral =
+      desiredEphemeral ??
+      (interactionChannelId ? readEphemeralCommands(instancesDir, interactionChannelId) : true);
     void (async () => {
       try {
         const deferResp = await fetch(
@@ -728,7 +813,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+            body: JSON.stringify({ type: 5, data: { flags: resultingEphemeral ? 64 : 0 } }),
           },
         );
         if (!deferResp.ok) {
@@ -752,7 +837,9 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         }
         const result = runDebugCommand(commandInput);
         // `secrettest` delivers a secret to the channel's agent and acks with a
-        // single embed; everything else renders its own embeds or raw content.
+        // single embed; `ephemeral` persists the toggle and renders a status
+        // (Log) or toggle (Command Result) embed; everything else renders its own
+        // embeds or raw content.
         let res: { ok: boolean; status: number };
         if (result.kind === "secret") {
           const ack = deliverDebugSecret({
@@ -767,6 +854,17 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: [ack.embed],
             attachments: ack.attachments,
+          });
+        } else if (result.kind === "ephemeral") {
+          const built = applyDebugEphemeral(
+            instancesDir,
+            interactionChannelId ?? "",
+            result.desired,
+            runtime,
+          );
+          res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: [built.embed],
+            attachments: built.attachments,
           });
         } else if (result.kind === "embeds") {
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
@@ -851,7 +949,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+              body: JSON.stringify({
+                type: 5,
+                data: { flags: ephemeralFlags(interactionChannelId) },
+              }),
             },
           );
           if (!deferResp.ok) {
@@ -907,7 +1008,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+        body: JSON.stringify({
+          type: 5,
+          data: { flags: ephemeralFlags(interactionChannelId) },
+        }),
       }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
       const editReply = (payload: ChannelReplyPayload) => {
         // Embed replies upload their category icons (attachment://), so route
@@ -1022,7 +1126,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+                body: JSON.stringify({
+                  type: 5,
+                  data: { flags: ephemeralFlags(interactionChannelId) },
+                }),
               },
             );
             if (!deferResp.ok) {
@@ -1189,7 +1296,7 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
  * `/channel unregister` confirmation buttons.
  */
 export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInteractionData): void {
-  const { applicationId, runtime, channelGuild, channelCommandDeps } = ctx;
+  const { applicationId, runtime, channelGuild, channelCommandDeps, unregisterInFlight } = ctx;
 
   const customId = d.data?.custom_id;
   const parsed = customId ? parseUnregisterCustomId(customId) : null;
@@ -1200,49 +1307,87 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     channelGuild.set(d.channel_id, d.guild_id);
   }
 
-  if (parsed && clickerId && customId) {
-    if (parsed.initiatorId !== clickerId) {
-      // Someone other than the initiator clicked: reply ephemerally
-      // and leave the original confirmation message untouched.
+  if (!parsed || !clickerId || !customId) {
+    return;
+  }
+
+  // Respond to the interaction with an ephemeral message (used for the
+  // wrong-clicker and already-in-flight guards, which must not touch the
+  // confirmation message).
+  const ephemeralReply = (content: string) =>
+    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 4, data: { content, flags: 64 } }),
+    }).catch((err) => runtime.error(`[router] button response failed: ${String(err)}`));
+
+  // Replace the confirmation message by editing @original (the component's own
+  // message). Uploads the footer icon, reusing the CDN cache the confirmation
+  // send warmed, and always drops the buttons.
+  const editMessage = (update: {
+    embeds: DiscordEmbed[];
+    attachments: string[];
+    components: DiscordActionRow[];
+  }) =>
+    editInteractionEmbedReply(applicationId, interactionToken, update)
+      .then((res) => {
+        if (!res.ok) {
+          runtime.error(`[router] button followup failed (${res.status})`);
+        }
+      })
+      .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
+
+  void (async () => {
+    const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
+    if (outcome.kind === "ignored") {
+      return;
+    }
+    if (outcome.kind === "notForYou") {
+      // Leave the confirmation message untouched for the real initiator.
+      ephemeralReply(outcome.notice);
+      return;
+    }
+    if (outcome.kind === "confirm") {
+      // Barrier against a double-click racing ahead of the button removal: run
+      // teardown at most once per channel. A second click lands here while the
+      // first is still mid-flight and is acknowledged without re-running it.
+      if (unregisterInFlight.has(outcome.channelId)) {
+        ephemeralReply("This channel is already being unregistered. Hang tight.");
+        return;
+      }
+      unregisterInFlight.add(outcome.channelId);
+      // Immediately replace the message (type 7 UPDATE_MESSAGE) to drop the
+      // buttons and show the interim "unregistering..." state, so the click is
+      // acknowledged at once and cannot be clicked again. The interim embed
+      // reuses the registration icon already attached to the message, so it needs
+      // no re-upload (the callback endpoint cannot multipart-upload one).
       void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: 4,
-          data: { content: "This confirmation isn't for you.", flags: 64 },
+          type: 7,
+          data: { embeds: outcome.interim.embeds, components: outcome.interim.components },
         }),
-      }).catch((err) => runtime.error(`[router] button response failed: ${String(err)}`));
-    } else {
-      // Defer the message update (type 6) so a slow unregister does
-      // not blow Discord's ~3s response window, then edit the original
-      // confirmation message with the result and drop the buttons.
-      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: 6 }),
-      }).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
-      void handleUnregisterButtonClick({ customId, clickerId }, channelCommandDeps).then(
-        (result) => {
-          if (!result.update) {
-            return;
-          }
-          // Upload the footer icon (reusing the CDN cache the confirmation send
-          // warmed) and drop the buttons.
-          void editInteractionEmbedReply(applicationId, interactionToken, {
-            embeds: result.update.embeds,
-            attachments: result.update.attachments,
-            components: result.update.components,
-          })
-            .then((res) => {
-              if (!res.ok) {
-                runtime.error(`[router] button followup failed (${res.status})`);
-              }
-            })
-            .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
-        },
-      );
+      }).catch((err) => runtime.error(`[router] button interim update failed: ${String(err)}`));
+      try {
+        const final = await outcome.perform();
+        await editMessage(final);
+      } finally {
+        unregisterInFlight.delete(outcome.channelId);
+      }
+      return;
     }
-  }
+    // cancelled / denied / notRegistered: a single message replacement. Defer the
+    // update (type 6) first so a slow permission check cannot blow Discord's ~3s
+    // window, then edit the message (the editor uploads the embed's icon, which
+    // may differ from the one already on the message, e.g. the Log denial icon).
+    await fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 6 }),
+    }).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
+    await editMessage(outcome.update);
+  })();
 }
 
 /**

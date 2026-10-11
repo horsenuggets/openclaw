@@ -142,6 +142,13 @@ export type ChannelCommandDeps = {
   isWhitelisted: (userId: string) => Promise<boolean>;
   isAdmin: (userId: string) => Promise<boolean>;
   whitelistConfigured: () => boolean;
+  /**
+   * True when the given user id is the router's own bot. A channel cannot be
+   * registered to the bot itself: the bot would own an agent instance of itself
+   * and loop on its own messages, so registering it is refused up front with the
+   * "unavailable user" notice.
+   */
+  isSelf: (userId: string) => boolean;
   /** Returns the instance's status, or null when the channel is not registered. */
   describeInstance: (channelId: string) => InstanceStatus | null;
   /** Optional live check of whether the agent container is up (TCP probe). */
@@ -397,6 +404,22 @@ export async function handleChannelCommand(
       ownerId = requestedOwner;
     }
 
+    // The bot cannot own an agent instance of itself: it would self-route on its
+    // own messages. Refuse before any provisioning with a yellow registration
+    // embed naming the owner as unavailable, whether the bot was passed via the
+    // `owner` argument or is somehow the caller (e.g. a text-command driver).
+    if (deps.isSelf(ownerId)) {
+      await ctx.reply(
+        registrationReply(
+          "Unavailable User",
+          `Channel <#${ctx.channelId}> cannot be registered under <@${ownerId}> because that user is a bot and cannot own an agent instance.`,
+        ),
+        { ephemeral: true },
+      );
+      deps.log(`[channel] register refused: owner ${ownerId} is the bot itself`);
+      return;
+    }
+
     // Whitelisted-but-not-admin users may only register their own DM.
     if (!admin && !ctx.isDM) {
       await ctx.reply(
@@ -472,7 +495,7 @@ export async function handleChannelCommand(
         {
           ...registrationReply(
             "Unregister",
-            `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent (instance data is kept).`,
+            `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
           ),
           components: [unregisterButtons(ctx.channelId, ctx.userId)],
         },
@@ -507,44 +530,81 @@ function unregisterResultReply(
   return registrationReply(
     "Unregister",
     result.ok
-      ? `Channel <#${channelId}> has been successfully unregistered from user <@${ownerId}>.`
+      ? `Channel <#${channelId}> has been successfully unregistered from user <@${ownerId}>. Its agent, container, port, and all of its data have been removed.`
       : `Could not unregister channel <#${channelId}>. ${result.message}`,
   );
 }
 
-export type UnregisterButtonResult = {
-  /**
-   * Replace the original message (Discord UPDATE_MESSAGE / type 7). `attachments`
-   * lists the icon files the embeds reference; the follow-up edit resolves them
-   * from the CDN cache (the confirmation message already uploaded them).
-   */
-  update?: { embeds: DiscordEmbed[]; attachments: string[]; components: DiscordActionRow[] };
-  /** Send an ephemeral notice instead of updating (e.g. wrong clicker). */
-  ephemeral?: string;
+/**
+ * Interim reply shown the instant the confirm button is clicked: the buttons are
+ * dropped and the message states that teardown is underway, so the click is
+ * acknowledged immediately rather than leaving stale buttons while a slow Docker
+ * teardown runs. Uses the same registration icon the confirmation already
+ * uploaded, so it can be rendered as a plain UPDATE_MESSAGE without re-uploading.
+ */
+function unregisterInterimReply(
+  channelId: string,
+  ownerId: string,
+): { embeds: DiscordEmbed[]; attachments: string[] } {
+  return registrationReply(
+    "Unregister",
+    `Unregistering channel <#${channelId}> under user <@${ownerId}>. Stopping the agent and wiping its container, port, and data...`,
+  );
+}
+
+/** A message replacement for the confirmation message (embeds + no buttons). */
+export type UnregisterUpdate = {
+  embeds: DiscordEmbed[];
+  attachments: string[];
+  components: DiscordActionRow[];
 };
 
 /**
- * Handle a click on an unregister confirmation button. Only the user who opened
- * the dialog may act on it; permission is re-checked at click time in case roles
- * changed. Returns the message update (or an ephemeral notice). Returns an empty
- * object for `custom_id`s that are not ours.
+ * The decision for a click on an unregister confirmation button. The router
+ * adapter owns the Discord I/O; this stays transport-agnostic. The `confirm`
+ * outcome is two-phase: the adapter renders `interim` immediately (dropping the
+ * buttons) and then awaits `perform` for the final result, so a slow teardown
+ * never leaves clickable buttons behind.
  */
-export async function handleUnregisterButtonClick(
+export type UnregisterClickOutcome =
+  | { kind: "ignored" }
+  | { kind: "notForYou"; notice: string }
+  | { kind: "cancelled"; update: UnregisterUpdate }
+  | { kind: "denied"; update: UnregisterUpdate }
+  | { kind: "notRegistered"; update: UnregisterUpdate }
+  | {
+      kind: "confirm";
+      channelId: string;
+      ownerId: string;
+      interim: UnregisterUpdate;
+      perform: () => Promise<UnregisterUpdate>;
+    };
+
+/**
+ * Decide what a click on an unregister confirmation button should do. Only the
+ * user who opened the dialog may act on it, and permission is re-checked at click
+ * time in case roles changed. Returns `ignored` for `custom_id`s that are not
+ * ours. For a valid confirm, returns the interim message plus a `perform` thunk
+ * that runs the actual unregister and yields the final message; the adapter
+ * sequences the two so the buttons vanish the moment the click lands.
+ */
+export async function decideUnregisterClick(
   params: { customId: string; clickerId: string },
   deps: ChannelCommandDeps,
-): Promise<UnregisterButtonResult> {
+): Promise<UnregisterClickOutcome> {
   const parsed = parseUnregisterCustomId(params.customId);
   if (!parsed) {
-    return {};
+    return { kind: "ignored" };
   }
   const { kind, channelId, initiatorId } = parsed;
 
   if (params.clickerId !== initiatorId) {
-    return { ephemeral: "This confirmation isn't for you." };
+    return { kind: "notForYou", notice: "This confirmation isn't for you." };
   }
 
   if (kind === "cancel") {
     return {
+      kind: "cancelled",
       update: {
         ...registrationReply(
           "Unregister",
@@ -558,6 +618,7 @@ export async function handleUnregisterButtonClick(
   const status = deps.describeInstance(channelId);
   if (!status) {
     return {
+      kind: "notRegistered",
       update: {
         ...registrationReply(
           "Unregister",
@@ -571,19 +632,23 @@ export async function handleUnregisterButtonClick(
   const isOwner = status.ownerId === params.clickerId;
   if (!isOwner && !(await deps.isAdmin(params.clickerId))) {
     return {
-      update: {
-        ...unauthorizedReply(channelId, status.ownerId),
-        components: [],
-      },
+      kind: "denied",
+      update: { ...unauthorizedReply(channelId, status.ownerId), components: [] },
     };
   }
 
-  const result = await deps.provisioning.unregister({ channelId });
-  deps.log(`[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`);
+  const ownerId = status.ownerId ?? params.clickerId;
   return {
-    update: {
-      ...unregisterResultReply(channelId, status.ownerId ?? params.clickerId, result),
-      components: [],
+    kind: "confirm",
+    channelId,
+    ownerId,
+    interim: { ...unregisterInterimReply(channelId, ownerId), components: [] },
+    perform: async () => {
+      const result = await deps.provisioning.unregister({ channelId });
+      deps.log(
+        `[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`,
+      );
+      return { ...unregisterResultReply(channelId, ownerId, result), components: [] };
     },
   };
 }
