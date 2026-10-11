@@ -129,11 +129,17 @@ it("rolls back the ephemeral toggle when the defer ack is rejected", async () =>
   // (4xx/5xx) the command visibly failed and no reply lands — so the preference
   // must be rolled back to private rather than silently leaving the channel public.
   expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  let deferCalls = 0;
+  let publicWhileDeferring = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       // Reject only the interaction defer callback.
       if (typeof url === "string" && url.includes("/callback")) {
+        deferCalls += 1;
+        // At defer time the toggle has already persisted the public value; capture
+        // that so the test proves the rollback (not just the unchanged default).
+        publicWhileDeferring = !readEphemeralCommands(instancesDir, CHANNEL);
         return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
       }
       return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
@@ -158,8 +164,11 @@ it("rolls back the ephemeral toggle when the defer ack is rejected", async () =>
       data: { name: "debug", options: [{ name: "command", value: "ephemeral off" }] },
       user: { id: "u1" },
     } as never);
-    // The toggle persisted "public" then rolled back to the private default after
-    // the rejected defer.
+    // Wait until the defer actually fired (so the assertion cannot pass on the
+    // initial default before the handler ran), confirm the value WAS public at
+    // defer time, then confirm it rolled back to private after the rejection.
+    await vi.waitFor(() => expect(deferCalls).toBeGreaterThan(0));
+    expect(publicWhileDeferring).toBe(true);
     await vi.waitFor(() => expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true));
   } finally {
     vi.unstubAllGlobals();
@@ -171,10 +180,14 @@ it("rolls back the ephemeral toggle when the defer request throws", async () => 
   // returning a non-ok response: it rejects into the outer catch after the toggle
   // already persisted, so the catch must still roll the preference back.
   expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  let deferCalls = 0;
+  let publicWhileDeferring = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       if (typeof url === "string" && url.includes("/callback")) {
+        deferCalls += 1;
+        publicWhileDeferring = !readEphemeralCommands(instancesDir, CHANNEL);
         throw new Error("network down");
       }
       return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
@@ -199,6 +212,8 @@ it("rolls back the ephemeral toggle when the defer request throws", async () => 
       data: { name: "debug", options: [{ name: "command", value: "ephemeral off" }] },
       user: { id: "u1" },
     } as never);
+    await vi.waitFor(() => expect(deferCalls).toBeGreaterThan(0));
+    expect(publicWhileDeferring).toBe(true);
     await vi.waitFor(() => expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true));
   } finally {
     vi.unstubAllGlobals();

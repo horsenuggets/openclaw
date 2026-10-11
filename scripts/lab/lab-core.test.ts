@@ -193,6 +193,20 @@ describe("reorderDayChannelsDescending", () => {
     expect(reorderDayChannelsDescending([])).toEqual([]);
     expect(reorderDayChannelsDescending([{ id: "x", name: "general", position: 0 }])).toEqual([]);
   });
+
+  it("forces distinct positions when day channels share a slot (Discord tie-break)", () => {
+    // Both day channels report position 1 (Discord allows ties, broken by id). Reusing
+    // the slots as-is would leave both at 1 and report no change, but the id-tiebreak
+    // order is not date-ordered. The reorder must spread them to distinct ascending
+    // slots so the newest date is unambiguously first (smallest position).
+    const changes = reorderDayChannelsDescending([
+      { id: "a", name: "2026-10-01", position: 1 },
+      { id: "b", name: "2026-10-02", position: 1 },
+    ]);
+    // Distinct target slots {1, 2}: newest 10-02 -> 1 (already there, no change),
+    // older 10-01 -> 2. The result is unambiguous newest-first (b at 1, a at 2).
+    expect(changes).toEqual([{ id: "a", position: 2 }]);
+  });
 });
 
 describe("archive category naming", () => {
