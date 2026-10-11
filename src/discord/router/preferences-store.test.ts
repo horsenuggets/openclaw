@@ -137,6 +137,21 @@ it("reads back a stored ephemeral preference", () => {
   expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(false);
 });
 
+it("fails closed to true for a malformed (non-boolean) ephemeral value", () => {
+  // The preferences file is arbitrary JSON; a malformed `ephemeralCommands` (e.g.
+  // 0 or "") must not flip the channel public and leak a reply. Only an explicit
+  // `false` makes replies public; anything else reads as the private default.
+  const file = userPreferencesPath(instancesDir, CHANNEL);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  for (const bad of [0, "", "false", null, 1, "true"]) {
+    fs.writeFileSync(file, JSON.stringify({ ephemeralCommands: bad }));
+    expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  }
+  // The one value that legitimately makes replies public is a literal false.
+  fs.writeFileSync(file, JSON.stringify({ ephemeralCommands: false }));
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(false);
+});
+
 it("setEphemeralCommands persists without clobbering other preferences", () => {
   writeUserPreferences(instancesDir, CHANNEL, { lifecycleMessages: true });
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);

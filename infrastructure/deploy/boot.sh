@@ -170,64 +170,76 @@ if [ -z "$ASSIGNMENTS" ]; then
 else
   while read -r channelId port; do
     [ -z "$channelId" ] && continue
-    # Only start instances adopted into the token-free layout (marker written by
-    # openclawctl prepare_instance_dirs). A pre-existing instance without it would
-    # mount the new read-only-config / /state layout and crash-loop, so skip it with
-    # a re-register hint instead. Migrating legacy instances in place is a follow-up.
-    if [ ! -f "$INSTANCES_DIR/$channelId/.token-free" ]; then
-      echo "Skipping channel $channelId: legacy layout (no .token-free marker)." >&2
-      echo "  Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
-      echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
-      continue
-    fi
-    # Re-assert the instance's proxy URLs from the current agent-bridge env before
-    # starting it. A deploy that changed the bridge gateway IP (e.g. the
-    # host-networking -> bridge migration) otherwise leaves the on-disk config
-    # pointing at a stale address (an old 127.0.0.1 is now the box's own loopback),
-    # so the model/container proxies are unreachable and the agent silently fails.
-    # If the reconcile fails, skip this box rather than start it with unreachable
-    # proxies; other instances still boot.
-    if ! ~/deploy/bin/openclawctl reconcile "$channelId"; then
-      echo "Skipping channel $channelId: could not reconcile its proxy URLs" >&2
-      echo "  (would start with unreachable model/container proxies)." >&2
-      continue
-    fi
-    # Ensure the box's real HOME mount exists and is owned by the container uid
-    # before Compose starts. reconcile does not run prepare_instance_dirs, so an
-    # instance adopted before the home-mount layout has no ~/.openclaw-instances/
-    # <id>/home; Docker would then create the bind source as root and uid 1000
-    # could not write $HOME. Idempotent; AGENT_UID/GID match agent.yml (1000:1000).
-    instance_home="$INSTANCES_DIR/$channelId/home"
-    instance_state="$INSTANCES_DIR/$channelId/state"
-    mkdir -p "$instance_home"
-    # One-time migration for instances adopted when HOME was /state: any
-    # $HOME-relative data they wrote then lives under state/.config, state/.cache,
-    # state/.openclaw (the canvas host resolves os.homedir()/.openclaw/canvas, so
-    # canvas data landed here), etc. Switching HOME to /home/openclaw would orphan
-    # them, so move each such dotdir into home/ before the first start under the new
-    # layout. This does NOT touch openclaw's own gateway state: that used
-    # OPENCLAW_STATE_DIR=/state (the /state root directly, e.g. state/agents,
-    # state/sessions), never state/.openclaw, which is purely HOME-relative. Guarded:
-    # only when home/ does not already have that entry (never clobber a value the box
-    # wrote under the new HOME).
-    if [ -d "$instance_state" ]; then
-      for d in .config .cache .local .claude .gog .openclaw gogcli; do
-        if [ -e "$instance_state/$d" ] && [ ! -e "$instance_home/$d" ]; then
-          mv "$instance_state/$d" "$instance_home/$d" 2>/dev/null \
-            && echo "Migrated $channelId: state/$d -> home/$d" >&2 || true
-        fi
-      done
-    fi
-    # Hand the home mount to the container uid. If this fails the box would start
-    # with an unwritable $HOME (the exact root-owned/UID-mismatch case this repairs),
-    # so skip the instance rather than launch a broken box; others still boot.
-    if ! chown -R 1000:1000 "$instance_home" 2>/dev/null; then
-      echo "Skipping channel $channelId: could not chown its home mount to the agent uid" >&2
-      echo "  (would start with an unwritable \$HOME)." >&2
-      continue
-    fi
-    OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
-      docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
+    # Hold the SAME per-channel lifecycle lock openclawctl add/remove/purge/restart
+    # use, across this whole reconcile/prepare/start sequence. Otherwise a concurrent
+    # purge (the provisioner may already be up: setup starts it before invoking
+    # boot) could delete the instance after the checks below but before `compose
+    # up`, leaving boot to start a container with the captured port and no `.port` —
+    # the exact orphan/reuse race the lock prevents. The lock file path and fd (8)
+    # match openclawctl's with_channel_lock. A subshell holds it; its skip paths use
+    # `exit 0` (leave the subshell, continue the loop) since `continue` cannot cross
+    # the subshell boundary.
+    (
+      flock 8
+      # Only start instances adopted into the token-free layout (marker written by
+      # openclawctl prepare_instance_dirs). A pre-existing instance without it would
+      # mount the new read-only-config / /state layout and crash-loop, so skip it
+      # with a re-register hint instead. Migrating legacy instances is a follow-up.
+      if [ ! -f "$INSTANCES_DIR/$channelId/.token-free" ]; then
+        echo "Skipping channel $channelId: legacy layout (no .token-free marker)." >&2
+        echo "  Re-register it to adopt the token-free layout (non-destructive; keeps the" >&2
+        echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
+        exit 0
+      fi
+      # Re-assert the instance's proxy URLs from the current agent-bridge env before
+      # starting it. A deploy that changed the bridge gateway IP (e.g. the
+      # host-networking -> bridge migration) otherwise leaves the on-disk config
+      # pointing at a stale address (an old 127.0.0.1 is now the box's own loopback),
+      # so the model/container proxies are unreachable and the agent silently fails.
+      # If the reconcile fails, skip this box rather than start it with unreachable
+      # proxies; other instances still boot.
+      if ! ~/deploy/bin/openclawctl reconcile "$channelId"; then
+        echo "Skipping channel $channelId: could not reconcile its proxy URLs" >&2
+        echo "  (would start with unreachable model/container proxies)." >&2
+        exit 0
+      fi
+      # Ensure the box's real HOME mount exists and is owned by the container uid
+      # before Compose starts. reconcile does not run prepare_instance_dirs, so an
+      # instance adopted before the home-mount layout has no ~/.openclaw-instances/
+      # <id>/home; Docker would then create the bind source as root and uid 1000
+      # could not write $HOME. Idempotent; AGENT_UID/GID match agent.yml (1000:1000).
+      instance_home="$INSTANCES_DIR/$channelId/home"
+      instance_state="$INSTANCES_DIR/$channelId/state"
+      mkdir -p "$instance_home"
+      # One-time migration for instances adopted when HOME was /state: any
+      # $HOME-relative data they wrote then lives under state/.config, state/.cache,
+      # state/.openclaw (the canvas host resolves os.homedir()/.openclaw/canvas, so
+      # canvas data landed here), etc. Switching HOME to /home/openclaw would orphan
+      # them, so move each such dotdir into home/ before the first start under the new
+      # layout. This does NOT touch openclaw's own gateway state: that used
+      # OPENCLAW_STATE_DIR=/state (the /state root directly, e.g. state/agents,
+      # state/sessions), never state/.openclaw, which is purely HOME-relative. Guarded:
+      # only when home/ does not already have that entry (never clobber a value the box
+      # wrote under the new HOME).
+      if [ -d "$instance_state" ]; then
+        for d in .config .cache .local .claude .gog .openclaw gogcli; do
+          if [ -e "$instance_state/$d" ] && [ ! -e "$instance_home/$d" ]; then
+            mv "$instance_state/$d" "$instance_home/$d" 2>/dev/null \
+              && echo "Migrated $channelId: state/$d -> home/$d" >&2 || true
+          fi
+        done
+      fi
+      # Hand the home mount to the container uid. If this fails the box would start
+      # with an unwritable $HOME (the exact root-owned/UID-mismatch case this repairs),
+      # so skip the instance rather than launch a broken box; others still boot.
+      if ! chown -R 1000:1000 "$instance_home" 2>/dev/null; then
+        echo "Skipping channel $channelId: could not chown its home mount to the agent uid" >&2
+        echo "  (would start with an unwritable \$HOME)." >&2
+        exit 0
+      fi
+      OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
+        docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
+    ) 8>"$INSTANCES_DIR/.lifecycle-$channelId.lock"
   done <<< "$ASSIGNMENTS"
 fi
 

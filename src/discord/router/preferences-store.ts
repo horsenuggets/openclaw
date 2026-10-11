@@ -105,9 +105,15 @@ export function clearUserPreferences(instancesDir: string, channelId: string): v
  * channel out via `/debug ephemeral off`. Read channel-keyed (not from an
  * in-memory instance) because `/debug` runs on any channel, including ones with
  * no registered instance.
+ *
+ * Fails CLOSED (private): only an explicit `false` makes replies public. The
+ * preferences file is arbitrary JSON cast to UserPreferences, so a malformed
+ * value (e.g. `0`, `""`, or a string "false") must not be allowed to flip a
+ * channel public and leak a reply; anything that is not literally `false` is
+ * treated as the private default.
  */
 export function readEphemeralCommands(instancesDir: string, channelId: string): boolean {
-  return readUserPreferences(instancesDir, channelId).ephemeralCommands ?? true;
+  return readUserPreferences(instancesDir, channelId).ephemeralCommands !== false;
 }
 
 /**
