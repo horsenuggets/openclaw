@@ -8,6 +8,7 @@ import {
   type DiscordActionRow,
   type DiscordEmbed,
   type InstanceStatus,
+  buildUnregisterAckUpdate,
   decideUnregisterClick,
   handleChannelCommand,
   parseChannelTextCommand,
@@ -1418,14 +1419,25 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     unregisterInFlight.add(parsed.channelId);
   }
 
-  // Acknowledge this valid-initiator click up front with a deferred message
-  // update (type 6): it does not change the message yet (so the buttons stay
-  // until the edit below), but it satisfies the deadline regardless of how long
-  // the authorization and teardown take. Every branch below then edits @original.
+  // Acknowledge this valid-initiator click up front, before any authorization.
+  // For a CONFIRM, use a type-7 UPDATE_MESSAGE carrying a generic "processing"
+  // state so the buttons vanish INSTANTLY (the second click then has nothing to
+  // click, on top of the in-flight guard above); it reuses the icon already on the
+  // message, so no re-upload. For a CANCEL, a type-6 deferred update is enough (it
+  // is immediately replaced by the "cancelled" edit below). Either way the ack
+  // satisfies Discord's ~3s deadline regardless of how long authorization and
+  // teardown take, and the owner-named interim/final states follow.
+  const ackBody =
+    parsed.kind === "confirm"
+      ? {
+          type: 7,
+          data: { embeds: buildUnregisterAckUpdate(parsed.channelId).embeds, components: [] },
+        }
+      : { type: 6 };
   const ack = fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: 6 }),
+    body: JSON.stringify(ackBody),
   }).catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`));
 
   // A click for a channel whose teardown is already in flight is acked (above) but

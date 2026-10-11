@@ -1246,20 +1246,23 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
       await vi.advanceTimersByTimeAsync(0);
     }
 
-    // The click is acknowledged up front with a deferred message update (type 6)
-    // BEFORE the async authorization, so a slow role lookup cannot blow Discord's
-    // ~3s deadline. The message is then edited (via @original) twice: first to the
-    // interim "unregistering..." state (buttons dropped), then to the final result
-    // after the instance is removed (still no buttons).
-    const ack = callbacks.find((c) => c.type === 6);
+    // A confirm click is acknowledged up front with an INSTANT type-7
+    // UPDATE_MESSAGE that drops the buttons (components: []) and shows a generic
+    // "processing" state, BEFORE the async authorization, so a slow role lookup
+    // cannot blow Discord's ~3s deadline and the buttons vanish immediately. The
+    // message is then edited (via @original) to the owner-named interim
+    // "unregistering..." state and finally to the result after teardown.
+    const ack = callbacks.find((c) => c.type === 7);
     expect(ack).toBeDefined();
+    expect(ack?.data?.components).toEqual([]);
+    expect(ack?.data?.embeds?.[0]?.description).toContain("Processing the unregister request");
     const interim = patches.find((p) =>
       p.embeds?.[0]?.description?.includes("Unregistering channel"),
     );
@@ -1319,7 +1322,7 @@ describe("discord router channel-delete cleanup", () => {
         token: "tok",
         channel_id: CHANNEL,
         guild_id: GUILD,
-        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
+        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
         member: { user: { id: OWNER } },
       });
     // First click starts teardown (now blocked on the gate). Second click arrives
@@ -1334,8 +1337,9 @@ describe("discord router channel-delete cleanup", () => {
     }
     // Only one teardown ran despite two clicks.
     expect(unregisterCalls).toEqual([CHANNEL]);
-    // Both clicks were still acknowledged (type 6) so neither interaction expires.
-    expect(callbacks.filter((c) => c.type === 6).length).toBe(2);
+    // Both confirm clicks were still acknowledged (type 7 instant update) so
+    // neither interaction expires, even though the second is otherwise ignored.
+    expect(callbacks.filter((c) => c.type === 7).length).toBe(2);
 
     releaseUnregister?.();
     for (let i = 0; i < 5; i++) {
@@ -1397,7 +1401,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1409,7 +1413,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:18795` },
+      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1463,7 +1467,7 @@ describe("discord router channel-delete cleanup", () => {
       channel_id: CHANNEL,
       guild_id: GUILD,
       // custom_id names OWNER as initiator, but a different user clicks.
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
       member: { user: { id: "444444444444444444" } },
     });
     await vi.advanceTimersByTimeAsync(0);

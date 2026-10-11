@@ -562,6 +562,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     // to applicationId would be owned by the bot itself; refuse it up front.
     isSelf: (userId) => userId === applicationId,
     describeInstance,
+    // Per-registration nonce used to bind an unregister confirmation to the exact
+    // registration it was shown for. Reuse the connection registration key, which
+    // already rotates on every (un)register; take its generation prefix (the
+    // integer before the ":") so the value is colon-free for the custom_id.
+    registrationNonce: (channelId) => {
+      const key = currentConnectionRegistrationKey(channelId);
+      return key === null ? null : key.split(":")[0];
+    },
     // The router shares the host network, so the agent container's port is
     // reachable on loopback; a quick TCP connect tells `/channel status`
     // whether the agent is actually up.

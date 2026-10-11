@@ -148,6 +148,9 @@ function makeDeps(over: Partial<ChannelCommandDeps> = {}): ChannelCommandDeps {
     whitelistConfigured: () => true,
     isSelf: () => false,
     describeInstance: () => null,
+    // Per-registration nonce; tests that exercise the unregister button build
+    // custom_ids with gen "1" to match this default (see buildUnregisterCustomId).
+    registrationNonce: () => "1",
     provisioning: {
       register: vi.fn(async () => ({ ok: true, message: "registered" })),
       unregister: vi.fn(async () => ({ ok: true, message: "removed" })),
@@ -652,14 +655,15 @@ describe("decideUnregisterClick", () => {
   });
 
   it("refuses a stale confirm whose registration generation no longer matches", async () => {
-    // The button was issued when the channel was on port 1 (gen "1"), but the
-    // channel has since been re-registered on a new port (gen "2"). Confirming the
-    // stale dialog must NOT purge the new instance.
+    // The button was issued at nonce "1", but the channel has since been
+    // unregistered and re-registered (nonce now "2"). Confirming the stale dialog
+    // must NOT purge the new instance, even though the reused port is unchanged.
     const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
     const result = await decideUnregisterClick(
       { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({
-        describeInstance: () => ({ port: 2, ownerId: "U1", onboarded: true }),
+        describeInstance: owned,
+        registrationNonce: () => "2",
         provisioning: { register: vi.fn(), unregister },
       }),
     );

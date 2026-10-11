@@ -151,6 +151,16 @@ export type ChannelCommandDeps = {
   isSelf: (userId: string) => boolean;
   /** Returns the instance's status, or null when the channel is not registered. */
   describeInstance: (channelId: string) => InstanceStatus | null;
+  /**
+   * A per-registration nonce for the channel that CHANGES on every successful
+   * (un)register, or null when unregistered. Used to bind an unregister
+   * confirmation to the exact registration it was shown for, so a stale
+   * confirmation clicked after the channel was unregistered and re-registered
+   * cannot purge the new instance. Must be `:`-free (it is embedded in a
+   * colon-delimited custom_id). The port is NOT suitable here: openclawctl reuses
+   * the lowest free port, so an immediate re-register typically reuses it.
+   */
+  registrationNonce: (channelId: string) => string | null;
   /** Optional live check of whether the agent container is up (TCP probe). */
   probeRunning?: (port: number) => Promise<boolean>;
   provisioning: ProvisioningClient;
@@ -262,11 +272,12 @@ export function parseUserMention(raw: string | undefined): string | null {
 
 /**
  * Build a `custom_id` for an unregister confirmation button. The trailing `gen`
- * segment binds the button to the registration it was shown for: the instance's
- * assigned port, which a re-register reassigns (see docs/deployment.md). Clicking
- * a stale confirmation after the channel was unregistered and re-registered would
- * otherwise purge the NEW instance; decideUnregisterClick revalidates `gen`
- * against the current port and refuses a mismatch. `-` marks an unknown port.
+ * segment binds the button to the registration it was shown for: a per-
+ * registration nonce that changes on every (un)register (see
+ * `ChannelCommandDeps.registrationNonce`). Clicking a stale confirmation after the
+ * channel was unregistered and re-registered would otherwise purge the NEW
+ * instance; decideUnregisterClick revalidates `gen` against the current nonce and
+ * refuses a mismatch. `-` marks an unknown/unregistered channel.
  */
 export function buildUnregisterCustomId(
   kind: "confirm" | "cancel",
@@ -302,9 +313,9 @@ export function parseUnregisterCustomId(customId: string): UnregisterButton | nu
   return null;
 }
 
-/** The registration generation marker for a channel: its current port, or `-`. */
-function registrationGen(status: InstanceStatus | null): string {
-  return status ? String(status.port) : "-";
+/** The registration generation marker for a channel: its current nonce, or `-`. */
+function registrationGen(deps: ChannelCommandDeps, channelId: string): string {
+  return deps.registrationNonce(channelId) ?? "-";
 }
 
 /** The two-button action row shown under an unregister confirmation embed. */
@@ -512,7 +523,9 @@ export async function handleChannelCommand(
             "Unregister",
             `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
           ),
-          components: [unregisterButtons(ctx.channelId, ctx.userId, registrationGen(status))],
+          components: [
+            unregisterButtons(ctx.channelId, ctx.userId, registrationGen(deps, ctx.channelId)),
+          ],
         },
         { ephemeral: true },
       );
@@ -573,6 +586,25 @@ export type UnregisterUpdate = {
   attachments: string[];
   components: DiscordActionRow[];
 };
+
+/**
+ * The INSTANT acknowledgement shown the moment a confirm button is clicked, before
+ * any authorization runs: drops the buttons (so a second click cannot land) and
+ * states that the request is being processed. Deliberately owner-agnostic so the
+ * router can send it synchronously via a type-7 UPDATE_MESSAGE without first
+ * resolving the owner or awaiting the admin check. Reuses the registration icon
+ * already attached to the confirmation message, so no re-upload is needed. The
+ * owner-named interim/final states follow once authorization resolves.
+ */
+export function buildUnregisterAckUpdate(channelId: string): UnregisterUpdate {
+  return {
+    ...registrationReply(
+      "Unregister",
+      `Processing the unregister request for channel <#${channelId}>...`,
+    ),
+    components: [],
+  };
+}
 
 /**
  * The decision for a click on an unregister confirmation button. The router
@@ -645,13 +677,15 @@ export async function decideUnregisterClick(
   }
 
   // Refuse a confirm whose registration generation no longer matches the current
-  // one. The button's `gen` is the port captured when the dialog was shown; if the
-  // channel was unregistered and re-registered since (reassigning the port), this
-  // stale confirmation would otherwise purge the NEW instance and its data. Treat
-  // the mismatch as "not registered" (the registration it referred to is gone).
-  if (gen !== registrationGen(status)) {
+  // one. The button's `gen` is the per-registration nonce captured when the dialog
+  // was shown; if the channel was unregistered and re-registered since (new nonce),
+  // this stale confirmation would otherwise purge the NEW instance and its data.
+  // Treat the mismatch as "not registered" (the registration it referred to is
+  // gone). The nonce changes on every (un)register, unlike the reusable port.
+  const currentGen = registrationGen(deps, channelId);
+  if (gen !== currentGen) {
     deps.log(
-      `[channel] unregister confirm for ${channelId} ignored: stale registration (button gen ${gen} != current ${registrationGen(status)})`,
+      `[channel] unregister confirm for ${channelId} ignored: stale registration (button gen ${gen} != current ${currentGen})`,
     );
     return {
       kind: "notRegistered",
