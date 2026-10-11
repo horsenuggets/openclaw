@@ -6,6 +6,7 @@ import {
   clearUserPreferences,
   readEphemeralCommands,
   readUserPreferences,
+  removeUserPreferences,
   setEphemeralCommands,
   userPreferencesPath,
   writeUserPreferences,
@@ -170,4 +171,15 @@ it("clearing preferences resets ephemeral back to the default", () => {
 it("setEphemeralCommands returns false when the write fails", () => {
   fs.writeFileSync(path.join(instancesDir, "shared"), "not a directory");
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(false);
+});
+
+it("removeUserPreferences hard-deletes the file, leaving no tombstone", () => {
+  writeUserPreferences(instancesDir, CHANNEL, { ephemeralCommands: false });
+  const file = userPreferencesPath(instancesDir, CHANNEL);
+  expect(fs.existsSync(file)).toBe(true);
+  removeUserPreferences(instancesDir, CHANNEL);
+  // No file remains (unlike clearUserPreferences, which writes an empty tombstone).
+  expect(fs.existsSync(file)).toBe(false);
+  // Idempotent: removing again on an absent file is fine.
+  expect(() => removeUserPreferences(instancesDir, CHANNEL)).not.toThrow();
 });

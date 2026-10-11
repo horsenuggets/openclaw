@@ -166,6 +166,34 @@ describe("createNoticeDebouncer", () => {
     expect(other).toHaveBeenCalledTimes(2);
   });
 
+  it("suppressChannel no-ops triggers for the channel until unsuppressed", () => {
+    const h = harness();
+    const d = createNoticeDebouncer({
+      windowMs: 5000,
+      setTimer: h.setTimer,
+      clearTimer: h.clearTimer,
+    });
+    const a = vi.fn();
+    const other = vi.fn();
+    // Open a window, then suppress the channel (teardown begins): the existing
+    // window is cancelled and further triggers for the channel do nothing.
+    d.trigger("A:u1", a);
+    expect(a).toHaveBeenCalledTimes(1);
+    d.suppressChannel("A");
+    expect(d.activeCount()).toBe(0);
+    d.trigger("A:u1", a); // suppressed: no send, no window
+    d.trigger("A:u2", a); // suppressed too
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(d.activeCount()).toBe(0);
+    // A different channel is unaffected.
+    d.trigger("B:u1", other);
+    expect(other).toHaveBeenCalledTimes(1);
+    // Lifting suppression lets the channel trigger again.
+    d.unsuppressChannel("A");
+    d.trigger("A:u1", a);
+    expect(a).toHaveBeenCalledTimes(2);
+  });
+
   it("cancelAll drops every pending window (shutdown)", () => {
     const h = harness();
     const d = createNoticeDebouncer({

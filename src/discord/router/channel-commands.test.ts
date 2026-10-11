@@ -73,24 +73,28 @@ describe("parseUserMention", () => {
 });
 
 describe("parseUnregisterCustomId", () => {
-  it("round-trips confirm and cancel ids without confusing the shared prefix", () => {
-    const confirm = buildUnregisterCustomId("confirm", "C1", "U1");
-    const cancel = buildUnregisterCustomId("cancel", "C1", "U1");
+  it("round-trips confirm and cancel ids (with the registration gen) without confusing the shared prefix", () => {
+    const confirm = buildUnregisterCustomId("confirm", "C1", "U1", "18001");
+    const cancel = buildUnregisterCustomId("cancel", "C1", "U1", "18001");
     expect(parseUnregisterCustomId(confirm)).toEqual({
       kind: "confirm",
       channelId: "C1",
       initiatorId: "U1",
+      gen: "18001",
     });
     expect(parseUnregisterCustomId(cancel)).toEqual({
       kind: "cancel",
       channelId: "C1",
       initiatorId: "U1",
+      gen: "18001",
     });
   });
 
   it("returns null for unrelated ids", () => {
-    expect(parseUnregisterCustomId("something-else:C:U")).toBeNull();
+    expect(parseUnregisterCustomId("something-else:C:U:1")).toBeNull();
     expect(parseUnregisterCustomId("chan-unreg:onlytwo")).toBeNull();
+    // A legacy 3-segment id (no gen) no longer parses.
+    expect(parseUnregisterCustomId("chan-unreg:C1:U1")).toBeNull();
   });
 });
 
@@ -474,7 +478,9 @@ describe("handleChannelCommand unregister", () => {
     const { embed, components } = embedOf(replies[0].payload);
     expect(embed.description).toContain("Are you sure");
     const button = components?.[0].components[0];
-    expect(button?.custom_id).toBe(buildUnregisterCustomId("confirm", "123456789012345678", "U1"));
+    expect(button?.custom_id).toBe(
+      buildUnregisterCustomId("confirm", "123456789012345678", "U1", "1"),
+    );
     expect(button?.style).toBe(4);
     expect(button?.label).toBe("Confirm Unregister");
   });
@@ -561,7 +567,7 @@ describe("decideUnregisterClick", () => {
   it("rejects clicks from anyone but the initiator", async () => {
     const unregister = vi.fn();
     const result = await decideUnregisterClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U2" },
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U2" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
     expect(result.kind).toBe("notForYou");
@@ -574,7 +580,7 @@ describe("decideUnregisterClick", () => {
   it("defers teardown to perform() and shows an interim state on owner confirm", async () => {
     const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
     const result = await decideUnregisterClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U1" },
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
     expect(result.kind).toBe("confirm");
@@ -598,7 +604,7 @@ describe("decideUnregisterClick", () => {
   it("cancels without touching provisioning", async () => {
     const unregister = vi.fn();
     const result = await decideUnregisterClick(
-      { customId: buildUnregisterCustomId("cancel", "C1", "U1"), clickerId: "U1" },
+      { customId: buildUnregisterCustomId("cancel", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
     expect(unregister).not.toHaveBeenCalled();
@@ -614,7 +620,10 @@ describe("decideUnregisterClick", () => {
     // owner nor admin, so the click must not remove anything.
     const unregister = vi.fn();
     const result = await decideUnregisterClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "STRANGER"), clickerId: "STRANGER" },
+      {
+        customId: buildUnregisterCustomId("confirm", "C1", "STRANGER", "1"),
+        clickerId: "STRANGER",
+      },
       makeDeps({
         describeInstance: owned,
         isAdmin: async () => false,
@@ -633,12 +642,31 @@ describe("decideUnregisterClick", () => {
 
   it("reports nothing to remove when the channel is already unregistered", async () => {
     const result = await decideUnregisterClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U1" },
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({ describeInstance: () => null }),
     );
     expect(result.kind).toBe("notRegistered");
     if (result.kind === "notRegistered") {
       expect(result.update.embeds[0].description).toContain("nothing to remove");
+    }
+  });
+
+  it("refuses a stale confirm whose registration generation no longer matches", async () => {
+    // The button was issued when the channel was on port 1 (gen "1"), but the
+    // channel has since been re-registered on a new port (gen "2"). Confirming the
+    // stale dialog must NOT purge the new instance.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
+      makeDeps({
+        describeInstance: () => ({ port: 2, ownerId: "U1", onboarded: true }),
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).not.toHaveBeenCalled();
+    expect(result.kind).toBe("notRegistered");
+    if (result.kind === "notRegistered") {
+      expect(result.update.embeds[0].description).toContain("out of date");
     }
   });
 });

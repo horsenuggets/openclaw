@@ -86,17 +86,29 @@ export function writeUserPreferences(
 }
 
 /**
- * Reset a channel's preferences to defaults, e.g. on unregister. Writes an empty
- * tombstone rather than deleting the file: a plain delete would re-expose the
- * legacy `.onboarding.json` fallback in {@link readUserPreferences}, so a channel
- * an older release left lifecycle-enabled would resurrect that setting when it is
- * re-registered (the provisioner preserves the instance dir and its
- * `.onboarding.json`). The empty file suppresses the fallback so a re-registered
- * channel starts from defaults. Throws on a genuine write failure so the caller
- * can log it rather than clearing silently.
+ * Reset a channel's preferences to defaults by writing an empty tombstone rather
+ * than deleting the file: a plain delete would re-expose the legacy
+ * `.onboarding.json` fallback in {@link readUserPreferences}, so a channel an
+ * older release left lifecycle-enabled would resurrect that setting. Use this when
+ * the instance directory (and its legacy `.onboarding.json`) is PRESERVED. Throws
+ * on a genuine write failure so the caller can log it rather than clearing
+ * silently. For a destructive teardown that wipes the instance dir, prefer
+ * {@link removeUserPreferences}, which leaves no metadata behind.
  */
 export function clearUserPreferences(instancesDir: string, channelId: string): void {
   writeUserPreferences(instancesDir, channelId, {});
+}
+
+/**
+ * Hard-delete a channel's preferences file, leaving no metadata behind. Safe only
+ * for a DESTRUCTIVE teardown (`purge`/`/channel unregister`) that already wiped
+ * the instance directory, so the legacy `.onboarding.json` fallback source is gone
+ * too and a plain delete cannot resurrect a stale setting. Idempotent: a missing
+ * file is fine. Unlike {@link clearUserPreferences} it does not leave an empty
+ * tombstone, so the promised "all data removed" wipe really removes everything.
+ */
+export function removeUserPreferences(instancesDir: string, channelId: string): void {
+  fs.rmSync(userPreferencesPath(instancesDir, channelId), { force: true });
 }
 
 /**

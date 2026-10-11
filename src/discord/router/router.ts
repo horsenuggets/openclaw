@@ -51,7 +51,7 @@ import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { createNoticeDebouncer } from "./notice-debounce.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
-import { clearUserPreferences } from "./preferences-store.js";
+import { removeUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
@@ -515,31 +515,41 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           return result;
         },
         unregister: async (p) => {
-          // Drop any pending unauthorized-notice windows for the channel BEFORE
-          // awaiting the Docker teardown, not after: a purge can take longer than
-          // the 5s debounce window, so a queued trailing notice could otherwise
-          // fire mid-teardown and post using the captured former owner/status. If
-          // teardown fails, a later offending message simply opens a fresh window.
-          unauthorizedNoticeDebouncer.cancelChannel(p.channelId);
-          const result = await daemonProvisioning.unregister(p);
-          if (result.ok) {
-            // Preferences live outside the instance dir the provisioner tears down
-            // (so the router can write them under a read-only instances mount), so
-            // reset them here, scoped to exactly the channel that was unregistered.
-            // This must not live in reloadInstances' reconciliation: that treats any
-            // instance missing from a fresh scan (e.g. a transiently unreadable
-            // `.port`) as removed and would clear a live channel's preferences.
-            try {
-              clearUserPreferences(config.instancesDir, p.channelId);
-            } catch (err) {
-              runtime.error(
-                `[router] failed to clear preferences for unregistered channel ${p.channelId}: ${String(err)}`,
-              );
+          // Suppress unauthorized-notice windows for the channel for the WHOLE
+          // teardown, not just cancel them once up front. The instance stays in the
+          // `instances` map until this request succeeds and we reloadInstances, so
+          // an unauthorized message during a slow purge could otherwise open a NEW
+          // window whose trailing send fires after teardown using the former
+          // owner/status. Suppression cancels the current windows and no-ops any
+          // trigger for this channel until we lift it below.
+          unauthorizedNoticeDebouncer.suppressChannel(p.channelId);
+          try {
+            const result = await daemonProvisioning.unregister(p);
+            if (result.ok) {
+              // Hard-delete the channel's preferences (not a tombstone): the purge
+              // wiped the instance dir and its legacy `.onboarding.json`, so there is
+              // nothing left to fall back to, and the "all data removed" promise must
+              // leave no per-channel metadata behind. Scoped to exactly this channel;
+              // this must not live in reloadInstances' reconciliation, which treats a
+              // transiently unreadable instance as removed and would wipe a live
+              // channel's preferences.
+              try {
+                removeUserPreferences(config.instancesDir, p.channelId);
+              } catch (err) {
+                runtime.error(
+                  `[router] failed to remove preferences for unregistered channel ${p.channelId}: ${String(err)}`,
+                );
+              }
+              reloadInstances();
+              rotateConnectionRegistrationKey(p.channelId);
             }
-            reloadInstances();
-            rotateConnectionRegistrationKey(p.channelId);
+            return result;
+          } finally {
+            // Lift suppression whether teardown succeeded or failed. On success the
+            // channel is gone, so no new denials will arise; on failure a later
+            // offending message legitimately opens a fresh window again.
+            unauthorizedNoticeDebouncer.unsuppressChannel(p.channelId);
           }
-          return result;
         },
       }
     : stubProvisioning;

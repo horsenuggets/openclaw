@@ -1246,7 +1246,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1319,7 +1319,7 @@ describe("discord router channel-delete cleanup", () => {
         token: "tok",
         channel_id: CHANNEL,
         guild_id: GUILD,
-        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
         member: { user: { id: OWNER } },
       });
     // First click starts teardown (now blocked on the gate). Second click arrives
@@ -1397,7 +1397,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1409,7 +1409,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:18795` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1463,7 +1463,7 @@ describe("discord router channel-delete cleanup", () => {
       channel_id: CHANNEL,
       guild_id: GUILD,
       // custom_id names OWNER as initiator, but a different user clicks.
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:18795` },
       member: { user: { id: "444444444444444444" } },
     });
     await vi.advanceTimersByTimeAsync(0);

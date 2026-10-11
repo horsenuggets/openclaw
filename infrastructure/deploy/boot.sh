@@ -191,6 +191,23 @@ else
         echo "  instance data): openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
         exit 0
       fi
+      # Re-read the current .port NOW that we hold the lock. `port` was captured in
+      # ASSIGNMENTS before the lock, so a purge + re-register that ran while we
+      # waited could have changed it (or removed the channel entirely). Starting
+      # Compose with the stale value would recreate the container on the wrong port
+      # while the router discovers the new one. Use the on-disk value and skip the
+      # channel if its registration disappeared or the port is malformed.
+      current_port=$(cat "$INSTANCES_DIR/$channelId/.port" 2>/dev/null || true)
+      if ! printf '%s' "$current_port" | grep -Eq '^[0-9]+$'; then
+        echo "Skipping channel $channelId: no valid .port after acquiring the lock" >&2
+        echo "  (registration was removed or changed while booting)." >&2
+        exit 0
+      fi
+      if [ "$current_port" != "$port" ]; then
+        echo "Channel $channelId port changed under the lock ($port -> $current_port);" >&2
+        echo "  using the current value." >&2
+        port="$current_port"
+      fi
       # Re-assert the instance's proxy URLs from the current agent-bridge env before
       # starting it. A deploy that changed the bridge gateway IP (e.g. the
       # host-networking -> bridge migration) otherwise leaves the on-disk config

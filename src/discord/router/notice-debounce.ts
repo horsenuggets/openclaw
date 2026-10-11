@@ -42,6 +42,17 @@ export type NoticeDebouncer = {
   cancelChannel: (channelId: string) => void;
   /** Drop every pending window (e.g. on router shutdown). */
   cancelAll: () => void;
+  /**
+   * Suppress a channel while its teardown is in progress: cancels its current
+   * windows AND makes {@link trigger} a no-op for its keys until
+   * {@link unsuppressChannel}. The instance stays in the router's `instances` map
+   * until unregister completes, so an unauthorized message during a slow purge
+   * could otherwise open a NEW window whose trailing send fires after teardown
+   * using the former owner. Suppressing closes that window.
+   */
+  suppressChannel: (channelId: string) => void;
+  /** Lift a channel's teardown suppression (also cancels any residual windows). */
+  unsuppressChannel: (channelId: string) => void;
   /** Number of keys with an active window. Exposed for tests. */
   activeCount: () => number;
 };
@@ -66,6 +77,24 @@ export function createNoticeDebouncer(opts: {
     });
   const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
   const entries = new Map<string, Entry>();
+  // Channels whose teardown is in progress; trigger is a no-op for their keys.
+  const suppressed = new Set<string>();
+
+  // Keys are `channelId:userId`; the channel is the part before the first colon.
+  const channelOf = (key: string): string => {
+    const idx = key.indexOf(":");
+    return idx === -1 ? key : key.slice(0, idx);
+  };
+
+  const cancelChannel = (channelId: string): void => {
+    const prefix = `${channelId}:`;
+    for (const [key, entry] of entries) {
+      if (key.startsWith(prefix)) {
+        clearTimer(entry.timer);
+        entries.delete(key);
+      }
+    }
+  };
 
   const onElapse = (key: string): void => {
     const entry = entries.get(key);
@@ -86,6 +115,12 @@ export function createNoticeDebouncer(opts: {
 
   return {
     trigger: (key, send) => {
+      // Ignore denials for a channel whose teardown is in progress: its instance
+      // is about to disappear, so a reply (and especially a trailing one that
+      // could fire after teardown) would use a stale owner/status.
+      if (suppressed.has(channelOf(key))) {
+        return;
+      }
       const entry = entries.get(key);
       if (!entry) {
         entries.set(key, { timer: setTimer(() => onElapse(key), windowMs), pending: false, send });
@@ -104,21 +139,20 @@ export function createNoticeDebouncer(opts: {
         entries.delete(key);
       }
     },
-    cancelChannel: (channelId) => {
-      // Keys are `channelId:userId`; drop every window under this channel.
-      const prefix = `${channelId}:`;
-      for (const [key, entry] of entries) {
-        if (key.startsWith(prefix)) {
-          clearTimer(entry.timer);
-          entries.delete(key);
-        }
-      }
-    },
+    cancelChannel,
     cancelAll: () => {
       for (const entry of entries.values()) {
         clearTimer(entry.timer);
       }
       entries.clear();
+    },
+    suppressChannel: (channelId) => {
+      suppressed.add(channelId);
+      cancelChannel(channelId);
+    },
+    unsuppressChannel: (channelId) => {
+      suppressed.delete(channelId);
+      cancelChannel(channelId);
     },
     activeCount: () => entries.size,
   };

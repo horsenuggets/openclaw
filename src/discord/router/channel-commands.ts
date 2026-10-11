@@ -260,40 +260,55 @@ export function parseUserMention(raw: string | undefined): string | null {
   return /^\d{17,20}$/.test(trimmed) ? trimmed : null;
 }
 
-/** Build a `custom_id` for an unregister confirmation button. */
+/**
+ * Build a `custom_id` for an unregister confirmation button. The trailing `gen`
+ * segment binds the button to the registration it was shown for: the instance's
+ * assigned port, which a re-register reassigns (see docs/deployment.md). Clicking
+ * a stale confirmation after the channel was unregistered and re-registered would
+ * otherwise purge the NEW instance; decideUnregisterClick revalidates `gen`
+ * against the current port and refuses a mismatch. `-` marks an unknown port.
+ */
 export function buildUnregisterCustomId(
   kind: "confirm" | "cancel",
   channelId: string,
   initiatorId: string,
+  gen: string,
 ): string {
   const prefix = kind === "confirm" ? UNREGISTER_CONFIRM_PREFIX : UNREGISTER_CANCEL_PREFIX;
-  return `${prefix}:${channelId}:${initiatorId}`;
+  return `${prefix}:${channelId}:${initiatorId}:${gen}`;
 }
 
 export type UnregisterButton = {
   kind: "confirm" | "cancel";
   channelId: string;
   initiatorId: string;
+  /** Registration generation the button was issued for (the instance port). */
+  gen: string;
 };
 
 /** Parse an unregister button `custom_id`. Returns null for unrelated ids. */
 export function parseUnregisterCustomId(customId: string): UnregisterButton | null {
   const parts = customId.split(":");
-  if (parts.length !== 3) {
+  if (parts.length !== 4) {
     return null;
   }
-  const [prefix, channelId, initiatorId] = parts;
+  const [prefix, channelId, initiatorId, gen] = parts;
   if (prefix === UNREGISTER_CONFIRM_PREFIX) {
-    return { kind: "confirm", channelId, initiatorId };
+    return { kind: "confirm", channelId, initiatorId, gen };
   }
   if (prefix === UNREGISTER_CANCEL_PREFIX) {
-    return { kind: "cancel", channelId, initiatorId };
+    return { kind: "cancel", channelId, initiatorId, gen };
   }
   return null;
 }
 
+/** The registration generation marker for a channel: its current port, or `-`. */
+function registrationGen(status: InstanceStatus | null): string {
+  return status ? String(status.port) : "-";
+}
+
 /** The two-button action row shown under an unregister confirmation embed. */
-function unregisterButtons(channelId: string, initiatorId: string): DiscordActionRow {
+function unregisterButtons(channelId: string, initiatorId: string, gen: string): DiscordActionRow {
   return {
     type: 1,
     components: [
@@ -301,13 +316,13 @@ function unregisterButtons(channelId: string, initiatorId: string): DiscordActio
         type: 2,
         style: 4, // danger
         label: "Confirm Unregister",
-        custom_id: buildUnregisterCustomId("confirm", channelId, initiatorId),
+        custom_id: buildUnregisterCustomId("confirm", channelId, initiatorId, gen),
       },
       {
         type: 2,
         style: 2, // secondary
         label: "Cancel",
-        custom_id: buildUnregisterCustomId("cancel", channelId, initiatorId),
+        custom_id: buildUnregisterCustomId("cancel", channelId, initiatorId, gen),
       },
     ],
   };
@@ -497,7 +512,7 @@ export async function handleChannelCommand(
             "Unregister",
             `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
           ),
-          components: [unregisterButtons(ctx.channelId, ctx.userId)],
+          components: [unregisterButtons(ctx.channelId, ctx.userId, registrationGen(status))],
         },
         { ephemeral: true },
       );
@@ -596,7 +611,7 @@ export async function decideUnregisterClick(
   if (!parsed) {
     return { kind: "ignored" };
   }
-  const { kind, channelId, initiatorId } = parsed;
+  const { kind, channelId, initiatorId, gen } = parsed;
 
   if (params.clickerId !== initiatorId) {
     return { kind: "notForYou", notice: "This confirmation isn't for you." };
@@ -623,6 +638,27 @@ export async function decideUnregisterClick(
         ...registrationReply(
           "Unregister",
           `Channel <#${channelId}> is not registered, so there is nothing to remove.`,
+        ),
+        components: [],
+      },
+    };
+  }
+
+  // Refuse a confirm whose registration generation no longer matches the current
+  // one. The button's `gen` is the port captured when the dialog was shown; if the
+  // channel was unregistered and re-registered since (reassigning the port), this
+  // stale confirmation would otherwise purge the NEW instance and its data. Treat
+  // the mismatch as "not registered" (the registration it referred to is gone).
+  if (gen !== registrationGen(status)) {
+    deps.log(
+      `[channel] unregister confirm for ${channelId} ignored: stale registration (button gen ${gen} != current ${registrationGen(status)})`,
+    );
+    return {
+      kind: "notRegistered",
+      update: {
+        ...registrationReply(
+          "Unregister",
+          `This confirmation is out of date: channel <#${channelId}> was re-registered since the dialog was shown. Run \`/channel unregister\` again if you still want to remove it.`,
         ),
         components: [],
       },
