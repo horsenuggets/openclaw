@@ -7,12 +7,13 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Discord router: the owner gate on `/connections`, `/secret`, and `/lifecycle` now also
-  applies on an unregistered channel. Previously these commands skipped the gate when the
-  channel had no registered instance and fell through to a "This channel is not registered
-  yet" reply, so a non-owner learned the registration state instead of being denied. They
-  now return the standard permission notice to anyone who is not the channel owner,
-  registered or not; the only exceptions remain `/debug` (admin only) and `/channel`
-  (admin, anywhere).
+  applies on an unregistered channel, across both the slash and the text-command
+  (tester-bot) paths. Previously these commands skipped the gate when the channel had no
+  registered instance and fell through to a "This channel is not registered yet" reply, so
+  a non-owner learned the registration state instead of being denied. They now return the
+  standard permission notice to anyone who is not the channel owner, registered or not (a
+  1:1 DM still reaches the register-first guidance, since the caller is its own owner);
+  the only exceptions remain `/debug` (admin only) and `/channel` (admin, anywhere).
 - Discord router: `/debug` now has an admin-gated text-command path so an automation or
   tester bot that cannot invoke slash commands can drive it (`/debug ...` or `//debug ...`
   as a plain message). Added a `secrettest <value> [name]` debug subcommand that hands the

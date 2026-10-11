@@ -368,6 +368,58 @@ describe("discord router channel-delete cleanup", () => {
     );
   });
 
+  it("denies a text /connections in an unregistered guild channel instead of the not-registered hint", async () => {
+    // The text-command equivalent of the slash owner gate: an unregistered guild
+    // channel has no owner, so a non-owner's `/conn list` must get the standard
+    // unauthorized notice, never the "not registered yet" hint that would leak the
+    // channel's registration state. UNREG is absent from the instances map.
+    const UNREG = "000000000000000000";
+    const STRANGER = "444444444444444444";
+    const posts: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.includes(`/channels/${UNREG}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(init);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "unreg-conn-msg",
+      author: { id: STRANGER },
+      guild_id: GUILD,
+      channel_id: UNREG,
+      content: "/conn list",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes(`denied /connections from ${STRANGER}`))).toBe(true);
+    expect(posts).toHaveLength(1);
+    const payload = payloadOf(posts[0]);
+    expect(payload.embeds?.[0].description).toContain("not authorized");
+    expect(payload.embeds?.[0].description).not.toContain("not registered");
+    expect(payload.message_reference?.message_id).toBe("unreg-conn-msg");
+  });
+
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
     // OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS lets an E2E driver bot exercise the
     // unauthorized-access denial: unlike a trusted conversational bot it does not

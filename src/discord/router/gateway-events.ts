@@ -380,13 +380,15 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         `[router] /connections ${connectCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId}, token=${hasToken})`,
       );
     };
-    // Owner-gate on a registered channel: /connections reads and writes the
-    // channel's stored credentials, so only its owner may drive it (the slash
-    // path gates via runForOwner; this is the text-command equivalent, and it
-    // fails closed for a group DM since a non-owner participant is not the owner).
-    // An unregistered channel has no owner or stored connections, so the handler's
-    // own not-registered reply is safe to reach ungated.
-    if (authorizedInstanceKey !== null) {
+    // Owner-gate the caller: /connections reads and writes the channel's stored
+    // credentials, so only its owner may drive it (the slash path gates via
+    // runForOwner; this is the text-command equivalent). Gate in any guild channel,
+    // registered or not, and in a registered DM. An unregistered guild channel has
+    // no owner, so the gate fails closed and denies with the standard notice rather
+    // than leaking the "not registered yet" hint to a non-owner. Only an
+    // unregistered DM falls through ungated, so the 1:1 owner still gets the
+    // handler's "register first" guidance instead of a denial against themselves.
+    if (guildId || authorizedInstanceKey !== null) {
       const status = describeInstance(channelId);
       void isAuthorizedForChannel(channelId, authorId, {
         describeInstance: () => status,
