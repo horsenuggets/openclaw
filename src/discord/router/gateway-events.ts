@@ -793,8 +793,10 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
   // The /debug command runs an admin-only internal subcommand parsed from its
   // single free-text `command` option. Gating is purely on admin identity (not
   // channel ownership). Replies are ephemeral by default, but honor the channel's
-  // `ephemeralCommands` preference. Defer first because the admin check can hit
-  // the Discord role API and exceed the ~3s window.
+  // `ephemeralCommands` preference. The admin check runs BEFORE the first
+  // interaction response so a denial stays ephemeral even on a public channel
+  // (see the detailed note at the defer below); the role lookup is a single call,
+  // well inside Discord's ~3s window.
   if (interactionData?.name === DEBUG_COMMAND_SPEC.name) {
     const userId = d.member?.user?.id ?? d.user?.id ?? "";
     const commandInput = String(
@@ -1358,39 +1360,52 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
       })
       .catch((err) => runtime.error(`[router] button followup failed: ${String(err)}`));
 
+  // The custom_id alone tells us synchronously whether this click is ours and
+  // whether the clicker is the initiator, with no network call. Use that to
+  // acknowledge the interaction BEFORE the async authorization inside
+  // decideUnregisterClick (which awaits deps.isAdmin, a Discord member lookup,
+  // for a non-owner confirm). Acknowledging first guarantees we beat Discord's
+  // ~3s interaction deadline even when the role lookup is slow; without it the
+  // type-6/7 ack would land only after that await and the interaction could
+  // expire. A wrong-clicker click is answered with its own ephemeral (type 4),
+  // leaving the confirmation message untouched for the real initiator.
+  if (clickerId !== parsed.initiatorId) {
+    ephemeralReply("This confirmation isn't for you.");
+    return;
+  }
+
+  // Acknowledge this valid-initiator click up front with a deferred message
+  // update (type 6): it does not change the message yet (so the buttons stay
+  // until the edit below), but it satisfies the deadline regardless of how long
+  // the authorization and teardown take. Every branch below then edits @original.
+  const ack = fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: 6 }),
+  }).catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`));
+
   void (async () => {
+    await ack;
     const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
-    if (outcome.kind === "ignored") {
-      return;
-    }
-    if (outcome.kind === "notForYou") {
-      // Leave the confirmation message untouched for the real initiator.
-      ephemeralReply(outcome.notice);
+    // notForYou cannot occur here (initiator already matched above); ignored is
+    // impossible too (parsed is non-null). Both are handled defensively.
+    if (outcome.kind === "ignored" || outcome.kind === "notForYou") {
       return;
     }
     if (outcome.kind === "confirm") {
       // Barrier against a double-click racing ahead of the button removal: run
       // teardown at most once per channel. A second click lands here while the
-      // first is still mid-flight and is acknowledged without re-running it.
+      // first is still mid-flight and is acknowledged (via its own type-6 ack
+      // above) without re-running teardown.
       if (unregisterInFlight.has(outcome.channelId)) {
-        ephemeralReply("This channel is already being unregistered. Hang tight.");
         return;
       }
       unregisterInFlight.add(outcome.channelId);
-      // Immediately replace the message (type 7 UPDATE_MESSAGE) to drop the
-      // buttons and show the interim "unregistering..." state, so the click is
-      // acknowledged at once and cannot be clicked again. The interim embed
-      // reuses the registration icon already attached to the message, so it needs
-      // no re-upload (the callback endpoint cannot multipart-upload one).
-      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: 7,
-          data: { embeds: outcome.interim.embeds, components: outcome.interim.components },
-        }),
-      }).catch((err) => runtime.error(`[router] button interim update failed: ${String(err)}`));
       try {
+        // Drop the buttons and show the interim "unregistering..." state at once
+        // (editing the already-acked message), then edit again with the final
+        // result after teardown completes.
+        await editMessage(outcome.interim);
         const final = await outcome.perform();
         await editMessage(final);
       } finally {
@@ -1398,15 +1413,10 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
       }
       return;
     }
-    // cancelled / denied / notRegistered: a single message replacement. Defer the
-    // update (type 6) first so a slow permission check cannot blow Discord's ~3s
-    // window, then edit the message (the editor uploads the embed's icon, which
-    // may differ from the one already on the message, e.g. the Log denial icon).
-    await fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: 6 }),
-    }).catch((err) => runtime.error(`[router] button defer failed: ${String(err)}`));
+    // cancelled / denied / notRegistered: a single message replacement. The
+    // interaction is already acked (type 6 above), so just edit the message (the
+    // editor uploads the embed's icon, which may differ from the one already on
+    // the message, e.g. the Log denial icon).
     await editMessage(outcome.update);
   })();
 }

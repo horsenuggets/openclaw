@@ -1253,12 +1253,17 @@ describe("discord router channel-delete cleanup", () => {
       await vi.advanceTimersByTimeAsync(0);
     }
 
-    // Immediate UPDATE_MESSAGE ack (type 7) drops the buttons and shows the
-    // interim "unregistering..." state, then the instance is removed and the
-    // original confirmation message is edited to the final result (no buttons).
-    const interim = callbacks.find((c) => c.type === 7);
-    expect(interim?.data?.components).toEqual([]);
-    expect(interim?.data?.embeds?.[0]?.description).toContain("Unregistering channel");
+    // The click is acknowledged up front with a deferred message update (type 6)
+    // BEFORE the async authorization, so a slow role lookup cannot blow Discord's
+    // ~3s deadline. The message is then edited (via @original) twice: first to the
+    // interim "unregistering..." state (buttons dropped), then to the final result
+    // after the instance is removed (still no buttons).
+    const ack = callbacks.find((c) => c.type === 6);
+    expect(ack).toBeDefined();
+    const interim = patches.find((p) =>
+      p.embeds?.[0]?.description?.includes("Unregistering channel"),
+    );
+    expect(interim?.components).toEqual([]);
     expect(unregisterCalls).toEqual([CHANNEL]);
     const patch = patches.at(-1);
     expect(patch?.components).toEqual([]);
