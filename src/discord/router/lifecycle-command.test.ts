@@ -16,6 +16,7 @@ describe("resolveLifecycleCommand", () => {
     expect(r.newValue).toBe(true);
     expect(r.state).toBe("enabled");
     expect(r.description).toContain("already `enabled`");
+    expect(r.description).toContain("nothing changed");
   });
 
   it("disables when currently on", () => {
@@ -31,6 +32,7 @@ describe("resolveLifecycleCommand", () => {
     expect(r.newValue).toBe(false);
     expect(r.state).toBe("disabled");
     expect(r.description).toContain("already `disabled`");
+    expect(r.description).toContain("nothing changed");
   });
 
   it("is a status query (no write) when enabled with no arg", () => {

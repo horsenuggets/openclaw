@@ -333,7 +333,9 @@ type EmbedDispatch = {
  * the response), or dropped when its file cannot be read. Works for both the
  * initial reply (cold cache uploads) and follow-up edits (warm cache reuses).
  */
-async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; status: number }> {
+async function dispatchEmbed(
+  request: EmbedDispatch,
+): Promise<{ ok: boolean; status: number; id?: string }> {
   const now = Date.now();
   const needed = [...new Set(request.attachments ?? [])];
 
@@ -383,7 +385,7 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; sta
       headers: { ...authHeader, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return { ok: resp.ok, status: resp.status };
+    return { ok: resp.ok, status: resp.status, id: await readMessageId(resp) };
   }
 
   payload.attachments = toUpload.map((file, index) => ({ id: index, filename: file.filename }));
@@ -399,10 +401,18 @@ async function dispatchEmbed(request: EmbedDispatch): Promise<{ ok: boolean; sta
     headers: authHeader,
     body: form,
   });
+  // Read the body once and reuse it for both icon caching and the message id, since
+  // a Response body can only be consumed a single time.
+  let body: { id?: string; attachments?: { filename?: string; url?: string }[] } | undefined;
   if (resp.ok) {
-    await cacheUploadedIcons(resp, toUpload, now);
+    body = await resp.json().catch(() => undefined);
+    cacheUploadedIcons(body?.attachments, toUpload, now);
   }
-  return { ok: resp.ok, status: resp.status };
+  return {
+    ok: resp.ok,
+    status: resp.status,
+    id: typeof body?.id === "string" ? body.id : undefined,
+  };
 }
 
 /**
@@ -413,7 +423,7 @@ export async function sendEmbedMessage(
   token: string,
   channelId: string,
   message: EmbedMessage,
-): Promise<{ ok: boolean; status: number }> {
+): Promise<{ ok: boolean; status: number; id?: string }> {
   return dispatchEmbed({
     url: `${DISCORD_API}${Routes.channelMessages(channelId)}`,
     method: "POST",
@@ -469,25 +479,54 @@ export async function editInteractionContentReply(
   return { ok: resp.ok, status: resp.status };
 }
 
-/** Cache CDN URLs from the send response for the icons we just uploaded. */
-async function cacheUploadedIcons(
-  resp: Response,
+/** Cache CDN URLs from the (already-parsed) send response for icons just uploaded. */
+function cacheUploadedIcons(
+  attachments: { filename?: string; url?: string }[] | undefined,
   uploaded: { filename: string; data: Buffer }[],
   now: number,
-): Promise<void> {
-  try {
-    const body = (await resp.json()) as {
-      attachments?: { filename?: string; url?: string }[];
-    };
-    const names = new Set(uploaded.map((file) => file.filename));
-    for (const att of body.attachments ?? []) {
-      if (att.filename && att.url && names.has(att.filename)) {
-        cdnCache.set(att.filename, { url: att.url, expiresAt: cdnExpiry(att.url, now) });
-      }
+): void {
+  const names = new Set(uploaded.map((file) => file.filename));
+  for (const att of attachments ?? []) {
+    if (att.filename && att.url && names.has(att.filename)) {
+      cdnCache.set(att.filename, { url: att.url, expiresAt: cdnExpiry(att.url, now) });
     }
-  } catch {
-    // Response body unreadable; skip caching (the next send re-uploads).
   }
+}
+
+/** Best-effort extraction of the created/edited message id from a JSON response. */
+async function readMessageId(resp: Response): Promise<string | undefined> {
+  if (!resp.ok) {
+    return undefined;
+  }
+  try {
+    const body = (await resp.json()) as { id?: string };
+    return typeof body.id === "string" ? body.id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Edit a channel message's embeds/components in place, uploading referenced icons
+ * the same way a channel post does. Used by the `/debug unregisterflow` preview to
+ * walk one message through the confirm -> interim -> final states, mirroring what
+ * the real two-phase unregister button does to its confirmation message.
+ */
+export async function editChannelEmbedMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+  message: { embeds: DiscordEmbed[]; attachments?: string[]; components?: DiscordActionRow[] },
+): Promise<{ ok: boolean; status: number }> {
+  return dispatchEmbed({
+    url: `${DISCORD_API}${Routes.channelMessages(channelId)}/${messageId}`,
+    method: "PATCH",
+    authToken: token,
+    embeds: message.embeds,
+    attachments: message.attachments,
+    components: message.components,
+    forceComponents: true,
+  });
 }
 
 /**

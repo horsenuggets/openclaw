@@ -91,7 +91,14 @@ export type DebugResult =
    * (it reads the current value, writes `desired`, and picks the embed), so this
    * module stays free of I/O.
    */
-  | { kind: "ephemeral"; desired: boolean | null };
+  | { kind: "ephemeral"; desired: boolean | null }
+  /**
+   * The `unregisterflow` preview. Asks the router to walk one posted message
+   * through the unregister confirm -> interim -> final render states, mirroring the
+   * real two-phase button, so the UX can be inspected without a live click.
+   * `channelId` is an explicit target, or null to use the command's own channel.
+   */
+  | { kind: "unregisterflow"; channelId: string | null };
 
 /** Inputs handed to a subcommand's `run`. */
 export type DebugRunContext = {
@@ -372,6 +379,26 @@ const ephemeralSubcommand: DebugSubcommand = {
   },
 };
 
+/** A Discord snowflake token (17-20 digits), for the optional channel argument. */
+const SNOWFLAKE_RE = /^\d{17,20}$/;
+
+const unregisterFlowSubcommand: DebugSubcommand = {
+  name: "unregisterflow",
+  usage: "unregisterflow [channelId]",
+  description:
+    "Preview the two-phase unregister button flow (confirm -> interim -> final) in this channel, or a given channel id, without actually unregistering anything.",
+  run: ({ args }) => {
+    const raw = args[0];
+    if (raw !== undefined && raw !== "" && !SNOWFLAKE_RE.test(raw)) {
+      return debugNotice(
+        "Invalid Channel Id",
+        `\`${clamp(raw, MAX_ECHOED_NAME_CHARS)}\` is not a valid channel id. Pass a 17-20 digit id, or omit it to use this channel.`,
+      );
+    }
+    return { kind: "unregisterflow", channelId: raw && raw !== "" ? raw : null };
+  },
+};
+
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
@@ -384,6 +411,7 @@ export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
   echoSubcommand,
   ephemeralSubcommand,
   secretTestSubcommand,
+  unregisterFlowSubcommand,
   helpSubcommand,
 ];
 

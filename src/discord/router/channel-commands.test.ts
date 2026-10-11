@@ -4,6 +4,7 @@ import {
   type ChannelReplyPayload,
   type InstanceStatus,
   buildUnregisterCustomId,
+  buildUnregisterFlowPreview,
   decideUnregisterClick,
   handleChannelCommand,
   isUnregisterConfirmArg,
@@ -726,5 +727,26 @@ describe("decideUnregisterClick", () => {
     expect(unregister).not.toHaveBeenCalled();
     expect(final.embeds[0].description).toContain("out of date");
     expect(final.components).toEqual([]);
+  });
+});
+
+describe("buildUnregisterFlowPreview", () => {
+  it("builds confirm (disabled buttons) -> interim (no buttons) -> final (no buttons)", () => {
+    const preview = buildUnregisterFlowPreview("C9", "U9");
+    // Confirm stage shows the prompt with the buttons present but disabled so the
+    // preview is not clickable.
+    const buttons = preview.confirm.components[0]?.components ?? [];
+    expect(buttons.length).toBe(2);
+    expect(buttons.every((b) => b.disabled === true)).toBe(true);
+    expect(preview.confirm.embeds[0].description).toContain("Are you sure");
+
+    // Interim drops the buttons and announces teardown is underway.
+    expect(preview.interim.components).toEqual([]);
+    expect(preview.interim.embeds[0].description).toContain("Unregistering channel <#C9>");
+
+    // Final has no buttons and states the teardown (reusing the real result wording).
+    expect(preview.final.components).toEqual([]);
+    expect(preview.final.embeds[0].description).toContain("has been unregistered");
+    expect(preview.final.embeds[0].description).toContain("wiped in the background");
   });
 });

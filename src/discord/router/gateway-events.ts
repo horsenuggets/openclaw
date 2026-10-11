@@ -9,6 +9,7 @@ import {
   type DiscordEmbed,
   type InstanceStatus,
   buildUnregisterAckUpdate,
+  buildUnregisterFlowPreview,
   decideUnregisterClick,
   handleChannelCommand,
   parseChannelTextCommand,
@@ -35,10 +36,12 @@ import {
   discordDeleteMessage,
   discordSendEphemeral,
   discordSendReply,
+  editChannelEmbedMessage,
   editInteractionContentReply,
   editInteractionEmbedReply,
+  sendEmbedMessage,
 } from "./discord-api.js";
-import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
+import { type BuiltEmbed, buildCommandResultEmbed, buildEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
 import {
@@ -260,8 +263,13 @@ function applyDebugEphemeral(
 ): { embed: BuiltEmbed; effectiveEphemeral: boolean } {
   const current = readEphemeralCommands(instancesDir, channelId);
   const outcome = resolveEphemeralCommand(current, desired);
-  if (outcome.kind === "status") {
-    return { embed: buildLogEmbed(outcome.description), effectiveEphemeral: current };
+  if (outcome.newValue === undefined) {
+    // Bare status query: a Command Result embed (matching /lifecycle) whose footer
+    // checkbox reflects the current state; nothing is persisted.
+    return {
+      embed: buildCommandResultEmbed(outcome.description, outcome.state),
+      effectiveEphemeral: current,
+    };
   }
   if (!setEphemeralCommands(instancesDir, channelId, outcome.newValue)) {
     runtime.error(`[router] failed to persist ephemeral preference for channel ${channelId}`);
@@ -278,6 +286,53 @@ function applyDebugEphemeral(
     embed: buildCommandResultEmbed(outcome.description, outcome.state),
     effectiveEphemeral: outcome.newValue,
   };
+}
+
+/** Pacing between the preview's confirm -> interim -> final edits, so each state is visible. */
+const UNREGISTER_FLOW_STEP_MS = 2500;
+
+/**
+ * Drive the `/debug unregisterflow` preview: post the (disabled-button)
+ * confirmation into `postChannelId`, then edit that same message to the interim
+ * and final states, mirroring what a real confirm click does to its message. No
+ * instance is touched; this is purely a render preview. Returns the ack embed to
+ * show as the command's own reply. The edits are scheduled fire-and-forget so the
+ * ack lands immediately.
+ */
+function runDebugUnregisterFlow(params: {
+  discordToken: string;
+  postChannelId: string;
+  previewChannelId: string;
+  ownerId: string;
+  runtime: GatewayContext["runtime"];
+}): BuiltEmbed {
+  const { discordToken, postChannelId, previewChannelId, ownerId, runtime } = params;
+  const preview = buildUnregisterFlowPreview(previewChannelId, ownerId);
+  void (async () => {
+    const posted = await sendEmbedMessage(discordToken, postChannelId, preview.confirm);
+    if (!posted.ok || !posted.id) {
+      runtime.error(`[router] unregisterflow preview post failed (${posted.status})`);
+      return;
+    }
+    const messageId = posted.id;
+    const edit = (stage: "interim" | "final") =>
+      editChannelEmbedMessage(discordToken, postChannelId, messageId, preview[stage])
+        .then((res) => {
+          if (!res.ok) {
+            runtime.error(`[router] unregisterflow ${stage} edit failed (${res.status})`);
+          }
+        })
+        .catch((err) =>
+          runtime.error(`[router] unregisterflow ${stage} edit failed: ${String(err)}`),
+        );
+    setTimeout(() => void edit("interim"), UNREGISTER_FLOW_STEP_MS);
+    setTimeout(() => void edit("final"), UNREGISTER_FLOW_STEP_MS * 2);
+  })();
+  return buildEmbed({
+    category: "debug",
+    title: "Unregister Flow Preview",
+    description: `Previewing the two-phase unregister UX for <#${previewChannelId}> in this channel » the confirmation posts, then its buttons drop to the interim state, then the final result. No instance was touched.`,
+  });
 }
 
 /**
@@ -572,6 +627,17 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         // the toggle only persists the preference for later slash replies here;
         // the effectiveEphemeral value is irrelevant for this in-channel reply.
         reply(applyDebugEphemeral(instancesDir, channelId, result.desired, runtime).embed);
+      } else if (result.kind === "unregisterflow") {
+        const previewChannelId = result.channelId ?? channelId;
+        reply(
+          runDebugUnregisterFlow({
+            discordToken,
+            postChannelId: channelId,
+            previewChannelId,
+            ownerId: describeInstance(previewChannelId)?.ownerId ?? authorId,
+            runtime,
+          }),
+        );
       } else if (result.kind === "embeds") {
         void discordSendReply(discordToken, channelId, commandMessageId, {
           embeds: result.embeds,
@@ -722,6 +788,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
  */
 export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionData): void {
   const {
+    discordToken,
     applicationId,
     runtime,
     instancesDir,
@@ -980,6 +1047,19 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: [built.embed],
             attachments: built.attachments,
+          });
+        } else if (result.kind === "unregisterflow") {
+          const previewChannelId = result.channelId ?? interactionChannelId ?? "";
+          const ack = runDebugUnregisterFlow({
+            discordToken,
+            postChannelId: interactionChannelId ?? previewChannelId,
+            previewChannelId,
+            ownerId: describeInstance(previewChannelId)?.ownerId ?? userId,
+            runtime,
+          });
+          res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: [ack.embed],
+            attachments: ack.attachments,
           });
         } else if (result.kind === "embeds") {
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
