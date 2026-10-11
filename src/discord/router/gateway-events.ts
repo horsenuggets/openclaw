@@ -41,7 +41,11 @@ import {
 import { type BuiltEmbed, buildCommandResultEmbed } from "./embed-categories.js";
 import { resolveLifecycleCommand } from "./lifecycle-command.js";
 import { buildLogEmbed } from "./log-embed.js";
-import { readEphemeralCommands, setEphemeralCommands } from "./preferences-store.js";
+import {
+  getEphemeralRevision,
+  readEphemeralCommands,
+  setEphemeralCommands,
+} from "./preferences-store.js";
 import { handleTextCommand, isKnownTextCommand } from "./route-message.js";
 import { isConversationalBot } from "./router-filters.js";
 import { isAuthorizedForChannel } from "./router.js";
@@ -888,7 +892,9 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         // that landed in between (A and B both toggling the same channel) is not
         // clobbered by A's late rollback.
         let toggledEphemeralFrom: boolean | null = null;
-        let toggledEphemeralTo: boolean | null = null;
+        // The preference revision immediately after THIS handler's write; the
+        // rollback only fires if it is still current (no concurrent toggle since).
+        let toggledEphemeralRevision = 0;
         if (result.kind === "ephemeral") {
           const applied = applyDebugEphemeral(
             instancesDir,
@@ -900,7 +906,9 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           deferEphemeral = applied.effectiveEphemeral;
           if (applied.effectiveEphemeral !== currentEphemeral) {
             toggledEphemeralFrom = currentEphemeral;
-            toggledEphemeralTo = applied.effectiveEphemeral;
+            toggledEphemeralRevision = interactionChannelId
+              ? getEphemeralRevision(interactionChannelId)
+              : 0;
           }
         }
         // Roll the ephemeral toggle back to its prior value. The toggle persisted
@@ -911,13 +919,13 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         // so the outer catch can also invoke it; cleared once the defer succeeds.
         const rollbackEphemeral = (): void => {
           if (toggledEphemeralFrom !== null && interactionChannelId) {
-            // Generation-aware: only restore if the stored value is still what we
-            // wrote. If a concurrent toggle changed it in the meantime, that newer
-            // intent wins and we must not clobber it.
-            const now = readEphemeralCommands(instancesDir, interactionChannelId);
-            if (now !== toggledEphemeralTo) {
+            // Revision-aware (not value-aware): only restore if OUR write is still the
+            // latest. If any other toggle persisted since (even to the same value),
+            // the revision advanced and that newer request owns the state now, so we
+            // must not undo it. A value comparison could not tell "my write stands"
+            // from "another request wrote the same value".
+            if (getEphemeralRevision(interactionChannelId) !== toggledEphemeralRevision) {
               toggledEphemeralFrom = null;
-              toggledEphemeralTo = null;
               return;
             }
             if (!setEphemeralCommands(instancesDir, interactionChannelId, toggledEphemeralFrom)) {
@@ -926,7 +934,6 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
               );
             }
             toggledEphemeralFrom = null;
-            toggledEphemeralTo = null;
           }
         };
         // Expose the rollback to the catch so a thrown/aborted defer also undoes the

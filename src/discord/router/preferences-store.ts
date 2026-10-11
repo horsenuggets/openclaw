@@ -133,10 +133,28 @@ export function readEphemeralCommands(instancesDir: string, channelId: string): 
 }
 
 /**
+ * Monotonic per-channel revision, bumped on every successful
+ * {@link setEphemeralCommands}. A caller that persists a value before an async
+ * step (e.g. the `/debug ephemeral` toggle, which must persist before deferring)
+ * can capture the revision and, on a later rollback, restore ONLY if the revision
+ * is unchanged — i.e. no other toggle wrote in between. A plain value comparison
+ * cannot distinguish "my write still stands" from "another request wrote the same
+ * value", so two concurrent `ephemeral off`s could otherwise let the first's
+ * rollback undo the second's success. Process-local; concurrency is within one
+ * router process.
+ */
+const ephemeralRevisions = new Map<string, number>();
+
+/** The current ephemeral-preference revision for a channel (0 if never written). */
+export function getEphemeralRevision(channelId: string): number {
+  return ephemeralRevisions.get(channelId) ?? 0;
+}
+
+/**
  * Persist a channel's ephemeral-command preference, preserving any other stored
  * preferences. Returns whether the write succeeded so the caller can surface a
  * failure (e.g. a read-only mount) rather than reporting a change that did not
- * stick.
+ * stick. Bumps the channel's revision on success (see {@link getEphemeralRevision}).
  */
 export function setEphemeralCommands(
   instancesDir: string,
@@ -147,6 +165,7 @@ export function setEphemeralCommands(
     const prefs: UserPreferences = { ...readUserPreferences(instancesDir, channelId) };
     prefs.ephemeralCommands = value;
     writeUserPreferences(instancesDir, channelId, prefs);
+    ephemeralRevisions.set(channelId, (ephemeralRevisions.get(channelId) ?? 0) + 1);
     return true;
   } catch {
     return false;

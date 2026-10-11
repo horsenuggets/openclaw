@@ -132,21 +132,41 @@ export type ChannelPosition = { id: string; position: number };
  * (Discord orders ascending by `position`, so newest date = smallest position).
  *
  * Only inputs whose `name` is a `YYYY-MM-DD` day channel participate; callers
- * should pre-filter to the Testing category. The set of position slots the day
- * channels currently occupy is preserved and reassigned among them in
- * descending-date order, so non-date channels sharing the category keep their
- * positions and are never collided with. Ties on identical date names fall back
- * to the original relative order (stable).
+ * should pre-filter to the Testing category. The day channels are reassigned to
+ * the position slots they currently occupy, in descending-date order, so non-date
+ * channels sharing the category keep their positions. Ties on identical date names
+ * fall back to the original relative order (stable).
+ *
+ * Discord allows multiple channels to share a `position` and then breaks the tie by
+ * channel id, which is NOT date-ordered. So when day channels share slots, reusing
+ * those slots as-is would leave an ambiguous order (two channels at position 1) and
+ * wrongly report "no change". To force an unambiguous newest-first order, the
+ * TARGET slots are de-duplicated into strictly ascending distinct values: shared
+ * slots are spread out by filling the gaps above the smallest occupied slot (and,
+ * if necessary, just past the largest). This can nudge a non-date channel that sat
+ * between two tied day channels, but an unambiguous date order is the priority and
+ * ties are rare in practice (the Testing category normally has distinct positions).
  *
  * Returns only the entries whose position actually changes; an empty array means
- * the channels are already ordered newest-first and no API call is needed.
+ * the channels are already ordered newest-first with distinct positions and no API
+ * call is needed.
  */
 export function reorderDayChannelsDescending(
   dayChannels: readonly DayChannel[],
 ): ChannelPosition[] {
   const days = dayChannels.filter((c) => isDateChannelName(c.name));
-  // The occupied slots, ascending, get reused so other channels are undisturbed.
-  const slots = days.map((c) => c.position).toSorted((a, b) => a - b);
+  // Distinct target slots, ascending: start from the occupied slots, then ensure
+  // one strictly-increasing distinct value per day channel so the final order is
+  // unambiguous even if the inputs shared positions.
+  const occupied = days.map((c) => c.position).toSorted((a, b) => a - b);
+  const slots: number[] = [];
+  let next = occupied.length > 0 ? occupied[0] : 0;
+  for (let i = 0; i < days.length; i++) {
+    // Prefer the i-th occupied slot, but never repeat or go backwards.
+    const candidate = Math.max(next, occupied[i] ?? next);
+    slots.push(candidate);
+    next = candidate + 1;
+  }
   // Sort by date descending; ties preserve input order for stability.
   const byDateDesc = days
     .map((c, index) => ({ channel: c, index }))
