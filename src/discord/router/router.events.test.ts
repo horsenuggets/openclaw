@@ -368,6 +368,58 @@ describe("discord router channel-delete cleanup", () => {
     );
   });
 
+  it("denies a text /connections in an unregistered guild channel instead of the not-registered hint", async () => {
+    // The text-command equivalent of the slash owner gate: an unregistered guild
+    // channel has no owner, so a non-owner's `/conn list` must get the standard
+    // unauthorized notice, never the "not registered yet" hint that would leak the
+    // channel's registration state. UNREG is absent from the instances map.
+    const UNREG = "000000000000000000";
+    const STRANGER = "444444444444444444";
+    const posts: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.includes(`/channels/${UNREG}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(init);
+          return new Response(JSON.stringify({ id: "notice-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "unreg-conn-msg",
+      author: { id: STRANGER },
+      guild_id: GUILD,
+      channel_id: UNREG,
+      content: "/conn list",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes(`denied /connections from ${STRANGER}`))).toBe(true);
+    expect(posts).toHaveLength(1);
+    const payload = payloadOf(posts[0]);
+    expect(payload.embeds?.[0].description).toContain("not authorized");
+    expect(payload.embeds?.[0].description).not.toContain("not registered");
+    expect(payload.message_reference?.message_id).toBe("unreg-conn-msg");
+  });
+
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
     // OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS lets an E2E driver bot exercise the
     // unauthorized-access denial: unlike a trusted conversational bot it does not
@@ -1265,7 +1317,12 @@ describe("discord router channel-delete cleanup", () => {
       guild: boolean;
       dmType?: number | null;
       ownerKnown: boolean;
+      // Whether the channel has a registered instance. Defaults to true; set false
+      // to exercise the ownerless (unregistered) channel path, which must still deny
+      // a non-owner rather than falling through to a "not registered" reply.
+      registered?: boolean;
     }) => {
+      const registered = params.registered ?? true;
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
       if (params.ownerKnown) {
         fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: OWNER }));
@@ -1287,7 +1344,19 @@ describe("discord router channel-delete cleanup", () => {
         }) as unknown as typeof fetch,
       );
       try {
-        void start(dir);
+        // An unregistered channel has an empty instances map, so instanceKey and
+        // describeInstance resolve to nothing and the owner gate must fail closed.
+        const config = registered
+          ? makeConfig(dir)
+          : {
+              discordToken: "test-token",
+              instances: new Map<string, InstanceConfig>(),
+              instancesDir: "/tmp/does-not-matter",
+              agentTimeoutMs: 1000,
+            };
+        const started = startRouter(config, runtime);
+        startedRouters.push(started);
+        void started;
         await vi.advanceTimersByTimeAsync(0);
         const ws = FakeWebSocket.instances[0];
         ws.emit("open");
@@ -1354,6 +1423,34 @@ describe("discord router channel-delete cleanup", () => {
           expect(proceeded).toBe(true);
         }
       });
+    }
+
+    // Unregistered channel: no owner exists, so the gate fails closed. Every caller
+    // in a guild is denied with the standard unauthorized notice, never the
+    // "not registered" hint (the bug this gate fixes). Both a stranger and the
+    // would-be owner are denied, since an unregistered channel has no owner at all.
+    for (const command of ["lifecycle", "secret", "connections"] as const) {
+      for (const userId of [STRANGER, OWNER]) {
+        it(`denies ${userId === OWNER ? "the owner" : "a stranger"} running ${command} in an unregistered guild channel`, async () => {
+          const { callbacks, patches } = await runInteraction({
+            command,
+            userId,
+            guild: true,
+            ownerKnown: true,
+            registered: false,
+          });
+          // No secret modal opened and no command dispatched.
+          expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
+          const notice = patches.find((patch) =>
+            patch.embeds?.[0]?.description?.includes("not authorized"),
+          );
+          expect(notice).toBeDefined();
+          // The "not registered" hint must never leak to a denied caller.
+          expect(
+            patches.some((patch) => patch.embeds?.[0]?.description?.includes("not registered")),
+          ).toBe(false);
+        });
+      }
     }
 
     for (const command of ["lifecycle", "secret", "connections"] as const) {
