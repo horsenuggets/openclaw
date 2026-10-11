@@ -27,7 +27,7 @@ import {
 } from "./connections-store.js";
 import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
-import { DEBUG_COMMAND_SPEC, debugTextCommandHasSecret } from "./debug-command.js";
+import { DEBUG_COMMAND_SPEC, parseDebugTextCommand } from "./debug-command.js";
 import {
   DISCORD_API,
   discordSend,
@@ -1185,10 +1185,12 @@ async function recoverUnansweredMessages(
       }
       const content = lastUserMsg.content?.trim();
       const msgAttachments = lastUserMsg.attachments ?? [];
-      if (content && debugTextCommandHasSecret(content)) {
-        runtime.log(
-          `[router] skipping recovery for ${channelId}: plaintext /debug secrettest command`,
-        );
+      // Never recover a `/debug` command: it is a host-side command (not an agent
+      // turn), and its arguments are log-sensitive (a secrettest value, or a
+      // credential pasted as any subcommand). Replaying it would route the raw
+      // input into the agent and log it below, so skip every `/debug`.
+      if (content && parseDebugTextCommand(content) !== null) {
+        runtime.log(`[router] skipping recovery for ${channelId}: /debug command`);
         continue;
       }
       if (!content && msgAttachments.length === 0) {

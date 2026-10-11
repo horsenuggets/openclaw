@@ -133,6 +133,8 @@ notice, so a new subcommand only needs its registry entry plus `run`.
   `/debug` referenced in a reply) is reduced to just its sanitized subcommand label
   (`debugSubcommandLabel`) before it reaches the router log, so neither a `secrettest`
   value nor a credential pasted as an unknown subcommand is ever persisted there (the
-  `secrettest` value still stays visible in the channel by design). If reconnect recovery
-  finds an unanswered plaintext `secrettest` command (`debugTextCommandHasSecret`), it
-  skips it rather than logging or routing the value.
+  `secrettest` value still stays visible in the channel by design). Two related guards
+  keep those values out of the log and the agent transcript: the router drops its own
+  echoed replies (`authorId === applicationId`) before logging or re-parsing them, and
+  reconnect recovery skips any unanswered `/debug` command (`parseDebugTextCommand`)
+  rather than logging or routing its arguments.

@@ -514,7 +514,7 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
   });
 
-  it("does not log a drop for the router's own message in a registered channel", async () => {
+  it("drops the router's own echoed message before logging or parsing it", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
     const ws = FakeWebSocket.instances[0];
@@ -522,20 +522,27 @@ describe("discord router channel-delete cleanup", () => {
     ws.hello();
     ws.ready();
 
-    // Discord echoes the bot's own replies as MESSAGE_CREATE, and
-    // isConversationalBot rejects authorId === applicationId, so without the
-    // self guard every normal response would log a bogus "untrusted bot" drop.
+    // Discord echoes the bot's own replies as MESSAGE_CREATE. The self guard drops
+    // them before the MESSAGE_CREATE log and the pre-bot command parsers, so an
+    // echoed secret (e.g. from `/debug echo <credential>`) never lands in the log,
+    // an echoed command-looking reply is not re-parsed, and there is no bogus
+    // "untrusted bot" drop line.
     ws.dispatch("MESSAGE_CREATE", {
       id: "self-msg",
       author: { id: "app-123", bot: true },
       guild_id: GUILD,
       channel_id: CHANNEL,
-      content: "an agent reply",
+      content: "/debug echo sk-echoed-secret",
       attachments: [],
     });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
+    // The echo is never logged (the guard returns before the MESSAGE_CREATE log)...
+    expect(logs.some((l) => l.includes("sk-echoed-secret"))).toBe(false);
+    expect(logs.some((l) => l.includes("MESSAGE_CREATE: author=app-123"))).toBe(false);
+    // ...and the echoed `/debug` is not re-parsed and handled a second time.
+    expect(logs.some((l) => l.includes("/debug (text) from app-123"))).toBe(false);
   });
 
   it("logs a reasoned drop for a message with no author id in a registered channel", async () => {
@@ -951,8 +958,10 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
   });
 
-  it("skips recovery of plaintext /debug secrettest commands without logging the value", async () => {
-    const testSecret = "test-secret-for-recovery";
+  it("skips recovery of any /debug command without logging or routing its arguments", async () => {
+    // A credential pasted as an unknown subcommand (or an echo arg) is just as
+    // log-sensitive as a secrettest value, so recovery must skip every /debug.
+    const testSecret = "sk-credential-in-recovery";
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -965,9 +974,9 @@ describe("discord router channel-delete cleanup", () => {
             status: 200,
             json: async () => [
               {
-                id: "secrettest-recovery",
+                id: "debug-recovery",
                 author: { id: OWNER, bot: false },
-                content: `/debug secrettest ${testSecret} my-name`,
+                content: `/debug echo ${testSecret}`,
               },
             ],
           };
@@ -984,7 +993,7 @@ describe("discord router channel-delete cleanup", () => {
     ws.ready();
     await vi.advanceTimersByTimeAsync(10_000);
 
-    expect(logs.some((l) => l.includes("skipping recovery") && l.includes("secrettest"))).toBe(
+    expect(logs.some((l) => l.includes("skipping recovery") && l.includes("/debug command"))).toBe(
       true,
     );
     expect(logs.some((l) => l.includes(testSecret))).toBe(false);

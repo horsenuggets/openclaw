@@ -182,20 +182,6 @@ export function parseDebugTextCommand(content: string): string | null {
 }
 
 /**
- * True when a `/debug` text command carries a `secrettest` value, so the router
- * can redact it from logs (the value is deliberately visible in the channel for
- * testing, but router logs persist separately and should never hold it).
- */
-export function debugTextCommandHasSecret(content: string): boolean {
-  const input = parseDebugTextCommand(content);
-  if (input === null) {
-    return false;
-  }
-  const { subcommand, args } = parseDebugCommand(input);
-  return subcommand === "secrettest" && args.length > 0;
-}
-
-/**
  * A short, log-safe label for a debug command. Only ever a registered
  * subcommand name (fixed, control-char-free strings), `(help)` for empty input,
  * or `(unknown)` for anything unrecognized. Crucially, unrecognized input is NOT

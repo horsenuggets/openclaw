@@ -6,7 +6,6 @@ import {
   type DebugSubcommand,
   buildDebugHelpEmbeds,
   debugSubcommandLabel,
-  debugTextCommandHasSecret,
   parseDebugCommand,
   parseDebugTextCommand,
   runDebugCommand,
@@ -327,18 +326,5 @@ describe("parseDebugTextCommand", () => {
     expect(parseDebugTextCommand("hello")).toBeNull();
     expect(parseDebugTextCommand("/debugger start")).toBeNull();
     expect(parseDebugTextCommand("debug echo")).toBeNull();
-  });
-});
-
-describe("debugTextCommandHasSecret", () => {
-  it("is true only for a secrettest command carrying a value", () => {
-    expect(debugTextCommandHasSecret("/debug secrettest the-value")).toBe(true);
-    expect(debugTextCommandHasSecret("//debug secrettest v name")).toBe(true);
-  });
-
-  it("is false for other debug commands or a value-less secrettest", () => {
-    expect(debugTextCommandHasSecret("/debug secrettest")).toBe(false);
-    expect(debugTextCommandHasSecret("/debug echo hi")).toBe(false);
-    expect(debugTextCommandHasSecret("just a message")).toBe(false);
   });
 });

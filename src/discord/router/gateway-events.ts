@@ -232,6 +232,17 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   let content = messageContent;
   const channelId = d.channel_id;
 
+  // Discord echoes the router's own replies back as MESSAGE_CREATE. Drop them up
+  // front, before the MESSAGE_CREATE log and the pre-bot text-command parsers:
+  // otherwise an `echo`ed secret (e.g. `/debug echo <credential>`) would persist
+  // in the fallback log, and command-looking output (e.g. `/debug echo "/debug
+  // help"`) would be parsed and handled a second time. The bot filter below also
+  // rejects self, but only after those steps, so guard here. External tester bots
+  // are a different author id and still flow through normally.
+  if (authorId && authorId === applicationId) {
+    return;
+  }
+
   // Learn the channel's guild so GUILD_DELETE can tear down its
   // instances (see channelGuild above).
   if (channelId && guildId) {
