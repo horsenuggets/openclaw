@@ -1280,6 +1280,54 @@ describe("discord router channel-delete cleanup", () => {
     delete process.env.OPENCLAW_ADMIN_ROLE_ID;
   });
 
+  it("does not tear down when Discord rejects the confirm acknowledgement", async () => {
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          // Discord rejects the interaction ack (e.g. interaction expired).
+          return { ok: false, status: 404, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // The ack was rejected, so teardown must NOT run.
+    expect(unregisterCalls).toEqual([]);
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
   it("runs teardown once when the confirm button is double-clicked", async () => {
     // Authorize via the owner path (the initiator owns the channel on disk is not
     // available, so use the admin role like the single-click test).

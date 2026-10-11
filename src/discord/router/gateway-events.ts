@@ -1454,7 +1454,8 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
   // indefinitely (teardown never starts, every later click is acked-and-ignored)
   // until the socket eventually died. BUTTON_ACK_TIMEOUT_MS caps the wait; on
   // timeout/failure the finally below still releases the guard. The await lives
-  // inside the try so no ack outcome can skip that release.
+  // inside the try so no ack outcome can skip that release. Resolves to the
+  // Response (to check resp.ok) or undefined when the request threw/aborted.
   const ackController = new AbortController();
   const ackTimer = setTimeout(() => ackController.abort(), BUTTON_ACK_TIMEOUT_MS);
   const ack = fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
@@ -1463,7 +1464,10 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     body: JSON.stringify(ackBody),
     signal: ackController.signal,
   })
-    .catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`))
+    .catch((err) => {
+      runtime.error(`[router] button ack failed: ${String(err)}`);
+      return undefined;
+    })
     .finally(() => clearTimeout(ackTimer));
 
   // A click for a channel whose teardown is already in flight is acked (above) but
@@ -1474,7 +1478,18 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
 
   void (async () => {
     try {
-      await ack;
+      // Only continue once the ack was ACCEPTED. fetch resolves (does not reject)
+      // on a 4xx/5xx, so a rejected type-7 update would otherwise still proceed to
+      // destructive teardown while the user still sees the buttons / "interaction
+      // failed". A non-ok (or thrown/aborted, resp === undefined) ack stops here;
+      // the finally releases the guard so the user can click again.
+      const ackResp = await ack;
+      if (!ackResp || !ackResp.ok) {
+        runtime.error(
+          `[router] button ack not accepted (${ackResp ? ackResp.status : "no response"}); skipping teardown`,
+        );
+        return;
+      }
       const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
       // notForYou cannot occur here (initiator already matched above); ignored is
       // impossible too (parsed is non-null). Both are handled defensively.
