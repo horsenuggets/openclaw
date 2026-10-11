@@ -89,7 +89,11 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
   `.onboarding.json`) may use them. Non-owners get the channel-ownership denial embed
   (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
-  `denyInteractionEphemeral`).
+  `denyInteractionEphemeral`). The gate runs regardless of registration state » an
+  unregistered channel has no owner, so `isAuthorizedForChannel` fails closed and denies
+  rather than letting the command fall through to a "not registered yet" reply that would
+  leak the registration state to a non-owner. A 1:1 DM is exempt (the caller is its own
+  owner), and on an unregistered DM the command still reports that it is not registered.
 - `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
   state rather than one channel's agent. A non-admin gets the same permission embed via

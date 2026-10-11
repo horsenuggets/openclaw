@@ -1265,7 +1265,12 @@ describe("discord router channel-delete cleanup", () => {
       guild: boolean;
       dmType?: number | null;
       ownerKnown: boolean;
+      // Whether the channel has a registered instance. Defaults to true; set false
+      // to exercise the ownerless (unregistered) channel path, which must still deny
+      // a non-owner rather than falling through to a "not registered" reply.
+      registered?: boolean;
     }) => {
+      const registered = params.registered ?? true;
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-gate-"));
       if (params.ownerKnown) {
         fs.writeFileSync(path.join(dir, ".onboarding.json"), JSON.stringify({ ownerId: OWNER }));
@@ -1287,7 +1292,19 @@ describe("discord router channel-delete cleanup", () => {
         }) as unknown as typeof fetch,
       );
       try {
-        void start(dir);
+        // An unregistered channel has an empty instances map, so instanceKey and
+        // describeInstance resolve to nothing and the owner gate must fail closed.
+        const config = registered
+          ? makeConfig(dir)
+          : {
+              discordToken: "test-token",
+              instances: new Map<string, InstanceConfig>(),
+              instancesDir: "/tmp/does-not-matter",
+              agentTimeoutMs: 1000,
+            };
+        const started = startRouter(config, runtime);
+        startedRouters.push(started);
+        void started;
         await vi.advanceTimersByTimeAsync(0);
         const ws = FakeWebSocket.instances[0];
         ws.emit("open");
@@ -1354,6 +1371,34 @@ describe("discord router channel-delete cleanup", () => {
           expect(proceeded).toBe(true);
         }
       });
+    }
+
+    // Unregistered channel: no owner exists, so the gate fails closed. Every caller
+    // in a guild is denied with the standard unauthorized notice, never the
+    // "not registered" hint (the bug this gate fixes). Both a stranger and the
+    // would-be owner are denied, since an unregistered channel has no owner at all.
+    for (const command of ["lifecycle", "secret", "connections"] as const) {
+      for (const userId of [STRANGER, OWNER]) {
+        it(`denies ${userId === OWNER ? "the owner" : "a stranger"} running ${command} in an unregistered guild channel`, async () => {
+          const { callbacks, patches } = await runInteraction({
+            command,
+            userId,
+            guild: true,
+            ownerKnown: true,
+            registered: false,
+          });
+          // No secret modal opened and no command dispatched.
+          expect(callbacks.some((cb) => cb.type === 9)).toBe(false);
+          const notice = patches.find((patch) =>
+            patch.embeds?.[0]?.description?.includes("not authorized"),
+          );
+          expect(notice).toBeDefined();
+          // The "not registered" hint must never leak to a denied caller.
+          expect(
+            patches.some((patch) => patch.embeds?.[0]?.description?.includes("not registered")),
+          ).toBe(false);
+        });
+      }
     }
 
     for (const command of ["lifecycle", "secret", "connections"] as const) {

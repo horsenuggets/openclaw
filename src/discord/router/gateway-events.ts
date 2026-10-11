@@ -796,23 +796,23 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           }
         })
         .catch((err) => runtime.error(`[router] secret modal open failed: ${String(err)}`));
-    // An unregistered channel has no owner to gate on; the modal submit reports it.
-    if (interactionChannelId && instances.get(interactionChannelId)) {
-      runForOwner(interactionChannelId, openModal);
-    } else {
-      openModal();
-    }
+    // Gate every caller. An unregistered channel has no owner, so the owner gate
+    // fails closed and denies with the standard notice rather than opening the
+    // modal; only the registered owner (or a 1:1 DM with themselves) may open it.
+    runForOwner(interactionChannelId ?? "", openModal);
     return;
   }
 
   if (interactionData?.name === "lifecycle" && interactionChannelId) {
-    const instance = instances.get(interactionChannelId);
-    if (!instance) {
-      respondToInteraction("*This channel is not registered.*");
-      return;
-    }
-
+    // Gate first: a non-owner must get the standard unauthorized notice, not the
+    // "not registered" hint. An unregistered channel has no owner, so the gate
+    // denies; only the owner (or a 1:1 DM) reaches the registration check below.
     runForOwner(interactionChannelId, () => {
+      const instance = instances.get(interactionChannelId);
+      if (!instance) {
+        respondToInteraction("*This channel is not registered.*");
+        return;
+      }
       const current = instance.preferences.lifecycleMessages ?? false;
       const setting = (
         interactionData.options as Array<{ name: string; value: string }> | undefined
@@ -1031,15 +1031,12 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           }
         })();
       };
-      // Owner-gate on a registered channel, reusing the /secret and /lifecycle
-      // gate: /connections reads and writes the channel's stored credentials, so
-      // only its owner may drive it, and group DMs are rejected (runForOwner fails
-      // closed). An unregistered channel has no owner; the handler reports that.
-      if (authorizedInstanceKey !== null) {
-        runForOwner(interactionChannelId, dispatch);
-      } else {
-        dispatch();
-      }
+      // Owner-gate every caller, reusing the /secret and /lifecycle gate:
+      // /connections reads and writes the channel's stored credentials, so only its
+      // owner may drive it, and group DMs are rejected (runForOwner fails closed). An
+      // unregistered channel has no owner, so the gate denies with the standard
+      // notice rather than leaking the "not registered yet" hint to a non-owner.
+      runForOwner(interactionChannelId, dispatch);
     }
   }
 }
