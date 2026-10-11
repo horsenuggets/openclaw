@@ -19,6 +19,7 @@
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
+import { sanitizeSecretName } from "./secret-command.js";
 
 /** Discord embed limits the help overflow must respect. */
 const MAX_FIELDS_PER_EMBED = 25;
@@ -73,11 +74,14 @@ export const DEBUG_COMMAND_SPEC = {
  * What a subcommand wants the router to reply with. `embeds` carries one or more
  * category embeds plus the icon filenames they reference (uploaded by the
  * sender); `content` carries raw message text with no embed wrapper (the `echo`
- * case: "the raw text as an individual message").
+ * case: "the raw text as an individual message"); `secret` asks the router to
+ * hand the channel's agent a secret out-of-band (the `secrettest` case) exactly
+ * like the `/secret` modal, so the router adapter owns that delivery + ack.
  */
 export type DebugResult =
   | { kind: "embeds"; embeds: DiscordEmbed[]; attachments: string[] }
-  | { kind: "content"; content: string };
+  | { kind: "content"; content: string }
+  | { kind: "secret"; name: string; value: string };
 
 /** Inputs handed to a subcommand's `run`. */
 export type DebugRunContext = {
@@ -159,6 +163,22 @@ export function parseDebugCommand(input: string): { subcommand: string | null; a
     return { subcommand: null, args: [] };
   }
   return { subcommand: tokens[0].toLowerCase(), args: tokens.slice(1) };
+}
+
+/**
+ * Parse a plain-message `/debug ...` text command (tolerating a `//` prefix) into
+ * the raw remainder passed to {@link runDebugCommand}. Returns null when the
+ * message is not a `/debug` command at all, and the (possibly empty) remainder
+ * string otherwise. This is the text-command sibling of the slash `command`
+ * option, letting an automation/tester bot that cannot invoke slash commands
+ * drive the admin debug console.
+ */
+export function parseDebugTextCommand(content: string): string | null {
+  const match = content.trim().match(/^\/\/?debug\b\s*([\s\S]*)$/is);
+  if (!match) {
+    return null;
+  }
+  return match[1].trim();
 }
 
 /**
@@ -277,6 +297,27 @@ const echoSubcommand: DebugSubcommand = {
   },
 };
 
+const secretTestSubcommand: DebugSubcommand = {
+  name: "secrettest",
+  usage: "secrettest <secret-value> [secret-name]",
+  description:
+    "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as plaintext (so it stays visible in the channel). Never use a real secret here; use /secret for anything sensitive.",
+  run: ({ args }) => {
+    // args[0] is the value, args[1] the optional name. A multi-word value must be
+    // quoted (the tokenizer splits on whitespace), matching every other debug arg.
+    const value = args[0] ?? "";
+    if (!value) {
+      return debugNotice(
+        "No Secret Value",
+        "Provide a value, for example `secrettest my-test-value my-name`. This is a " +
+          "TESTING command: the value is sent as plaintext and stays visible in the channel, " +
+          "so never pass anything truly sensitive (use `/secret` for that).",
+      );
+    }
+    return { kind: "secret", name: sanitizeSecretName(args[1] ?? "", value), value };
+  },
+};
+
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
@@ -285,7 +326,11 @@ const helpSubcommand: DebugSubcommand = {
 };
 
 /** Every registered `/debug` subcommand. */
-export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [echoSubcommand, helpSubcommand];
+export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
+  echoSubcommand,
+  secretTestSubcommand,
+  helpSubcommand,
+];
 
 /**
  * Parse and run a `/debug` command string. An empty string or `help` prints the

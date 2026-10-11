@@ -225,6 +225,21 @@ export function parseChannelTextCommand(
   return { subcommand: parts[0]?.toLowerCase() ?? null, args: parts.slice(1) };
 }
 
+/**
+ * Accepted `/channel unregister <arg>` tokens that skip the confirmation button
+ * and unregister immediately. Kept liberal so whatever a tester or admin types
+ * naturally (`confirm`, `yes`, `force`, `--yes`, `-y`, or `confirm:yes`) just
+ * works; a leading `confirm:` is stripped so `confirm:yes` matches `yes`. Any
+ * other argument (or none) falls back to the button.
+ */
+const UNREGISTER_CONFIRM_TOKENS = new Set(["confirm", "yes", "force", "--yes", "-y"]);
+
+/** True when an unregister argument explicitly confirms (skips the button). */
+export function isUnregisterConfirmArg(arg: string | undefined): boolean {
+  const token = (arg ?? "").toLowerCase().replace(/^confirm:/, "");
+  return UNREGISTER_CONFIRM_TOKENS.has(token);
+}
+
 /** Resolve a Discord user id from a mention (`<@123>` / `<@!123>`) or raw id. */
 export function parseUserMention(raw: string | undefined): string | null {
   if (!raw) {
@@ -278,7 +293,7 @@ function unregisterButtons(channelId: string, initiatorId: string): DiscordActio
       {
         type: 2,
         style: 4, // danger
-        label: "Confirm unregister",
+        label: "Confirm Unregister",
         custom_id: buildUnregisterCustomId("confirm", channelId, initiatorId),
       },
       {
@@ -450,11 +465,9 @@ export async function handleChannelCommand(
       return;
     }
 
-    // A text `confirm:yes` (or bare `yes`) skips the button (used by bots/e2e
-    // that cannot click); humans get a confirmation button instead. Strip a
-    // leading `confirm:` so both spellings resolve to the same token.
-    const confirm = (ctx.args[0] ?? "").toLowerCase().replace(/^confirm:/, "");
-    if (confirm !== "yes") {
+    // An explicit confirm argument skips the button (used by bots/e2e that
+    // cannot click); humans with no argument get a confirmation button instead.
+    if (!isUnregisterConfirmArg(ctx.args[0])) {
       await ctx.reply(
         {
           ...registrationReply(

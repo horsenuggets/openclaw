@@ -307,6 +307,40 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("content=/connections add <redacted>"))).toBe(true);
   });
 
+  it("logs only the sanitized subcommand label for any /debug command", async () => {
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // A credential pasted as an unknown /debug subcommand (or a secrettest value)
+    // must never land in the persistent log: only the sanitized label is kept.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "debug-log-msg-1",
+      author: { id: "444444444444444444" },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/debug sk-SUPERSECRETCREDENTIAL",
+      attachments: [],
+    });
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "debug-log-msg-2",
+      author: { id: "444444444444444444" },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/debug secrettest sk-ANOTHERSECRET my-name",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("sk-SUPERSECRETCREDENTIAL"))).toBe(false);
+    expect(logs.some((l) => l.includes("sk-ANOTHERSECRET"))).toBe(false);
+    expect(logs.some((l) => l.includes("content=/debug (unknown)"))).toBe(true);
+    expect(logs.some((l) => l.includes("content=/debug secrettest"))).toBe(true);
+  });
+
   it("detects, redacts, and scrubs a token command sent as a reply", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
@@ -480,7 +514,7 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
   });
 
-  it("does not log a drop for the router's own message in a registered channel", async () => {
+  it("drops the router's own echoed message before logging or parsing it", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);
     const ws = FakeWebSocket.instances[0];
@@ -488,20 +522,27 @@ describe("discord router channel-delete cleanup", () => {
     ws.hello();
     ws.ready();
 
-    // Discord echoes the bot's own replies as MESSAGE_CREATE, and
-    // isConversationalBot rejects authorId === applicationId, so without the
-    // self guard every normal response would log a bogus "untrusted bot" drop.
+    // Discord echoes the bot's own replies as MESSAGE_CREATE. The self guard drops
+    // them before the MESSAGE_CREATE log and the pre-bot command parsers, so an
+    // echoed secret (e.g. from `/debug echo <credential>`) never lands in the log,
+    // an echoed command-looking reply is not re-parsed, and there is no bogus
+    // "untrusted bot" drop line.
     ws.dispatch("MESSAGE_CREATE", {
       id: "self-msg",
       author: { id: "app-123", bot: true },
       guild_id: GUILD,
       channel_id: CHANNEL,
-      content: "an agent reply",
+      content: "/debug echo sk-echoed-secret",
       attachments: [],
     });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(logs.some((l) => l.includes("dropped message from"))).toBe(false);
+    // The echo is never logged (the guard returns before the MESSAGE_CREATE log)...
+    expect(logs.some((l) => l.includes("sk-echoed-secret"))).toBe(false);
+    expect(logs.some((l) => l.includes("MESSAGE_CREATE: author=app-123"))).toBe(false);
+    // ...and the echoed `/debug` is not re-parsed and handled a second time.
+    expect(logs.some((l) => l.includes("/debug (text) from app-123"))).toBe(false);
   });
 
   it("logs a reasoned drop for a message with no author id in a registered channel", async () => {
@@ -915,6 +956,49 @@ describe("discord router channel-delete cleanup", () => {
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+  });
+
+  it("skips recovery of any /debug command without logging or routing its arguments", async () => {
+    // A credential pasted as an unknown subcommand (or an echo arg) is just as
+    // log-sensitive as a secrettest value, so recovery must skip every /debug.
+    const testSecret = "sk-credential-in-recovery";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(`/channels/${CHANNEL}`)) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes(`/channels/${CHANNEL}/messages`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: "debug-recovery",
+                author: { id: OWNER, bot: false },
+                content: `/debug echo ${testSecret}`,
+              },
+            ],
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(logs.some((l) => l.includes("skipping recovery") && l.includes("/debug command"))).toBe(
+      true,
+    );
+    expect(logs.some((l) => l.includes(testSecret))).toBe(false);
+    expect(logs.some((l) => l.includes("recovering unanswered message"))).toBe(false);
+    expect(logs.some((l) => l.includes("routing message from"))).toBe(false);
   });
 
   it("still recovers a message left beneath a genuine lifecycle banner", async () => {
@@ -1470,6 +1554,152 @@ describe("discord router channel-delete cleanup", () => {
       expect(echoed).toBeDefined();
       // The content edit clears any prior embeds (sends an empty array).
       expect(echoed?.embeds).toEqual([]);
+    });
+
+    it("delivers a secrettest secret via the slash branch and acks with the test embed", async () => {
+      // Covers the interaction-specific wiring (deliverDebugSecret + the ephemeral
+      // embed edit) that the plain-message path does not exercise. CHANNEL is
+      // registered in the harness, so the secret is enqueued and acked.
+      const { patches } = await runDebug({
+        userId: ADMIN,
+        admin: true,
+        command: "secrettest slash-secret-value my-name",
+      });
+      const ack = patches.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      expect(ack).toBeDefined();
+      expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
+    });
+  });
+
+  // The text-command path lets a tester/automation bot (which cannot invoke slash
+  // commands) drive /debug as a plain message. Admin-gated the same way, but its
+  // replies land in-channel because a bot cannot send a true ephemeral.
+  describe("/debug text path", () => {
+    const ADMIN_BOT = "444444444444444444";
+    const NON_ADMIN_BOT = "555555555555555555";
+    type TextReply = { content?: string; embeds?: Array<{ title?: string; description?: string }> };
+
+    const runDebugText = async (params: { authorId: string; admin: boolean; content: string }) => {
+      if (params.admin) {
+        vi.stubEnv("OPENCLAW_ADMIN_OVERRIDE_IDS", params.authorId);
+      }
+      const posts: RequestInit[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (
+            typeof url === "string" &&
+            url.includes(`/channels/${CHANNEL}/messages`) &&
+            init?.method === "POST"
+          ) {
+            posts.push(init);
+            return new Response(JSON.stringify({ id: "debug-reply-1" }), { status: 200 });
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: "app-123" }),
+          } as unknown as Response;
+        }) as unknown as typeof fetch,
+      );
+
+      void start();
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "debug-text-msg",
+        author: { id: params.authorId, bot: true },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: params.content,
+        attachments: [],
+      });
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      return { posts: posts.map((p) => payloadOf(p) as TextReply) };
+    };
+
+    it("lets an admin bot drive /debug echo via text, replying in-channel", async () => {
+      const { posts } = await runDebugText({
+        authorId: ADMIN_BOT,
+        admin: true,
+        content: "/debug echo hi-there",
+      });
+      expect(posts.some((p) => p.content === "hi-there")).toBe(true);
+    });
+
+    it("denies a non-admin bot's /debug text with the shared permission embed", async () => {
+      const { posts } = await runDebugText({
+        authorId: NON_ADMIN_BOT,
+        admin: false,
+        content: "/debug echo pwned",
+      });
+      expect(posts.some((p) => p.embeds?.[0]?.description?.includes("necessary permissions"))).toBe(
+        true,
+      );
+      // The subcommand never ran, so the echoed text was never posted.
+      expect(posts.some((p) => p.content === "pwned")).toBe(false);
+    });
+
+    it("delivers a secrettest secret and acks with the plaintext-test embed", async () => {
+      const { posts } = await runDebugText({
+        authorId: ADMIN_BOT,
+        admin: true,
+        content: "/debug secrettest test-value my-name",
+      });
+      const ack = posts.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      expect(ack).toBeDefined();
+      expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
+    });
+
+    it("still recognizes /debug when sent as a reply (parses the original body)", async () => {
+      vi.stubEnv("OPENCLAW_ADMIN_OVERRIDE_IDS", ADMIN_BOT);
+      const posts: RequestInit[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (
+            typeof url === "string" &&
+            url.includes(`/channels/${CHANNEL}/messages`) &&
+            init?.method === "POST"
+          ) {
+            posts.push(init);
+            return new Response(JSON.stringify({ id: "debug-reply-2" }), { status: 200 });
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: "app-123" }),
+          } as unknown as Response;
+        }) as unknown as typeof fetch,
+      );
+      void start();
+      await vi.advanceTimersByTimeAsync(0);
+      const ws = FakeWebSocket.instances[0];
+      ws.emit("open");
+      ws.hello();
+      ws.ready();
+      // A reply prefixes `content` with "[Replying to ...]"; the command must still
+      // be parsed from the original body, not missed and routed to the agent.
+      ws.dispatch("MESSAGE_CREATE", {
+        id: "debug-reply-msg",
+        author: { id: ADMIN_BOT, bot: true },
+        guild_id: GUILD,
+        channel_id: CHANNEL,
+        content: "/debug echo from-a-reply",
+        referenced_message: { author: { username: "someone" }, content: "earlier message" },
+        attachments: [],
+      });
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(
+        posts.map((p) => payloadOf(p) as TextReply).some((p) => p.content === "from-a-reply"),
+      ).toBe(true);
     });
   });
 

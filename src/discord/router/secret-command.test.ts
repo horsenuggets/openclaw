@@ -10,6 +10,7 @@ import {
   buildSecretModal,
   buildSecretNoticeEmbed,
   buildSecretReceivedEmbed,
+  buildSecretTestReceivedEmbed,
   parseSecretModalSubmit,
   sanitizeSecretName,
   secretPath,
@@ -117,6 +118,20 @@ describe("secretPath / secretReminderMessage", () => {
     expect(msg).toContain("transcript");
     expect(msg).toContain("path");
   });
+
+  it("defaults to the private framing but flips it for a visible-in-channel test secret", () => {
+    const privateMsg = secretReminderMessage("redirect");
+    expect(privateMsg).toContain("provided privately");
+    expect(privateMsg).not.toContain("secrettest");
+
+    const testMsg = secretReminderMessage("redirect", true);
+    // The plaintext-visible framing must not claim privacy (that would contradict
+    // the /debug secrettest warning); it still steers consume-by-path.
+    expect(testMsg).not.toContain("provided privately");
+    expect(testMsg.toLowerCase()).toContain("visible in this channel");
+    expect(testMsg).toContain("secrettest");
+    expect(testMsg).toContain("/tmp/secrets/redirect");
+  });
 });
 
 describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
@@ -149,5 +164,17 @@ describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
     );
     expect(embed.title).toBe("Secret Not Provided.");
     expect(embed.description).toBe("No secret value was provided.");
+  });
+
+  it("flags the test-received embed as plaintext and test-only without leaking the value", () => {
+    const { embed, attachments } = buildSecretTestReceivedEmbed("redirect");
+    expect(embed.title).toBe("Test Secret Received!");
+    expect(embed.description).toContain("`redirect`");
+    expect(embed.description.toLowerCase()).toContain("plaintext");
+    expect(embed.description.toLowerCase()).toContain("testing");
+    // Points users at the private /secret for anything sensitive.
+    expect(embed.description).toContain("/secret");
+    expect(embed.color).toBe(EMBED_CATEGORIES.secrets.color);
+    expect(attachments).toContain(EMBED_CATEGORIES.secrets.icon);
   });
 });

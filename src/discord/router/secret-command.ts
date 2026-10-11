@@ -182,12 +182,21 @@ export function secretPath(name: string): string {
  * command that needs it) rather than printing its contents, and warns that
  * `cat`-ing it would copy the value into the transcript. That keeps the secret
  * off the wire and out of the transcript in the normal case.
+ *
+ * `visibleInChannel` flips the privacy framing for the `/debug secrettest` test
+ * path, where the value WAS typed into the channel as plaintext: claiming it was
+ * "provided privately" would be false and contradict the command's own warning.
+ * The consume-by-path guidance still applies either way.
  */
-export function secretReminderMessage(name: string): string {
+export function secretReminderMessage(name: string, visibleInChannel = false): string {
   const path = secretPath(name);
+  const origin = visibleInChannel
+    ? `It was provided for TESTING via \`/debug secrettest\`, so its plaintext value is ` +
+      `visible in this channel's history; treat it as non-sensitive. `
+    : `It was provided privately by the user and is not shown in the chat. `;
   return (
     `A secret named "${name}" has been made available to you at ${path}. ` +
-    `It was provided privately by the user and is not shown in the chat. ` +
+    origin +
     `This file is temporary and may not persist across restarts. ` +
     `Use it by passing the file PATH to whatever needs it (for example ` +
     `\`curl --data @${path} ...\` or reading it inside a single command), ` +
@@ -214,6 +223,25 @@ export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
       `The secret \`${name}\` was received and queued for delivery to this ` +
       `channel's OpenClaw agent. Keep in mind that secrets are temporary and they ` +
       `can be overwritten.`,
+  });
+}
+
+/**
+ * Build the ack embed for the `/debug secrettest` command (Secrets category).
+ * Unlike {@link buildSecretReceivedEmbed}, this loudly flags that the value
+ * arrived as PLAINTEXT (it was typed into the channel, not a private modal), so
+ * it must only ever carry throwaway test values. The name is a sanitized label,
+ * never the value.
+ */
+export function buildSecretTestReceivedEmbed(name: string): BuiltEmbed {
+  return buildEmbed({
+    category: "secrets",
+    title: "Test Secret Received!",
+    description:
+      `The test secret \`${name}\` was queued for delivery to this channel's OpenClaw agent. ` +
+      `This is a TESTING command, so the value was sent as plaintext and is visible in this ` +
+      `channel's history. Never use it for anything truly sensitive, use \`/secret\` (a private ` +
+      `popup) for that. Secrets are temporary and can be overwritten.`,
   });
 }
 

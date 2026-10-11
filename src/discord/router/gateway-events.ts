@@ -18,7 +18,13 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
-import { DEBUG_COMMAND_SPEC, debugSubcommandLabel, runDebugCommand } from "./debug-command.js";
+import {
+  DEBUG_COMMAND_SPEC,
+  type DebugResult,
+  debugSubcommandLabel,
+  parseDebugTextCommand,
+  runDebugCommand,
+} from "./debug-command.js";
 import {
   DISCORD_API,
   discordDeleteMessage,
@@ -37,6 +43,7 @@ import {
   buildSecretModal,
   buildSecretNoticeEmbed,
   buildSecretReceivedEmbed,
+  buildSecretTestReceivedEmbed,
   parseSecretModalSubmit,
   sanitizeSecretName,
   secretReminderMessage,
@@ -159,6 +166,43 @@ type ChannelDeleteData = { id?: string };
 type GuildDeleteData = { id?: string };
 
 /**
+ * Deliver a `/debug secrettest` secret to the channel's agent, mirroring the
+ * `/secret` modal path: enqueue a buffered system turn carrying the secret so the
+ * box writes it to `/tmp/secrets/<name>` and the agent is pointed at it. Returns
+ * the ack embed to render (ephemerally for slash, in-channel for text), or a
+ * not-registered notice. The value arrived as plaintext, so the ack
+ * (`buildSecretTestReceivedEmbed`) flags the test-only framing.
+ */
+function deliverDebugSecret(params: {
+  instances: GatewayContext["instances"];
+  channelQueue: GatewayContext["channelQueue"];
+  runtime: GatewayContext["runtime"];
+  channelId: string;
+  authorId: string;
+  name: string;
+  value: string;
+}): BuiltEmbed {
+  const { instances, channelQueue, runtime, channelId, authorId, name, value } = params;
+  if (!instances.get(channelId)) {
+    return buildSecretNoticeEmbed(
+      "Not Registered.",
+      "This channel is not registered, so there is no agent to receive a secret.",
+    );
+  }
+  // Buffered (never steered) so the out-of-band secret reaches routeMessage
+  // intact, exactly like the /secret modal submission does. The reminder uses the
+  // visible-in-channel framing because the value arrived as plaintext.
+  channelQueue.enqueue(channelId, {
+    authorId,
+    messageContent: secretReminderMessage(name, true),
+    systemTurn: true,
+    secret: { name, value },
+  });
+  runtime.log(`[router] debug secrettest "${name}" delivered to channel ${channelId}`);
+  return buildSecretTestReceivedEmbed(name);
+}
+
+/**
  * Forward a user (or trusted bot) message to its channel's agent. Handles the
  * `/channel` management commands first (so they work before registration and
  * for bots), then the bot/empty filter, the registered-instance gate, text
@@ -178,6 +222,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     describeInstance,
     channelCommandDeps,
     connectCommandDeps,
+    isAdmin,
   } = ctx;
 
   const authorId = d.author?.id;
@@ -186,6 +231,17 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   const messageContent = d.content ?? "";
   let content = messageContent;
   const channelId = d.channel_id;
+
+  // Discord echoes the router's own replies back as MESSAGE_CREATE. Drop them up
+  // front, before the MESSAGE_CREATE log and the pre-bot text-command parsers:
+  // otherwise an `echo`ed secret (e.g. `/debug echo <credential>`) would persist
+  // in the fallback log, and command-looking output (e.g. `/debug echo "/debug
+  // help"`) would be parsed and handled a second time. The bot filter below also
+  // rejects self, but only after those steps, so guard here. External tester bots
+  // are a different author id and still flow through normally.
+  if (authorId && authorId === applicationId) {
+    return;
+  }
 
   // Learn the channel's guild so GUILD_DELETE can tear down its
   // instances (see channelGuild above).
@@ -202,13 +258,20 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
   if (ref && typeof ref === "object") {
     const refAuthor = ref.author?.username ?? "unknown";
     const rawRef = (ref.content ?? "").slice(0, 500);
-    // The referenced message may itself be a token-bearing `/connections add`
-    // (e.g. the bot's own reply to a not-yet-scrubbed token command, echoed back
-    // via MESSAGE_CREATE, or a user replying to one). Redact it so the token is
-    // not forwarded into the agent transcript or the fallback log below.
+    // The referenced message may itself carry a secret: a token-bearing
+    // `/connections add`, or any `/debug` command (its args can be a pasted
+    // credential, and the bot's own ack is a reply to a `/debug secrettest`, so
+    // Discord echoes that command back in `referenced_message`). Reduce a `/debug`
+    // to just its sanitized subcommand label, matching `debugSubcommandLabel`, so
+    // no raw debug input is forwarded into the agent transcript or the log below.
     const refParsed = parseConnectTextCommand(rawRef);
+    const refDebug = parseDebugTextCommand(rawRef);
     const refContent =
-      refParsed && connectTextCommandHasToken(refParsed) ? "/connections add <redacted>" : rawRef;
+      refParsed && connectTextCommandHasToken(refParsed)
+        ? "/connections add <redacted>"
+        : refDebug !== null
+          ? `/debug ${debugSubcommandLabel(refDebug)}`
+          : rawRef;
     if (refContent) {
       content = `[Replying to ${refAuthor}: "${refContent}"]\n${content}`;
     }
@@ -224,6 +287,14 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     const parsed = parseConnectTextCommand(messageContent);
     if (parsed && connectTextCommandHasToken(parsed)) {
       return "/connections add <redacted>";
+    }
+    // Any `/debug` command: its args can be a secret (a `secrettest` value, or a
+    // credential accidentally pasted as an unknown subcommand). Router logs
+    // persist separately from the channel, so log only the sanitized subcommand
+    // label, never the raw input, matching the slash path's `debugSubcommandLabel`.
+    const debugInput = parseDebugTextCommand(messageContent);
+    if (debugInput !== null) {
+      return `/debug ${debugSubcommandLabel(debugInput)}`;
     }
     return content.slice(0, 60);
   })();
@@ -363,6 +434,54 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     return;
   }
 
+  // `/debug` text path, handled before the bot filter so a trusted tester or
+  // automation bot (which cannot invoke slash commands) can drive the admin
+  // debug console. Gated on admin identity exactly like the slash path; a
+  // non-admin gets the same permission notice. Replies land in-channel (bots
+  // cannot send true ephemerals), so unlike the slash path this debug output is
+  // visible in the channel, which is acceptable on a testing surface.
+  // Parse the original message body (not the reply-prefixed `content`) so a
+  // `/debug` sent as a reply is still recognized, matching the `/connections` path.
+  const debugInput = authorId ? parseDebugTextCommand(messageContent) : null;
+  if (debugInput !== null && authorId) {
+    const commandMessageId = d.id;
+    const reply = (payload: BuiltEmbed) =>
+      void discordSendReply(discordToken, channelId, commandMessageId, {
+        embeds: [payload.embed],
+        attachments: payload.attachments,
+      });
+    void (async () => {
+      if (!(await isAdmin(authorId))) {
+        runtime.log(`[router] denied /debug (text) from ${authorId} (not an admin)`);
+        reply(buildPermissionDeniedEmbed(buildMissingPermissionText(DEBUG_COMMAND_SPEC.name)));
+        return;
+      }
+      const result: DebugResult = runDebugCommand(debugInput);
+      if (result.kind === "secret") {
+        reply(
+          deliverDebugSecret({
+            instances,
+            channelQueue,
+            runtime,
+            channelId,
+            authorId,
+            name: result.name,
+            value: result.value,
+          }),
+        );
+      } else if (result.kind === "embeds") {
+        void discordSendReply(discordToken, channelId, commandMessageId, {
+          embeds: result.embeds,
+          attachments: result.attachments,
+        });
+      } else {
+        void discordSendReply(discordToken, channelId, commandMessageId, result.content);
+      }
+      runtime.log(`[router] /debug (text) from ${authorId}: ${debugSubcommandLabel(debugInput)}`);
+    })();
+    return;
+  }
+
   // Normal agent messages: ignore untrusted bots and empty messages.
   // Channel commands were already handled above so bots can still drive
   // them. A trusted bot (OPENCLAW_MOCK_USER_BOT_ID) may converse, but
@@ -496,6 +615,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     applicationId,
     runtime,
     instances,
+    channelQueue,
     channelGuild,
     channelCommandDeps,
     connectCommandDeps,
@@ -621,13 +741,31 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           return;
         }
         const result = runDebugCommand(commandInput);
-        const res =
-          result.kind === "embeds"
-            ? await editInteractionEmbedReply(applicationId, interactionToken, {
-                embeds: result.embeds,
-                attachments: result.attachments,
-              })
-            : await editInteractionContentReply(applicationId, interactionToken, result.content);
+        // `secrettest` delivers a secret to the channel's agent and acks with a
+        // single embed; everything else renders its own embeds or raw content.
+        let res: { ok: boolean; status: number };
+        if (result.kind === "secret") {
+          const ack = deliverDebugSecret({
+            instances,
+            channelQueue,
+            runtime,
+            channelId: interactionChannelId ?? "",
+            authorId: userId,
+            name: result.name,
+            value: result.value,
+          });
+          res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: [ack.embed],
+            attachments: ack.attachments,
+          });
+        } else if (result.kind === "embeds") {
+          res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: result.embeds,
+            attachments: result.attachments,
+          });
+        } else {
+          res = await editInteractionContentReply(applicationId, interactionToken, result.content);
+        }
         if (!res.ok) {
           runtime.error(`[router] debug command result failed (${res.status})`);
         }

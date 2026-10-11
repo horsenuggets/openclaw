@@ -15,6 +15,10 @@ All of it lives under `src/discord/router/`:
   or raw message content.
 - `gateway-events.ts` (`handleSlashInteraction`) - the router adapter that admin-gates the
   interaction, defers it ephemerally, runs the command, and renders the result.
+  `handleMessageCreate` also carries a text-command path (`parseDebugTextCommand`) so an
+  automation/tester bot that cannot invoke slash commands can drive `/debug` as a plain
+  message (admin-gated the same way; replies land in-channel since bots cannot send true
+  ephemerals).
 - `router.ts` - registers `DEBUG_COMMAND_SPEC` with Discord on startup.
 - `embed-categories.ts` - the `debug` embed category (footer "Debug", icon `debug.png`,
   accent `#ff80e0`). See [embed-system.md](embed-system.md).
@@ -28,6 +32,16 @@ Invoke `/debug` in Discord and type the subcommand into the `command` option, fo
   registered subcommand.
 - `/debug echo "hello world"` - replies with the raw text `hello world` as an individual
   message (no embed wrapper).
+- `/debug secrettest <secret-value> [secret-name]` - hands this channel's agent a secret
+  exactly like `/secret` (written to `/tmp/secrets/<name>` in the box, the agent pointed
+  at it via a system reminder), but the value is passed as PLAINTEXT in the command. It is
+  a TESTING convenience: because the value is typed into the channel it stays visible in
+  the history, so it must only ever carry throwaway test values. For anything real, use
+  the `/secret` modal (which keeps the value private). The ack embed loudly flags the
+  plaintext exposure. A multi-word value must be quoted. The channel must be registered.
+
+As a plain message (for the tester/automation bot), the same commands work with a leading
+`/debug` (or `//debug`), for example `/debug secrettest my-test-value my-name`.
 
 Behavior worth knowing:
 
@@ -79,6 +93,12 @@ Subcommands are defined inside `debug-command.ts` and registered in the
    - `{ kind: "embeds", embeds, attachments }` for rich output. For a simple one-embed
      notice use the in-module `debugNotice(title, description)` helper, which builds a
      Debug-category embed and returns the result for you.
+   - `{ kind: "secret", name, value }` to hand the channel's agent a secret out-of-band
+     (the `secrettest` case). The subcommand stays pure and just describes the secret; the
+     router adapter (`deliverDebugSecret`) owns the delivery (enqueue a buffered system
+     turn with `secret: { name, value }`, exactly like the `/secret` modal) and acks with
+     `buildSecretTestReceivedEmbed`. Sanitize the name with `sanitizeSecretName` so it is
+     a safe filename.
 4. Add tests in `debug-command.test.ts` (the parser/registry is pure and easy to unit
    test). If the subcommand changes the router/gating path, add an integration test to the
    `/debug admin gate` block in `router.events.test.ts`.
@@ -105,5 +125,16 @@ notice, so a new subcommand only needs its registry entry plus `run`.
   with embeds (`editInteractionEmbedReply`) or content (`editInteractionContentReply`).
 - `isAdmin` is evaluated before the command is dispatched, so a non-admin's subcommand
   never runs.
-- There is no text-command fallback (unlike `/channel` and `/connections`); `/debug` is a
-  slash interaction only.
+- There is an admin-gated text-command path (`parseDebugTextCommand`), added so an
+  automation/tester bot that cannot invoke slash commands can still drive `/debug`. It
+  runs the same `runDebugCommand`, but because a bot cannot send a true ephemeral, its
+  replies post in-channel (visible), unlike the ephemeral slash path. A non-admin's
+  `/debug ...` text gets the same permission-denied embed. Any `/debug` text (and a
+  `/debug` referenced in a reply) is reduced to just its sanitized subcommand label
+  (`debugSubcommandLabel`) before it reaches the router log, so neither a `secrettest`
+  value nor a credential pasted as an unknown subcommand is ever persisted there (the
+  `secrettest` value still stays visible in the channel by design). Two related guards
+  keep those values out of the log and the agent transcript: the router drops its own
+  echoed replies (`authorId === applicationId`) before logging or re-parsing them, and
+  reconnect recovery skips any unanswered `/debug` command (`parseDebugTextCommand`)
+  rather than logging or routing its arguments.

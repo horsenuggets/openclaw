@@ -27,7 +27,7 @@ import {
 } from "./connections-store.js";
 import { connectorRegistry } from "./connectors.js";
 import { startContainerProxyServer } from "./container-proxy.js";
-import { DEBUG_COMMAND_SPEC } from "./debug-command.js";
+import { DEBUG_COMMAND_SPEC, parseDebugTextCommand } from "./debug-command.js";
 import {
   DISCORD_API,
   discordSend,
@@ -1056,7 +1056,8 @@ export async function handleChannelDeleted(
 
 /**
  * Check each onboarded user's DM for unanswered messages.
- * If the most recent message is from the user (not the bot), route it to the agent.
+ * If the most recent message is from the user (not the bot), route it to the agent,
+ * except plaintext `/debug secrettest` commands, which must never be replayed.
  */
 async function recoverUnansweredMessages(
   discordToken: string,
@@ -1184,6 +1185,14 @@ async function recoverUnansweredMessages(
       }
       const content = lastUserMsg.content?.trim();
       const msgAttachments = lastUserMsg.attachments ?? [];
+      // Never recover a `/debug` command: it is a host-side command (not an agent
+      // turn), and its arguments are log-sensitive (a secrettest value, or a
+      // credential pasted as any subcommand). Replaying it would route the raw
+      // input into the agent and log it below, so skip every `/debug`.
+      if (content && parseDebugTextCommand(content) !== null) {
+        runtime.log(`[router] skipping recovery for ${channelId}: /debug command`);
+        continue;
+      }
       if (!content && msgAttachments.length === 0) {
         continue;
       }
