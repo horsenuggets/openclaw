@@ -194,6 +194,30 @@ describe("createNoticeDebouncer", () => {
     expect(a).toHaveBeenCalledTimes(2);
   });
 
+  it("reference-counts suppression so overlapping teardowns only lift it on the last", () => {
+    const h = harness();
+    const d = createNoticeDebouncer({
+      windowMs: 5000,
+      setTimer: h.setTimer,
+      clearTimer: h.clearTimer,
+    });
+    const a = vi.fn();
+    // Two overlapping unregisters both suppress the same channel.
+    d.suppressChannel("A");
+    d.suppressChannel("A");
+    // The first teardown finishes and lifts its suppression, but the second is
+    // still running, so the channel must STAY suppressed.
+    d.unsuppressChannel("A");
+    d.trigger("A:u1", a);
+    expect(a).not.toHaveBeenCalled();
+    // The second teardown finishes: now suppression is fully lifted.
+    d.unsuppressChannel("A");
+    d.trigger("A:u1", a);
+    expect(a).toHaveBeenCalledTimes(1);
+    // An unbalanced extra unsuppress is a harmless no-op.
+    expect(() => d.unsuppressChannel("A")).not.toThrow();
+  });
+
   it("cancelAll drops every pending window (shutdown)", () => {
     const h = harness();
     const d = createNoticeDebouncer({

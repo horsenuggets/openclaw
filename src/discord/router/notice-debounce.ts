@@ -78,7 +78,12 @@ export function createNoticeDebouncer(opts: {
   const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
   const entries = new Map<string, Entry>();
   // Channels whose teardown is in progress; trigger is a no-op for their keys.
-  const suppressed = new Set<string>();
+  // Reference-counted, not a plain Set: overlapping unregisters (e.g. an explicit
+  // confirm racing a channel-delete) each suppress/unsuppress, and suppression must
+  // persist until the LAST one completes. A plain Set would let the first finisher
+  // lift it while a second teardown is still awaiting the provisioner, re-opening
+  // the stale-notice window this guards.
+  const suppressed = new Map<string, number>();
 
   // Keys are `channelId:userId`; the channel is the part before the first colon.
   const channelOf = (key: string): string => {
@@ -147,11 +152,21 @@ export function createNoticeDebouncer(opts: {
       entries.clear();
     },
     suppressChannel: (channelId) => {
-      suppressed.add(channelId);
+      suppressed.set(channelId, (suppressed.get(channelId) ?? 0) + 1);
       cancelChannel(channelId);
     },
     unsuppressChannel: (channelId) => {
-      suppressed.delete(channelId);
+      // Decrement the ref count; only the final outstanding teardown lifts
+      // suppression. An unbalanced call (count already 0/absent) is a no-op.
+      const count = suppressed.get(channelId);
+      if (count === undefined) {
+        return;
+      }
+      if (count <= 1) {
+        suppressed.delete(channelId);
+      } else {
+        suppressed.set(channelId, count - 1);
+      }
       cancelChannel(channelId);
     },
     activeCount: () => entries.size,

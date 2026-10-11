@@ -180,6 +180,14 @@ const DM_CHANNEL_TYPE = 1;
 /** Discord channel type for a multi-participant group DM (no owner to gate on). */
 const GROUP_DM_CHANNEL_TYPE = 3;
 
+/**
+ * Upper bound for the unregister button's interaction-ack fetch. The in-flight
+ * guard is claimed before this ack, so a stalled unbounded request would pin the
+ * channel's guard indefinitely; this caps the wait so the guard is always released.
+ * Comfortably above Discord's own ~3s interaction window.
+ */
+const BUTTON_ACK_TIMEOUT_MS = 10_000;
+
 /** CHANNEL_DELETE / THREAD_DELETE dispatch payload fields. */
 type ChannelDeleteData = { id?: string };
 
@@ -1441,11 +1449,22 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         data: { embeds: buildUnregisterAckUpdate(parsed.channelId).embeds, components: [] },
       }
     : { type: 6 };
+  // Bound the ack with an AbortController timeout. The guard is already claimed, so
+  // a raw unbounded fetch that stalls would hold the channel's in-flight guard
+  // indefinitely (teardown never starts, every later click is acked-and-ignored)
+  // until the socket eventually died. BUTTON_ACK_TIMEOUT_MS caps the wait; on
+  // timeout/failure the finally below still releases the guard. The await lives
+  // inside the try so no ack outcome can skip that release.
+  const ackController = new AbortController();
+  const ackTimer = setTimeout(() => ackController.abort(), BUTTON_ACK_TIMEOUT_MS);
   const ack = fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ackBody),
-  }).catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`));
+    signal: ackController.signal,
+  })
+    .catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`))
+    .finally(() => clearTimeout(ackTimer));
 
   // A click for a channel whose teardown is already in flight is acked (above) but
   // otherwise ignored.
@@ -1454,8 +1473,8 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
   }
 
   void (async () => {
-    await ack;
     try {
+      await ack;
       const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
       // notForYou cannot occur here (initiator already matched above); ignored is
       // impossible too (parsed is non-null). Both are handled defensively.
