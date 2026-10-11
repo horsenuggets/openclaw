@@ -882,9 +882,13 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           ? readEphemeralCommands(instancesDir, interactionChannelId)
           : true;
         let deferEphemeral = currentEphemeral;
-        // Track whether the ephemeral toggle actually changed the stored value, so a
-        // failed defer can roll it back (see below).
+        // Track, for a rollback after a failed defer: the value we rolled FROM, and
+        // the value we WROTE. The rollback is generation-aware — it only restores if
+        // the current stored value is still the one we wrote, so a concurrent toggle
+        // that landed in between (A and B both toggling the same channel) is not
+        // clobbered by A's late rollback.
         let toggledEphemeralFrom: boolean | null = null;
+        let toggledEphemeralTo: boolean | null = null;
         if (result.kind === "ephemeral") {
           const applied = applyDebugEphemeral(
             instancesDir,
@@ -896,6 +900,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           deferEphemeral = applied.effectiveEphemeral;
           if (applied.effectiveEphemeral !== currentEphemeral) {
             toggledEphemeralFrom = currentEphemeral;
+            toggledEphemeralTo = applied.effectiveEphemeral;
           }
         }
         // Roll the ephemeral toggle back to its prior value. The toggle persisted
@@ -906,12 +911,22 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         // so the outer catch can also invoke it; cleared once the defer succeeds.
         const rollbackEphemeral = (): void => {
           if (toggledEphemeralFrom !== null && interactionChannelId) {
+            // Generation-aware: only restore if the stored value is still what we
+            // wrote. If a concurrent toggle changed it in the meantime, that newer
+            // intent wins and we must not clobber it.
+            const now = readEphemeralCommands(instancesDir, interactionChannelId);
+            if (now !== toggledEphemeralTo) {
+              toggledEphemeralFrom = null;
+              toggledEphemeralTo = null;
+              return;
+            }
             if (!setEphemeralCommands(instancesDir, interactionChannelId, toggledEphemeralFrom)) {
               runtime.error(
                 `[router] failed to roll back ephemeral preference for channel ${interactionChannelId} after a failed defer`,
               );
             }
             toggledEphemeralFrom = null;
+            toggledEphemeralTo = null;
           }
         };
         // Expose the rollback to the catch so a thrown/aborted defer also undoes the

@@ -214,6 +214,23 @@ async function handleUnregister(body: UnregisterRequest): Promise<ProvisionRespo
     };
   }
   if (result.code !== 0) {
+    // A non-zero/timeout (e.g. the 120s SIGKILL) may have landed AFTER purge crossed
+    // its commit point: purge_locked renames the live instance dir to a tombstone
+    // (stopping the container, freeing the port) and only then wipes it detached, so
+    // the shell can be killed between the rename and a clean exit. Reconcile against
+    // the filesystem: if the instance dir is already gone, the teardown committed, so
+    // report success and let the router reloadInstances (stop routing to a now-gone
+    // instance) rather than reporting a failure that keeps stale state.
+    if (!fs.existsSync(path.join(INSTANCES_DIR, body.channelId))) {
+      console.log(
+        `[provisioner] purge ${body.channelId} exited ${result.code} but the instance dir is gone; treating as committed`,
+      );
+      return {
+        ok: true,
+        message:
+          "Channel unregistered. The agent and container are stopped and the port is freed; data cleanup is finishing in the background.",
+      };
+    }
     console.error(`[provisioner] purge ${body.channelId} failed: ${result.stderr.trim()}`);
     return { ok: false, message: "Failed to remove the instance. Check the provisioner logs." };
   }
