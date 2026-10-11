@@ -152,6 +152,9 @@ describe("discord router channel-delete cleanup", () => {
     // Provisioner env so the router builds a real daemon client (not the stub).
     process.env.OPENCLAW_PROVISIONER_PORT = "18810";
     process.env.OPENCLAW_PROVISIONER_TOKEN = "secret";
+    // Pin the registration epoch so the unregister-confirmation nonce is
+    // deterministic (`e-<generation>`); production leaves it random.
+    process.env.OPENCLAW_REGISTRATION_EPOCH = "e";
 
     const realOnce = process.once.bind(process);
     vi.spyOn(process, "once").mockImplementation(((event: string, listener: () => void) => {
@@ -171,6 +174,7 @@ describe("discord router channel-delete cleanup", () => {
     await Promise.allSettled(startedRouters);
     delete process.env.OPENCLAW_PROVISIONER_PORT;
     delete process.env.OPENCLAW_PROVISIONER_TOKEN;
+    delete process.env.OPENCLAW_REGISTRATION_EPOCH;
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -1246,7 +1250,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1322,7 +1326,7 @@ describe("discord router channel-delete cleanup", () => {
         token: "tok",
         channel_id: CHANNEL,
         guild_id: GUILD,
-        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
+        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
         member: { user: { id: OWNER } },
       });
     // First click starts teardown (now blocked on the gate). Second click arrives
@@ -1401,7 +1405,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1413,7 +1417,7 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:1` },
+      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
@@ -1467,7 +1471,7 @@ describe("discord router channel-delete cleanup", () => {
       channel_id: CHANNEL,
       guild_id: GUILD,
       // custom_id names OWNER as initiator, but a different user clicks.
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:1` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: "444444444444444444" } },
     });
     await vi.advanceTimersByTimeAsync(0);

@@ -412,6 +412,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
   };
 
+  // A process-unique epoch, mixed into the unregister-confirmation nonce so a
+  // confirmation issued before a router restart can never validate afterward. The
+  // connection registration generation counter resets to 0 on startup, so without
+  // this a restart could hand a replacement registration the same integer a
+  // pre-restart button carried, letting that stale button purge the new instance.
+  // Base36 of the start time plus a random suffix is colon-free (safe in the
+  // colon-delimited custom_id) and collision-resistant across restarts.
+  // OPENCLAW_REGISTRATION_EPOCH pins it for deterministic tests; it is never set in
+  // production (the random value is what guarantees cross-restart uniqueness).
+  const registrationEpoch =
+    process.env.OPENCLAW_REGISTRATION_EPOCH ||
+    `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
   // `instanceDir` is stable across unregister/re-register, so connection
   // authorization uses an in-memory identity that rotates for each registration.
   let connectionRegistrationGeneration = 0;
@@ -564,11 +576,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     describeInstance,
     // Per-registration nonce used to bind an unregister confirmation to the exact
     // registration it was shown for. Reuse the connection registration key, which
-    // already rotates on every (un)register; take its generation prefix (the
-    // integer before the ":") so the value is colon-free for the custom_id.
+    // rotates on every (un)register; take its generation prefix (the integer before
+    // the ":"), and prefix the process-unique epoch so the value is both colon-free
+    // (safe in the custom_id) and unique across router restarts (the generation
+    // counter resets to 0 on startup, so the epoch is what stops a pre-restart
+    // button from validating against a same-numbered post-restart registration).
     registrationNonce: (channelId) => {
       const key = currentConnectionRegistrationKey(channelId);
-      return key === null ? null : key.split(":")[0];
+      return key === null ? null : `${registrationEpoch}-${key.split(":")[0]}`;
     },
     // The router shares the host network, so the agent container's port is
     // reachable on loopback; a quick TCP connect tells `/channel status`

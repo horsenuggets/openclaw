@@ -293,7 +293,11 @@ export type UnregisterButton = {
   kind: "confirm" | "cancel";
   channelId: string;
   initiatorId: string;
-  /** Registration generation the button was issued for (the instance port). */
+  /**
+   * The per-registration nonce the button was issued for (see
+   * `ChannelCommandDeps.registrationNonce`), NOT the instance port. Revalidated at
+   * click time so a stale confirmation cannot purge a re-registered instance.
+   */
   gen: string;
 };
 
