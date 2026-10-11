@@ -50,6 +50,21 @@ it("reads an empty object when the file holds malformed JSON", () => {
   expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({});
 });
 
+it("does not fall back to the legacy block when the new file is present but malformed", () => {
+  // A corrupt new-store file (e.g. a damaged tombstone) must read as defaults, not
+  // reactivate a stale legacy setting. The fallback applies only when it is absent.
+  const legacyDir = path.join(instancesDir, CHANNEL);
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(legacyDir, ".onboarding.json"),
+    JSON.stringify({ preferences: { lifecycleMessages: true } }),
+  );
+  const file = userPreferencesPath(instancesDir, CHANNEL);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, "{ not json");
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({});
+});
+
 it("reads an empty object when the stored value is not an object", () => {
   const file = userPreferencesPath(instancesDir, CHANNEL);
   fs.mkdirSync(path.dirname(file), { recursive: true });

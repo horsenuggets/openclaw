@@ -37,12 +37,17 @@ function asPreferences(raw: unknown): UserPreferences {
  * next {@link writeUserPreferences} migrates it forward to the new store.
  */
 export function readUserPreferences(instancesDir: string, channelId: string): UserPreferences {
-  try {
-    return asPreferences(
-      JSON.parse(fs.readFileSync(userPreferencesPath(instancesDir, channelId), "utf-8")),
-    );
-  } catch {
-    // New store absent/unreadable: fall back to the legacy .onboarding.json block.
+  // Fall back to the legacy block ONLY when the new store is absent. A present but
+  // malformed/unreadable new-store file (including an empty tombstone that got
+  // corrupted) reads as defaults and must NOT re-expose the legacy block, or a
+  // cleared channel could resurrect a stale legacy lifecycle setting.
+  const file = userPreferencesPath(instancesDir, channelId);
+  if (fs.existsSync(file)) {
+    try {
+      return asPreferences(JSON.parse(fs.readFileSync(file, "utf-8")));
+    } catch {
+      return {};
+    }
   }
   try {
     const legacy = JSON.parse(
