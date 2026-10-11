@@ -39,14 +39,24 @@ before starting each box, so a deploy self-heals stale instance configs.
 ## openclawctl
 
 `infrastructure/scripts/openclawctl` manages instances. Subcommands » `add-dm`,
-`add-channel`, `remove`, `restart`, `reconcile`, and `list`. (Workspace seeding is an
-internal function called during add, not a standalone subcommand.)
+`add-channel`, `remove`, `purge`, `restart`, `reconcile`, and `list`. (Workspace seeding
+is an internal function called during add, not a standalone subcommand.)
 
 - `reconcile <id>` re-asserts the proxy URLs and `workspace=/workspace` in an instance
   config and keeps the same port, without recreating the container. It refuses legacy
   instances that were never prepared.
-- `remove <id>` stops the container and frees the port but preserves instance data under
-  `~/.openclaw-instances/<id>/`; deleting data is a separate manual step.
+- `remove <id>` is non-destructive » it stops the container and frees the port but
+  preserves instance data under `~/.openclaw-instances/<id>/`; deleting data is a separate
+  manual step.
+- `purge <id>` is the destructive full teardown » it stops and deletes the container and
+  wipes the whole instance directory (which also frees the port), so a re-register starts
+  clean. It aborts before wiping if the container cannot be torn down (daemon down or
+  removal denied) so it never strands a running container on a freed port while deleting
+  its data. The provisioner's `/channel unregister` now uses `purge` (not `remove`).
+- `add`, `remove`, and `purge` each hold a per-channel lifecycle lock across their whole
+  operation, so a concurrent add and purge for the same channel are serialized (an add
+  releases the port lock the moment it reserves a port, so without this a purge could wipe
+  the instance dir in the gap before the container starts).
 - Port allocation skips currently-listening ports to avoid bind clashes, and each gateway
   also opens a dynamic secondary port that is not recorded in `.port`.
 

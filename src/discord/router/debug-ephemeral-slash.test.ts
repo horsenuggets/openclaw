@@ -111,3 +111,14 @@ it("reports a save failure instead of a success toggle when the write fails", as
     "Could not save the ephemeral command preference",
   );
 });
+
+it("defers ephemeral for a failed `ephemeral off` so the did-not-stick reply stays private", async () => {
+  // A new channel is private by default. If `ephemeral off` fails to persist, the
+  // channel is still private, so the reply (including the "did not stick" notice)
+  // must be deferred ephemeral (flags 64) rather than public — the persistence
+  // runs before the defer and the defer flag reflects the actual post-write value.
+  fs.writeFileSync(path.join(instancesDir, "shared"), "not a directory");
+  const { callbacks } = await runDebugSlash({ command: "ephemeral off", isAdmin: true });
+  expect(callbacks[0]?.type).toBe(5);
+  expect(callbacks[0]?.data?.flags).toBe(64);
+});

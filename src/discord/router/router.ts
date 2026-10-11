@@ -517,6 +517,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         unregister: async (p) => {
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
+            // Drop any pending unauthorized-notice windows for the channel so a
+            // queued trailing notice cannot fire after the owner is gone and post
+            // using the captured former owner/status.
+            unauthorizedNoticeDebouncer.cancelChannel(p.channelId);
             // Preferences live outside the instance dir the provisioner tears down
             // (so the router can write them under a read-only instances mount), so
             // reset them here, scoped to exactly the channel that was unregistered.
@@ -662,6 +666,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // removed from a guild), tear the instance down through the same provisioning
   // path `/channel unregister` uses.
   const cleanupDeletedChannel = (channelId: string, reason: string): void => {
+    // Drop any pending unauthorized-notice windows for this channel first: a
+    // queued trailing notice would otherwise fire after teardown and post to a
+    // now-ownerless (or deleted) channel using the captured former owner.
+    unauthorizedNoticeDebouncer.cancelChannel(channelId);
     void handleChannelDeleted(channelId, reason, {
       describeInstance,
       provisioning,
@@ -1003,6 +1011,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         clearInterval(heartbeatInterval);
         heartbeatInterval = undefined;
       }
+      // Drop any pending unauthorized-notice windows so a trailing reply cannot
+      // fire (or hit the Discord API) mid-shutdown. The timers are also unref'd,
+      // so even without this they would not hold the event loop open.
+      unauthorizedNoticeDebouncer.cancelAll();
       if (currentWs) {
         currentWs.close();
       }

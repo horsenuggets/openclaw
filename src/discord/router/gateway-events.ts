@@ -26,7 +26,6 @@ import {
   type DebugResult,
   debugSubcommandLabel,
   parseDebugTextCommand,
-  peekDebugEphemeralDesired,
   runDebugCommand,
 } from "./debug-command.js";
 import { resolveEphemeralCommand } from "./debug-ephemeral.js";
@@ -231,26 +230,41 @@ function deliverDebugSecret(params: {
  * change did not stick, matching /lifecycle, which surfaces the failure rather
  * than claiming a success the user would not see survive a restart. Shared by the
  * slash and text paths.
+ *
+ * Also returns `effectiveEphemeral`: the channel's ACTUAL ephemeral-commands
+ * value after this call (the new value on a successful write, the unchanged
+ * current value on a status query or a failed write). The slash path persists via
+ * this helper BEFORE deferring and uses `effectiveEphemeral` for the defer flag,
+ * so the reply's ephemerality always matches the stored setting even when the
+ * write fails (otherwise a failed `ephemeral off` would still have deferred the
+ * "did not stick" reply publicly while the channel stayed private).
  */
 function applyDebugEphemeral(
   instancesDir: string,
   channelId: string,
   desired: boolean | null,
   runtime: GatewayContext["runtime"],
-): BuiltEmbed {
+): { embed: BuiltEmbed; effectiveEphemeral: boolean } {
   const current = readEphemeralCommands(instancesDir, channelId);
   const outcome = resolveEphemeralCommand(current, desired);
   if (outcome.kind === "status") {
-    return buildLogEmbed(outcome.description);
+    return { embed: buildLogEmbed(outcome.description), effectiveEphemeral: current };
   }
   if (!setEphemeralCommands(instancesDir, channelId, outcome.newValue)) {
     runtime.error(`[router] failed to persist ephemeral preference for channel ${channelId}`);
-    return buildLogEmbed(
-      "Could not save the ephemeral command preference. Please try again. (The change did not stick.)",
-    );
+    return {
+      embed: buildLogEmbed(
+        "Could not save the ephemeral command preference. Please try again. (The change did not stick.)",
+      ),
+      // The write did not stick, so the channel keeps its current value.
+      effectiveEphemeral: current,
+    };
   }
   runtime.log(`[router] /debug ephemeral for channel ${channelId}: ${outcome.state}`);
-  return buildCommandResultEmbed(outcome.description, outcome.state);
+  return {
+    embed: buildCommandResultEmbed(outcome.description, outcome.state),
+    effectiveEphemeral: outcome.newValue,
+  };
 }
 
 /**
@@ -534,8 +548,9 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         );
       } else if (result.kind === "ephemeral") {
         // Text replies are always in-channel (bots cannot send ephemerals), so
-        // the toggle only persists the preference for later slash replies here.
-        reply(applyDebugEphemeral(instancesDir, channelId, result.desired, runtime));
+        // the toggle only persists the preference for later slash replies here;
+        // the effectiveEphemeral value is irrelevant for this in-channel reply.
+        reply(applyDebugEphemeral(instancesDir, channelId, result.desired, runtime).embed);
       } else if (result.kind === "embeds") {
         void discordSendReply(discordToken, channelId, commandMessageId, {
           embeds: result.embeds,
@@ -804,14 +819,6 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         (o) => o.name === "command",
       )?.value ?? "",
     );
-    // `ephemeral on/off` changes the very preference that fixes this reply's
-    // ephemerality, and Discord locks that in at defer time, so resolve the
-    // *resulting* value: an explicit on/off uses the new value, everything else
-    // (including a bare status query) uses the current one.
-    const desiredEphemeral = peekDebugEphemeralDesired(commandInput);
-    const resultingEphemeral =
-      desiredEphemeral ??
-      (interactionChannelId ? readEphemeralCommands(instancesDir, interactionChannelId) : true);
     void (async () => {
       try {
         // Authorize BEFORE the first interaction response. Discord fixes a reply's
@@ -839,23 +846,44 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           });
           return;
         }
+        const result = runDebugCommand(commandInput);
+        // `ephemeral on/off` changes the very preference that fixes this reply's
+        // ephemerality, which Discord locks at defer time. So for the ephemeral
+        // subcommand, persist the toggle NOW (after authorization, before the
+        // defer) and derive the defer flag from the ACTUAL post-write value: a
+        // failed `ephemeral off` keeps the channel private, so the "did not stick"
+        // reply must still be ephemeral rather than public. Every other subcommand
+        // defers with the channel's current preference. The persisted embed is
+        // reused for the edit below so the write runs exactly once.
+        let prebuiltEphemeral: BuiltEmbed | null = null;
+        let deferEphemeral = interactionChannelId
+          ? readEphemeralCommands(instancesDir, interactionChannelId)
+          : true;
+        if (result.kind === "ephemeral") {
+          const applied = applyDebugEphemeral(
+            instancesDir,
+            interactionChannelId ?? "",
+            result.desired,
+            runtime,
+          );
+          prebuiltEphemeral = applied.embed;
+          deferEphemeral = applied.effectiveEphemeral;
+        }
         const deferResp = await fetch(
           `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: 5, data: { flags: resultingEphemeral ? 64 : 0 } }),
+            body: JSON.stringify({ type: 5, data: { flags: deferEphemeral ? 64 : 0 } }),
           },
         );
         if (!deferResp.ok) {
           runtime.error(`[router] debug defer failed (${deferResp.status})`);
           return;
         }
-        const result = runDebugCommand(commandInput);
         // `secrettest` delivers a secret to the channel's agent and acks with a
-        // single embed; `ephemeral` persists the toggle and renders a status
-        // (Log) or toggle (Command Result) embed; everything else renders its own
-        // embeds or raw content.
+        // single embed; `ephemeral` edits in the embed built (and persisted)
+        // before the defer; everything else renders its own embeds or raw content.
         let res: { ok: boolean; status: number };
         if (result.kind === "secret") {
           const ack = deliverDebugSecret({
@@ -872,12 +900,8 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
             attachments: ack.attachments,
           });
         } else if (result.kind === "ephemeral") {
-          const built = applyDebugEphemeral(
-            instancesDir,
-            interactionChannelId ?? "",
-            result.desired,
-            runtime,
-          );
+          // Already persisted and built above (before the defer).
+          const built = prebuiltEphemeral ?? buildLogEmbed("");
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: [built.embed],
             attachments: built.attachments,

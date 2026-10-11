@@ -136,4 +136,55 @@ describe("createNoticeDebouncer", () => {
     h.fire();
     expect(send).toHaveBeenCalledTimes(1); // only the leading send, no trailing
   });
+
+  it("cancelChannel drops every per-user window for a channel without touching others", () => {
+    const h = harness();
+    const d = createNoticeDebouncer({
+      windowMs: 5000,
+      setTimer: h.setTimer,
+      clearTimer: h.clearTimer,
+    });
+    const u1 = vi.fn();
+    const u2 = vi.fn();
+    const other = vi.fn();
+    // Two users offending in channel A, plus one in channel B. Keys are
+    // `channelId:userId`, and each key owes a trailing reply after its leading one.
+    d.trigger("A:u1", u1);
+    d.trigger("A:u1", u1);
+    d.trigger("A:u2", u2);
+    d.trigger("A:u2", u2);
+    d.trigger("B:u1", other);
+    d.trigger("B:u1", other);
+    expect(d.activeCount()).toBe(3);
+    // Tearing down channel A drops both of A's windows; B is untouched.
+    d.cancelChannel("A");
+    expect(d.activeCount()).toBe(1);
+    h.fire();
+    // A's trailing replies never fire (still just their leading send); B's does.
+    expect(u1).toHaveBeenCalledTimes(1);
+    expect(u2).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancelAll drops every pending window (shutdown)", () => {
+    const h = harness();
+    const d = createNoticeDebouncer({
+      windowMs: 5000,
+      setTimer: h.setTimer,
+      clearTimer: h.clearTimer,
+    });
+    const a = vi.fn();
+    const b = vi.fn();
+    d.trigger("A:u1", a);
+    d.trigger("A:u1", a);
+    d.trigger("B:u2", b);
+    d.trigger("B:u2", b);
+    expect(d.activeCount()).toBe(2);
+    d.cancelAll();
+    expect(d.activeCount()).toBe(0);
+    h.fire();
+    // No trailing replies fire after cancelAll; only the earlier leading sends.
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+  });
 });

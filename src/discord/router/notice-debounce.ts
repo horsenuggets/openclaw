@@ -33,6 +33,15 @@ export type NoticeDebouncer = {
   trigger: (key: string, send: () => void) => void;
   /** Drop any pending timer for a key (e.g. when its channel is torn down). */
   cancel: (key: string) => void;
+  /**
+   * Drop every pending window for a channel. Keys are `channelId:userId`, so this
+   * cancels all per-user windows under `channelId`. Call it when a channel is torn
+   * down (unregister) or deleted so a queued trailing notice cannot fire
+   * afterward and post to a now-ownerless or deleted channel.
+   */
+  cancelChannel: (channelId: string) => void;
+  /** Drop every pending window (e.g. on router shutdown). */
+  cancelAll: () => void;
   /** Number of keys with an active window. Exposed for tests. */
   activeCount: () => number;
 };
@@ -43,7 +52,18 @@ export function createNoticeDebouncer(opts: {
   clearTimer?: (handle: TimerHandle) => void;
 }): NoticeDebouncer {
   const windowMs = opts.windowMs;
-  const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  // Default timers are unref'd: a pending denial window is a best-effort
+  // notification and must never keep the process alive during shutdown (an active
+  // window could otherwise hold the event loop open for up to a window, or fire
+  // another Discord request mid-shutdown). An injected setTimer (tests) decides
+  // its own ref behavior.
+  const setTimer =
+    opts.setTimer ??
+    ((fn, ms) => {
+      const handle = setTimeout(fn, ms);
+      handle.unref?.();
+      return handle;
+    });
   const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
   const entries = new Map<string, Entry>();
 
@@ -83,6 +103,22 @@ export function createNoticeDebouncer(opts: {
         clearTimer(entry.timer);
         entries.delete(key);
       }
+    },
+    cancelChannel: (channelId) => {
+      // Keys are `channelId:userId`; drop every window under this channel.
+      const prefix = `${channelId}:`;
+      for (const [key, entry] of entries) {
+        if (key.startsWith(prefix)) {
+          clearTimer(entry.timer);
+          entries.delete(key);
+        }
+      }
+    },
+    cancelAll: () => {
+      for (const entry of entries.values()) {
+        clearTimer(entry.timer);
+      }
+      entries.clear();
     },
     activeCount: () => entries.size,
   };
