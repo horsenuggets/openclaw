@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import {
-  deleteUserPreferences,
+  clearUserPreferences,
   readUserPreferences,
   userPreferencesPath,
   writeUserPreferences,
@@ -57,12 +57,26 @@ it("reads an empty object when the stored value is not an object", () => {
   expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({});
 });
 
-it("deletes a channel's preferences and no-ops when already absent", () => {
+it("clears a channel's preferences by writing an empty tombstone", () => {
   writeUserPreferences(instancesDir, CHANNEL, { lifecycleMessages: true });
-  deleteUserPreferences(instancesDir, CHANNEL);
-  expect(fs.existsSync(userPreferencesPath(instancesDir, CHANNEL))).toBe(false);
-  // Deleting again must not throw.
-  expect(() => deleteUserPreferences(instancesDir, CHANNEL)).not.toThrow();
+  clearUserPreferences(instancesDir, CHANNEL);
+  // The file is kept (as a tombstone), not deleted, and reads back as defaults.
+  expect(fs.existsSync(userPreferencesPath(instancesDir, CHANNEL))).toBe(true);
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({});
+});
+
+it("clear suppresses the legacy fallback so re-register does not resurrect a setting", () => {
+  // The provisioner preserves the instance dir and its .onboarding.json across an
+  // unregister/re-register, so a legacy lifecycle-enabled block would otherwise be
+  // re-exposed by the fallback. The tombstone must win over it.
+  const legacyDir = path.join(instancesDir, CHANNEL);
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(legacyDir, ".onboarding.json"),
+    JSON.stringify({ preferences: { lifecycleMessages: true } }),
+  );
+  clearUserPreferences(instancesDir, CHANNEL);
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({});
 });
 
 it("falls back to the legacy .onboarding.json block when the new file is absent", () => {

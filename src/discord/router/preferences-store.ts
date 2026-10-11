@@ -66,14 +66,23 @@ export function writeUserPreferences(
 ): void {
   const file = userPreferencesPath(instancesDir, channelId);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(preferences, null, 2)}\n`);
+  // Write + rename so a crashed/partial write can never leave a truncated file a
+  // reader would treat as "{}", silently dropping a live preference.
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(preferences, null, 2)}\n`);
+  fs.renameSync(tmp, file);
 }
 
-/** Remove a channel's preferences file (no-op when absent), e.g. on unregister. */
-export function deleteUserPreferences(instancesDir: string, channelId: string): void {
-  try {
-    fs.rmSync(userPreferencesPath(instancesDir, channelId));
-  } catch {
-    // Nothing stored for this channel; deletion is a no-op.
-  }
+/**
+ * Reset a channel's preferences to defaults, e.g. on unregister. Writes an empty
+ * tombstone rather than deleting the file: a plain delete would re-expose the
+ * legacy `.onboarding.json` fallback in {@link readUserPreferences}, so a channel
+ * an older release left lifecycle-enabled would resurrect that setting when it is
+ * re-registered (the provisioner preserves the instance dir and its
+ * `.onboarding.json`). The empty file suppresses the fallback so a re-registered
+ * channel starts from defaults. Throws on a genuine write failure so the caller
+ * can log it rather than clearing silently.
+ */
+export function clearUserPreferences(instancesDir: string, channelId: string): void {
+  writeUserPreferences(instancesDir, channelId, {});
 }
