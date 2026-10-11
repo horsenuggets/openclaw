@@ -18,6 +18,12 @@ services:
       # writable; the rest of the instances tree stays read-only. The nested rw bind
       # over the ro mount above makes only shared/auth writable.
       - ~/.openclaw-instances/shared/auth:/root/.openclaw-instances/shared/auth:rw
+      # Per-channel user preferences (e.g. the /lifecycle banner toggle) are
+      # router-owned state, not provisioner-owned registration facts, so the router
+      # must be able to write them even though the rest of the instances tree stays
+      # read-only. Carve out a writable subtree the same way as shared/auth above;
+      # the health-monitor reads the same path to decide which channels get banners.
+      - ~/.openclaw-instances/shared/preferences:/root/.openclaw-instances/shared/preferences:rw
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       # Whitelist for /channel register/unregister: the auth guild id and the

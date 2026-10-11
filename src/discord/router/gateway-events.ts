@@ -829,8 +829,15 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       )?.find((o: { name: string }) => o.name === "setting")?.value;
 
       const result = resolveLifecycleCommand(current, setting);
-      if (result.newValue !== undefined) {
-        setUserPreference(instance, "lifecycleMessages", result.newValue);
+      if (
+        result.newValue !== undefined &&
+        !setUserPreference(instance, "lifecycleMessages", result.newValue)
+      ) {
+        runtime.error(
+          `[router] failed to persist lifecycle preference for channel ${interactionChannelId}`,
+        );
+        respondToInteraction("*Could not save your lifecycle preference. Please try again.*");
+        return;
       }
       const built = buildCommandResultEmbed(result.description, result.state);
       // Defer ephemerally, then edit with the uploaded footer icon (the command

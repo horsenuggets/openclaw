@@ -50,6 +50,7 @@ import {
 import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
+import { deleteUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
@@ -460,6 +461,11 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
+        // Preferences live outside the instance dir (so the router can write them
+        // under a read-only instances mount), so the provisioner's instance-dir
+        // teardown does not remove them; drop them here so a re-registered channel
+        // starts from defaults rather than inheriting a stale lifecycle toggle.
+        deleteUserPreferences(config.instancesDir, id);
       }
       runtime.log(`[router] instances reloaded: ${instances.size}`);
     } catch (err) {

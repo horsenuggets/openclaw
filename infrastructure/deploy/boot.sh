@@ -122,6 +122,12 @@ if [ ! -f "$SHARED_AUTH_FILE" ]; then
   fi
 fi
 
+# Router-owned per-channel preferences (e.g. the /lifecycle banner toggle) live
+# in a writable subtree bind-mounted into the router (see discord-router.yml).
+# Create it before any container starts so Docker binds the existing host dir
+# rather than creating a root-owned one, matching the shared/auth handling above.
+mkdir -p "$INSTANCES_DIR/shared/preferences"
+
 # Each instance owns its port as a `.port` dotfile in its own directory, so
 # there is no central ports.json to read or reconcile. Discover channels by
 # scanning for those dotfiles.

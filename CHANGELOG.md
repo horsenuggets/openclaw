@@ -6,6 +6,16 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/lifecycle` now actually persists its on/off setting on the Docker
+  deployment. Per-channel preferences moved out of the provisioner-owned
+  `.onboarding.json` into a router-owned, writable store at
+  `shared/preferences/<channelId>.json`, carved out of the read-only instances mount the
+  same way `shared/auth` is. Previously the router could not write `.onboarding.json`
+  under that read-only mount, so the write failed silently (swallowed as "best effort"),
+  the command reported success anyway, and the health-monitor never saw the flag, so
+  startup/shutdown banners never fired. `/lifecycle` now surfaces a genuine save failure
+  instead of reporting a change that did not persist, and a channel's preferences are
+  cleared on unregister.
 - Discord router: the owner gate on `/connections`, `/secret`, and `/lifecycle` now also
   applies on an unregistered channel, across both the slash and the text-command
   (tester-bot) paths. Previously these commands skipped the gate when the channel had no

@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-
-export type UserPreferences = {
-  /** Show agent startup/shutdown lifecycle banners. Default: false. */
-  lifecycleMessages?: boolean;
-};
+import {
+  readUserPreferences,
+  type UserPreferences,
+  writeUserPreferences,
+} from "./preferences-store.js";
 
 export type InstanceConfig = {
   channelId: string;
@@ -154,17 +154,9 @@ export function loadRouterConfig(opts: {
       }
     }
 
-    // User preferences (lifecycle messages, etc.) live in .onboarding.json.
-    const onboardingPath = path.join(instanceDir, ".onboarding.json");
-    let preferences: UserPreferences = {};
-    if (fs.existsSync(onboardingPath)) {
-      try {
-        const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
-        preferences = raw?.preferences ?? {};
-      } catch {
-        preferences = {};
-      }
-    }
+    // User preferences (lifecycle messages, etc.) are router-owned state kept in
+    // a writable subtree, separate from the provisioner-owned .onboarding.json.
+    const preferences: UserPreferences = readUserPreferences(instancesDir, channelId);
 
     // Env var overrides
     const envToken = process.env[`OPENCLAW_${channelId}_TOKEN`];
@@ -191,39 +183,26 @@ export function loadRouterConfig(opts: {
   };
 }
 
-/** Read the onboarding preferences file. */
-function readOnboardingFile(instance: InstanceConfig): Record<string, unknown> {
-  try {
-    const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
-    return JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-/** Write the onboarding file preserving all fields. */
-function writeOnboardingFile(instance: InstanceConfig, data: Record<string, unknown>): void {
-  const onboardingPath = path.join(instance.instanceDir, ".onboarding.json");
-  fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
-}
-
-/** Update a user preference. */
+/**
+ * Update a user preference, persisting it to the router-owned preferences store
+ * and the in-memory instance. Returns whether the write succeeded so callers can
+ * surface a failure instead of reporting a change that did not persist (a
+ * read-only mount, for example, previously failed silently).
+ */
 export function setUserPreference(
   instance: InstanceConfig,
   key: keyof UserPreferences,
   value: boolean,
-): void {
+): boolean {
+  const instancesDir = path.dirname(instance.instanceDir);
   try {
-    const existing = readOnboardingFile(instance);
-    const raw = existing.preferences;
-    const prefs: UserPreferences =
-      raw != null && typeof raw === "object" && !Array.isArray(raw) ? (raw as UserPreferences) : {};
+    const prefs: UserPreferences = { ...readUserPreferences(instancesDir, instance.channelId) };
     prefs[key] = value;
-    existing.preferences = prefs;
-    writeOnboardingFile(instance, existing);
+    writeUserPreferences(instancesDir, instance.channelId, prefs);
     instance.preferences = prefs;
+    return true;
   } catch {
-    // Best effort
+    return false;
   }
 }
 

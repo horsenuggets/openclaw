@@ -473,8 +473,25 @@ export async function handleTextCommand(params: {
     case "lifecycle": {
       const current = instance.preferences.lifecycleMessages ?? false;
       const result = resolveLifecycleCommand(current, cmdArg);
-      if (result.newValue !== undefined) {
-        setUserPreference(instance, "lifecycleMessages", result.newValue);
+      if (
+        result.newValue !== undefined &&
+        !setUserPreference(instance, "lifecycleMessages", result.newValue)
+      ) {
+        runtime.error(`[router] failed to persist lifecycle preference for channel ${channelId}`);
+        const failed = buildLogEmbed("Could not save your lifecycle preference. Please try again.");
+        await sendEmbedMessage(discordToken, channelId, {
+          embeds: [failed.embed],
+          attachments: failed.attachments,
+          messageReference: {
+            message_id: messageId,
+            channel_id: channelId,
+            fail_if_not_exists: false,
+          },
+        });
+        runtime.log(
+          `[router] text command /lifecycle for ${userId}: arg=${cmdArg ?? "status"} (save failed)`,
+        );
+        return true;
       }
       const built = buildCommandResultEmbed(result.description, result.state);
       const sent = await sendEmbedMessage(discordToken, channelId, {

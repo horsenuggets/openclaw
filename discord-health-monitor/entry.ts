@@ -11,6 +11,7 @@ import http from "node:http";
 import path from "node:path";
 import { DISCORD_API, sendEmbedMessage } from "../src/discord/router/discord-api.js";
 import { buildLogEmbed } from "../src/discord/router/log-embed.js";
+import { readUserPreferences } from "../src/discord/router/preferences-store.js";
 import { buildLifecycleMessage, type LifecycleEvent } from "./lifecycle-message.js";
 import { readInstancePort } from "./ports.js";
 
@@ -81,16 +82,10 @@ function loadChannels(): ChannelConfig[] {
     // channels that have opted in.
     const bootstrapPath = path.join(INSTANCES_DIR, channelId, "workspace", "BOOTSTRAP.md");
     const onboarded = !fs.existsSync(bootstrapPath);
-    let lifecycleMessages = false;
-    const onboardingPath = path.join(INSTANCES_DIR, channelId, ".onboarding.json");
-    if (fs.existsSync(onboardingPath)) {
-      try {
-        const raw = JSON.parse(fs.readFileSync(onboardingPath, "utf-8"));
-        lifecycleMessages = raw?.preferences?.lifecycleMessages === true;
-      } catch {
-        // default false
-      }
-    }
+    // Preferences are router-owned state in a writable subtree, read through the
+    // same helper the router writes with so the two never disagree on location.
+    const lifecycleMessages =
+      readUserPreferences(INSTANCES_DIR, channelId).lifecycleMessages === true;
     if (onboarded && lifecycleMessages) {
       channels.push({ channelId, lifecycleMessages });
     }
