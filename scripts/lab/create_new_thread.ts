@@ -38,6 +38,7 @@ import {
   dateChannelName,
   humanMemberIds,
   nextThreadNumber,
+  reorderDayChannelsDescending,
   sanitizeThreadName,
   TESTING_CATEGORY,
   TESTING_FOOTER_ICON,
@@ -142,6 +143,30 @@ async function addEveryoneToThread(client: LabDiscord, threadId: string): Promis
   );
 }
 
+/**
+ * Reorder the Testing-category day channels so the newest date sits at the top.
+ * Re-fetches the channel list so a freshly created day channel's id and position
+ * are included. Any failure warns rather than throws: the thread creation is the
+ * important part and must not be lost over this cosmetic ordering step.
+ */
+async function reorderTestingDays(client: LabDiscord, categoryId: string): Promise<void> {
+  try {
+    const channels = await client.listGuildChannels();
+    const dayChannels = channels
+      .filter((c) => c.type === ChannelType.GuildText && c.parent_id === categoryId)
+      .map((c) => ({ id: c.id, name: c.name, position: c.position ?? 0 }));
+    const changes = reorderDayChannelsDescending(dayChannels);
+    if (changes.length > 0) {
+      await client.modifyChannelPositions(changes);
+      console.log(`Reordered ${changes.length} Testing day channel(s) newest-first.`);
+    }
+  } catch (err) {
+    console.warn(
+      `Could not reorder Testing day channels: ${err instanceof Error ? err.message : err}`,
+    );
+  }
+}
+
 async function createNewThread(): Promise<void> {
   const [title, description] = process.argv.slice(2);
   if (!title) {
@@ -202,6 +227,10 @@ async function createNewThread(): Promise<void> {
       });
       await client.sendEmbed(dayChannel.id, buildDateChannelEmbed(now), [TESTING_FOOTER_ICON]);
     }
+
+    // Keep the Testing category sorted newest-day-at-top. Runs inside the guild
+    // lock so it cannot race another run's day-channel creation.
+    await reorderTestingDays(client, testingCategory.id);
 
     // Number the new thread one past the highest existing number for the day,
     // counting both active and archived threads so numbers never collide.

@@ -12,9 +12,12 @@
  * the matched subcommand, and returns a {@link DebugResult} describing what to
  * reply with. That result is still Discord-shaped, though (embed payloads and
  * attachment names, or raw message content). The router adapter in
- * gateway-events.ts gates on admin, defers the interaction ephemerally, and
- * renders the result. Everything the command produces is delivered ephemerally,
- * so debug output never leaks to the channel.
+ * gateway-events.ts gates on admin BEFORE deferring, then defers with the
+ * channel's resolved ephemeral flag and renders the result. Authorized debug
+ * output is ephemeral by default but honors the per-channel `ephemeralCommands`
+ * preference (toggled by the `ephemeral` subcommand), so a channel set public via
+ * `/debug ephemeral off` keeps results visible for inspection. Permission denials
+ * stay ephemeral regardless.
  */
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
@@ -81,7 +84,14 @@ export const DEBUG_COMMAND_SPEC = {
 export type DebugResult =
   | { kind: "embeds"; embeds: DiscordEmbed[]; attachments: string[] }
   | { kind: "content"; content: string }
-  | { kind: "secret"; name: string; value: string };
+  | { kind: "secret"; name: string; value: string }
+  /**
+   * The `ephemeral` toggle. `desired` is the requested value (true/false) or
+   * null for a bare status query. The router owns the persistence and rendering
+   * (it reads the current value, writes `desired`, and picks the embed), so this
+   * module stays free of I/O.
+   */
+  | { kind: "ephemeral"; desired: boolean | null };
 
 /** Inputs handed to a subcommand's `run`. */
 export type DebugRunContext = {
@@ -318,6 +328,50 @@ const secretTestSubcommand: DebugSubcommand = {
   },
 };
 
+/** Tokens accepted as "turn ephemeral on" and "turn it off", respectively. */
+const EPHEMERAL_ON_TOKENS = new Set(["on", "true", "enable", "enabled", "yes"]);
+const EPHEMERAL_OFF_TOKENS = new Set(["off", "false", "disable", "disabled", "no"]);
+
+/**
+ * Interpret the argument to `ephemeral`: no argument is a status query
+ * (`desired: null`), a recognized on/off token sets the value, and anything else
+ * is invalid.
+ */
+export function resolveEphemeralArgs(
+  args: string[],
+): { desired: boolean | null } | { invalid: string } {
+  const raw = args[0];
+  if (raw === undefined || raw === "") {
+    return { desired: null };
+  }
+  const token = raw.toLowerCase();
+  if (EPHEMERAL_ON_TOKENS.has(token)) {
+    return { desired: true };
+  }
+  if (EPHEMERAL_OFF_TOKENS.has(token)) {
+    return { desired: false };
+  }
+  return { invalid: raw };
+}
+
+const ephemeralSubcommand: DebugSubcommand = {
+  name: "ephemeral",
+  usage: "ephemeral [on|off]",
+  description:
+    "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` replies are ephemeral (`/channel` and `/secret` always are). Omit the argument to see the current status.",
+  run: ({ args }) => {
+    const resolved = resolveEphemeralArgs(args);
+    if ("invalid" in resolved) {
+      return debugNotice(
+        "Unknown Ephemeral Setting",
+        `\`${clamp(resolved.invalid, MAX_ECHOED_NAME_CHARS)}\` is not a valid setting. ` +
+          "Use `ephemeral on`, `ephemeral off`, or `ephemeral` on its own to see the current status.",
+      );
+    }
+    return { kind: "ephemeral", desired: resolved.desired };
+  },
+};
+
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
@@ -328,6 +382,7 @@ const helpSubcommand: DebugSubcommand = {
 /** Every registered `/debug` subcommand. */
 export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
   echoSubcommand,
+  ephemeralSubcommand,
   secretTestSubcommand,
   helpSubcommand,
 ];
@@ -335,7 +390,9 @@ export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
 /**
  * Parse and run a `/debug` command string. An empty string or `help` prints the
  * help embed; an unknown subcommand returns a Debug-category notice pointing at
- * `help`. The returned {@link DebugResult} is rendered ephemerally by the router.
+ * `help`. The returned {@link DebugResult} is rendered by the router, ephemerally
+ * by default but honoring the channel's `ephemeralCommands` preference (a channel
+ * set public via `/debug ephemeral off` sees results in-channel).
  */
 export function runDebugCommand(input: string): DebugResult {
   const { subcommand, args } = parseDebugCommand(input);

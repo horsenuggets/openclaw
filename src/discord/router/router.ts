@@ -49,13 +49,17 @@ import {
 } from "./gateway-events.js";
 import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
+import { createNoticeDebouncer } from "./notice-debounce.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
-import { clearUserPreferences } from "./preferences-store.js";
+import { removeUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { SECRET_COMMAND_SPEC } from "./secret-command.js";
 import { createWhitelistChecker } from "./whitelist.js";
+
+/** Window for coalescing repeated unauthorized-access notices to one reply. */
+const UNAUTHORIZED_NOTICE_DEBOUNCE_MS = 5000;
 
 /**
  * PUT a JSON body to a Discord application-command endpoint and surface a non-OK
@@ -382,6 +386,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   const unauthorizedNoticeEnabled =
     parseBooleanValue(process.env.OPENCLAW_ROUTER_UNAUTHORIZED_NOTICE) !== false;
 
+  // Coalesce the unauthorized notice per user+channel: the first offending
+  // message is answered immediately, then at most one reply per window while the
+  // spam continues, so a flood never earns a reply-per-message storm.
+  const unauthorizedNoticeDebouncer = createNoticeDebouncer({
+    windowMs: UNAUTHORIZED_NOTICE_DEBOUNCE_MS,
+  });
+
   // Read-only view of an instance for `/channel status`. Owner is stored by the
   // provisioner in .onboarding.json; onboarded == first-run BOOTSTRAP.md gone.
   const describeInstance = (channelId: string): InstanceStatus | null => {
@@ -401,6 +412,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return { port: inst.port, ownerId, onboarded: !bootstrapExists(inst) };
   };
 
+  // A process-unique epoch, mixed into the unregister-confirmation nonce so a
+  // confirmation issued before a router restart can never validate afterward. The
+  // connection registration generation counter resets to 0 on startup, so without
+  // this a restart could hand a replacement registration the same integer a
+  // pre-restart button carried, letting that stale button purge the new instance.
+  // Base36 of the start time plus a random suffix is colon-free (safe in the
+  // colon-delimited custom_id) and collision-resistant across restarts.
+  // OPENCLAW_REGISTRATION_EPOCH pins it for deterministic tests; it is never set in
+  // production (the random value is what guarantees cross-restart uniqueness).
+  const registrationEpoch =
+    process.env.OPENCLAW_REGISTRATION_EPOCH ||
+    `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
   // `instanceDir` is stable across unregister/re-register, so connection
   // authorization uses an in-memory identity that rotates for each registration.
   let connectionRegistrationGeneration = 0;
@@ -430,6 +453,38 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     return key;
   };
 
+  // Host registration tokens, keyed by channel. Declared here so reloadInstances
+  // (below) can hydrate it from disk; populated authoritatively on register. The
+  // provisioner mints a fresh token per successful (re-)register (openclawctl's
+  // `.reg-token`). An unregister confirmation carries it so the host can refuse a
+  // purge whose token no longer matches (an atomic, under-the-lifecycle-lock guard
+  // against purging a replacement registration). Surfaced as the authoritative
+  // registrationNonce.
+  const hostRegTokens = new Map<string, string>();
+  // Read an instance's persisted host registration token from disk (empty/absent
+  // => undefined). Lets the router recover tokens across restarts and for
+  // registrations it did not create this session, so the host-atomic stale-purge
+  // guard is available then too (not only for registrations made this session).
+  const readHostRegToken = (instanceDir: string): string | undefined => {
+    try {
+      const raw = fs.readFileSync(path.join(instanceDir, ".reg-token"), "utf-8").trim();
+      return raw || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // Hydrate host registration tokens for the instances loaded at startup (the map
+  // is built from config before any reload), so the host-atomic stale-purge guard
+  // works immediately after a restart rather than only for registrations made this
+  // session.
+  for (const [id, inst] of instances) {
+    const token = readHostRegToken(inst.instanceDir);
+    if (token) {
+      hostRegTokens.set(id, token);
+    }
+  }
+
   // Reconcile the in-memory instance map with disk. The map is built once at
   // startup, so after the daemon creates/removes an instance we re-scan so the
   // channel becomes (or stops being) routable immediately, without a restart.
@@ -448,6 +503,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         if (!existing || existing.instanceDir !== inst.instanceDir) {
           connectionRegistrationKeys.set(id, nextConnectionRegistrationKey(id));
         }
+        // Hydrate the host registration token from disk so a post-restart (or
+        // pre-existing) registration still carries it on unregister. A register
+        // handler overwrites this with the freshly minted token; here we only fill
+        // from disk so a stale in-memory token is refreshed to the current one.
+        const diskToken = readHostRegToken(inst.instanceDir);
+        if (diskToken) {
+          hostRegTokens.set(id, diskToken);
+        }
       }
       const removed: string[] = [];
       for (const id of instances.keys()) {
@@ -458,6 +521,7 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       for (const id of removed) {
         instances.delete(id);
         connectionRegistrationKeys.delete(id);
+        hostRegTokens.delete(id);
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
@@ -493,36 +557,76 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         })
       : null;
   // Reconcile the instance map after any successful provisioning change.
+  // (hostRegTokens is declared above so reloadInstances can hydrate it from disk.)
   const provisioning: ProvisioningClient = daemonProvisioning
     ? {
         register: async (p) => {
           const result = await daemonProvisioning.register(p);
           if (result.ok) {
+            if (result.regToken) {
+              hostRegTokens.set(p.channelId, result.regToken);
+            } else {
+              // A register with no token (older provisioner) leaves the nonce
+              // unknown; drop any stale entry so registrationNonce falls back to the
+              // in-memory epoch-generation rather than a wrong token.
+              hostRegTokens.delete(p.channelId);
+            }
             reloadInstances();
             rotateConnectionRegistrationKey(p.channelId);
           }
           return result;
         },
         unregister: async (p) => {
-          const result = await daemonProvisioning.unregister(p);
-          if (result.ok) {
-            // Preferences live outside the instance dir the provisioner tears down
-            // (so the router can write them under a read-only instances mount), so
-            // reset them here, scoped to exactly the channel that was unregistered.
-            // This must not live in reloadInstances' reconciliation: that treats any
-            // instance missing from a fresh scan (e.g. a transiently unreadable
-            // `.port`) as removed and would clear a live channel's preferences.
-            try {
-              clearUserPreferences(config.instancesDir, p.channelId);
-            } catch (err) {
-              runtime.error(
-                `[router] failed to clear preferences for unregistered channel ${p.channelId}: ${String(err)}`,
-              );
+          // Suppress unauthorized-notice windows for the channel for the WHOLE
+          // teardown, not just cancel them once up front. The instance stays in the
+          // `instances` map until this request succeeds and we reloadInstances, so
+          // an unauthorized message during a slow purge could otherwise open a NEW
+          // window whose trailing send fires after teardown using the former
+          // owner/status. Suppression cancels the current windows and no-ops any
+          // trigger for this channel until we lift it below.
+          unauthorizedNoticeDebouncer.suppressChannel(p.channelId);
+          try {
+            // Carry the host registration token so the host can atomically refuse a
+            // stale purge. Prefer an explicit token from the caller; otherwise fall
+            // back to the one we recorded at register time.
+            const expectedRegToken = p.expectedRegToken ?? hostRegTokens.get(p.channelId);
+            const result = await daemonProvisioning.unregister({
+              channelId: p.channelId,
+              ...(expectedRegToken ? { expectedRegToken } : {}),
+            });
+            if (result.ok) {
+              hostRegTokens.delete(p.channelId);
+              // Hard-delete the channel's preferences (not a tombstone): the purge
+              // wiped the instance dir and its legacy `.onboarding.json`, so there is
+              // nothing left to fall back to, and the "all data removed" promise must
+              // leave no per-channel metadata behind. Scoped to exactly this channel;
+              // this must not live in reloadInstances' reconciliation, which treats a
+              // transiently unreadable instance as removed and would wipe a live
+              // channel's preferences.
+              try {
+                removeUserPreferences(config.instancesDir, p.channelId);
+              } catch (err) {
+                runtime.error(
+                  `[router] failed to remove preferences for unregistered channel ${p.channelId}: ${String(err)}`,
+                );
+              }
+              reloadInstances();
+              rotateConnectionRegistrationKey(p.channelId);
+            } else {
+              // A failed unregister (notably the host refusing a stale-token purge of
+              // a re-registered channel) must refresh our cached token: otherwise
+              // hostRegTokens keeps the OLD token, so the next dialog reuses it and is
+              // rejected forever until a restart. Reconcile so the replacement
+              // registration's current on-disk token is hydrated before the retry.
+              reloadInstances();
             }
-            reloadInstances();
-            rotateConnectionRegistrationKey(p.channelId);
+            return result;
+          } finally {
+            // Lift suppression whether teardown succeeded or failed. On success the
+            // channel is gone, so no new denials will arise; on failure a later
+            // offending message legitimately opens a fresh window again.
+            unauthorizedNoticeDebouncer.unsuppressChannel(p.channelId);
           }
-          return result;
         },
       }
     : stubProvisioning;
@@ -531,7 +635,27 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     isWhitelisted: whitelist.isWhitelisted,
     isAdmin: whitelist.isAdmin,
     whitelistConfigured: whitelist.isConfigured,
+    // The bot's own user id equals its application id, so a channel registered
+    // to applicationId would be owned by the bot itself; refuse it up front.
+    isSelf: (userId) => userId === applicationId,
     describeInstance,
+    // Per-registration nonce used to bind an unregister confirmation to the exact
+    // registration it was shown for. Prefer the HOST registration token (minted per
+    // (re-)register by openclawctl): it is persisted on the host and validated there
+    // under the lifecycle lock, so passing it as expectedRegToken makes the purge
+    // atomic with any concurrent re-register (and it survives a router restart). It
+    // is hex, so colon-free and safe in the custom_id. Fall back to the in-memory
+    // epoch-generation when no host token is known (stub provisioner / older host):
+    // that still gives the router-side recheck a value, just without the host-atomic
+    // guarantee.
+    registrationNonce: (channelId) => {
+      const hostToken = hostRegTokens.get(channelId);
+      if (hostToken) {
+        return hostToken;
+      }
+      const key = currentConnectionRegistrationKey(channelId);
+      return key === null ? null : `${registrationEpoch}-${key.split(":")[0]}`;
+    },
     // The router shares the host network, so the agent container's port is
     // reachable on loopback; a quick TCP connect tells `/channel status`
     // whether the agent is actually up.
@@ -648,6 +772,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
   // removed from a guild), tear the instance down through the same provisioning
   // path `/channel unregister` uses.
   const cleanupDeletedChannel = (channelId: string, reason: string): void => {
+    // Drop any pending unauthorized-notice windows for this channel first: a
+    // queued trailing notice would otherwise fire after teardown and post to a
+    // now-ownerless (or deleted) channel using the captured former owner.
+    unauthorizedNoticeDebouncer.cancelChannel(channelId);
     void handleChannelDeleted(channelId, reason, {
       describeInstance,
       provisioning,
@@ -671,12 +799,15 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     discordToken,
     applicationId,
     runtime,
+    instancesDir: config.instancesDir,
     instances,
     channelQueue,
     channelGuild,
     allowedBotIds,
     ownerGatedBotIds,
     unauthorizedNoticeEnabled,
+    unauthorizedNoticeDebouncer,
+    unregisterInFlight: new Set<string>(),
     describeInstance,
     isAdmin: whitelist.isAdmin,
     channelCommandDeps,
@@ -986,6 +1117,10 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         clearInterval(heartbeatInterval);
         heartbeatInterval = undefined;
       }
+      // Drop any pending unauthorized-notice windows so a trailing reply cannot
+      // fire (or hit the Discord API) mid-shutdown. The timers are also unref'd,
+      // so even without this they would not hold the event loop open.
+      unauthorizedNoticeDebouncer.cancelAll();
       if (currentWs) {
         currentWs.close();
       }

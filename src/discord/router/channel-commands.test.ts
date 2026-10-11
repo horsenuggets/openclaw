@@ -4,8 +4,8 @@ import {
   type ChannelReplyPayload,
   type InstanceStatus,
   buildUnregisterCustomId,
+  decideUnregisterClick,
   handleChannelCommand,
-  handleUnregisterButtonClick,
   isUnregisterConfirmArg,
   parseChannelTextCommand,
   parseUnregisterCustomId,
@@ -73,24 +73,28 @@ describe("parseUserMention", () => {
 });
 
 describe("parseUnregisterCustomId", () => {
-  it("round-trips confirm and cancel ids without confusing the shared prefix", () => {
-    const confirm = buildUnregisterCustomId("confirm", "C1", "U1");
-    const cancel = buildUnregisterCustomId("cancel", "C1", "U1");
+  it("round-trips confirm and cancel ids (with the registration gen) without confusing the shared prefix", () => {
+    const confirm = buildUnregisterCustomId("confirm", "C1", "U1", "18001");
+    const cancel = buildUnregisterCustomId("cancel", "C1", "U1", "18001");
     expect(parseUnregisterCustomId(confirm)).toEqual({
       kind: "confirm",
       channelId: "C1",
       initiatorId: "U1",
+      gen: "18001",
     });
     expect(parseUnregisterCustomId(cancel)).toEqual({
       kind: "cancel",
       channelId: "C1",
       initiatorId: "U1",
+      gen: "18001",
     });
   });
 
   it("returns null for unrelated ids", () => {
-    expect(parseUnregisterCustomId("something-else:C:U")).toBeNull();
+    expect(parseUnregisterCustomId("something-else:C:U:1")).toBeNull();
     expect(parseUnregisterCustomId("chan-unreg:onlytwo")).toBeNull();
+    // A legacy 3-segment id (no gen) no longer parses.
+    expect(parseUnregisterCustomId("chan-unreg:C1:U1")).toBeNull();
   });
 });
 
@@ -142,7 +146,11 @@ function makeDeps(over: Partial<ChannelCommandDeps> = {}): ChannelCommandDeps {
     isWhitelisted: vi.fn(async () => true),
     isAdmin: vi.fn(async () => false),
     whitelistConfigured: () => true,
+    isSelf: () => false,
     describeInstance: () => null,
+    // Per-registration nonce; tests that exercise the unregister button build
+    // custom_ids with gen "1" to match this default (see buildUnregisterCustomId).
+    registrationNonce: () => "1",
     provisioning: {
       register: vi.fn(async () => ({ ok: true, message: "registered" })),
       unregister: vi.fn(async () => ({ ok: true, message: "removed" })),
@@ -377,6 +385,29 @@ describe("handleChannelCommand register", () => {
     );
   });
 
+  it("refuses to register the bot itself and names it an unavailable user", async () => {
+    const register = vi.fn();
+    const { ctx, replies } = makeCtx("register", ["<@888888888888888888>"], {
+      isDM: false,
+      userId: "ADMIN",
+    });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        isAdmin: async () => true,
+        isSelf: (id) => id === "888888888888888888",
+        provisioning: { register, unregister: vi.fn() },
+      }),
+    );
+    expect(register).not.toHaveBeenCalled();
+    const { embed } = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Unavailable User");
+    expect(embed.description).toContain("cannot be registered under <@888888888888888888>");
+    expect(embed.description).toContain("bot and cannot own an agent instance");
+    // Uses the yellow Channel Registration embed, not the Log permission embed.
+    expect(embed.footer?.text).toBe("Channel Registration");
+  });
+
   it("blocks register when the whitelist is not configured", async () => {
     const register = vi.fn();
     const { ctx, replies } = makeCtx("register", [], { isDM: true });
@@ -450,7 +481,9 @@ describe("handleChannelCommand unregister", () => {
     const { embed, components } = embedOf(replies[0].payload);
     expect(embed.description).toContain("Are you sure");
     const button = components?.[0].components[0];
-    expect(button?.custom_id).toBe(buildUnregisterCustomId("confirm", "123456789012345678", "U1"));
+    expect(button?.custom_id).toBe(
+      buildUnregisterCustomId("confirm", "123456789012345678", "U1", "1"),
+    );
     expect(button?.style).toBe(4);
     expect(button?.label).toBe("Confirm Unregister");
   });
@@ -479,6 +512,32 @@ describe("handleChannelCommand unregister", () => {
       }),
     );
     expect(unregister).toHaveBeenCalledOnce();
+  });
+
+  it("aborts an explicit-confirm unregister if the registration changed during admin auth", async () => {
+    // A non-owner admin runs `/channel unregister yes`; while deps.isAdmin awaits,
+    // the channel is re-registered (nonce 1 -> 2). The explicit-confirm path must
+    // revalidate the nonce and abort WITHOUT purging the replacement instance.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    let nonce = "1";
+    const { ctx, replies } = makeCtx("unregister", ["yes"], { userId: "ADMIN" });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        describeInstance: () => ({ port: 1, ownerId: "U1", onboarded: true }),
+        // Non-owner: forces the async admin lookup. Flip the nonce as it resolves to
+        // simulate a concurrent re-register completing during authorization.
+        isAdmin: async () => {
+          nonce = "2";
+          return true;
+        },
+        registrationNonce: () => nonce,
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).not.toHaveBeenCalled();
+    const { embed } = embedOf(replies[replies.length - 1].payload);
+    expect(embed.description).toContain("out of date");
   });
 
   it("denies a non-owner, non-admin user", async () => {
@@ -523,55 +582,78 @@ describe("handleChannelCommand unregister", () => {
   });
 });
 
-describe("handleUnregisterButtonClick", () => {
+describe("decideUnregisterClick", () => {
   const owned = (): InstanceStatus => ({ port: 1, ownerId: "U1", onboarded: true });
 
   it("ignores custom_ids that are not ours", async () => {
-    const result = await handleUnregisterButtonClick(
+    const result = await decideUnregisterClick(
       { customId: "other:C:U", clickerId: "U1" },
       makeDeps(),
     );
-    expect(result).toEqual({});
+    expect(result.kind).toBe("ignored");
   });
 
   it("rejects clicks from anyone but the initiator", async () => {
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U2" },
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U2" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
-    expect(result.ephemeral).toContain("isn't for you");
+    expect(result.kind).toBe("notForYou");
+    if (result.kind === "notForYou") {
+      expect(result.notice).toContain("isn't for you");
+    }
     expect(unregister).not.toHaveBeenCalled();
   });
 
-  it("unregisters and clears the buttons when the owner confirms", async () => {
+  it("defers teardown to perform() and shows an interim state on owner confirm", async () => {
     const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
-    const result = await handleUnregisterButtonClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "U1"), clickerId: "U1" },
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
+    expect(result.kind).toBe("confirm");
+    if (result.kind !== "confirm") {
+      return;
+    }
+    // Deciding must NOT run teardown; that happens only when perform() is called.
+    expect(unregister).not.toHaveBeenCalled();
+    expect(result.interim.components).toEqual([]);
+    expect(result.interim.embeds[0].description).toContain("Unregistering channel <#C1>");
+    expect(result.interim.embeds[0].description).toContain("<@U1>");
+
+    const final = await result.perform();
     expect(unregister).toHaveBeenCalledWith({ channelId: "C1" });
-    expect(result.update?.components).toEqual([]);
-    expect(result.update?.embeds[0].description).toContain("successfully unregistered");
+    expect(final.components).toEqual([]);
+    expect(final.embeds[0].description).toContain("has been unregistered");
+    // The wording reflects that container/port are torn down and the data wipe is
+    // still finishing in the background (not that the bytes are already gone).
+    expect(final.embeds[0].description).toContain("wiped in the background");
   });
 
   it("cancels without touching provisioning", async () => {
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
-      { customId: buildUnregisterCustomId("cancel", "C1", "U1"), clickerId: "U1" },
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("cancel", "C1", "U1", "1"), clickerId: "U1" },
       makeDeps({ describeInstance: owned, provisioning: { register: vi.fn(), unregister } }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(result.update?.embeds[0].description).toContain("cancelled");
-    expect(result.update?.components).toEqual([]);
+    expect(result.kind).toBe("cancelled");
+    if (result.kind === "cancelled") {
+      expect(result.update.embeds[0].description).toContain("cancelled");
+      expect(result.update.components).toEqual([]);
+    }
   });
 
   it("re-checks permission at click time and blocks a non-owner initiator", async () => {
     // A stranger somehow holds a confirm id for themselves; they are neither
     // owner nor admin, so the click must not remove anything.
     const unregister = vi.fn();
-    const result = await handleUnregisterButtonClick(
-      { customId: buildUnregisterCustomId("confirm", "C1", "STRANGER"), clickerId: "STRANGER" },
+    const result = await decideUnregisterClick(
+      {
+        customId: buildUnregisterCustomId("confirm", "C1", "STRANGER", "1"),
+        clickerId: "STRANGER",
+      },
       makeDeps({
         describeInstance: owned,
         isAdmin: async () => false,
@@ -579,9 +661,70 @@ describe("handleUnregisterButtonClick", () => {
       }),
     );
     expect(unregister).not.toHaveBeenCalled();
-    expect(result.update?.embeds[0].description).toContain(
-      "not authorized to use this channel's agent",
+    expect(result.kind).toBe("denied");
+    if (result.kind === "denied") {
+      expect(result.update.embeds[0].description).toContain(
+        "not authorized to use this channel's agent",
+      );
+      expect(result.update.embeds[0].description).toContain("<@U1>");
+    }
+  });
+
+  it("reports nothing to remove when the channel is already unregistered", async () => {
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
+      makeDeps({ describeInstance: () => null }),
     );
-    expect(result.update?.embeds[0].description).toContain("<@U1>");
+    expect(result.kind).toBe("notRegistered");
+    if (result.kind === "notRegistered") {
+      expect(result.update.embeds[0].description).toContain("nothing to remove");
+    }
+  });
+
+  it("refuses a stale confirm whose registration generation no longer matches", async () => {
+    // The button was issued at nonce "1", but the channel has since been
+    // unregistered and re-registered (nonce now "2"). Confirming the stale dialog
+    // must NOT purge the new instance, even though the reused port is unchanged.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
+      makeDeps({
+        describeInstance: owned,
+        registrationNonce: () => "2",
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).not.toHaveBeenCalled();
+    expect(result.kind).toBe("notRegistered");
+    if (result.kind === "notRegistered") {
+      expect(result.update.embeds[0].description).toContain("out of date");
+    }
+  });
+
+  it("re-validates the nonce at perform() and aborts if it changed after deciding", async () => {
+    // The nonce matches when deciding (so we get a confirm outcome), but a
+    // re-register completes during the adapter's interim-edit await and bumps it
+    // before perform() runs. perform() must re-check and abort WITHOUT purging, so
+    // a stale confirmation cannot delete the replacement registration.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    let nonce = "1";
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
+      makeDeps({
+        describeInstance: owned,
+        registrationNonce: () => nonce,
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(result.kind).toBe("confirm");
+    if (result.kind !== "confirm") {
+      return;
+    }
+    // A re-register happens before perform() is invoked.
+    nonce = "2";
+    const final = await result.perform();
+    expect(unregister).not.toHaveBeenCalled();
+    expect(final.embeds[0].description).toContain("out of date");
+    expect(final.components).toEqual([]);
   });
 });

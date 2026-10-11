@@ -40,6 +40,35 @@ BASE_PORT=18789
 PORT_FILENAME=".port"
 PORT_LOCK_FILE="$INSTANCES_DIR/.port.lock"
 
+# A lifecycle lock held across a channel's COMPLETE add or teardown. The
+# PORT_LOCK_FILE lock only guards port assignment/free, which an add releases the
+# instant reserve_port returns — it then seeds and starts the container outside
+# any lock. Without a lifecycle lock, a purge could slip into that gap, see no
+# container yet, and wipe the instance dir (deleting the freshly assigned .port)
+# while the add goes on to start a container with its already-captured port,
+# leaving an undiscoverable container on a now-reusable port. A per-channel lock
+# (separate file per channel so unrelated channels still run concurrently) held
+# for the whole add and the whole purge/remove serializes them. Uses fd 8 so it
+# nests cleanly around the inner PORT_LOCK_FILE lock (fd 9).
+channel_lock_file() {
+  echo "$INSTANCES_DIR/.lifecycle-$1.lock"
+}
+
+# Run a command while holding the per-channel lifecycle lock. flock releases the
+# lock automatically when the subshell exits (including on error), and the inner
+# command's exit status is propagated so callers still see add/purge failures.
+with_channel_lock() {
+  local channelId="$1"
+  shift
+  local lock
+  lock=$(channel_lock_file "$channelId")
+  mkdir -p "$INSTANCES_DIR"
+  (
+    flock 8
+    "$@"
+  ) 8>"$lock"
+}
+
 # Locate the openclaw CLI. deploy.sh installs it alongside this script in
 # ~/deploy/bin, so prefer the sibling binary; fall back to PATH. Used for
 # JSON5-aware config edits (config set) so we don't hand-roll a JSON5 parser.
@@ -76,6 +105,61 @@ require_channel_id() {
 
 port_file() {
   echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
+}
+
+# Per-registration token file. A fresh random token is written on every
+# registration (assign_port) and read back by purge to confirm the registration a
+# destructive unregister was issued for is still the current one. This is the
+# ON-DISK identity that makes the purge atomic with concurrent add/re-register:
+# both run under the lifecycle lock, so validating the token while holding that
+# lock cannot race a re-register (which writes a new token under the same lock).
+# Unlike the port, the token is NOT reused, so a same-port re-register still
+# changes it.
+REG_TOKEN_FILENAME=".reg-token"
+reg_token_file() {
+  echo "$INSTANCES_DIR/$1/$REG_TOKEN_FILENAME"
+}
+
+# Read an instance's current registration token (empty if unset/unreadable).
+get_reg_token() {
+  local file
+  file=$(reg_token_file "$1")
+  [ -f "$file" ] || return 0
+  tr -d '[:space:]' < "$file" 2>/dev/null || true
+}
+
+# Ensure a channel has a registration token, minting one only if absent. Used to
+# backfill instances registered before tokens existed so the host-atomic
+# stale-purge guard applies to them too. Callers run it under the lifecycle lock.
+ensure_reg_token() {
+  local channelId="$1"
+  [ -d "$INSTANCES_DIR/$channelId" ] || return 0
+  [ -s "$(reg_token_file "$channelId")" ] && return 0
+  write_reg_token "$channelId" > /dev/null
+}
+
+# Write a fresh random registration token for a channel (atomic write+rename).
+# Returns non-zero (and cleans up any partial temp) if the write or rename fails,
+# so a caller never reports a registration success that did not persist the token
+# the stale-purge guard depends on. Echoes the token on success.
+write_reg_token() {
+  local channelId="$1" token dst tmp
+  token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
+  [ -n "$token" ] || token="$(date +%s)$$"
+  dst=$(reg_token_file "$channelId")
+  mkdir -p "$(dirname "$dst")" || return 1
+  tmp="${dst}.tmp.$$"
+  if ! printf '%s' "$token" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    echo "Error: could not write registration token for $channelId" >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$dst"; then
+    rm -f "$tmp" 2>/dev/null || true
+    echo "Error: could not install registration token for $channelId" >&2
+    return 1
+  fi
+  echo "$token"
 }
 
 # Parse a raw .port value to a canonical positive decimal port, or empty.
@@ -148,6 +232,17 @@ reserve_port() {
 
     port=$(allocate_port)
     assign_port "$channelId" "$port"
+    # Stamp a fresh registration token alongside the port so a purge can confirm it
+    # is tearing down THIS registration, not a later re-registration that reused the
+    # same channel id (and possibly the same port). Written under the same locks as
+    # the port, so it rotates atomically with every (re-)registration. Fail closed:
+    # if the token cannot be persisted, roll back the port so the registration does
+    # not come up without the stale-purge guard the token provides.
+    if ! write_reg_token "$channelId" > /dev/null; then
+      free_port "$channelId"
+      echo "ERROR: could not persist registration token for $channelId" >&2
+      exit 1
+    fi
     echo "$port"
   ) 9>"$PORT_LOCK_FILE"
 }
@@ -376,6 +471,48 @@ stop_container() {
   local channelId="$1"
   local container="agents.channel-$channelId"
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
+}
+
+# Strict teardown for `purge`: stop and remove the container, and FAIL (return
+# non-zero) if the container still exists afterward. Unlike stop_container, this
+# must not swallow a genuine Docker error, because purge wipes the instance data
+# right after. If the daemon is down or removal is denied, the container would be
+# left running on a port we are about to free while its data is irreversibly
+# deleted. An already-absent container is success (nothing to tear down).
+purge_container() {
+  local channelId="$1"
+  local container="agents.channel-$channelId"
+  # `inspect` distinguishes "no such container" (exit 1, nothing to do) from a
+  # daemon failure. When it cannot talk to the daemon at all, bail before wiping.
+  local inspect_out
+  if ! inspect_out=$(docker inspect --format '{{.Id}}' "$container" 2>&1); then
+    case "$inspect_out" in
+      *"No such object"* | *"no such container"*) return 0 ;;
+      *) echo "Error: cannot inspect container $container: $inspect_out" >&2; return 1 ;;
+    esac
+  fi
+  # Container exists: stop then remove, and confirm it is gone.
+  docker stop "$container" >/dev/null 2>&1 || true
+  if ! docker rm -f "$container" >/dev/null 2>&1; then
+    echo "Error: failed to remove container $container" >&2
+    return 1
+  fi
+  # Re-inspect to CONFIRM removal. Only an explicit "no such object" proves the
+  # container is gone. Any other outcome — a successful inspect (still present) or
+  # a different error such as the daemon dying right after rm -f — must fail: purge
+  # wipes the data next, so we cannot proceed without positive proof of teardown.
+  local verify_out
+  if verify_out=$(docker inspect --format '{{.Id}}' "$container" 2>&1); then
+    echo "Error: container $container still present after removal" >&2
+    return 1
+  fi
+  case "$verify_out" in
+    *"No such object"* | *"no such container"*) return 0 ;;
+    *)
+      echo "Error: cannot confirm removal of container $container: $verify_out" >&2
+      return 1
+      ;;
+  esac
 }
 
 # Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
@@ -753,62 +890,29 @@ cmd_add_dm() {
   require_channel_id "$channelId"
   echo "DM channel ID: $channelId"
 
-  # Check if already registered
-  local existing_port
-  existing_port=$(get_port "$channelId")
-  if [ -n "$existing_port" ]; then
-    echo "Channel $channelId is already registered on port $existing_port."
-    exit 0
+  # Reuse the shared add body under the channel's lifecycle lock (same
+  # reserve->seed->start flow as add-channel), so a concurrent purge cannot race
+  # the start. The DM-specific confirmation is printed only on success.
+  with_channel_lock "$channelId" add_channel_locked "$channelId"
+  local status=$?
+  if [ "$status" -eq 0 ]; then
+    echo "Done. User $userId can now DM the bot."
   fi
-
-  # Allocate port and register
-  local port status
-  if port=$(reserve_port "$channelId"); then
-    :
-  else
-    status=$?
-    if [ "$status" -eq 2 ]; then
-      echo "Channel $channelId is already registered on port $(get_port "$channelId")."
-      exit 0
-    fi
-    exit 1
-  fi
-  echo "Assigned port $port"
-
-  # Create instance directory
-  mkdir -p "$INSTANCES_DIR/$channelId"
-
-  # Build the token-free instance config from the allowlist. Fail-closed: if it
-  # cannot be written, deregister and abort rather than start a box without a
-  # freshly-built config.
-  if ! seed_instance_config "$channelId"; then
-    echo "Error: could not build config for $channelId; aborting." >&2
-    free_port "$channelId"
-    exit 1
-  fi
-
-  seed_workspace "$channelId" || true
-
-  # Start container (start_container runs prepare_instance_dirs for the token-free
-  # layout: writable mounts, placeholder auth, config sanitization, ownership).
-  echo "Starting container agents.channel-$channelId on port $port..."
-  start_container "$channelId" "$port"
-  echo "Done. User $userId can now DM the bot."
+  exit "$status"
 }
 
-cmd_add_channel() {
-  local channelId="${1:-}"
-  if [ -z "$channelId" ]; then
-    echo "Usage: openclawctl add-channel <channelId>"
-    exit 1
-  fi
-  require_channel_id "$channelId"
+# The add body, run while holding the channel's lifecycle lock so a concurrent
+# purge/remove cannot wipe the instance dir in the window between reserve_port
+# and start_container. Uses `return` (not `exit`) so with_channel_lock's subshell
+# exits with its status and the caller can propagate it.
+add_channel_locked() {
+  local channelId="$1"
 
   local existing_port
   existing_port=$(get_port "$channelId")
   if [ -n "$existing_port" ]; then
     echo "Channel $channelId is already registered on port $existing_port."
-    exit 0
+    return 0
   fi
 
   local port status
@@ -818,9 +922,9 @@ cmd_add_channel() {
     status=$?
     if [ "$status" -eq 2 ]; then
       echo "Channel $channelId is already registered on port $(get_port "$channelId")."
-      exit 0
+      return 0
     fi
-    exit 1
+    return 1
   fi
   echo "Assigned port $port"
 
@@ -832,7 +936,7 @@ cmd_add_channel() {
   if ! seed_instance_config "$channelId"; then
     echo "Error: could not build config for $channelId; aborting." >&2
     free_port "$channelId"
-    exit 1
+    return 1
   fi
 
   seed_workspace "$channelId" || true
@@ -844,6 +948,29 @@ cmd_add_channel() {
   echo "Done. Channel $channelId is now registered."
 }
 
+cmd_add_channel() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl add-channel <channelId>"
+    exit 1
+  fi
+  require_channel_id "$channelId"
+  with_channel_lock "$channelId" add_channel_locked "$channelId"
+  exit $?
+}
+
+remove_locked() {
+  local channelId="$1"
+  echo "Stopping container for channel $channelId..."
+  stop_container "$channelId"
+
+  echo "Freeing port..."
+  free_port "$channelId"
+
+  echo "Done. Instance data preserved at $INSTANCES_DIR/$channelId/"
+  echo "To delete data: rm -rf $INSTANCES_DIR/$channelId"
+}
+
 cmd_remove() {
   local channelId="${1:-}"
   if [ -z "$channelId" ]; then
@@ -852,37 +979,142 @@ cmd_remove() {
   fi
   require_channel_id "$channelId"
 
-  # Hold the same lock reserve_port uses across the whole stop+free sequence,
-  # so a concurrent `add-*` for this channel cannot slip a freshly-assigned
-  # .port in between our stop and free_port (which would delete the new port
-  # and leave the new container running but undiscoverable).
-  (
-    flock 9
-
-    echo "Stopping container for channel $channelId..."
-    stop_container "$channelId"
-
-    echo "Freeing port..."
-    free_port "$channelId"
-  ) 9>"$PORT_LOCK_FILE"
-
-  echo "Done. Instance data preserved at $INSTANCES_DIR/$channelId/"
-  echo "To delete data: rm -rf $INSTANCES_DIR/$channelId"
+  # Hold the channel's lifecycle lock across the whole stop+free sequence, so a
+  # concurrent `add-*` for this channel cannot run its reserve->seed->start flow
+  # in between our stop and free_port (which would delete the new port and leave
+  # the new container running but undiscoverable). This serializes the complete
+  # add and remove, not just port assignment.
+  with_channel_lock "$channelId" remove_locked "$channelId"
+  exit $?
 }
 
-cmd_restart() {
+# Fully remove a channel: stop and delete its container, then wipe the whole
+# instance directory (which also frees its port, since the .port dotfile lives
+# inside it). Unlike `remove`, nothing is preserved. This backs the user-facing
+# `/channel unregister`, which promises a clean teardown so a re-register starts
+# from scratch rather than resurrecting old data. require_channel_id guarantees
+# the id is a 17-20 digit snowflake, so the rm path cannot escape INSTANCES_DIR.
+purge_locked() {
+  local channelId="$1"
+  local expectedToken="${2:-}"
+  # Validate the registration token FIRST, while holding the lifecycle lock (this
+  # runs inside with_channel_lock), BEFORE touching the container or data. If the
+  # caller passed the token it saw when the unregister was issued and it no longer
+  # matches the on-disk token, the channel was re-registered since; abort so a stale
+  # request cannot purge the replacement. Because add/re-register also hold this
+  # lock and rotate the token under it, this check is atomic with any concurrent
+  # registration — closing the TOCTOU window a router-side-only recheck cannot. An
+  # empty expectedToken means the caller opted out of the check (e.g. a manual
+  # operator purge), so skip it.
+  if [ -n "$expectedToken" ]; then
+    local currentToken
+    currentToken=$(get_reg_token "$channelId")
+    if [ "$expectedToken" != "$currentToken" ]; then
+      echo "Error: registration changed since unregister was issued (stale request); not purging." >&2
+      return 2
+    fi
+  fi
+  echo "Stopping container for channel $channelId..."
+  # Strict: abort before wiping if the container could not be torn down, so a
+  # daemon outage or a denied removal never strands a running container on a
+  # port we are about to free while its data is irreversibly deleted.
+  if ! purge_container "$channelId"; then
+    echo "Error: could not tear down the container; instance data left intact." >&2
+    return 1
+  fi
+
+  # Make the destructive wipe atomic and interrupt-safe: RENAME the instance dir to
+  # a tombstone FIRST (a single rename, effectively instantaneous), then rm -rf the
+  # tombstone. The rename is the COMMIT POINT: it unregisters the channel (its .port
+  # goes with it, so the port is freed and the registration disappears the instant
+  # the rename returns). require_channel_id already constrained channelId to a
+  # snowflake, so these paths cannot escape INSTANCES_DIR.
+  echo "Wiping instance data and freeing port..."
+  local tombstone="${INSTANCES_DIR:?}/.purging-$channelId.$$"
+  if [ -d "${INSTANCES_DIR:?}/$channelId" ]; then
+    # A failed rename means nothing was committed — report failure so the router
+    # keeps the instance and the operator can retry.
+    if ! mv "${INSTANCES_DIR:?}/$channelId" "$tombstone"; then
+      echo "Error: could not rename instance dir for teardown; instance left intact." >&2
+      return 1
+    fi
+  fi
+  # Remove the channel's router-owned preferences, which live OUTSIDE the instance
+  # dir (under shared/preferences so the router can write them even when the
+  # instances tree is mounted read-only). A tiny file, so delete it inline. Without
+  # this a purge would leave stale lifecycle/ephemeral settings to be resurrected on
+  # re-registration. Best-effort (the channel is already unregistered).
+  # Remove both the final file and any leftover write-temp (writeUserPreferences
+  # writes `.json.tmp` then renames; a crash between can orphan the temp), so the
+  # full wipe retains no per-channel preference metadata.
+  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json" \
+    "${INSTANCES_DIR:?}/shared/preferences/$channelId.json.tmp" 2>/dev/null || true
+  # Delete the tombstone in a FULLY DETACHED child (new session via setsid, or nohup
+  # as a fallback) and return success immediately. The rm -rf is the only slow step
+  # and the only one that can be mid-flight when the provisioner's 120s timeout
+  # SIGKILLs openclawctl's process group: a foreground (or even plain-backgrounded)
+  # rm would die with the group, leaving the tombstone AND — worse — making this
+  # shell never return 0, so runCtl maps the killed process to a failure and the
+  # router skips reloadInstances, keeping the already-removed instance routable.
+  # Detaching the rm into its own session takes it out of the killed group, so the
+  # wipe completes regardless, and this shell returns 0 the instant the rename (the
+  # real commit) is done. sweep_purge_tombstones still reaps any tombstone whose
+  # detached rm was somehow interrupted (e.g. a host reboot) on the next boot.
+  # CLOSE fd 8 (8>&-) in the detached child: it would otherwise inherit the
+  # lifecycle flock and hold it for the whole rm -rf, blocking every later
+  # add/remove/restart for this channel (and risking their 120s timeout) for a
+  # large workspace. The tombstone has a distinct path, so deleting it needs no
+  # lock.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null 8>&- &
+  else
+    nohup rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null 8>&- &
+  fi
+  echo "Done. Channel $channelId fully removed (container and port freed; data wipe detached)."
+}
+
+# Reap orphaned purge tombstones left by a purge whose rm -rf was interrupted
+# (e.g. the provisioner's SIGKILL on timeout). Safe to run anytime; boot.sh calls
+# it once at startup. Best-effort: a tombstone still being deleted by a live purge
+# is simply retried and skipped on EBUSY/ENOENT races.
+sweep_purge_tombstones() {
+  for t in "${INSTANCES_DIR:?}"/.purging-*; do
+    [ -e "$t" ] || continue
+    rm -rf "$t" 2>/dev/null || true
+  done
+}
+
+cmd_purge() {
   local channelId="${1:-}"
+  # Optional expected registration token: when given, purge_locked validates it
+  # against the on-disk token under the lifecycle lock and refuses a mismatch, so a
+  # stale unregister cannot wipe a channel that was re-registered since the request
+  # was issued. Omitted => no token check (manual operator purge).
+  local expectedToken="${2:-}"
   if [ -z "$channelId" ]; then
-    echo "Usage: openclawctl restart <channelId>"
+    echo "Usage: openclawctl purge <channelId> [expectedRegToken]"
     exit 1
   fi
   require_channel_id "$channelId"
+
+  # Hold the channel's lifecycle lock across the whole token-check + stop + wipe
+  # sequence, so a concurrent `add-*` for this channel cannot run its
+  # reserve->seed->start flow in the gap. This both serializes the complete add and
+  # purge AND makes the token check atomic with any concurrent re-registration. A
+  # teardown failure propagates (purge_locked returns non-zero) so the provisioner
+  # reports it rather than claiming the data was removed.
+  with_channel_lock "$channelId" purge_locked "$channelId" "$expectedToken"
+  exit $?
+}
+
+restart_locked() {
+  local channelId="$1"
 
   local port
   port=$(get_port "$channelId")
   if [ -z "$port" ]; then
     echo "Error: Channel $channelId is not registered."
-    exit 1
+    return 1
   fi
 
   if ! is_prepared "$channelId"; then
@@ -892,13 +1124,29 @@ cmd_restart() {
     echo "  openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
     # Nonzero so callers can distinguish a refusal from a completed restart,
     # consistent with the other restart error paths.
-    exit 1
+    return 1
   fi
 
   echo "Restarting container for channel $channelId on port $port..."
   stop_container "$channelId"
   start_container "$channelId" "$port"
   echo "Done."
+}
+
+cmd_restart() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl restart <channelId>"
+    exit 1
+  fi
+  require_channel_id "$channelId"
+  # Hold the channel's lifecycle lock across the whole read-port/stop/start
+  # sequence. Otherwise a concurrent purge could see no container (after our stop)
+  # and wipe the instance dir while we go on to start a container with the port we
+  # already read, stranding it on a now-reusable port — the same race add/purge
+  # guard against.
+  with_channel_lock "$channelId" restart_locked "$channelId"
+  exit $?
 }
 
 # Re-assert a registered instance's proxy URLs (model proxy + container proxy) and
@@ -989,18 +1237,27 @@ case "${1:-}" in
   add-dm)      cmd_add_dm "${2:-}" ;;
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
+  purge)       cmd_purge "${2:-}" "${3:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
   reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
+  sweep-tombstones) sweep_purge_tombstones ;;
+  ensure-reg-token)
+    require_channel_id "${2:-}"
+    with_channel_lock "${2:-}" ensure_reg_token "${2:-}"
+    ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
     echo "Commands:"
     echo "  add-dm <userId>         Register a DM channel for a Discord user"
     echo "  add-channel <channelId> Register a text channel"
-    echo "  remove <channelId>      Stop and deregister a channel"
+    echo "  remove <channelId>      Stop and deregister a channel (keeps its data)"
+    echo "  purge <channelId>       Stop, deregister, and wipe a channel's data"
     echo "  restart <channelId>     Restart a channel's container"
     echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"
+    echo "  sweep-tombstones        Reap orphaned purge tombstones (.purging-*)"
+    echo "  ensure-reg-token <id>   Mint a registration token if the channel lacks one"
     ;;
 esac

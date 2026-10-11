@@ -4,7 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import {
   clearUserPreferences,
+  readEphemeralCommands,
   readUserPreferences,
+  removeUserPreferences,
+  setEphemeralCommands,
   userPreferencesPath,
   writeUserPreferences,
 } from "./preferences-store.js";
@@ -124,4 +127,63 @@ it("writeUserPreferences throws when the subtree cannot be created", () => {
   // recursive mkdir throws ENOTDIR regardless of uid (root bypasses chmod perms).
   fs.writeFileSync(path.join(instancesDir, "shared"), "not a directory");
   expect(() => writeUserPreferences(instancesDir, CHANNEL, { lifecycleMessages: true })).toThrow();
+});
+
+it("defaults ephemeral commands to true when unset", () => {
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+});
+
+it("reads back a stored ephemeral preference", () => {
+  writeUserPreferences(instancesDir, CHANNEL, { ephemeralCommands: false });
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(false);
+});
+
+it("fails closed to true for a malformed (non-boolean) ephemeral value", () => {
+  // The preferences file is arbitrary JSON; a malformed `ephemeralCommands` (e.g.
+  // 0 or "") must not flip the channel public and leak a reply. Only an explicit
+  // `false` makes replies public; anything else reads as the private default.
+  const file = userPreferencesPath(instancesDir, CHANNEL);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  for (const bad of [0, "", "false", null, 1, "true"]) {
+    fs.writeFileSync(file, JSON.stringify({ ephemeralCommands: bad }));
+    expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+  }
+  // The one value that legitimately makes replies public is a literal false.
+  fs.writeFileSync(file, JSON.stringify({ ephemeralCommands: false }));
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(false);
+});
+
+it("setEphemeralCommands persists without clobbering other preferences", () => {
+  writeUserPreferences(instancesDir, CHANNEL, { lifecycleMessages: true });
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({
+    lifecycleMessages: true,
+    ephemeralCommands: false,
+  });
+});
+
+it("clearing preferences resets ephemeral back to the default", () => {
+  setEphemeralCommands(instancesDir, CHANNEL, false);
+  clearUserPreferences(instancesDir, CHANNEL);
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true);
+});
+
+it("setEphemeralCommands returns false when the write fails", () => {
+  fs.writeFileSync(path.join(instancesDir, "shared"), "not a directory");
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(false);
+});
+
+it("removeUserPreferences hard-deletes the file and any write-temp, leaving no tombstone", () => {
+  writeUserPreferences(instancesDir, CHANNEL, { ephemeralCommands: false });
+  const file = userPreferencesPath(instancesDir, CHANNEL);
+  // Simulate a crash that orphaned a write-temp (writeUserPreferences uses .tmp).
+  fs.writeFileSync(`${file}.tmp`, "{}");
+  expect(fs.existsSync(file)).toBe(true);
+  removeUserPreferences(instancesDir, CHANNEL);
+  // Neither the final file nor the temp remains (unlike clearUserPreferences, which
+  // writes an empty tombstone).
+  expect(fs.existsSync(file)).toBe(false);
+  expect(fs.existsSync(`${file}.tmp`)).toBe(false);
+  // Idempotent: removing again on absent files is fine.
+  expect(() => removeUserPreferences(instancesDir, CHANNEL)).not.toThrow();
 });

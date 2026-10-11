@@ -12,8 +12,15 @@ import type { ProvisioningClient, ProvisioningResult } from "./channel-commands.
 
 /** Wire shapes shared with the daemon. */
 export type RegisterRequest = { channelId: string; ownerId: string; isDM: boolean };
-export type UnregisterRequest = { channelId: string };
-export type ProvisionResponse = { ok: boolean; message: string };
+/**
+ * `expectedRegToken` is the host registration token the router recorded when this
+ * unregister (confirmation) was issued. The daemon validates it against the
+ * on-disk token under the per-channel lifecycle lock and refuses a mismatch, so a
+ * stale request cannot purge a channel re-registered since. Omitted => no check.
+ */
+export type UnregisterRequest = { channelId: string; expectedRegToken?: string };
+/** `regToken` is the host registration token minted for a successful register. */
+export type ProvisionResponse = { ok: boolean; message: string; regToken?: string };
 
 /** A Discord snowflake (channel/user id). */
 export function isSnowflake(id: string): boolean {
@@ -46,7 +53,11 @@ export function createHttpProvisioningClient(opts: {
           : resp.ok
             ? "Done."
             : `Provisioning failed (${resp.status}).`;
-      return { ok: resp.ok && data.ok !== false, message };
+      return {
+        ok: resp.ok && data.ok !== false,
+        message,
+        ...(typeof data.regToken === "string" ? { regToken: data.regToken } : {}),
+      };
     } catch (err) {
       opts.log?.(`[provisioning] ${path} failed: ${String(err)}`);
       return { ok: false, message: "Could not reach the provisioning service." };
@@ -61,6 +72,9 @@ export function createHttpProvisioningClient(opts: {
         isDM: params.isDM,
       } satisfies RegisterRequest),
     unregister: (params) =>
-      call("/unregister", { channelId: params.channelId } satisfies UnregisterRequest),
+      call("/unregister", {
+        channelId: params.channelId,
+        ...(params.expectedRegToken ? { expectedRegToken: params.expectedRegToken } : {}),
+      } satisfies UnregisterRequest),
   };
 }

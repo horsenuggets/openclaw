@@ -49,19 +49,45 @@ const READINESS_INTERVAL_MS = 500;
 /** Run openclawctl with the given args; resolve with its exit code and output. */
 function runCtl(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(OPENCLAWCTL_BIN, args, { env: process.env });
+    // Start openclawctl in its own process group (detached) so a timeout can kill
+    // the WHOLE group, not just the top-level bash process. openclawctl runs its
+    // lifecycle operations in a `( flock; ... )` subshell, a separate child; a
+    // plain child.kill would SIGKILL only the parent and orphan that subshell,
+    // which could then still acquire the lock and finish a purge (deleting the
+    // instance) long after we reported a timeout failure. Killing the group reaps
+    // the subshell too.
+    const child = spawn(OPENCLAWCTL_BIN, args, { env: process.env, detached: true });
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-    }, CTL_TIMEOUT_MS);
+    let settled = false;
+    const killGroup = (signal: NodeJS.Signals): void => {
+      if (child.pid === undefined) {
+        return;
+      }
+      try {
+        // Negative pid targets the whole process group (the detached child is its
+        // leader), so the flock subshell and any docker children die with it.
+        process.kill(-child.pid, signal);
+      } catch {
+        // Already gone (race with close); nothing to kill.
+      }
+    };
+    const timer = setTimeout(() => killGroup("SIGKILL"), CTL_TIMEOUT_MS);
     child.stdout.on("data", (d) => (stdout += String(d)));
     child.stderr.on("data", (d) => (stderr += String(d)));
     child.on("error", (err) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timer);
       resolve({ code: -1, stdout, stderr: `${stderr}${String(err)}` });
     });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timer);
       resolve({ code: code ?? -1, stdout, stderr });
     });
@@ -77,6 +103,16 @@ function readInstancePort(channelId: string): number | undefined {
     }
     const parsed = Number.parseInt(raw, 10);
     return parsed > 0 ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Read the host registration token openclawctl stamped for this instance. */
+function readRegToken(channelId: string): string | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(INSTANCES_DIR, channelId, ".reg-token"), "utf-8").trim();
+    return raw || undefined;
   } catch {
     return undefined;
   }
@@ -137,6 +173,9 @@ async function handleRegister(body: RegisterRequest): Promise<ProvisionResponse>
   if (port === undefined) {
     return { ok: false, message: "Instance was created but no port was assigned." };
   }
+  // Return the host registration token openclawctl minted for this registration so
+  // the router can bind a later unregister confirmation to exactly this instance.
+  const regToken = readRegToken(body.channelId);
   const ready = await waitForPort(port, READINESS_TIMEOUT_MS);
   console.log(`[provisioner] registered ${body.channelId} on port ${port} (ready=${ready})`);
   return {
@@ -144,6 +183,7 @@ async function handleRegister(body: RegisterRequest): Promise<ProvisionResponse>
     message: ready
       ? "Channel registered and the agent is ready. Send a message to begin setup."
       : "Channel registered. The agent is still starting up, give it a few seconds before your first message.",
+    ...(regToken ? { regToken } : {}),
   };
 }
 
@@ -151,13 +191,58 @@ async function handleUnregister(body: UnregisterRequest): Promise<ProvisionRespo
   if (!isSnowflake(body.channelId)) {
     return { ok: false, message: "Invalid channel id." };
   }
-  const result = await runCtl(["remove", body.channelId]);
+  // `purge` (not `remove`): unregister is a full teardown. It stops and deletes
+  // the container, frees the port, and wipes the instance directory, so a later
+  // re-register starts clean rather than resurrecting old data. Pass the expected
+  // registration token (when the router supplied one) so openclawctl refuses the
+  // purge under the lifecycle lock if the channel was re-registered since the
+  // request was issued — the atomic guard against purging a replacement instance.
+  const ctlArgs = body.expectedRegToken
+    ? ["purge", body.channelId, body.expectedRegToken]
+    : ["purge", body.channelId];
+  const result = await runCtl(ctlArgs);
+  if (result.code === 2) {
+    // Exit 2 = the registration token no longer matches, i.e. the channel was
+    // re-registered since this unregister was issued. Not a teardown failure; the
+    // current instance is intact and must stay routable, so surface a distinct
+    // message and leave router state unchanged.
+    console.log(`[provisioner] purge ${body.channelId} refused: stale registration`);
+    return {
+      ok: false,
+      message:
+        "This request is out of date: the channel was re-registered since it was issued. Run unregister again to remove the current instance.",
+    };
+  }
   if (result.code !== 0) {
-    console.error(`[provisioner] remove ${body.channelId} failed: ${result.stderr.trim()}`);
+    // A non-zero/timeout (e.g. the 120s SIGKILL) may have landed AFTER purge crossed
+    // its commit point: purge_locked renames the live instance dir to a tombstone
+    // (stopping the container, freeing the port) and only then wipes it detached, so
+    // the shell can be killed between the rename and a clean exit. Reconcile against
+    // the filesystem: if the instance dir is already gone, the teardown committed, so
+    // report success and let the router reloadInstances (stop routing to a now-gone
+    // instance) rather than reporting a failure that keeps stale state.
+    if (!fs.existsSync(path.join(INSTANCES_DIR, body.channelId))) {
+      console.log(
+        `[provisioner] purge ${body.channelId} exited ${result.code} but the instance dir is gone; treating as committed`,
+      );
+      return {
+        ok: true,
+        message:
+          "Channel unregistered. The agent and container are stopped and the port is freed; data cleanup is finishing in the background.",
+      };
+    }
+    console.error(`[provisioner] purge ${body.channelId} failed: ${result.stderr.trim()}`);
     return { ok: false, message: "Failed to remove the instance. Check the provisioner logs." };
   }
-  console.log(`[provisioner] unregistered ${body.channelId}`);
-  return { ok: true, message: "Channel unregistered. The agent has been stopped (data is kept)." };
+  console.log(`[provisioner] unregistered and purged ${body.channelId}`);
+  return {
+    ok: true,
+    // purge commits by renaming the instance dir (container stopped, port freed)
+    // and wipes the data in a detached background process, so the deletion may
+    // still be finishing when this returns; describe it as in-progress.
+    message:
+      "Channel unregistered. The agent and container are stopped and the port is freed; data is being wiped in the background.",
+  };
 }
 
 function readJsonBody(req: http.IncomingMessage): Promise<unknown> {

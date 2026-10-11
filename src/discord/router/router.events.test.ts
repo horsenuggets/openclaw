@@ -152,6 +152,9 @@ describe("discord router channel-delete cleanup", () => {
     // Provisioner env so the router builds a real daemon client (not the stub).
     process.env.OPENCLAW_PROVISIONER_PORT = "18810";
     process.env.OPENCLAW_PROVISIONER_TOKEN = "secret";
+    // Pin the registration epoch so the unregister-confirmation nonce is
+    // deterministic (`e-<generation>`); production leaves it random.
+    process.env.OPENCLAW_REGISTRATION_EPOCH = "e";
 
     const realOnce = process.once.bind(process);
     vi.spyOn(process, "once").mockImplementation(((event: string, listener: () => void) => {
@@ -171,6 +174,7 @@ describe("discord router channel-delete cleanup", () => {
     await Promise.allSettled(startedRouters);
     delete process.env.OPENCLAW_PROVISIONER_PORT;
     delete process.env.OPENCLAW_PROVISIONER_TOKEN;
+    delete process.env.OPENCLAW_REGISTRATION_EPOCH;
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -1198,7 +1202,10 @@ describe("discord router channel-delete cleanup", () => {
     // role instead (member lookup returns the admin role id).
     process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
     process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
-    const callbacks: { type: number; data?: { content?: string } }[] = [];
+    const callbacks: {
+      type: number;
+      data?: { content?: string; components?: unknown; embeds?: { description?: string }[] };
+    }[] = [];
     const patches: { components?: unknown; embeds?: { description?: string }[] }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -1243,20 +1250,241 @@ describe("discord router channel-delete cleanup", () => {
       token: "tok",
       channel_id: CHANNEL,
       guild_id: GUILD,
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: OWNER } },
     });
     for (let i = 0; i < 5; i++) {
       await vi.advanceTimersByTimeAsync(0);
     }
 
-    // Deferred update ack (type 6), then the instance was removed and the
-    // original confirmation message edited to the result with no buttons.
-    expect(callbacks.some((c) => c.type === 6)).toBe(true);
+    // A confirm click is acknowledged up front with an INSTANT type-7
+    // UPDATE_MESSAGE that drops the buttons (components: []) and shows a generic
+    // "processing" state, BEFORE the async authorization, so a slow role lookup
+    // cannot blow Discord's ~3s deadline and the buttons vanish immediately. The
+    // message is then edited (via @original) to the owner-named interim
+    // "unregistering..." state and finally to the result after teardown.
+    const ack = callbacks.find((c) => c.type === 7);
+    expect(ack).toBeDefined();
+    expect(ack?.data?.components).toEqual([]);
+    expect(ack?.data?.embeds?.[0]?.description).toContain("Processing the unregister request");
+    const interim = patches.find((p) =>
+      p.embeds?.[0]?.description?.includes("Unregistering channel"),
+    );
+    expect(interim?.components).toEqual([]);
     expect(unregisterCalls).toEqual([CHANNEL]);
     const patch = patches.at(-1);
     expect(patch?.components).toEqual([]);
-    expect(patch?.embeds?.[0]?.description).toContain("successfully unregistered");
+    expect(patch?.embeds?.[0]?.description).toContain("has been unregistered");
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
+  it("does not tear down when Discord rejects the confirm acknowledgement", async () => {
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          // Discord rejects the interaction ack (e.g. interaction expired).
+          return { ok: false, status: 404, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // The ack was rejected, so teardown must NOT run.
+    expect(unregisterCalls).toEqual([]);
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
+  it("runs teardown once when the confirm button is double-clicked", async () => {
+    // Authorize via the owner path (the initiator owns the channel on disk is not
+    // available, so use the admin role like the single-click test).
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const callbacks: { type: number }[] = [];
+    // Hold the first /unregister in-flight so the second click lands while the
+    // in-flight guard is set, exercising the double-click barrier.
+    let releaseUnregister: (() => void) | undefined;
+    const unregisterGate = new Promise<void>((resolve) => {
+      releaseUnregister = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          await unregisterGate;
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    const click = () =>
+      ws.dispatch("INTERACTION_CREATE", {
+        id: "int-btn",
+        type: 3,
+        token: "tok",
+        channel_id: CHANNEL,
+        guild_id: GUILD,
+        data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
+        member: { user: { id: OWNER } },
+      });
+    // First click starts teardown (now blocked on the gate). Second click arrives
+    // while the first is in-flight and must be a no-op for provisioning.
+    click();
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    click();
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // Only one teardown ran despite two clicks.
+    expect(unregisterCalls).toEqual([CHANNEL]);
+    // The first (claiming) confirm sends the instant type-7 processing update; the
+    // second (ignored, already-in-flight) confirm uses a message-neutral type-6 ack
+    // so it cannot overwrite the terminal result, yet still acks so it never
+    // expires. One type-7 and one type-6, two acks total.
+    expect(callbacks.filter((c) => c.type === 7).length).toBe(1);
+    expect(callbacks.filter((c) => c.type === 6).length).toBe(1);
+
+    releaseUnregister?.();
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // Still exactly one teardown after the first completes.
+    expect(unregisterCalls).toEqual([CHANNEL]);
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
+  it("ignores a Cancel click that arrives while a teardown is in flight", async () => {
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const patches: { embeds?: { description?: string }[] }[] = [];
+    let releaseUnregister: (() => void) | undefined;
+    const unregisterGate = new Promise<void>((resolve) => {
+      releaseUnregister = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          await unregisterGate;
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/messages/@original")) {
+          const body = init?.body;
+          const json =
+            body instanceof FormData
+              ? JSON.parse(body.get("payload_json") as string)
+              : JSON.parse((body as string) ?? "{}");
+          patches.push(json);
+          return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // Confirm click starts teardown (blocked on the gate), then a Cancel click for
+    // the same channel arrives mid-teardown. The Cancel must be ignored, not edit
+    // the message to "cancelled".
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-confirm",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-cancel",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}:e-1` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // No "cancelled" message was edited in while teardown runs.
+    expect(patches.some((p) => p.embeds?.[0]?.description?.includes("cancelled"))).toBe(false);
+
+    releaseUnregister?.();
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // Teardown completed exactly once, and the final message is the success result
+    // (never overwritten by a stale cancellation).
+    expect(unregisterCalls).toEqual([CHANNEL]);
+    expect(patches.at(-1)?.embeds?.[0]?.description).toContain("has been unregistered");
 
     delete process.env.OPENCLAW_AUTH_GUILD_ID;
     delete process.env.OPENCLAW_ADMIN_ROLE_ID;
@@ -1294,7 +1522,7 @@ describe("discord router channel-delete cleanup", () => {
       channel_id: CHANNEL,
       guild_id: GUILD,
       // custom_id names OWNER as initiator, but a different user clicks.
-      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:e-1` },
       member: { user: { id: "444444444444444444" } },
     });
     await vi.advanceTimersByTimeAsync(0);
@@ -1304,6 +1532,61 @@ describe("discord router channel-delete cleanup", () => {
     expect(ephemeral?.data?.content).toContain("isn't for you");
     expect(ephemeral?.data?.flags).toBe(64);
     expect(unregisterCalls).toEqual([]);
+  });
+
+  it("forwards the on-disk registration token as expectedRegToken on unregister", async () => {
+    // A real instance dir with a persisted .reg-token: the router hydrates it on
+    // reloadInstances and must carry it to the provisioner so the host can refuse a
+    // stale purge. Covers the post-restart case (hostRegTokens starts empty).
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-regtok-"));
+    fs.writeFileSync(path.join(dir, ".reg-token"), "host-tok-xyz");
+    let unregBody: { channelId?: string; expectedRegToken?: string } | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          unregBody = JSON.parse((init?.body as string) ?? "{}");
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/callback")) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        if (typeof url === "string" && url.includes("/messages/@original")) {
+          return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start(dir);
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+    // Force a reload so the router hydrates the on-disk token into hostRegTokens.
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-btn",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}:host-tok-xyz` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(unregBody?.expectedRegToken).toBe("host-tok-xyz");
+
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
   });
 
   describe("owner gate on agent-facing slash commands", () => {

@@ -80,6 +80,7 @@ it("slash /lifecycle replies with the save-failure notice, not a success result"
     const ctx = {
       applicationId: "app",
       runtime,
+      instancesDir,
       instances: new Map([[CHANNEL, instance]]),
       channelGuild: new Map<string, string>(),
     } as unknown as GatewayContext;

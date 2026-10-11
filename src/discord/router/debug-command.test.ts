@@ -8,6 +8,7 @@ import {
   debugSubcommandLabel,
   parseDebugCommand,
   parseDebugTextCommand,
+  resolveEphemeralArgs,
   runDebugCommand,
   tokenizeDebugCommand,
 } from "./debug-command.js";
@@ -25,6 +26,41 @@ function messageChars(embeds: DiscordEmbed[]): number {
     0,
   );
 }
+
+describe("ephemeral subcommand", () => {
+  it("is registered and listed in help", () => {
+    expect(DEBUG_SUBCOMMANDS.some((s) => s.name === "ephemeral")).toBe(true);
+  });
+
+  it("resolves a bare invocation to a status query", () => {
+    expect(resolveEphemeralArgs([])).toEqual({ desired: null });
+    expect(resolveEphemeralArgs([""])).toEqual({ desired: null });
+  });
+
+  it("resolves on/off synonyms to a boolean", () => {
+    for (const on of ["on", "ON", "true", "enable", "enabled", "yes"]) {
+      expect(resolveEphemeralArgs([on])).toEqual({ desired: true });
+    }
+    for (const off of ["off", "OFF", "false", "disable", "disabled", "no"]) {
+      expect(resolveEphemeralArgs([off])).toEqual({ desired: false });
+    }
+  });
+
+  it("flags an unrecognized argument as invalid", () => {
+    expect(resolveEphemeralArgs(["maybe"])).toEqual({ invalid: "maybe" });
+  });
+
+  it("runs to an ephemeral result carrying the desired value", () => {
+    expect(runDebugCommand("ephemeral")).toEqual({ kind: "ephemeral", desired: null });
+    expect(runDebugCommand("ephemeral off")).toEqual({ kind: "ephemeral", desired: false });
+    expect(runDebugCommand("ephemeral on")).toEqual({ kind: "ephemeral", desired: true });
+  });
+
+  it("returns a notice embed (not a toggle) for an invalid argument", () => {
+    const result = runDebugCommand("ephemeral nope");
+    expect(result.kind).toBe("embeds");
+  });
+});
 
 describe("tokenizeDebugCommand", () => {
   it("splits on whitespace", () => {
@@ -142,6 +178,13 @@ describe("buildDebugHelpEmbeds", () => {
     expect(embed.color).toBe(0xff80e0);
     expect(embed.fields).toEqual([
       { name: "`echo <message>`", value: "Sends the raw text as an individual message." },
+      {
+        name: "`ephemeral [on|off]`",
+        value:
+          "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` " +
+          "replies are ephemeral (`/channel` and `/secret` always are). Omit the argument " +
+          "to see the current status.",
+      },
       { name: "`help`", value: "Prints this help message." },
       {
         name: "`secrettest <secret-value> [secret-name]`",
