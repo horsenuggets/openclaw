@@ -388,6 +388,14 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
     // than leaking the "not registered yet" hint to a non-owner. Only an
     // unregistered DM falls through ungated, so the 1:1 owner still gets the
     // handler's "register first" guidance instead of a denial against themselves.
+    //
+    // A missing guildId here always means a 1:1 DM, never a group DM: a bot cannot
+    // be a member of a group DM, so the gateway never delivers a group-DM
+    // MESSAGE_CREATE to it, and MessageCreateData accordingly carries no channel
+    // type. This is the same invariant the conversation gate below relies on ("DMs
+    // are inherently 1:1 with the owner"). The slash and modal paths guard the
+    // group-DM channel type only because a user-installed app's INTERACTION_CREATE
+    // can originate from a group DM, which this message path cannot.
     if (guildId || authorizedInstanceKey !== null) {
       const status = describeInstance(channelId);
       void isAuthorizedForChannel(channelId, authorId, {
