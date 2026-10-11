@@ -50,6 +50,7 @@ import {
 import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
+import { clearUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
@@ -505,6 +506,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         unregister: async (p) => {
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
+            // Preferences live outside the instance dir the provisioner tears down
+            // (so the router can write them under a read-only instances mount), so
+            // reset them here, scoped to exactly the channel that was unregistered.
+            // This must not live in reloadInstances' reconciliation: that treats any
+            // instance missing from a fresh scan (e.g. a transiently unreadable
+            // `.port`) as removed and would clear a live channel's preferences.
+            try {
+              clearUserPreferences(config.instancesDir, p.channelId);
+            } catch (err) {
+              runtime.error(
+                `[router] failed to clear preferences for unregistered channel ${p.channelId}: ${String(err)}`,
+              );
+            }
             reloadInstances();
             rotateConnectionRegistrationKey(p.channelId);
           }

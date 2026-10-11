@@ -72,9 +72,15 @@ Each registered channel is an instance directory, `~/.openclaw-instances/<channe
   channel-to-port map by scanning these dotfiles at startup. No port, no route.
 - `.token-free` - marker for the token-free box layout. Instances created before this
   layout lack it and are skipped on deploy or boot, so they must be re-registered.
-- `.onboarding.json` - owner id and per-channel preferences (used for owner gating).
+- `.onboarding.json` - provisioner-owned registration facts (owner id, isDM), used for
+  owner gating. Written by the provisioner; the router only reads it.
 - `workspace/`, `state/`, `home/` - the box's mounted working directories.
-- A shared auth store lives at `~/.openclaw-instances/shared/auth/` (OAuth profiles).
+- A shared auth store lives at `~/.openclaw-instances/shared/auth/` (OAuth profiles), and
+  router-owned per-channel preferences (e.g. the `/lifecycle` banner toggle) live at
+  `~/.openclaw-instances/shared/preferences/<channelId>.json`. Both are writable subtrees
+  carved out of the otherwise read-only instances mount so the router can persist them;
+  the health-monitor reads the preferences file to decide which channels get lifecycle
+  banners.
 
 ## Two Outbound Delivery Paths
 
