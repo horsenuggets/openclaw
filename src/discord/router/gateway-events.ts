@@ -1410,6 +1410,16 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
 
   void (async () => {
     await ack;
+    // While a teardown is already running for this channel, ignore EVERY further
+    // click on its buttons (confirm, cancel, anything) — not just a second
+    // confirm. A stale Cancel landing mid-teardown would otherwise edit the
+    // message to "cancelled" even though the purge continues, and if that PATCH
+    // arrives after the final result the message would permanently (and falsely)
+    // claim cancellation. The click is already acked (type 6), so ignoring it is
+    // safe. channelId comes from the custom_id, so this needs no async decode.
+    if (unregisterInFlight.has(parsed.channelId)) {
+      return;
+    }
     const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
     // notForYou cannot occur here (initiator already matched above); ignored is
     // impossible too (parsed is non-null). Both are handled defensively.
@@ -1417,10 +1427,9 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
       return;
     }
     if (outcome.kind === "confirm") {
-      // Barrier against a double-click racing ahead of the button removal: run
-      // teardown at most once per channel. A second click lands here while the
-      // first is still mid-flight and is acknowledged (via its own type-6 ack
-      // above) without re-running teardown.
+      // Re-check the guard: a concurrent click could have entered teardown during
+      // the await above. Claim the channel before running teardown so it runs at
+      // most once (any click that arrives while it is held is ignored above).
       if (unregisterInFlight.has(outcome.channelId)) {
         return;
       }

@@ -1348,6 +1348,89 @@ describe("discord router channel-delete cleanup", () => {
     delete process.env.OPENCLAW_ADMIN_ROLE_ID;
   });
 
+  it("ignores a Cancel click that arrives while a teardown is in flight", async () => {
+    process.env.OPENCLAW_AUTH_GUILD_ID = GUILD;
+    process.env.OPENCLAW_ADMIN_ROLE_ID = "ADMIN";
+    const patches: { embeds?: { description?: string }[] }[] = [];
+    let releaseUnregister: (() => void) | undefined;
+    const unregisterGate = new Promise<void>((resolve) => {
+      releaseUnregister = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.includes("/unregister")) {
+          const body = JSON.parse((init?.body as string) ?? "{}");
+          unregisterCalls.push(body.channelId);
+          await unregisterGate;
+          return { ok: true, status: 200, json: async () => ({ ok: true, message: "removed" }) };
+        }
+        if (typeof url === "string" && url.includes("/members/")) {
+          return { ok: true, status: 200, json: async () => ({ roles: ["ADMIN"] }) };
+        }
+        if (typeof url === "string" && url.includes("/messages/@original")) {
+          const body = init?.body;
+          const json =
+            body instanceof FormData
+              ? JSON.parse(body.get("payload_json") as string)
+              : JSON.parse((body as string) ?? "{}");
+          patches.push(json);
+          return { ok: true, status: 200, json: async () => ({ attachments: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ attachments: [], id: "app-123" }) };
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // Confirm click starts teardown (blocked on the gate), then a Cancel click for
+    // the same channel arrives mid-teardown. The Cancel must be ignored, not edit
+    // the message to "cancelled".
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-confirm",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg:${CHANNEL}:${OWNER}` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    ws.dispatch("INTERACTION_CREATE", {
+      id: "int-cancel",
+      type: 3,
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: GUILD,
+      data: { custom_id: `chan-unreg-cancel:${CHANNEL}:${OWNER}` },
+      member: { user: { id: OWNER } },
+    });
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // No "cancelled" message was edited in while teardown runs.
+    expect(patches.some((p) => p.embeds?.[0]?.description?.includes("cancelled"))).toBe(false);
+
+    releaseUnregister?.();
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    // Teardown completed exactly once, and the final message is the success result
+    // (never overwritten by a stale cancellation).
+    expect(unregisterCalls).toEqual([CHANNEL]);
+    expect(patches.at(-1)?.embeds?.[0]?.description).toContain("successfully unregistered");
+
+    delete process.env.OPENCLAW_AUTH_GUILD_ID;
+    delete process.env.OPENCLAW_ADMIN_ROLE_ID;
+  });
+
   it("rejects a confirm button click from someone other than the initiator", async () => {
     const callbacks: { type: number; data?: { content?: string; flags?: number } }[] = [];
     vi.stubGlobal(

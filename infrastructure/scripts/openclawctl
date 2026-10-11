@@ -930,6 +930,14 @@ purge_locked() {
 
   echo "Wiping instance data and freeing port..."
   rm -rf "${INSTANCES_DIR:?}/$channelId"
+  # Also remove the channel's router-owned preferences, which live OUTSIDE the
+  # instance dir (under shared/preferences so the router can write them even when
+  # the instances tree is mounted read-only). Without this a purge would leave the
+  # old lifecycle/ephemeral settings behind to be resurrected on re-registration,
+  # contradicting the "all data removed" promise. The router also clears this on
+  # unregister, but doing it here guarantees the host teardown is genuinely
+  # complete even if the router's own cleanup is unavailable.
+  rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json"
   echo "Done. Channel $channelId fully removed (container, port, and data)."
 }
 

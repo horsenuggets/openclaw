@@ -8,7 +8,6 @@ import {
   debugSubcommandLabel,
   parseDebugCommand,
   parseDebugTextCommand,
-  peekDebugEphemeralDesired,
   resolveEphemeralArgs,
   runDebugCommand,
   tokenizeDebugCommand,
@@ -60,16 +59,6 @@ describe("ephemeral subcommand", () => {
   it("returns a notice embed (not a toggle) for an invalid argument", () => {
     const result = runDebugCommand("ephemeral nope");
     expect(result.kind).toBe("embeds");
-  });
-
-  it("peeks the resulting value only for an explicit on/off", () => {
-    expect(peekDebugEphemeralDesired("ephemeral on")).toBe(true);
-    expect(peekDebugEphemeralDesired("ephemeral off")).toBe(false);
-    // Status query, invalid arg, and non-ephemeral commands do not change it.
-    expect(peekDebugEphemeralDesired("ephemeral")).toBeNull();
-    expect(peekDebugEphemeralDesired("ephemeral nope")).toBeNull();
-    expect(peekDebugEphemeralDesired("echo hi")).toBeNull();
-    expect(peekDebugEphemeralDesired("")).toBeNull();
   });
 });
 
