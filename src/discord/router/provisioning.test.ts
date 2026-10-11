@@ -39,6 +39,60 @@ describe("createHttpProvisioningClient", () => {
     });
   });
 
+  it("surfaces the host registration token from a register response", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, message: "registered", regToken: "abc123" }),
+    }));
+    const client = createHttpProvisioningClient({
+      baseUrl: "http://127.0.0.1:18810",
+      token: "secret",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await client.register({
+      channelId: "111111111111111111",
+      ownerId: "222222222222222222",
+      isDM: false,
+    });
+    expect(result.regToken).toBe("abc123");
+  });
+
+  it("forwards expectedRegToken on unregister so the host can validate it", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, message: "removed" }),
+    }));
+    const client = createHttpProvisioningClient({
+      baseUrl: "http://127.0.0.1:18810",
+      token: "secret",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await client.unregister({ channelId: "111111111111111111", expectedRegToken: "tok-9" });
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      channelId: "111111111111111111",
+      expectedRegToken: "tok-9",
+    });
+  });
+
+  it("omits expectedRegToken when none is given", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, message: "removed" }),
+    }));
+    const client = createHttpProvisioningClient({
+      baseUrl: "http://127.0.0.1:18810",
+      token: "secret",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await client.unregister({ channelId: "111111111111111111" });
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ channelId: "111111111111111111" });
+  });
+
   it("treats a non-2xx response as a failure", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: false,

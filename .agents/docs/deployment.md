@@ -48,11 +48,19 @@ is an internal function called during add, not a standalone subcommand.)
 - `remove <id>` is non-destructive » it stops the container and frees the port but
   preserves instance data under `~/.openclaw-instances/<id>/`; deleting data is a separate
   manual step.
-- `purge <id>` is the destructive full teardown » it stops and deletes the container and
-  wipes the whole instance directory (which also frees the port), so a re-register starts
-  clean. It aborts before wiping if the container cannot be torn down (daemon down or
-  removal denied) so it never strands a running container on a freed port while deleting
-  its data. The provisioner's `/channel unregister` now uses `purge` (not `remove`).
+- `purge <id> [expectedRegToken]` is the destructive full teardown » it stops and deletes
+  the container and wipes the whole instance directory (which also frees the port), so a
+  re-register starts clean. It aborts before wiping if the container cannot be torn down
+  (daemon down or removal denied) so it never strands a running container on a freed port
+  while deleting its data. The commit point is an atomic rename of the instance dir to a
+  `.purging-*` tombstone (which frees the port and unregisters the channel instantly); the
+  slow `rm -rf` then runs detached so a provisioner timeout cannot leave a half-wipe, and
+  `boot.sh` runs `openclawctl sweep-tombstones` to reap any interrupted tombstone. The
+  optional `expectedRegToken` is the per-registration token (`.reg-token`, minted fresh on
+  every (re-)register alongside the port) the caller recorded; `purge` validates it under
+  the lifecycle lock and refuses (exit 2) on mismatch, so a stale unregister cannot wipe a
+  channel re-registered since. The provisioner's `/channel unregister` now uses `purge`
+  (not `remove`) and passes the token it returned at register time.
 - `add-dm`, `add-channel`, `remove`, `purge`, and `restart` each hold a per-channel
   lifecycle lock across their whole operation, and `boot.sh` takes the same lock before
   reconciling and starting each instance. This serializes the complete add/remove/purge/

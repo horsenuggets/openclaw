@@ -107,6 +107,40 @@ port_file() {
   echo "$INSTANCES_DIR/$1/$PORT_FILENAME"
 }
 
+# Per-registration token file. A fresh random token is written on every
+# registration (assign_port) and read back by purge to confirm the registration a
+# destructive unregister was issued for is still the current one. This is the
+# ON-DISK identity that makes the purge atomic with concurrent add/re-register:
+# both run under the lifecycle lock, so validating the token while holding that
+# lock cannot race a re-register (which writes a new token under the same lock).
+# Unlike the port, the token is NOT reused, so a same-port re-register still
+# changes it.
+REG_TOKEN_FILENAME=".reg-token"
+reg_token_file() {
+  echo "$INSTANCES_DIR/$1/$REG_TOKEN_FILENAME"
+}
+
+# Read an instance's current registration token (empty if unset/unreadable).
+get_reg_token() {
+  local file
+  file=$(reg_token_file "$1")
+  [ -f "$file" ] || return 0
+  tr -d '[:space:]' < "$file" 2>/dev/null || true
+}
+
+# Write a fresh random registration token for a channel (atomic write+rename).
+write_reg_token() {
+  local channelId="$1" token dst tmp
+  token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
+  [ -n "$token" ] || token="$(date +%s)$$"
+  dst=$(reg_token_file "$channelId")
+  mkdir -p "$(dirname "$dst")"
+  tmp="${dst}.tmp.$$"
+  printf '%s' "$token" > "$tmp"
+  mv "$tmp" "$dst"
+  echo "$token"
+}
+
 # Parse a raw .port value to a canonical positive decimal port, or empty.
 # Mirrors the router's rule: trim surrounding whitespace (like the TS/Python
 # readers' .strip()/.trim()), require all ASCII digits, value > 0, and
@@ -177,6 +211,11 @@ reserve_port() {
 
     port=$(allocate_port)
     assign_port "$channelId" "$port"
+    # Stamp a fresh registration token alongside the port so a purge can confirm it
+    # is tearing down THIS registration, not a later re-registration that reused the
+    # same channel id (and possibly the same port). Written under the same locks as
+    # the port, so it rotates atomically with every (re-)registration.
+    write_reg_token "$channelId" > /dev/null
     echo "$port"
   ) 9>"$PORT_LOCK_FILE"
 }
@@ -930,6 +969,24 @@ cmd_remove() {
 # the id is a 17-20 digit snowflake, so the rm path cannot escape INSTANCES_DIR.
 purge_locked() {
   local channelId="$1"
+  local expectedToken="${2:-}"
+  # Validate the registration token FIRST, while holding the lifecycle lock (this
+  # runs inside with_channel_lock), BEFORE touching the container or data. If the
+  # caller passed the token it saw when the unregister was issued and it no longer
+  # matches the on-disk token, the channel was re-registered since; abort so a stale
+  # request cannot purge the replacement. Because add/re-register also hold this
+  # lock and rotate the token under it, this check is atomic with any concurrent
+  # registration — closing the TOCTOU window a router-side-only recheck cannot. An
+  # empty expectedToken means the caller opted out of the check (e.g. a manual
+  # operator purge), so skip it.
+  if [ -n "$expectedToken" ]; then
+    local currentToken
+    currentToken=$(get_reg_token "$channelId")
+    if [ "$expectedToken" != "$currentToken" ]; then
+      echo "Error: registration changed since unregister was issued (stale request); not purging." >&2
+      return 2
+    fi
+  fi
   echo "Stopping container for channel $channelId..."
   # Strict: abort before wiping if the container could not be torn down, so a
   # daemon outage or a denied removal never strands a running container on a
@@ -998,21 +1055,24 @@ sweep_purge_tombstones() {
 
 cmd_purge() {
   local channelId="${1:-}"
+  # Optional expected registration token: when given, purge_locked validates it
+  # against the on-disk token under the lifecycle lock and refuses a mismatch, so a
+  # stale unregister cannot wipe a channel that was re-registered since the request
+  # was issued. Omitted => no token check (manual operator purge).
+  local expectedToken="${2:-}"
   if [ -z "$channelId" ]; then
-    echo "Usage: openclawctl purge <channelId>"
+    echo "Usage: openclawctl purge <channelId> [expectedRegToken]"
     exit 1
   fi
   require_channel_id "$channelId"
 
-  # Hold the channel's lifecycle lock across the whole stop+wipe sequence, so a
-  # concurrent `add-*` for this channel cannot run its reserve->seed->start flow
-  # in the gap between our container check and the directory wipe. Without this,
-  # an add that had already reserved its port (and released the port lock) could
-  # start a container right after we saw none and wiped the dir, stranding it on a
-  # now-reusable port. Serializing the complete add and purge closes that window.
-  # A teardown failure propagates (purge_locked returns non-zero) so the
-  # provisioner reports it rather than claiming the data was removed.
-  with_channel_lock "$channelId" purge_locked "$channelId"
+  # Hold the channel's lifecycle lock across the whole token-check + stop + wipe
+  # sequence, so a concurrent `add-*` for this channel cannot run its
+  # reserve->seed->start flow in the gap. This both serializes the complete add and
+  # purge AND makes the token check atomic with any concurrent re-registration. A
+  # teardown failure propagates (purge_locked returns non-zero) so the provisioner
+  # reports it rather than claiming the data was removed.
+  with_channel_lock "$channelId" purge_locked "$channelId" "$expectedToken"
   exit $?
 }
 
@@ -1146,7 +1206,7 @@ case "${1:-}" in
   add-dm)      cmd_add_dm "${2:-}" ;;
   add-channel) cmd_add_channel "${2:-}" ;;
   remove)      cmd_remove "${2:-}" ;;
-  purge)       cmd_purge "${2:-}" ;;
+  purge)       cmd_purge "${2:-}" "${3:-}" ;;
   restart)     cmd_restart "${2:-}" ;;
   reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;

@@ -108,6 +108,16 @@ function readInstancePort(channelId: string): number | undefined {
   }
 }
 
+/** Read the host registration token openclawctl stamped for this instance. */
+function readRegToken(channelId: string): string | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(INSTANCES_DIR, channelId, ".reg-token"), "utf-8").trim();
+    return raw || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Wait until something is listening on the agent's loopback port. */
 function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -163,6 +173,9 @@ async function handleRegister(body: RegisterRequest): Promise<ProvisionResponse>
   if (port === undefined) {
     return { ok: false, message: "Instance was created but no port was assigned." };
   }
+  // Return the host registration token openclawctl minted for this registration so
+  // the router can bind a later unregister confirmation to exactly this instance.
+  const regToken = readRegToken(body.channelId);
   const ready = await waitForPort(port, READINESS_TIMEOUT_MS);
   console.log(`[provisioner] registered ${body.channelId} on port ${port} (ready=${ready})`);
   return {
@@ -170,6 +183,7 @@ async function handleRegister(body: RegisterRequest): Promise<ProvisionResponse>
     message: ready
       ? "Channel registered and the agent is ready. Send a message to begin setup."
       : "Channel registered. The agent is still starting up, give it a few seconds before your first message.",
+    ...(regToken ? { regToken } : {}),
   };
 }
 
@@ -179,8 +193,26 @@ async function handleUnregister(body: UnregisterRequest): Promise<ProvisionRespo
   }
   // `purge` (not `remove`): unregister is a full teardown. It stops and deletes
   // the container, frees the port, and wipes the instance directory, so a later
-  // re-register starts clean rather than resurrecting old data.
-  const result = await runCtl(["purge", body.channelId]);
+  // re-register starts clean rather than resurrecting old data. Pass the expected
+  // registration token (when the router supplied one) so openclawctl refuses the
+  // purge under the lifecycle lock if the channel was re-registered since the
+  // request was issued — the atomic guard against purging a replacement instance.
+  const ctlArgs = body.expectedRegToken
+    ? ["purge", body.channelId, body.expectedRegToken]
+    : ["purge", body.channelId];
+  const result = await runCtl(ctlArgs);
+  if (result.code === 2) {
+    // Exit 2 = the registration token no longer matches, i.e. the channel was
+    // re-registered since this unregister was issued. Not a teardown failure; the
+    // current instance is intact and must stay routable, so surface a distinct
+    // message and leave router state unchanged.
+    console.log(`[provisioner] purge ${body.channelId} refused: stale registration`);
+    return {
+      ok: false,
+      message:
+        "This request is out of date: the channel was re-registered since it was issued. Run unregister again to remove the current instance.",
+    };
+  }
   if (result.code !== 0) {
     console.error(`[provisioner] purge ${body.channelId} failed: ${result.stderr.trim()}`);
     return { ok: false, message: "Failed to remove the instance. Check the provisioner logs." };

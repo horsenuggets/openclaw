@@ -515,12 +515,27 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           log: (message) => runtime.log(message),
         })
       : null;
+  // Host registration tokens, keyed by channel. The provisioner mints a fresh
+  // token per successful (re-)register (openclawctl's .reg-token); we record it so
+  // an unregister confirmation can carry it and the host can refuse a purge whose
+  // token no longer matches (an atomic, under-the-lifecycle-lock guard against
+  // purging a replacement registration). This is the authoritative per-
+  // registration nonce surfaced via channelCommandDeps.registrationNonce.
+  const hostRegTokens = new Map<string, string>();
   // Reconcile the instance map after any successful provisioning change.
   const provisioning: ProvisioningClient = daemonProvisioning
     ? {
         register: async (p) => {
           const result = await daemonProvisioning.register(p);
           if (result.ok) {
+            if (result.regToken) {
+              hostRegTokens.set(p.channelId, result.regToken);
+            } else {
+              // A register with no token (older provisioner) leaves the nonce
+              // unknown; drop any stale entry so registrationNonce falls back to the
+              // in-memory epoch-generation rather than a wrong token.
+              hostRegTokens.delete(p.channelId);
+            }
             reloadInstances();
             rotateConnectionRegistrationKey(p.channelId);
           }
@@ -536,8 +551,16 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           // trigger for this channel until we lift it below.
           unauthorizedNoticeDebouncer.suppressChannel(p.channelId);
           try {
-            const result = await daemonProvisioning.unregister(p);
+            // Carry the host registration token so the host can atomically refuse a
+            // stale purge. Prefer an explicit token from the caller; otherwise fall
+            // back to the one we recorded at register time.
+            const expectedRegToken = p.expectedRegToken ?? hostRegTokens.get(p.channelId);
+            const result = await daemonProvisioning.unregister({
+              channelId: p.channelId,
+              ...(expectedRegToken ? { expectedRegToken } : {}),
+            });
             if (result.ok) {
+              hostRegTokens.delete(p.channelId);
               // Hard-delete the channel's preferences (not a tombstone): the purge
               // wiped the instance dir and its legacy `.onboarding.json`, so there is
               // nothing left to fall back to, and the "all data removed" promise must
@@ -575,13 +598,19 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     isSelf: (userId) => userId === applicationId,
     describeInstance,
     // Per-registration nonce used to bind an unregister confirmation to the exact
-    // registration it was shown for. Reuse the connection registration key, which
-    // rotates on every (un)register; take its generation prefix (the integer before
-    // the ":"), and prefix the process-unique epoch so the value is both colon-free
-    // (safe in the custom_id) and unique across router restarts (the generation
-    // counter resets to 0 on startup, so the epoch is what stops a pre-restart
-    // button from validating against a same-numbered post-restart registration).
+    // registration it was shown for. Prefer the HOST registration token (minted per
+    // (re-)register by openclawctl): it is persisted on the host and validated there
+    // under the lifecycle lock, so passing it as expectedRegToken makes the purge
+    // atomic with any concurrent re-register (and it survives a router restart). It
+    // is hex, so colon-free and safe in the custom_id. Fall back to the in-memory
+    // epoch-generation when no host token is known (stub provisioner / older host):
+    // that still gives the router-side recheck a value, just without the host-atomic
+    // guarantee.
     registrationNonce: (channelId) => {
+      const hostToken = hostRegTokens.get(channelId);
+      if (hostToken) {
+        return hostToken;
+      }
       const key = currentConnectionRegistrationKey(channelId);
       return key === null ? null : `${registrationEpoch}-${key.split(":")[0]}`;
     },

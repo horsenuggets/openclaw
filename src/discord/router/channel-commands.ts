@@ -73,7 +73,16 @@ export type InstanceStatus = {
   running?: boolean;
 };
 
-export type ProvisioningResult = { ok: boolean; message: string };
+export type ProvisioningResult = {
+  ok: boolean;
+  message: string;
+  /**
+   * Host registration token minted for a successful register (openclawctl's
+   * .reg-token). The router records it to bind a later unregister confirmation to
+   * this exact registration; command handlers ignore it.
+   */
+  regToken?: string;
+};
 
 /** Host-side provisioning (create/start/stop instances). Implemented in Phase 2. */
 export type ProvisioningClient = {
@@ -82,7 +91,16 @@ export type ProvisioningClient = {
     isDM: boolean;
     ownerId: string;
   }) => Promise<ProvisioningResult>;
-  unregister: (params: { channelId: string }) => Promise<ProvisioningResult>;
+  /**
+   * Tear down a channel. `expectedRegToken`, when given, is the host registration
+   * token the caller recorded for the registration this teardown targets; the host
+   * validates it under the per-channel lifecycle lock and refuses a mismatch, so a
+   * stale request cannot purge a channel re-registered since.
+   */
+  unregister: (params: {
+    channelId: string;
+    expectedRegToken?: string;
+  }) => Promise<ProvisioningResult>;
 };
 
 /**
@@ -562,6 +580,11 @@ export async function handleChannelCommand(
       return;
     }
 
+    // The router's provisioning wrapper supplies the host registration token as
+    // expectedRegToken from its own records, so the host atomically refuses the
+    // purge under the lifecycle lock if the registration changed — closing the
+    // residual router-to-host window. (We do not forward genNow here, as it may be
+    // the epoch-generation fallback rather than a host token.)
     const result = await deps.provisioning.unregister({ channelId: ctx.channelId });
     await ctx.reply(unregisterResultReply(ctx.channelId, status.ownerId ?? ctx.userId, result), {
       ephemeral: true,
@@ -768,6 +791,13 @@ export async function decideUnregisterClick(
           components: [],
         };
       }
+      // The router's provisioning wrapper supplies the host registration token as
+      // expectedRegToken from its own records, so the HOST re-validates it under
+      // the lifecycle lock and refuses a mismatch — the atomic guard that closes
+      // the residual TOCTOU between this router-side recheck and the host acquiring
+      // that lock. (We do not forward the button's gen here: it may be the
+      // epoch-generation fallback when no host token exists, which would not match
+      // a host .reg-token and would wrongly refuse the purge.)
       const result = await deps.provisioning.unregister({ channelId });
       deps.log(
         `[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`,
