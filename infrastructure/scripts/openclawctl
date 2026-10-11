@@ -139,15 +139,26 @@ ensure_reg_token() {
 }
 
 # Write a fresh random registration token for a channel (atomic write+rename).
+# Returns non-zero (and cleans up any partial temp) if the write or rename fails,
+# so a caller never reports a registration success that did not persist the token
+# the stale-purge guard depends on. Echoes the token on success.
 write_reg_token() {
   local channelId="$1" token dst tmp
   token=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n')
   [ -n "$token" ] || token="$(date +%s)$$"
   dst=$(reg_token_file "$channelId")
-  mkdir -p "$(dirname "$dst")"
+  mkdir -p "$(dirname "$dst")" || return 1
   tmp="${dst}.tmp.$$"
-  printf '%s' "$token" > "$tmp"
-  mv "$tmp" "$dst"
+  if ! printf '%s' "$token" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    echo "Error: could not write registration token for $channelId" >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$dst"; then
+    rm -f "$tmp" 2>/dev/null || true
+    echo "Error: could not install registration token for $channelId" >&2
+    return 1
+  fi
   echo "$token"
 }
 
@@ -224,8 +235,14 @@ reserve_port() {
     # Stamp a fresh registration token alongside the port so a purge can confirm it
     # is tearing down THIS registration, not a later re-registration that reused the
     # same channel id (and possibly the same port). Written under the same locks as
-    # the port, so it rotates atomically with every (re-)registration.
-    write_reg_token "$channelId" > /dev/null
+    # the port, so it rotates atomically with every (re-)registration. Fail closed:
+    # if the token cannot be persisted, roll back the port so the registration does
+    # not come up without the stale-purge guard the token provides.
+    if ! write_reg_token "$channelId" > /dev/null; then
+      free_port "$channelId"
+      echo "ERROR: could not persist registration token for $channelId" >&2
+      exit 1
+    fi
     echo "$port"
   ) 9>"$PORT_LOCK_FILE"
 }

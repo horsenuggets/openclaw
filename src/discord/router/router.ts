@@ -612,6 +612,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
               }
               reloadInstances();
               rotateConnectionRegistrationKey(p.channelId);
+            } else {
+              // A failed unregister (notably the host refusing a stale-token purge of
+              // a re-registered channel) must refresh our cached token: otherwise
+              // hostRegTokens keeps the OLD token, so the next dialog reuses it and is
+              // rejected forever until a restart. Reconcile so the replacement
+              // registration's current on-disk token is hydrated before the retry.
+              reloadInstances();
             }
             return result;
           } finally {
