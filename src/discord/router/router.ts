@@ -515,12 +515,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
           return result;
         },
         unregister: async (p) => {
+          // Drop any pending unauthorized-notice windows for the channel BEFORE
+          // awaiting the Docker teardown, not after: a purge can take longer than
+          // the 5s debounce window, so a queued trailing notice could otherwise
+          // fire mid-teardown and post using the captured former owner/status. If
+          // teardown fails, a later offending message simply opens a fresh window.
+          unauthorizedNoticeDebouncer.cancelChannel(p.channelId);
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
-            // Drop any pending unauthorized-notice windows for the channel so a
-            // queued trailing notice cannot fire after the owner is gone and post
-            // using the captured former owner/status.
-            unauthorizedNoticeDebouncer.cancelChannel(p.channelId);
             // Preferences live outside the instance dir the provisioner tears down
             // (so the router can write them under a read-only instances mount), so
             // reset them here, scoped to exactly the channel that was unregistered.

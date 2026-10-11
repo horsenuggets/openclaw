@@ -1398,6 +1398,26 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     return;
   }
 
+  // Claim the in-flight guard SYNCHRONOUSLY, at the moment the click is received,
+  // BEFORE awaiting anything (even the ack). The handlers for two different clicks
+  // interleave only at `await` points, so a guard claimed before the first await
+  // cannot be bypassed by a later click's handler: once a Confirm is in flight,
+  // any subsequent click (including a Cancel whose callback Discord happens to
+  // complete first) sees the guard set and is ignored. A guard claimed only after
+  // `await ack` would leave exactly the window a quick Cancel could slip through.
+  //
+  // - If a teardown is already in flight for this channel, ignore EVERY further
+  //   click (confirm/cancel/anything): it would otherwise edit the message to a
+  //   stale state (e.g. "cancelled") that could land after the final result. The
+  //   click is still acked below so the interaction never expires.
+  // - Otherwise, a confirm click claims the guard now. parsed.kind comes from the
+  //   custom_id, so this is all synchronous.
+  const alreadyInFlight = unregisterInFlight.has(parsed.channelId);
+  const claimedInFlight = !alreadyInFlight && parsed.kind === "confirm";
+  if (claimedInFlight) {
+    unregisterInFlight.add(parsed.channelId);
+  }
+
   // Acknowledge this valid-initiator click up front with a deferred message
   // update (type 6): it does not change the message yet (so the buttons stay
   // until the edit below), but it satisfies the deadline regardless of how long
@@ -1408,29 +1428,14 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     body: JSON.stringify({ type: 6 }),
   }).catch((err) => runtime.error(`[router] button ack failed: ${String(err)}`));
 
+  // A click for a channel whose teardown is already in flight is acked (above) but
+  // otherwise ignored.
+  if (alreadyInFlight) {
+    return;
+  }
+
   void (async () => {
     await ack;
-    // While a teardown is already running for this channel, ignore EVERY further
-    // click on its buttons (confirm, cancel, anything). A stale Cancel landing
-    // mid-teardown would otherwise edit the message to "cancelled" even though the
-    // purge continues, and if that PATCH arrives after the final result the message
-    // would permanently (and falsely) claim cancellation. The click is already
-    // acked (type 6), so ignoring it is safe. channelId comes from the custom_id,
-    // so this needs no async decode.
-    if (unregisterInFlight.has(parsed.channelId)) {
-      return;
-    }
-    // Claim the in-flight guard SYNCHRONOUSLY for a confirm click, before the async
-    // authorization in decideUnregisterClick (which awaits a role lookup for a
-    // non-owner admin). Otherwise a Confirm quickly followed by a Cancel could let
-    // the Cancel slip past the still-unset guard during the Confirm's auth window
-    // and render "cancelled" while the Confirm goes on to purge. The guard is
-    // released below if this click turns out not to be an actual teardown (denied,
-    // not registered, or not ours). parsed.kind is known from the custom_id.
-    const claimedInFlight = parsed.kind === "confirm";
-    if (claimedInFlight) {
-      unregisterInFlight.add(parsed.channelId);
-    }
     try {
       const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
       // notForYou cannot occur here (initiator already matched above); ignored is
