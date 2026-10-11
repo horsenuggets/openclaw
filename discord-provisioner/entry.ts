@@ -188,7 +188,11 @@ async function handleUnregister(body: UnregisterRequest): Promise<ProvisionRespo
   console.log(`[provisioner] unregistered and purged ${body.channelId}`);
   return {
     ok: true,
-    message: "Channel unregistered. The agent, its container, port, and data have been removed.",
+    // purge commits by renaming the instance dir (container stopped, port freed)
+    // and wipes the data in a detached background process, so the deletion may
+    // still be finishing when this returns; describe it as in-progress.
+    message:
+      "Channel unregistered. The agent and container are stopped and the port is freed; data is being wiped in the background.",
   };
 }
 

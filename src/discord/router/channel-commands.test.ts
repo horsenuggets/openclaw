@@ -514,6 +514,32 @@ describe("handleChannelCommand unregister", () => {
     expect(unregister).toHaveBeenCalledOnce();
   });
 
+  it("aborts an explicit-confirm unregister if the registration changed during admin auth", async () => {
+    // A non-owner admin runs `/channel unregister yes`; while deps.isAdmin awaits,
+    // the channel is re-registered (nonce 1 -> 2). The explicit-confirm path must
+    // revalidate the nonce and abort WITHOUT purging the replacement instance.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    let nonce = "1";
+    const { ctx, replies } = makeCtx("unregister", ["yes"], { userId: "ADMIN" });
+    await handleChannelCommand(
+      ctx,
+      makeDeps({
+        describeInstance: () => ({ port: 1, ownerId: "U1", onboarded: true }),
+        // Non-owner: forces the async admin lookup. Flip the nonce as it resolves to
+        // simulate a concurrent re-register completing during authorization.
+        isAdmin: async () => {
+          nonce = "2";
+          return true;
+        },
+        registrationNonce: () => nonce,
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(unregister).not.toHaveBeenCalled();
+    const { embed } = embedOf(replies[replies.length - 1].payload);
+    expect(embed.description).toContain("out of date");
+  });
+
   it("denies a non-owner, non-admin user", async () => {
     const unregister = vi.fn();
     const { ctx, replies } = makeCtx("unregister", [], { userId: "STRANGER" });
@@ -599,9 +625,10 @@ describe("decideUnregisterClick", () => {
     const final = await result.perform();
     expect(unregister).toHaveBeenCalledWith({ channelId: "C1" });
     expect(final.components).toEqual([]);
-    expect(final.embeds[0].description).toContain("successfully unregistered");
-    // The final wording reflects the full teardown (container, port, and data).
-    expect(final.embeds[0].description).toContain("data have been removed");
+    expect(final.embeds[0].description).toContain("has been unregistered");
+    // The wording reflects that container/port are torn down and the data wipe is
+    // still finishing in the background (not that the bytes are already gone).
+    expect(final.embeds[0].description).toContain("wiped in the background");
   });
 
   it("cancels without touching provisioning", async () => {

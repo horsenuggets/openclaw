@@ -1274,7 +1274,7 @@ describe("discord router channel-delete cleanup", () => {
     expect(unregisterCalls).toEqual([CHANNEL]);
     const patch = patches.at(-1);
     expect(patch?.components).toEqual([]);
-    expect(patch?.embeds?.[0]?.description).toContain("successfully unregistered");
+    expect(patch?.embeds?.[0]?.description).toContain("has been unregistered");
 
     delete process.env.OPENCLAW_AUTH_GUILD_ID;
     delete process.env.OPENCLAW_ADMIN_ROLE_ID;
@@ -1436,7 +1436,7 @@ describe("discord router channel-delete cleanup", () => {
     // Teardown completed exactly once, and the final message is the success result
     // (never overwritten by a stale cancellation).
     expect(unregisterCalls).toEqual([CHANNEL]);
-    expect(patches.at(-1)?.embeds?.[0]?.description).toContain("successfully unregistered");
+    expect(patches.at(-1)?.embeds?.[0]?.description).toContain("has been unregistered");
 
     delete process.env.OPENCLAW_AUTH_GUILD_ID;
     delete process.env.OPENCLAW_ADMIN_ROLE_ID;

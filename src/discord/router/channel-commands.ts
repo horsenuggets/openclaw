@@ -510,6 +510,14 @@ export async function handleChannelCommand(
       return;
     }
 
+    // Snapshot the registration nonce BEFORE the async admin lookup below. Like the
+    // button flow, the explicit-confirm path must not purge a replacement: for a
+    // non-owner admin, the old registration could be removed and the channel
+    // re-registered while deps.isAdmin awaits, after which an unguarded
+    // unregister({channelId}) would wipe the new instance. Revalidated right before
+    // the destructive call.
+    const genAtStart = registrationGen(deps, ctx.channelId);
+
     // The owner may always remove their own channel; otherwise admin only.
     const isOwner = status.ownerId === ctx.userId;
     if (!isOwner && !(await deps.isAdmin(ctx.userId))) {
@@ -531,6 +539,24 @@ export async function handleChannelCommand(
             unregisterButtons(ctx.channelId, ctx.userId, registrationGen(deps, ctx.channelId)),
           ],
         },
+        { ephemeral: true },
+      );
+      return;
+    }
+
+    // Revalidate the nonce immediately before the destructive call: if the channel
+    // was re-registered since we snapshotted it (e.g. during the admin lookup),
+    // abort rather than purge the replacement, mirroring the button path.
+    const genNow = registrationGen(deps, ctx.channelId);
+    if (genAtStart !== genNow) {
+      deps.log(
+        `[channel] unregister ${ctx.channelId} aborted: stale registration (gen ${genAtStart} != ${genNow})`,
+      );
+      await ctx.reply(
+        registrationReply(
+          "Unregister",
+          `This request is out of date: channel <#${ctx.channelId}> was re-registered since it was issued. Run \`/channel unregister\` again if you still want to remove it.`,
+        ),
         { ephemeral: true },
       );
       return;
@@ -562,7 +588,12 @@ function unregisterResultReply(
   return registrationReply(
     "Unregister",
     result.ok
-      ? `Channel <#${channelId}> has been successfully unregistered from user <@${ownerId}>. Its agent, container, port, and all of its data have been removed.`
+      ? // The host commits the teardown by atomically renaming the instance dir
+        // (stopping the container and freeing the port), then wipes the data in a
+        // detached background process. So the agent/container/port are gone for
+        // certain, but the data deletion is still finishing; word it as such rather
+        // than promising the bytes are already gone.
+        `Channel <#${channelId}> has been unregistered from user <@${ownerId}>. Its agent and container are stopped and its port is freed; the remaining data is being wiped in the background.`
       : `Could not unregister channel <#${channelId}>. ${result.message}`,
   );
 }
