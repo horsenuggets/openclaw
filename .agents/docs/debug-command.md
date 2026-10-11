@@ -14,7 +14,9 @@ All of it lives under `src/discord/router/`:
   result is still Discord-shaped, though: it carries embed payloads plus attachment names,
   or raw message content.
 - `gateway-events.ts` (`handleSlashInteraction`) - the router adapter that admin-gates the
-  interaction, defers it ephemerally, runs the command, and renders the result.
+  interaction BEFORE deferring, then defers (with the channel's resolved ephemeral flag),
+  runs the command, and renders the result. Gating before the defer keeps a non-admin
+  denial ephemeral even on a channel set public via `/debug ephemeral off`.
   `handleMessageCreate` also carries a text-command path (`parseDebugTextCommand`) so an
   automation/tester bot that cannot invoke slash commands can drive `/debug` as a plain
   message (admin-gated the same way; replies land in-channel since bots cannot send true
@@ -56,8 +58,12 @@ Behavior worth knowing:
   ephemeral permission-denied embed (`denyInteractionEphemeral` with
   `buildMissingPermissionText`), the same embed every other slash command uses to refuse
   access.
-- Every reply is ephemeral (only the invoker sees it), so debug output never leaks into
-  the channel.
+- Replies are ephemeral by default (only the invoker sees them), so debug output stays out
+  of the channel. The per-channel `ephemeralCommands` preference (default on) can flip a
+  channel public via `/debug ephemeral off` so command output persists for inspection
+  during testing; `/debug ephemeral [on|off]` reads/sets it and `/debug ephemeral` alone
+  reports the current value. Permission denials stay ephemeral regardless of the
+  preference.
 - Usable anywhere (guild channels, bot DMs, group DMs: `contexts: [0, 1, 2]`) since the
   gate is on the caller's identity, not the surface.
 - The input is parsed by a quote-aware tokenizer (`tokenizeDebugCommand`): whitespace
@@ -120,11 +126,15 @@ notice, so a new subcommand only needs its registry entry plus `run`.
   first, fields in the middle, footer/timestamp on the last) and appends a truncation note
   field if the registry ever outgrows that budget, so an oversized list still renders
   instead of 400-ing.
-- Defer before edit. The handler defers the interaction ephemerally first (the admin check
-  can hit the Discord role API and exceed the ~3s window), then edits the original reply
-  with embeds (`editInteractionEmbedReply`) or content (`editInteractionContentReply`).
-- `isAdmin` is evaluated before the command is dispatched, so a non-admin's subcommand
-  never runs.
+- Gate, then defer, then edit. The handler evaluates `isAdmin` BEFORE issuing any
+  interaction response: a denial issues its own ephemeral defer (so it cannot leak to a
+  public channel), and only an authorized call defers with the channel's resolved
+  ephemeral flag and then edits the original reply with embeds
+  (`editInteractionEmbedReply`) or content (`editInteractionContentReply`). The admin
+  check is a single role lookup, well inside Discord's ~3s window, so gating before the
+  defer does not risk a timeout.
+- `isAdmin` is evaluated before the command is dispatched (and before the defer), so a
+  non-admin's subcommand never runs.
 - There is an admin-gated text-command path (`parseDebugTextCommand`), added so an
   automation/tester bot that cannot invoke slash commands can still drive `/debug`. It
   runs the same `runDebugCommand`, but because a bot cannot send a true ephemeral, its

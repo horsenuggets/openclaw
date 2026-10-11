@@ -227,9 +227,10 @@ function deliverDebugSecret(params: {
  * Apply a `/debug ephemeral` toggle for a channel and build its reply embed. A
  * bare status query renders a plain Log embed; an on/off toggle persists the new
  * value and renders a Command Result embed whose footer checkbox reflects it. A
- * failed write (e.g. a read-only mount) is logged and still rendered as the
- * attempted state, matching the /lifecycle persistence-failure handling's intent
- * to surface rather than silently drop. Shared by the slash and text paths.
+ * failed write (e.g. a read-only mount) renders a Log embed reporting that the
+ * change did not stick, matching /lifecycle, which surfaces the failure rather
+ * than claiming a success the user would not see survive a restart. Shared by the
+ * slash and text paths.
  */
 function applyDebugEphemeral(
   instancesDir: string,
@@ -244,6 +245,9 @@ function applyDebugEphemeral(
   }
   if (!setEphemeralCommands(instancesDir, channelId, outcome.newValue)) {
     runtime.error(`[router] failed to persist ephemeral preference for channel ${channelId}`);
+    return buildLogEmbed(
+      "Could not save the ephemeral command preference. Please try again. (The change did not stick.)",
+    );
   }
   runtime.log(`[router] /debug ephemeral for channel ${channelId}: ${outcome.state}`);
   return buildCommandResultEmbed(outcome.description, outcome.state);
@@ -800,14 +804,39 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     );
     // `ephemeral on/off` changes the very preference that fixes this reply's
     // ephemerality, and Discord locks that in at defer time, so resolve the
-    // *resulting* value before deferring: an explicit on/off uses the new value,
-    // everything else (including a bare status query) uses the current one.
+    // *resulting* value: an explicit on/off uses the new value, everything else
+    // (including a bare status query) uses the current one.
     const desiredEphemeral = peekDebugEphemeralDesired(commandInput);
     const resultingEphemeral =
       desiredEphemeral ??
       (interactionChannelId ? readEphemeralCommands(instancesDir, interactionChannelId) : true);
     void (async () => {
       try {
+        // Authorize BEFORE the first interaction response. Discord fixes a reply's
+        // ephemerality at defer time and an ephemeral reply cannot be made public
+        // (or vice versa) afterward, so if this channel's preference is public
+        // (`ephemeral off`), deferring first would publish the permission-denied
+        // embed to the whole channel, leaking that a non-admin probed /debug and
+        // violating the "every denial is ephemeral" invariant
+        // (.agents/docs/command-system.md). Gate first: a denial does its own
+        // ephemeral defer; only an authorized call defers with the resolved flag.
+        // The admin check is a single role lookup, well inside Discord's ~3s
+        // window, so gating before the defer does not risk a timeout.
+        if (!(await isAdmin(userId))) {
+          runtime.log(`[router] denied /debug from ${userId} (not an admin)`);
+          // Deny with the shared permission embed (ephemeral), so /debug refuses
+          // access the same way every other slash command does instead of a
+          // bespoke plain-text reply. alreadyDeferred:false so the denial opens
+          // its own ephemeral response rather than editing a public deferral.
+          await denyInteractionEphemeral({
+            applicationId,
+            interactionId,
+            interactionToken,
+            notice: buildMissingPermissionText(DEBUG_COMMAND_SPEC.name),
+            runtime,
+          });
+          return;
+        }
         const deferResp = await fetch(
           `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
           {
@@ -818,21 +847,6 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
         );
         if (!deferResp.ok) {
           runtime.error(`[router] debug defer failed (${deferResp.status})`);
-          return;
-        }
-        if (!(await isAdmin(userId))) {
-          runtime.log(`[router] denied /debug from ${userId} (not an admin)`);
-          // Deny with the shared permission embed (the interaction is already
-          // deferred above), so /debug refuses access the same way every other
-          // slash command does instead of a bespoke plain-text reply.
-          await denyInteractionEphemeral({
-            applicationId,
-            interactionId,
-            interactionToken,
-            notice: buildMissingPermissionText(DEBUG_COMMAND_SPEC.name),
-            runtime,
-            alreadyDeferred: true,
-          });
           return;
         }
         const result = runDebugCommand(commandInput);
@@ -1001,16 +1015,23 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
     const userId = d.member?.user?.id ?? d.user?.id;
     if (userId) {
-      // Acknowledge immediately with a deferred (ephemeral) response:
-      // register can take up to the daemon's command timeout plus
-      // readiness polling, well beyond Discord's ~3s window. The
-      // result is then delivered by editing the deferred reply.
+      // Acknowledge immediately with a deferred, ALWAYS-ephemeral response:
+      // register can take up to the daemon's command timeout plus readiness
+      // polling, well beyond Discord's ~3s window, and the result is delivered by
+      // editing the deferred reply. /channel is deliberately exempt from the
+      // channel's `ephemeralCommands` preference (unlike conversational command
+      // output): its gating (whitelist/admin/owner) is checked inside
+      // handleChannelCommand AFTER this defer, so deferring public would edit a
+      // permission-denied embed into a channel-visible reply and leak that a
+      // non-owner probed registration, violating the "every denial is ephemeral"
+      // invariant (.agents/docs/command-system.md). Every /channel reply already
+      // asks for ephemeral, so fixing the defer ephemeral matches that intent.
       void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: 5,
-          data: { flags: ephemeralFlags(interactionChannelId) },
+          data: { flags: 64 },
         }),
       }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
       const editReply = (payload: ChannelReplyPayload) => {

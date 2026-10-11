@@ -378,6 +378,37 @@ stop_container() {
   docker stop "$container" 2>/dev/null && docker rm "$container" 2>/dev/null || true
 }
 
+# Strict teardown for `purge`: stop and remove the container, and FAIL (return
+# non-zero) if the container still exists afterward. Unlike stop_container, this
+# must not swallow a genuine Docker error, because purge wipes the instance data
+# right after. If the daemon is down or removal is denied, the container would be
+# left running on a port we are about to free while its data is irreversibly
+# deleted. An already-absent container is success (nothing to tear down).
+purge_container() {
+  local channelId="$1"
+  local container="agents.channel-$channelId"
+  # `inspect` distinguishes "no such container" (exit 1, nothing to do) from a
+  # daemon failure. When it cannot talk to the daemon at all, bail before wiping.
+  local inspect_out
+  if ! inspect_out=$(docker inspect --format '{{.Id}}' "$container" 2>&1); then
+    case "$inspect_out" in
+      *"No such object"* | *"no such container"*) return 0 ;;
+      *) echo "Error: cannot inspect container $container: $inspect_out" >&2; return 1 ;;
+    esac
+  fi
+  # Container exists: stop then remove, and confirm it is gone.
+  docker stop "$container" >/dev/null 2>&1 || true
+  if ! docker rm -f "$container" >/dev/null 2>&1; then
+    echo "Error: failed to remove container $container" >&2
+    return 1
+  fi
+  if docker inspect --format '{{.Id}}' "$container" >/dev/null 2>&1; then
+    echo "Error: container $container still present after removal" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
 # HOST using the deploy binary (deploy.sh stages the hand-picked templates next to
 # it at ~/deploy/bin/docs/reference/templates). The onboarding wizard normally seeds
@@ -891,11 +922,24 @@ cmd_purge() {
     flock 9
 
     echo "Stopping container for channel $channelId..."
-    stop_container "$channelId"
+    # Strict: abort before wiping if the container could not be torn down, so a
+    # daemon outage or a denied removal never strands a running container on a
+    # port we are about to free while its data is irreversibly deleted.
+    if ! purge_container "$channelId"; then
+      echo "Error: could not tear down the container; instance data left intact." >&2
+      exit 1
+    fi
 
     echo "Wiping instance data and freeing port..."
     rm -rf "${INSTANCES_DIR:?}/$channelId"
   ) 9>"$PORT_LOCK_FILE"
+  # Propagate a teardown failure (the subshell exits non-zero when purge_container
+  # fails) so the provisioner sees a non-zero code and reports the failure instead
+  # of telling the user the data was removed when it was intentionally left intact.
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    exit "$rc"
+  fi
 
   echo "Done. Channel $channelId fully removed (container, port, and data)."
 }

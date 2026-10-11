@@ -30,11 +30,12 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   throwaway test values). Keeping subcommands behind the one free-text option (rather than
   registering each as its own slash command) is what hides them from the public slash
   picker; `/debug` itself is still globally registered and visible, gated at runtime by
-  the admin check. Slash replies are ephemeral, so debug output stays out of the channel;
-  `/debug` also has an admin-gated text path (`parseDebugTextCommand`) for
-  automation/tester bots, whose replies are in-channel because bots cannot send
-  ephemerals. See [debug-command.md](debug-command.md) for usage and how to add a
-  subcommand.
+  the admin check. Slash replies are ephemeral by default, so debug output stays out of
+  the channel, unless a tester flips the channel public with `/debug ephemeral off` (the
+  per-channel `ephemeralCommands` preference, default on; see below). `/debug` also has an
+  admin-gated text path (`parseDebugTextCommand`) for automation/tester bots, whose
+  replies are in-channel because bots cannot send ephemerals. See
+  [debug-command.md](debug-command.md) for usage and how to add a subcommand.
 
 These five (six counting the `/conn` alias) are the only slash commands the bot should
 expose. On startup `startRouter` registers them with a single bulk-overwrite
@@ -77,9 +78,16 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   else needs admin (a deliberate owner-recovery path). `OPENCLAW_ADMIN_OVERRIDE_IDS`
   grants admin unconditionally (used by lab rigs).
 - Every permission denial, for every slash command, renders the SAME ephemeral embed
-  (`unauthorized-notice.ts`). `buildPermissionDeniedEmbed` builds the Log-category embed;
-  `denyInteractionEphemeral` defers the interaction (or skips the defer when the handler
-  already deferred) and edits the embed into the reply. Two notice flavors feed it:
+  (`unauthorized-notice.ts`). This is a hard invariant: a denial is ALWAYS ephemeral, even
+  on a channel whose `ephemeralCommands` preference is off (public). Because Discord fixes
+  a reply's ephemerality at defer time and it cannot be changed afterward, any command
+  that can deny must either authorize before its first interaction response or let the
+  denial issue its own ephemeral defer; `/debug` (admin gate before the defer) and
+  `/channel` (always-ephemeral defer, exempt from the preference) both do this so a
+  non-admin probe cannot publish a permission embed to the channel.
+  `buildPermissionDeniedEmbed` builds the Log-category embed; `denyInteractionEphemeral`
+  defers the interaction ephemerally (or skips the defer when the handler already deferred
+  ephemerally) and edits the embed into the reply. Two notice flavors feed it:
   `buildUnauthorizedNoticeText` (channel-ownership denial, names the owner) and
   `buildMissingPermissionText` (generic "you do not have the necessary permissions to use
   `/<command>`" for globally gated commands). Plain-message denials reuse the same embed
@@ -96,10 +104,19 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   owner), and on an unregistered DM the command still reports that it is not registered.
 - `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
-  state rather than one channel's agent. A non-admin gets the same permission embed via
-  `denyInteractionEphemeral` (with `buildMissingPermissionText` and
-  `alreadyDeferred: true`, since the handler defers ephemerally first for the role
-  lookup). An admin's reply is then embeds (`help` / notices) or raw content (`echo`).
+  state rather than one channel's agent. The admin check runs BEFORE the interaction is
+  deferred, so a non-admin denial issues its own ephemeral defer via
+  `denyInteractionEphemeral` (with `buildMissingPermissionText`) and can never leak to a
+  channel whose `ephemeralCommands` preference is public. Only once the admin check passes
+  does the handler defer with the channel's resolved ephemeral flag; an admin's reply is
+  then embeds (`help` / notices / the `ephemeral` toggle) or raw content (`echo`).
+- The `ephemeralCommands` preference (per-channel, stored in `preferences-store.ts`,
+  default on) controls whether slash-command OUTPUT is ephemeral.
+  `/debug ephemeral [on|off]` reads/sets it; turning it off makes command results persist
+  in-channel so they can be inspected during testing. It governs the conversational
+  command replies (`/debug`, `/lifecycle`, `/connections` output); `/channel` is
+  deliberately exempt and always replies ephemerally, and permission denials are always
+  ephemeral regardless.
 - Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.
