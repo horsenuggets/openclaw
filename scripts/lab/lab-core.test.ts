@@ -17,6 +17,7 @@ import {
   LAB_EMBED_COLOR,
   nextThreadNumber,
   pickHalf,
+  reorderDayChannelsDescending,
   sanitizeThreadName,
   snowflakeToMillis,
 } from "./lab-core.js";
@@ -114,6 +115,83 @@ describe("date channel helpers", () => {
     expect(isDateChannelExpired(sevenDaysAgo, now)).toBe(false);
     expect(isDateChannelExpired(eightDaysAgo, now)).toBe(true);
     expect(isDateChannelExpired("2026-10-10", now)).toBe(false);
+  });
+});
+
+describe("reorderDayChannelsDescending", () => {
+  it("orders newest date first, reusing the occupied slots", () => {
+    const changes = reorderDayChannelsDescending([
+      { id: "a", name: "2026-10-01", position: 0 },
+      { id: "b", name: "2026-10-03", position: 1 },
+      { id: "c", name: "2026-10-02", position: 2 },
+    ]);
+    // Newest (10-03/b) -> slot 0, 10-02/c -> 1, 10-01/a -> 2; all three move.
+    expect(changes).toEqual([
+      { id: "b", position: 0 },
+      { id: "c", position: 1 },
+      { id: "a", position: 2 },
+    ]);
+  });
+
+  it("is a no-op for a single day channel", () => {
+    expect(reorderDayChannelsDescending([{ id: "a", name: "2026-10-01", position: 5 }])).toEqual(
+      [],
+    );
+  });
+
+  it("produces no changes when already newest-first", () => {
+    expect(
+      reorderDayChannelsDescending([
+        { id: "a", name: "2026-10-03", position: 0 },
+        { id: "b", name: "2026-10-02", position: 1 },
+        { id: "c", name: "2026-10-01", position: 2 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("reorders fully unsorted input", () => {
+    const changes = reorderDayChannelsDescending([
+      { id: "a", name: "2026-10-01", position: 0 },
+      { id: "b", name: "2026-10-02", position: 1 },
+      { id: "c", name: "2026-10-03", position: 2 },
+    ]);
+    expect(changes).toEqual([
+      { id: "c", position: 0 },
+      { id: "a", position: 2 },
+    ]);
+  });
+
+  it("ignores non-date channels passed in the category", () => {
+    const changes = reorderDayChannelsDescending([
+      { id: "x", name: "general", position: 0 },
+      { id: "a", name: "2026-10-01", position: 1 },
+      { id: "b", name: "2026-10-02", position: 3 },
+    ]);
+    // Only the two date channels participate, reusing slots 1 and 3; the
+    // non-date channel at 0 is never touched.
+    expect(changes).toEqual([
+      { id: "b", position: 1 },
+      { id: "a", position: 3 },
+    ]);
+  });
+
+  it("preserves non-contiguous occupied slots", () => {
+    const changes = reorderDayChannelsDescending([
+      { id: "a", name: "2026-10-01", position: 2 },
+      { id: "b", name: "2026-10-05", position: 7 },
+      { id: "c", name: "2026-10-03", position: 10 },
+    ]);
+    // Slots {2, 7, 10} reused ascending: newest 10-05 -> 2, 10-03 -> 7, 10-01 -> 10.
+    expect(changes).toEqual([
+      { id: "b", position: 2 },
+      { id: "c", position: 7 },
+      { id: "a", position: 10 },
+    ]);
+  });
+
+  it("returns an empty list when there are no day channels", () => {
+    expect(reorderDayChannelsDescending([])).toEqual([]);
+    expect(reorderDayChannelsDescending([{ id: "x", name: "general", position: 0 }])).toEqual([]);
   });
 });
 

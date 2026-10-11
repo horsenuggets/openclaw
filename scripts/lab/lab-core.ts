@@ -121,6 +121,47 @@ export function isDateChannelExpired(name: string, now: Date): boolean {
   return age !== null && age > ARCHIVE_THRESHOLD_DAYS;
 }
 
+/** A Testing day channel considered for reordering: its id, date name, and current position. */
+export type DayChannel = { id: string; name: string; position: number };
+
+/** A channel position assignment for Discord's bulk "Modify Guild Channel Positions" call. */
+export type ChannelPosition = { id: string; position: number };
+
+/**
+ * Reorder the Testing-category day channels so the newest date sits at the top
+ * (Discord orders ascending by `position`, so newest date = smallest position).
+ *
+ * Only inputs whose `name` is a `YYYY-MM-DD` day channel participate; callers
+ * should pre-filter to the Testing category. The set of position slots the day
+ * channels currently occupy is preserved and reassigned among them in
+ * descending-date order, so non-date channels sharing the category keep their
+ * positions and are never collided with. Ties on identical date names fall back
+ * to the original relative order (stable).
+ *
+ * Returns only the entries whose position actually changes; an empty array means
+ * the channels are already ordered newest-first and no API call is needed.
+ */
+export function reorderDayChannelsDescending(
+  dayChannels: readonly DayChannel[],
+): ChannelPosition[] {
+  const days = dayChannels.filter((c) => isDateChannelName(c.name));
+  // The occupied slots, ascending, get reused so other channels are undisturbed.
+  const slots = days.map((c) => c.position).toSorted((a, b) => a - b);
+  // Sort by date descending; ties preserve input order for stability.
+  const byDateDesc = days
+    .map((c, index) => ({ channel: c, index }))
+    .toSorted((a, b) => b.channel.name.localeCompare(a.channel.name) || a.index - b.index)
+    .map((entry) => entry.channel);
+  const changes: ChannelPosition[] = [];
+  byDateDesc.forEach((channel, i) => {
+    const position = slots[i];
+    if (position !== channel.position) {
+      changes.push({ id: channel.id, position });
+    }
+  });
+  return changes;
+}
+
 /** The canonical name for the Nth archive category (1-based): `Archive 0001`. */
 export function archiveCategoryName(index: number): string {
   return `Archive ${String(index).padStart(4, "0")}`;
