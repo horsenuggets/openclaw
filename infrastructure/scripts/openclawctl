@@ -431,11 +431,22 @@ purge_container() {
     echo "Error: failed to remove container $container" >&2
     return 1
   fi
-  if docker inspect --format '{{.Id}}' "$container" >/dev/null 2>&1; then
+  # Re-inspect to CONFIRM removal. Only an explicit "no such object" proves the
+  # container is gone. Any other outcome — a successful inspect (still present) or
+  # a different error such as the daemon dying right after rm -f — must fail: purge
+  # wipes the data next, so we cannot proceed without positive proof of teardown.
+  local verify_out
+  if verify_out=$(docker inspect --format '{{.Id}}' "$container" 2>&1); then
     echo "Error: container $container still present after removal" >&2
     return 1
   fi
-  return 0
+  case "$verify_out" in
+    *"No such object"* | *"no such container"*) return 0 ;;
+    *)
+      echo "Error: cannot confirm removal of container $container: $verify_out" >&2
+      return 1
+      ;;
+  esac
 }
 
 # Seed the agent workspace (BOOTSTRAP.md + SOUL/USER/AGENTS/etc. templates) on the
@@ -961,19 +972,14 @@ cmd_purge() {
   exit $?
 }
 
-cmd_restart() {
-  local channelId="${1:-}"
-  if [ -z "$channelId" ]; then
-    echo "Usage: openclawctl restart <channelId>"
-    exit 1
-  fi
-  require_channel_id "$channelId"
+restart_locked() {
+  local channelId="$1"
 
   local port
   port=$(get_port "$channelId")
   if [ -z "$port" ]; then
     echo "Error: Channel $channelId is not registered."
-    exit 1
+    return 1
   fi
 
   if ! is_prepared "$channelId"; then
@@ -983,13 +989,29 @@ cmd_restart() {
     echo "  openclawctl remove $channelId && openclawctl add-channel $channelId" >&2
     # Nonzero so callers can distinguish a refusal from a completed restart,
     # consistent with the other restart error paths.
-    exit 1
+    return 1
   fi
 
   echo "Restarting container for channel $channelId on port $port..."
   stop_container "$channelId"
   start_container "$channelId" "$port"
   echo "Done."
+}
+
+cmd_restart() {
+  local channelId="${1:-}"
+  if [ -z "$channelId" ]; then
+    echo "Usage: openclawctl restart <channelId>"
+    exit 1
+  fi
+  require_channel_id "$channelId"
+  # Hold the channel's lifecycle lock across the whole read-port/stop/start
+  # sequence. Otherwise a concurrent purge could see no container (after our stop)
+  # and wipe the instance dir while we go on to start a container with the port we
+  # already read, stranding it on a now-reusable port — the same race add/purge
+  # guard against.
+  with_channel_lock "$channelId" restart_locked "$channelId"
+  exit $?
 }
 
 # Re-assert a registered instance's proxy URLs (model proxy + container proxy) and

@@ -1411,46 +1411,58 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
   void (async () => {
     await ack;
     // While a teardown is already running for this channel, ignore EVERY further
-    // click on its buttons (confirm, cancel, anything) — not just a second
-    // confirm. A stale Cancel landing mid-teardown would otherwise edit the
-    // message to "cancelled" even though the purge continues, and if that PATCH
-    // arrives after the final result the message would permanently (and falsely)
-    // claim cancellation. The click is already acked (type 6), so ignoring it is
-    // safe. channelId comes from the custom_id, so this needs no async decode.
+    // click on its buttons (confirm, cancel, anything). A stale Cancel landing
+    // mid-teardown would otherwise edit the message to "cancelled" even though the
+    // purge continues, and if that PATCH arrives after the final result the message
+    // would permanently (and falsely) claim cancellation. The click is already
+    // acked (type 6), so ignoring it is safe. channelId comes from the custom_id,
+    // so this needs no async decode.
     if (unregisterInFlight.has(parsed.channelId)) {
       return;
     }
-    const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
-    // notForYou cannot occur here (initiator already matched above); ignored is
-    // impossible too (parsed is non-null). Both are handled defensively.
-    if (outcome.kind === "ignored" || outcome.kind === "notForYou") {
-      return;
+    // Claim the in-flight guard SYNCHRONOUSLY for a confirm click, before the async
+    // authorization in decideUnregisterClick (which awaits a role lookup for a
+    // non-owner admin). Otherwise a Confirm quickly followed by a Cancel could let
+    // the Cancel slip past the still-unset guard during the Confirm's auth window
+    // and render "cancelled" while the Confirm goes on to purge. The guard is
+    // released below if this click turns out not to be an actual teardown (denied,
+    // not registered, or not ours). parsed.kind is known from the custom_id.
+    const claimedInFlight = parsed.kind === "confirm";
+    if (claimedInFlight) {
+      unregisterInFlight.add(parsed.channelId);
     }
-    if (outcome.kind === "confirm") {
-      // Re-check the guard: a concurrent click could have entered teardown during
-      // the await above. Claim the channel before running teardown so it runs at
-      // most once (any click that arrives while it is held is ignored above).
-      if (unregisterInFlight.has(outcome.channelId)) {
+    try {
+      const outcome = await decideUnregisterClick({ customId, clickerId }, channelCommandDeps);
+      // notForYou cannot occur here (initiator already matched above); ignored is
+      // impossible too (parsed is non-null). Both are handled defensively.
+      if (outcome.kind === "ignored" || outcome.kind === "notForYou") {
         return;
       }
-      unregisterInFlight.add(outcome.channelId);
-      try {
+      if (outcome.kind === "confirm") {
         // Drop the buttons and show the interim "unregistering..." state at once
         // (editing the already-acked message), then edit again with the final
-        // result after teardown completes.
+        // result after teardown completes. The guard was claimed synchronously
+        // above, so no concurrent click can enter teardown or render cancellation.
         await editMessage(outcome.interim);
         const final = await outcome.perform();
         await editMessage(final);
-      } finally {
-        unregisterInFlight.delete(outcome.channelId);
+        return;
       }
-      return;
+      // cancelled / denied / notRegistered: a single message replacement. The
+      // interaction is already acked (type 6 above), so just edit the message (the
+      // editor uploads the embed's icon, which may differ from the one already on
+      // the message, e.g. the Log denial icon).
+      await editMessage(outcome.update);
+    } finally {
+      // Release the guard for a confirm-kind click. For a real teardown this runs
+      // after perform() completes (so the window stays held for the whole purge);
+      // for a confirm custom_id that decideUnregisterClick downgraded to
+      // denied/notRegistered, it frees the channel so a later legitimate attempt
+      // is not permanently blocked.
+      if (claimedInFlight) {
+        unregisterInFlight.delete(parsed.channelId);
+      }
     }
-    // cancelled / denied / notRegistered: a single message replacement. The
-    // interaction is already acked (type 6 above), so just edit the message (the
-    // editor uploads the embed's icon, which may differ from the one already on
-    // the message, e.g. the Log denial icon).
-    await editMessage(outcome.update);
   })();
 }
 
