@@ -718,6 +718,25 @@ export async function decideUnregisterClick(
     ownerId,
     interim: { ...unregisterInterimReply(channelId, ownerId), components: [] },
     perform: async () => {
+      // Re-validate the registration generation at the LAST moment before the
+      // destructive call. The earlier check and the adapter's interim-edit await
+      // leave a window in which another unregister/re-register could complete;
+      // provisioning.unregister only takes channelId, so without this re-check a
+      // stale confirmation could purge the replacement registration. If the nonce
+      // changed, abort without touching provisioning.
+      const genNow = registrationGen(deps, channelId);
+      if (gen !== genNow) {
+        deps.log(
+          `[channel] unregister ${channelId} aborted at perform: stale registration (button gen ${gen} != current ${genNow})`,
+        );
+        return {
+          ...registrationReply(
+            "Unregister",
+            `This confirmation is out of date: channel <#${channelId}> was re-registered since the dialog was shown. Run \`/channel unregister\` again if you still want to remove it.`,
+          ),
+          components: [],
+        };
+      }
       const result = await deps.provisioning.unregister({ channelId });
       deps.log(
         `[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`,

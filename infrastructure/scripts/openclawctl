@@ -939,17 +939,42 @@ purge_locked() {
     return 1
   fi
 
+  # Make the destructive wipe atomic and interrupt-safe: RENAME the instance dir to
+  # a tombstone FIRST (a single rename, effectively instantaneous), then rm -rf the
+  # tombstone. The rename is what unregisters the channel (its .port goes with it,
+  # so the port is freed and the registration disappears the moment the rename
+  # returns). If the provisioner's 120s SIGKILL lands during the slow rm -rf, the
+  # channel is already gone and only an orphaned tombstone (.purging-*) remains,
+  # which sweep_purge_tombstones reaps on the next boot/startup — never a
+  # half-deleted live instance. require_channel_id already constrained channelId to
+  # a snowflake, so these paths cannot escape INSTANCES_DIR.
   echo "Wiping instance data and freeing port..."
-  rm -rf "${INSTANCES_DIR:?}/$channelId"
+  local tombstone="${INSTANCES_DIR:?}/.purging-$channelId.$$"
+  if [ -d "${INSTANCES_DIR:?}/$channelId" ]; then
+    mv "${INSTANCES_DIR:?}/$channelId" "$tombstone"
+    rm -rf "$tombstone"
+  fi
   # Also remove the channel's router-owned preferences, which live OUTSIDE the
   # instance dir (under shared/preferences so the router can write them even when
   # the instances tree is mounted read-only). Without this a purge would leave the
   # old lifecycle/ephemeral settings behind to be resurrected on re-registration,
   # contradicting the "all data removed" promise. The router also clears this on
   # unregister, but doing it here guarantees the host teardown is genuinely
-  # complete even if the router's own cleanup is unavailable.
+  # complete even if the router's own cleanup is unavailable. (A tiny JSON file, so
+  # no atomic-rename dance is warranted.)
   rm -f "${INSTANCES_DIR:?}/shared/preferences/$channelId.json"
   echo "Done. Channel $channelId fully removed (container, port, and data)."
+}
+
+# Reap orphaned purge tombstones left by a purge whose rm -rf was interrupted
+# (e.g. the provisioner's SIGKILL on timeout). Safe to run anytime; boot.sh calls
+# it once at startup. Best-effort: a tombstone still being deleted by a live purge
+# is simply retried and skipped on EBUSY/ENOENT races.
+sweep_purge_tombstones() {
+  for t in "${INSTANCES_DIR:?}"/.purging-*; do
+    [ -e "$t" ] || continue
+    rm -rf "$t" 2>/dev/null || true
+  done
 }
 
 cmd_purge() {
@@ -1106,6 +1131,7 @@ case "${1:-}" in
   restart)     cmd_restart "${2:-}" ;;
   reconcile)   cmd_reconcile "${2:-}" ;;
   list)        cmd_list ;;
+  sweep-tombstones) sweep_purge_tombstones ;;
   *)
     echo "openclawctl — Manage OpenClaw agent containers"
     echo ""
@@ -1117,5 +1143,6 @@ case "${1:-}" in
     echo "  restart <channelId>     Restart a channel's container"
     echo "  reconcile <channelId>   Re-assert proxy URLs in the instance config"
     echo "  list                    List all registered channels and ports"
+    echo "  sweep-tombstones        Reap orphaned purge tombstones (.purging-*)"
     ;;
 esac

@@ -673,4 +673,31 @@ describe("decideUnregisterClick", () => {
       expect(result.update.embeds[0].description).toContain("out of date");
     }
   });
+
+  it("re-validates the nonce at perform() and aborts if it changed after deciding", async () => {
+    // The nonce matches when deciding (so we get a confirm outcome), but a
+    // re-register completes during the adapter's interim-edit await and bumps it
+    // before perform() runs. perform() must re-check and abort WITHOUT purging, so
+    // a stale confirmation cannot delete the replacement registration.
+    const unregister = vi.fn(async () => ({ ok: true, message: "removed" }));
+    let nonce = "1";
+    const result = await decideUnregisterClick(
+      { customId: buildUnregisterCustomId("confirm", "C1", "U1", "1"), clickerId: "U1" },
+      makeDeps({
+        describeInstance: owned,
+        registrationNonce: () => nonce,
+        provisioning: { register: vi.fn(), unregister },
+      }),
+    );
+    expect(result.kind).toBe("confirm");
+    if (result.kind !== "confirm") {
+      return;
+    }
+    // A re-register happens before perform() is invoked.
+    nonce = "2";
+    const final = await result.perform();
+    expect(unregister).not.toHaveBeenCalled();
+    expect(final.embeds[0].description).toContain("out of date");
+    expect(final.components).toEqual([]);
+  });
 });

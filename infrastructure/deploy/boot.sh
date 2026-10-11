@@ -128,6 +128,12 @@ fi
 # rather than creating a root-owned one, matching the shared/auth handling above.
 mkdir -p "$INSTANCES_DIR/shared/preferences"
 
+# Reap any orphaned purge tombstones (.purging-*) left by a destructive unregister
+# whose rm -rf was interrupted (e.g. the provisioner's 120s SIGKILL). The channel
+# was already unregistered by the atomic rename, so only dead data remains; clean
+# it before scanning for live instances so a partial wipe never lingers.
+~/deploy/bin/openclawctl sweep-tombstones || true
+
 # Each instance owns its port as a `.port` dotfile in its own directory, so
 # there is no central ports.json to read or reconcile. Discover channels by
 # scanning for those dotfiles.
