@@ -461,11 +461,6 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         // The instance is gone; discard its buffered messages rather than leaving
         // them to coalesce into a future registration of the same channel.
         channelQueue.clear(id);
-        // Preferences live outside the instance dir (so the router can write them
-        // under a read-only instances mount), so the provisioner's instance-dir
-        // teardown does not remove them; drop them here so a re-registered channel
-        // starts from defaults rather than inheriting a stale lifecycle toggle.
-        deleteUserPreferences(config.instancesDir, id);
       }
       runtime.log(`[router] instances reloaded: ${instances.size}`);
     } catch (err) {
@@ -511,6 +506,13 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
         unregister: async (p) => {
           const result = await daemonProvisioning.unregister(p);
           if (result.ok) {
+            // Preferences live outside the instance dir the provisioner tears down
+            // (so the router can write them under a read-only instances mount), so
+            // drop them here, scoped to exactly the channel that was unregistered.
+            // This must not live in reloadInstances' reconciliation: that treats any
+            // instance missing from a fresh scan (e.g. a transiently unreadable
+            // `.port`) as removed and would delete a live channel's preferences.
+            deleteUserPreferences(config.instancesDir, p.channelId);
             reloadInstances();
             rotateConnectionRegistrationKey(p.channelId);
           }

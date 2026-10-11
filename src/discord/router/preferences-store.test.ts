@@ -65,6 +65,30 @@ it("deletes a channel's preferences and no-ops when already absent", () => {
   expect(() => deleteUserPreferences(instancesDir, CHANNEL)).not.toThrow();
 });
 
+it("falls back to the legacy .onboarding.json block when the new file is absent", () => {
+  // An older release persisted preferences into the per-channel .onboarding.json on a
+  // writable deployment. With no new-store file yet, that value must still be read so
+  // the setting is not lost on upgrade.
+  const legacyDir = path.join(instancesDir, CHANNEL);
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(legacyDir, ".onboarding.json"),
+    JSON.stringify({ ownerId: "123", preferences: { lifecycleMessages: true } }),
+  );
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({ lifecycleMessages: true });
+});
+
+it("prefers the new store over the legacy block when both exist", () => {
+  const legacyDir = path.join(instancesDir, CHANNEL);
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(legacyDir, ".onboarding.json"),
+    JSON.stringify({ preferences: { lifecycleMessages: true } }),
+  );
+  writeUserPreferences(instancesDir, CHANNEL, { lifecycleMessages: false });
+  expect(readUserPreferences(instancesDir, CHANNEL)).toEqual({ lifecycleMessages: false });
+});
+
 it("writeUserPreferences throws when the subtree cannot be created", () => {
   // Simulate a write that cannot land (the read-only-mount condition that used to
   // fail silently): put a regular file where the shared/ directory must be, so the
