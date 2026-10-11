@@ -972,10 +972,15 @@ purge_locked() {
   # wipe completes regardless, and this shell returns 0 the instant the rename (the
   # real commit) is done. sweep_purge_tombstones still reaps any tombstone whose
   # detached rm was somehow interrupted (e.g. a host reboot) on the next boot.
+  # CLOSE fd 8 (8>&-) in the detached child: it would otherwise inherit the
+  # lifecycle flock and hold it for the whole rm -rf, blocking every later
+  # add/remove/restart for this channel (and risking their 120s timeout) for a
+  # large workspace. The tombstone has a distinct path, so deleting it needs no
+  # lock.
   if command -v setsid >/dev/null 2>&1; then
-    setsid rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null &
+    setsid rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null 8>&- &
   else
-    nohup rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null &
+    nohup rm -rf "$tombstone" >/dev/null 2>&1 < /dev/null 8>&- &
   fi
   echo "Done. Channel $channelId fully removed (container and port freed; data wipe detached)."
 }

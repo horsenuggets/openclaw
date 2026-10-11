@@ -204,8 +204,12 @@ else
       # while the router discovers the new one. Use the on-disk value and skip the
       # channel if its registration disappeared or the port is malformed.
       current_port=$(cat "$INSTANCES_DIR/$channelId/.port" 2>/dev/null || true)
-      if ! printf '%s' "$current_port" | grep -Eq '^[0-9]+$'; then
-        echo "Skipping channel $channelId: no valid .port after acquiring the lock" >&2
+      # Require a POSITIVE port (at least one nonzero digit): the router and the
+      # initial assignment scan both reject 0, so starting Compose with port 0 here
+      # would orphan the container while the router ignores the instance — exactly
+      # the state this re-read exists to prevent.
+      if ! printf '%s' "$current_port" | grep -Eq '^0*[1-9][0-9]*$'; then
+        echo "Skipping channel $channelId: no valid (positive) .port after acquiring the lock" >&2
         echo "  (registration was removed or changed while booting)." >&2
         exit 0
       fi
