@@ -5,7 +5,52 @@
     },
   ],
   "settings": {
-    "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
+    // Individual per-language blocks (not a combined "[a][b]" selector): VSCode
+    // treats a combined language-group selector as less specific than an
+    // individual "[typescript]" selector, so a user-level per-language default
+    // formatter would otherwise win and oxc would never run. One block per
+    // language guarantees the workspace oxc setting overrides any user default.
+    "[javascript]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit",
+      },
+    },
+    "[javascriptreact]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit",
+      },
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit",
+      },
+    },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit",
+      },
+    },
+    "[json]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.oxc": "explicit",
+        "source.organizeImports": "explicit",
+      },
+    },
+    "[jsonc]": {
       "editor.defaultFormatter": "oxc.oxc-vscode",
       "editor.formatOnSave": true,
       "editor.codeActionsOnSave": {
