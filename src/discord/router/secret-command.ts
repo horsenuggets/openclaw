@@ -218,7 +218,7 @@ export function secretReminderMessage(name: string, visibleInChannel = false): s
 export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
   return buildEmbed({
     category: "secrets",
-    title: "Secret Received!",
+    title: "Send Secret",
     description:
       `The secret \`${name}\` was received and queued for delivery to this ` +
       `channel's OpenClaw agent. Keep in mind that secrets are temporary and they ` +
@@ -236,7 +236,7 @@ export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
 export function buildSecretTestReceivedEmbed(name: string): BuiltEmbed {
   return buildEmbed({
     category: "secrets",
-    title: "Test Secret Received!",
+    title: "Send Test Secret",
     description:
       `The test secret \`${name}\` was queued for delivery to this channel's OpenClaw agent. ` +
       `This is a TESTING command, so the value was sent as plaintext and is visible in this ` +

@@ -1945,7 +1945,7 @@ describe("discord router channel-delete cleanup", () => {
         admin: true,
         command: "secrettest slash-secret-value my-name",
       });
-      const ack = patches.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      const ack = patches.find((p) => p.embeds?.[0]?.title === "Send Test Secret");
       expect(ack).toBeDefined();
       expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
     });
@@ -2031,7 +2031,7 @@ describe("discord router channel-delete cleanup", () => {
         admin: true,
         content: "/debug secrettest test-value my-name",
       });
-      const ack = posts.find((p) => p.embeds?.[0]?.title === "Test Secret Received!");
+      const ack = posts.find((p) => p.embeds?.[0]?.title === "Send Test Secret");
       expect(ack).toBeDefined();
       expect(ack?.embeds?.[0]?.description).toContain("`my-name`");
     });
@@ -2140,7 +2140,7 @@ describe("discord router channel-delete cleanup", () => {
       // Deferred ephemerally (type 5, flag 64), then the Secrets embed edited in.
       expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
       const embed = patches[0]?.embeds?.[0];
-      expect(embed?.title).toBe("Secret Received!");
+      expect(embed?.title).toBe("Send Secret");
       expect(embed?.footer?.text).toBe("Secrets");
       expect(embed?.color).toBe(0xa08060);
     });
@@ -2151,7 +2151,7 @@ describe("discord router channel-delete cleanup", () => {
         components: [{ components: [{ custom_id: "secret-value", value: "" }] }],
       });
       expect(callbacks.find((cb) => cb.type === 5)?.data?.flags).toBe(64);
-      expect(patches[0]?.embeds?.[0]?.title).toBe("Secret Not Provided.");
+      expect(patches[0]?.embeds?.[0]?.title).toBe("Send Secret");
       expect(patches[0]?.embeds?.[0]?.footer?.text).toBe("Secrets");
     });
   });

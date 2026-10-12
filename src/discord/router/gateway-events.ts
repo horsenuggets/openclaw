@@ -221,7 +221,7 @@ function deliverDebugSecret(params: {
   const { instances, channelQueue, runtime, channelId, authorId, name, value } = params;
   if (!instances.get(channelId)) {
     return buildSecretNoticeEmbed(
-      "Not Registered.",
+      "Send Test Secret",
       "This channel is not registered, so there is no agent to receive a secret.",
     );
   }
@@ -1426,13 +1426,13 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
   }
   const { value, name: rawName } = parseSecretModalSubmit(d.data?.components);
   if (!value) {
-    void ackEmbed(buildSecretNoticeEmbed("Secret Not Provided.", "No secret value was provided."));
+    void ackEmbed(buildSecretNoticeEmbed("Send Secret", "No secret value was provided."));
     return;
   }
   if (!instances.get(channelId)) {
     void ackEmbed(
       buildSecretNoticeEmbed(
-        "Channel Not Registered.",
+        "Send Secret",
         "This channel is not registered, so there is no agent to receive a secret.",
       ),
     );
@@ -1448,10 +1448,7 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
   // too as defense-in-depth in case a stale registration still dispatches one.
   if (!d.guild_id && d.channel?.type === GROUP_DM_CHANNEL_TYPE) {
     void ackEmbed(
-      buildSecretNoticeEmbed(
-        "Unavailable in Group DMs.",
-        "The /secret command is not available in group DMs.",
-      ),
+      buildSecretNoticeEmbed("Send Secret", "The /secret command is not available in group DMs."),
     );
     return;
   }

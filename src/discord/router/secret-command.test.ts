@@ -150,7 +150,7 @@ describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
 
   it("names the secret in the received embed without leaking the value", () => {
     const { embed, attachments } = buildSecretReceivedEmbed("redirect");
-    expect(embed.title).toBe("Secret Received!");
+    expect(embed.title).toBe("Send Secret");
     expect(embed.description).toContain("`redirect`");
     // The builder takes only the name, so the value cannot appear by construction.
     expect(embed.description.toLowerCase()).toContain("temporary");
@@ -158,17 +158,14 @@ describe("buildSecretReceivedEmbed / buildSecretNoticeEmbed", () => {
   });
 
   it("passes the notice title and description straight through", () => {
-    const { embed } = buildSecretNoticeEmbed(
-      "Secret Not Provided.",
-      "No secret value was provided.",
-    );
-    expect(embed.title).toBe("Secret Not Provided.");
+    const { embed } = buildSecretNoticeEmbed("Send Secret", "No secret value was provided.");
+    expect(embed.title).toBe("Send Secret");
     expect(embed.description).toBe("No secret value was provided.");
   });
 
   it("flags the test-received embed as plaintext and test-only without leaking the value", () => {
     const { embed, attachments } = buildSecretTestReceivedEmbed("redirect");
-    expect(embed.title).toBe("Test Secret Received!");
+    expect(embed.title).toBe("Send Test Secret");
     expect(embed.description).toContain("`redirect`");
     expect(embed.description.toLowerCase()).toContain("plaintext");
     expect(embed.description.toLowerCase()).toContain("testing");
