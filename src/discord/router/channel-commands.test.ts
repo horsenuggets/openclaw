@@ -302,7 +302,7 @@ describe("handleChannelCommand register", () => {
     };
     expect(payload.attachments).toEqual(["channel-registration.png"]);
     const embed = payload.embeds[0];
-    expect(embed.title).toBe("Registration Success!");
+    expect(embed.title).toBe("Register New Channel");
     expect(embed.color).toBe(0xffff80);
     expect(embed.footer).toEqual({
       text: "Channel Registration",
@@ -402,7 +402,7 @@ describe("handleChannelCommand register", () => {
     );
     expect(register).not.toHaveBeenCalled();
     const { embed } = embedOf(replies[0].payload);
-    expect(embed.title).toBe("Unavailable User");
+    expect(embed.title).toBe("Register New Channel");
     expect(embed.description).toContain("cannot be registered under <@888888888888888888>");
     expect(embed.description).toContain("bot and cannot own an agent instance");
     // Uses the yellow Channel Registration embed, not the Log permission embed.
