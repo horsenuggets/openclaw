@@ -739,13 +739,17 @@ describe("buildUnregisterFlowPreview", () => {
     expect(buttons.length).toBe(2);
     expect(buttons.every((b) => b.disabled === true)).toBe(true);
     expect(preview.confirm.embeds[0].description).toContain("Are you sure");
+    // Every stage carries the unified unregister action heading.
+    expect(preview.confirm.embeds[0].title).toBe("Unregister Channel");
 
     // Interim drops the buttons and announces teardown is underway.
     expect(preview.interim.components).toEqual([]);
     expect(preview.interim.embeds[0].description).toContain("Unregistering channel <#C9>");
+    expect(preview.interim.embeds[0].title).toBe("Unregister Channel");
 
     // Final has no buttons and states the teardown (reusing the real result wording).
     expect(preview.final.components).toEqual([]);
+    expect(preview.final.embeds[0].title).toBe("Unregister Channel");
     expect(preview.final.embeds[0].description).toContain("has been unregistered");
     expect(preview.final.embeds[0].description).toContain("wiped in the background");
   });
