@@ -5,6 +5,13 @@ testing. `scripts/lab/` manages it: it creates numbered testing threads and keep
 archive tidy, talking to the Lab guild as the **OpenClaw Mirror** bot (never the
 production bot, never a real server).
 
+> **Every scenario test belongs in a Testing THREAD created by
+> `scripts/lab/create_new_thread.sh "<title>"`.** Do not create loose guild channels for
+> ad-hoc testing: they have no place in the layout below and have to be hand-moved into
+> Sandbox or deleted. The thread id is the last path segment of the url the script prints;
+> a thread is a channel to the Discord REST API, so you register and drive it exactly like
+> a channel. For the full live-driving flow see `.agents/docs/prod-mirror-e2e-testing.md`.
+
 This doc is committed and public, so it names no real guild, bot, or channel ids. The
 scripts read all concrete ids from the environment at runtime.
 

@@ -47,6 +47,11 @@ to the dedicated lab server. Read the lab guild and bot ids from the gitignored
 `.env.mirror` and `.prod-mirror/box.env` at runtime; never hardcode them, and never test
 with the production bot or a real server.
 
+Always run scenarios inside a Lab Testing thread created with
+`scripts/lab/create_new_thread.sh "<title>"` (never a loose guild channel); see
+[lab-server.md](lab-server.md) and
+[prod-mirror-e2e-testing.md](prod-mirror-e2e-testing.md).
+
 ## Layer 4 » The Discord E2E Suite
 
 `src/discord/e2e/*.e2e.test.ts` hit real Discord and need two bots » A driver (test) bot

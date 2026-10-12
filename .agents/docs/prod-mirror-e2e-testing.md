@@ -82,6 +82,14 @@ docker exec openclaw-prod-mirror \
 
 ## Drive the Conversation
 
+> **ALWAYS test inside a Lab Testing THREAD, never a loose guild channel.** Create the
+> thread with `scripts/lab/create_new_thread.sh "<scenario title>"` (it prints the thread
+> url; the last path segment is the thread id). Threads can be registered just like
+> channels, and the `scripts/lab` archiver keeps them tidy on a schedule. A loose
+> `POST /guilds/<guild>/channels` channel has no home in the Lab layout and has to be
+> hand-moved into Sandbox or deleted afterwards — do not create them. See
+> `.agents/docs/lab-server.md` for the Testing/Sandbox/Archive layout.
+
 Drive the mock-user bot over the raw Discord REST API (`https://discord.com/api/v10`,
 header `Authorization: Bot <token>`). The token is `DISCORD_E2E_BOT_TOKEN` from `box.env`;
 source it with `set -a; source .prod-mirror/box.env; set +a` and read the guild id from
@@ -89,17 +97,23 @@ the env too (do not hardcode it).
 
 Flow for a behavior check...
 
-1. Create a channel » `POST /guilds/<guild>/channels` with `{name, type: 0}`.
-2. Register it » `POST /channels/<id>/messages {content: "/channel register"}`.
+1. Create a Testing thread » `scripts/lab/create_new_thread.sh "<scenario title>"`, and
+   take the thread id from the url it prints. Everything below uses that thread id as the
+   channel id (a thread IS a channel to the REST API).
+2. Register it » `POST /channels/<threadId>/messages {content: "/channel register"}`.
    Registration kicks onboarding, so the agent's first turn is the welcome greeting that
    asks for a name.
 3. Post your probe messages and, after each, poll
-   `GET /channels/<id>/messages?after=<lastId>` for messages whose author is a bot and is
-   not the mock-user (those are the agent's replies). Stop once the bot goes quiet for a
-   few seconds.
-4. Assert on the collected text. Do not hardcode the router bot id (bots get renamed);
-   derive the mock-user id from `GET /users/@me` and treat every other bot author as the
-   agent.
+   `GET /channels/<threadId>/messages?after=<lastId>` for messages whose author is a bot
+   and is not the mock-user (those are the agent's/router's replies). Stop once the bot
+   goes quiet for a few seconds.
+4. Assert on the collected text/embeds. Do not hardcode the router bot id (bots get
+   renamed); derive the mock-user id from `GET /users/@me` and treat every other bot
+   author as the agent/router.
+
+A worked example driver lives in `.prod-mirror/e2e-debug-commands.mjs` (gitignored): it
+registers a thread passed as `argv[2]` and asserts each `/debug` reply is a title-less
+Debug embed. Keep finished drivers in `.prod-mirror/` as evidence.
 
 Pick probes that surface the change. A tone edit was verified with » Give a capitalized
 name ("call me Alexander") and check the reply says "alexander"; ask for a web search
