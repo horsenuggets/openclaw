@@ -173,7 +173,8 @@ describe("runDebugCommand", () => {
     if (result.kind !== "embeds") {
       throw new Error("expected embeds");
     }
-    expect(result.embeds[0].title).toBe("Nothing to Echo");
+    expect(result.embeds[0].title).toBeUndefined();
+    expect(result.embeds[0].description).toContain("Provide a message");
   });
 
   it("returns an unknown-subcommand notice for an unregistered name", () => {
@@ -182,7 +183,7 @@ describe("runDebugCommand", () => {
     if (result.kind !== "embeds") {
       throw new Error("expected embeds");
     }
-    expect(result.embeds[0].title).toBe("Unknown Subcommand");
+    expect(result.embeds[0].title).toBeUndefined();
     expect(result.embeds[0].description).toContain("`bogus`");
   });
 });
