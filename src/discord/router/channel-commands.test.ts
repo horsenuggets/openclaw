@@ -302,7 +302,7 @@ describe("handleChannelCommand register", () => {
     };
     expect(payload.attachments).toEqual(["channel-registration.png"]);
     const embed = payload.embeds[0];
-    expect(embed.title).toBe("Registration Success!");
+    expect(embed.title).toBe("Register New Channel");
     expect(embed.color).toBe(0xffff80);
     expect(embed.footer).toEqual({
       text: "Channel Registration",
@@ -402,7 +402,7 @@ describe("handleChannelCommand register", () => {
     );
     expect(register).not.toHaveBeenCalled();
     const { embed } = embedOf(replies[0].payload);
-    expect(embed.title).toBe("Unavailable User");
+    expect(embed.title).toBe("Register New Channel");
     expect(embed.description).toContain("cannot be registered under <@888888888888888888>");
     expect(embed.description).toContain("bot and cannot own an agent instance");
     // Uses the yellow Channel Registration embed, not the Log permission embed.
@@ -739,13 +739,17 @@ describe("buildUnregisterFlowPreview", () => {
     expect(buttons.length).toBe(2);
     expect(buttons.every((b) => b.disabled === true)).toBe(true);
     expect(preview.confirm.embeds[0].description).toContain("Are you sure");
+    // Every stage carries the unified unregister action heading.
+    expect(preview.confirm.embeds[0].title).toBe("Unregister Channel");
 
     // Interim drops the buttons and announces teardown is underway.
     expect(preview.interim.components).toEqual([]);
     expect(preview.interim.embeds[0].description).toContain("Unregistering channel <#C9>");
+    expect(preview.interim.embeds[0].title).toBe("Unregister Channel");
 
     // Final has no buttons and states the teardown (reusing the real result wording).
     expect(preview.final.components).toEqual([]);
+    expect(preview.final.embeds[0].title).toBe("Unregister Channel");
     expect(preview.final.embeds[0].description).toContain("has been unregistered");
     expect(preview.final.embeds[0].description).toContain("wiped in the background");
   });

@@ -196,6 +196,15 @@ export type ChannelCommandDeps = {
 };
 
 /**
+ * Embed subcategory headings for the registration flow. The footer always
+ * carries the "Channel Registration" category label; these titles name the
+ * specific action so every register/unregister embed reads as one heading
+ * regardless of outcome. Kept as constants so the strings live in one place.
+ */
+const REGISTER_EMBED_TITLE = "Register New Channel";
+const UNREGISTER_EMBED_TITLE = "Unregister Channel";
+
+/**
  * Build a Channel Registration reply: a category-styled embed (color, footer
  * label and icon come from the "registration" category) plus the icon filenames
  * the sender must upload. The title is the specific action; the footer carries
@@ -420,7 +429,10 @@ export async function handleChannelCommand(
   if (sub === "register") {
     if (!deps.whitelistConfigured()) {
       await ctx.reply(
-        registrationReply("Register", "Instance management is not configured on this deployment."),
+        registrationReply(
+          REGISTER_EMBED_TITLE,
+          "Instance management is not configured on this deployment.",
+        ),
         { ephemeral: true },
       );
       deps.log(`[channel] register blocked: whitelist not configured`);
@@ -461,7 +473,7 @@ export async function handleChannelCommand(
     if (deps.isSelf(ownerId)) {
       await ctx.reply(
         registrationReply(
-          "Unavailable User",
+          REGISTER_EMBED_TITLE,
           `Channel <#${ctx.channelId}> cannot be registered under <@${ownerId}> because that user is a bot and cannot own an agent instance.`,
         ),
         { ephemeral: true },
@@ -487,7 +499,7 @@ export async function handleChannelCommand(
       const owner = existing.ownerId ? `<@${existing.ownerId}>` : OWNER_MENTION_FALLBACK;
       await ctx.reply(
         registrationReply(
-          "Register",
+          REGISTER_EMBED_TITLE,
           `Channel <#${ctx.channelId}> is already registered under user ${owner}. Use \`/channel status\` to check it.`,
         ),
         { ephemeral: true },
@@ -503,7 +515,7 @@ export async function handleChannelCommand(
     const message = result.ok
       ? `Channel <#${ctx.channelId}> successfully registered under user <@${ownerId}>. The agent is now ready!`
       : `Could not register channel <#${ctx.channelId}>. ${result.message}`;
-    await ctx.reply(registrationReply(result.ok ? "Registration Success!" : "Register", message), {
+    await ctx.reply(registrationReply(REGISTER_EMBED_TITLE, message), {
       ephemeral: true,
     });
     deps.log(
@@ -522,7 +534,7 @@ export async function handleChannelCommand(
     if (!status) {
       await ctx.reply(
         registrationReply(
-          "Unregister",
+          UNREGISTER_EMBED_TITLE,
           `Channel <#${ctx.channelId}> is not registered, so there is nothing to remove.`,
         ),
         { ephemeral: true },
@@ -566,7 +578,7 @@ export async function handleChannelCommand(
       );
       await ctx.reply(
         registrationReply(
-          "Unregister",
+          UNREGISTER_EMBED_TITLE,
           `This request is out of date: channel <#${ctx.channelId}> was re-registered since it was issued. Run \`/channel unregister\` again if you still want to remove it.`,
         ),
         { ephemeral: true },
@@ -608,7 +620,7 @@ function unregisterConfirmPrompt(
 ): { embeds: DiscordEmbed[]; attachments: string[]; components: DiscordActionRow[] } {
   return {
     ...registrationReply(
-      "Unregister",
+      UNREGISTER_EMBED_TITLE,
       `Are you sure you want to unregister channel <#${channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
     ),
     components: [unregisterButtons(channelId, initiatorId, gen)],
@@ -622,7 +634,7 @@ function unregisterResultReply(
   result: ProvisioningResult,
 ): { embeds: DiscordEmbed[]; attachments: string[] } {
   return registrationReply(
-    "Unregister",
+    UNREGISTER_EMBED_TITLE,
     result.ok
       ? // The host commits the teardown by atomically renaming the instance dir
         // (stopping the container and freeing the port), then wipes the data in a
@@ -646,7 +658,7 @@ function unregisterInterimReply(
   ownerId: string,
 ): { embeds: DiscordEmbed[]; attachments: string[] } {
   return registrationReply(
-    "Unregister",
+    UNREGISTER_EMBED_TITLE,
     `Unregistering channel <#${channelId}> under user <@${ownerId}>. Stopping the agent and wiping its container, port, and data...`,
   );
 }
@@ -670,7 +682,7 @@ export type UnregisterUpdate = {
 export function buildUnregisterAckUpdate(channelId: string): UnregisterUpdate {
   return {
     ...registrationReply(
-      "Unregister",
+      UNREGISTER_EMBED_TITLE,
       `Processing the unregister request for channel <#${channelId}>...`,
     ),
     components: [],
@@ -725,7 +737,7 @@ export async function decideUnregisterClick(
       kind: "cancelled",
       update: {
         ...registrationReply(
-          "Unregister",
+          UNREGISTER_EMBED_TITLE,
           `Unregister cancelled. Channel <#${channelId}> is still registered.`,
         ),
         components: [],
@@ -739,7 +751,7 @@ export async function decideUnregisterClick(
       kind: "notRegistered",
       update: {
         ...registrationReply(
-          "Unregister",
+          UNREGISTER_EMBED_TITLE,
           `Channel <#${channelId}> is not registered, so there is nothing to remove.`,
         ),
         components: [],
@@ -762,7 +774,7 @@ export async function decideUnregisterClick(
       kind: "notRegistered",
       update: {
         ...registrationReply(
-          "Unregister",
+          UNREGISTER_EMBED_TITLE,
           `This confirmation is out of date: channel <#${channelId}> was re-registered since the dialog was shown. Run \`/channel unregister\` again if you still want to remove it.`,
         ),
         components: [],
@@ -798,7 +810,7 @@ export async function decideUnregisterClick(
         );
         return {
           ...registrationReply(
-            "Unregister",
+            UNREGISTER_EMBED_TITLE,
             `This confirmation is out of date: channel <#${channelId}> was re-registered since the dialog was shown. Run \`/channel unregister\` again if you still want to remove it.`,
           ),
           components: [],

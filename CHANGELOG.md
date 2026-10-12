@@ -6,6 +6,11 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: channel command embeds now use unified action-heading titles. Register
+  and unregister share "Register New Channel" / "Unregister Channel", and the secret
+  embeds follow the same pattern with "Send Secret" / "Send Test Secret". These
+  subcategory titles are hoisted into shared constants so the register, unregister, and
+  secret flows (and their gateway-event cards) stay in sync. (#144)
 - Discord router: `/lifecycle` now actually persists its on/off setting on the Docker
   deployment. Per-channel preferences moved out of the provisioner-owned
   `.onboarding.json` into a router-owned, writable store at
