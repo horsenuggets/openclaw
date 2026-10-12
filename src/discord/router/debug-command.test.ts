@@ -173,7 +173,8 @@ describe("runDebugCommand", () => {
     if (result.kind !== "embeds") {
       throw new Error("expected embeds");
     }
-    expect(result.embeds[0].title).toBe("Nothing to Echo");
+    expect(result.embeds[0].title).toBeUndefined();
+    expect(result.embeds[0].description).toContain("Provide a message");
   });
 
   it("returns an unknown-subcommand notice for an unregistered name", () => {
@@ -182,7 +183,7 @@ describe("runDebugCommand", () => {
     if (result.kind !== "embeds") {
       throw new Error("expected embeds");
     }
-    expect(result.embeds[0].title).toBe("Unknown Subcommand");
+    expect(result.embeds[0].title).toBeUndefined();
     expect(result.embeds[0].description).toContain("`bogus`");
   });
 });
@@ -210,9 +211,9 @@ describe("buildDebugHelpEmbeds", () => {
       {
         name: "`secrettest <secret-value> [secret-name]`",
         value:
-          "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as " +
-          "plaintext (so it stays visible in the channel). Never use a real secret here; use " +
-          "/secret for anything sensitive.",
+          "Hand this channel's agent a secret like `/secret`, but passed as plaintext so it " +
+          "stays visible in the channel (for testing purposes). Never use a real secret here; " +
+          "use `/secret` for anything sensitive.",
       },
       {
         name: "`unregisterflow [channelId]`",

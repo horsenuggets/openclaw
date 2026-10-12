@@ -213,9 +213,13 @@ export function debugSubcommandLabel(input: string): string {
   return DEBUG_SUBCOMMANDS.some((sub) => sub.name === subcommand) ? subcommand : "(unknown)";
 }
 
-/** Build a single Debug-category notice embed as an embeds result. */
-function debugNotice(title: string, description: string): DebugResult {
-  const built = buildEmbed({ category: "debug", title, description });
+/**
+ * Build a single Debug-category notice embed as an embeds result. Title-less by
+ * design: a `/debug` reply carries its identity in the Debug footer, so the
+ * description alone says what happened.
+ */
+function debugNotice(description: string): DebugResult {
+  const built = buildEmbed({ category: "debug", description });
   return { kind: "embeds", embeds: [built.embed], attachments: built.attachments };
 }
 
@@ -308,7 +312,7 @@ const echoSubcommand: DebugSubcommand = {
   run: ({ args }) => {
     const message = args.join(" ");
     if (!message) {
-      return debugNotice("Nothing to Echo", 'Provide a message, for example `echo "hello world"`.');
+      return debugNotice('Provide a message, for example `echo "hello world"`.');
     }
     return { kind: "content", content: clamp(message, MAX_CONTENT_CHARS) };
   },
@@ -318,16 +322,15 @@ const secretTestSubcommand: DebugSubcommand = {
   name: "secrettest",
   usage: "secrettest <secret-value> [secret-name]",
   description:
-    "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as plaintext (so it stays visible in the channel). Never use a real secret here; use /secret for anything sensitive.",
+    "Hand this channel's agent a secret like `/secret`, but passed as plaintext so it stays visible in the channel (for testing purposes). Never use a real secret here; use `/secret` for anything sensitive.",
   run: ({ args }) => {
     // args[0] is the value, args[1] the optional name. A multi-word value must be
     // quoted (the tokenizer splits on whitespace), matching every other debug arg.
     const value = args[0] ?? "";
     if (!value) {
       return debugNotice(
-        "No Secret Value",
         "Provide a value, for example `secrettest my-test-value my-name`. This is a " +
-          "TESTING command: the value is sent as plaintext and stays visible in the channel, " +
+          "*testing* command » the value is sent as plaintext and stays visible in the channel, " +
           "so never pass anything truly sensitive (use `/secret` for that).",
       );
     }
@@ -370,7 +373,6 @@ const ephemeralSubcommand: DebugSubcommand = {
     const resolved = resolveEphemeralArgs(args);
     if ("invalid" in resolved) {
       return debugNotice(
-        "Unknown Ephemeral Setting",
         `\`${clamp(resolved.invalid, MAX_ECHOED_NAME_CHARS)}\` is not a valid setting. ` +
           "Use `ephemeral on`, `ephemeral off`, or `ephemeral` on its own to see the current status.",
       );
@@ -391,7 +393,6 @@ const unregisterFlowSubcommand: DebugSubcommand = {
     const raw = args[0];
     if (raw !== undefined && raw !== "" && !SNOWFLAKE_RE.test(raw)) {
       return debugNotice(
-        "Invalid Channel Id",
         `\`${clamp(raw, MAX_ECHOED_NAME_CHARS)}\` is not a valid channel id. Pass a 17-20 digit id, or omit it to use this channel.`,
       );
     }
@@ -430,7 +431,6 @@ export function runDebugCommand(input: string): DebugResult {
   const match = DEBUG_SUBCOMMANDS.find((sub) => sub.name === subcommand);
   if (!match) {
     return debugNotice(
-      "Unknown Subcommand",
       `There is no \`${clamp(subcommand, MAX_ECHOED_NAME_CHARS)}\` subcommand. ` +
         "Run `/debug help` to see everything available.",
     );

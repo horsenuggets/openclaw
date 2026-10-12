@@ -71,8 +71,8 @@ Behavior worth knowing:
   stripped (so `echo "a b"` echoes `a b`). There is no escape syntax, and an unterminated
   quote runs to the end of the string. The first token (lowercased) is the subcommand; the
   rest are positional arguments.
-- An unrecognized subcommand returns a Debug-category "Unknown Subcommand" notice pointing
-  at `/debug help`.
+- An unrecognized subcommand returns a title-less Debug-category notice pointing at
+  `/debug help`.
 
 ## Adding a Subcommand
 
@@ -97,8 +97,9 @@ Subcommands are defined inside `debug-command.ts` and registered in the
      content-producing subcommand enforces both itself: `echo` clamps via the in-module
      `clamp` helper and returns a notice embed instead when given no text.
    - `{ kind: "embeds", embeds, attachments }` for rich output. For a simple one-embed
-     notice use the in-module `debugNotice(title, description)` helper, which builds a
-     Debug-category embed and returns the result for you.
+     notice use the in-module `debugNotice(description)` helper, which builds a title-less
+     Debug-category embed (identity lives in the Debug footer) and returns the result for
+     you.
    - `{ kind: "secret", name, value }` to hand the channel's agent a secret out-of-band
      (the `secrettest` case). The subcommand stays pure and just describes the secret; the
      router adapter (`deliverDebugSecret`) owns the delivery (enqueue a buffered system

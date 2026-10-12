@@ -11,6 +11,11 @@ Docs: https://docs.openclaw.ai
   embeds follow the same pattern with "Send Secret" / "Send Test Secret". These
   subcategory titles are hoisted into shared constants so the register, unregister, and
   secret flows (and their gateway-event cards) stay in sync. (#144)
+- Discord router: `/debug` notice embeds are now title-less, and `/debug ephemeral`
+  replies (status, toggle, and failed-save) render as Debug-category embeds instead of
+  Command Result, while `/lifecycle` keeps its Command Result styling. The
+  `/debug secrettest` description is reworded for clarity, and a stale ephemeral-outcome
+  doc comment was corrected. (#145)
 - Discord router: `/lifecycle` now actually persists its on/off setting on the Docker
   deployment. Per-channel preferences moved out of the provisioner-owned
   `.onboarding.json` into a router-owned, writable store at

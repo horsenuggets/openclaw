@@ -98,6 +98,45 @@ it("defers an authorized /debug with the channel's public preference", async () 
   expect(callbacks[0]?.data?.flags).toBe(0);
 });
 
+/** The first embed on the captured edit reply, typed for the Debug-category assertions. */
+type ReplyEmbed = {
+  title?: string;
+  description?: string;
+  color?: number;
+  footer?: { text?: string };
+};
+
+function firstReplyEmbed(): ReplyEmbed {
+  const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
+  const message = edit.mock.calls[0][2] as { embeds: ReplyEmbed[] };
+  return message.embeds[0];
+}
+
+/** Assert an embed carries the title-less Debug-category identity (footer + color). */
+function expectDebugEmbed(embed: ReplyEmbed): void {
+  expect(embed.title).toBeUndefined();
+  expect(embed.footer?.text).toBe("Debug");
+  expect(embed.color).toBe(0xff80e0);
+}
+
+it("renders a bare `ephemeral` status query as a title-less Debug embed", async () => {
+  await runDebugSlash({ command: "ephemeral", isAdmin: true });
+  const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
+  await vi.waitFor(() => expect(edit).toHaveBeenCalled());
+  // A status query renders the Debug category (not Command Result) and persists nothing.
+  expectDebugEmbed(firstReplyEmbed());
+});
+
+it("renders a successful `ephemeral` toggle as a title-less Debug embed", async () => {
+  await runDebugSlash({ command: "ephemeral off", isAdmin: true });
+  const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
+  await vi.waitFor(() => expect(edit).toHaveBeenCalled());
+  // A successful toggle is Debug-category too (it used to be Command Result); the
+  // write stuck, so the preference is now public.
+  expectDebugEmbed(firstReplyEmbed());
+  expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(false);
+});
+
 it("reports a save failure instead of a success toggle when the write fails", async () => {
   // Force every preferences write to fail: setEphemeralCommands writes under
   // <instancesDir>/shared/preferences, so a plain file where shared/ must be makes
@@ -106,10 +145,10 @@ it("reports a save failure instead of a success toggle when the write fails", as
   await runDebugSlash({ command: "ephemeral on", isAdmin: true });
   const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
   await vi.waitFor(() => expect(edit).toHaveBeenCalled());
-  const message = edit.mock.calls[0][2] as { embeds: Array<{ description?: string }> };
-  expect(message.embeds[0].description).toContain(
-    "Could not save the ephemeral command preference",
-  );
+  const embed = firstReplyEmbed();
+  expect(embed.description).toContain("Could not save the ephemeral command preference");
+  // The failed-save notice is also a title-less Debug embed, not a Log embed.
+  expectDebugEmbed(embed);
 });
 
 it("defers ephemeral for a failed `ephemeral off` so the did-not-stick reply stays private", async () => {
