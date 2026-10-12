@@ -210,9 +210,9 @@ describe("buildDebugHelpEmbeds", () => {
       {
         name: "`secrettest <secret-value> [secret-name]`",
         value:
-          "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as " +
-          "plaintext (so it stays visible in the channel). Never use a real secret here; use " +
-          "/secret for anything sensitive.",
+          "Hand this channel's agent a secret like `/secret`, but passed as plaintext so it " +
+          "stays visible in the channel (for testing purposes). Never use a real secret here; " +
+          "use `/secret` for anything sensitive.",
       },
       {
         name: "`unregisterflow [channelId]`",

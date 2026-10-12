@@ -318,7 +318,7 @@ const secretTestSubcommand: DebugSubcommand = {
   name: "secrettest",
   usage: "secrettest <secret-value> [secret-name]",
   description:
-    "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as plaintext (so it stays visible in the channel). Never use a real secret here; use /secret for anything sensitive.",
+    "Hand this channel's agent a secret like `/secret`, but passed as plaintext so it stays visible in the channel (for testing purposes). Never use a real secret here; use `/secret` for anything sensitive.",
   run: ({ args }) => {
     // args[0] is the value, args[1] the optional name. A multi-word value must be
     // quoted (the tokenizer splits on whitespace), matching every other debug arg.
