@@ -241,12 +241,12 @@ function deliverDebugSecret(params: {
 }
 
 /**
- * Apply a `/debug ephemeral` toggle for a channel and build its reply embed. A
- * bare status query renders a plain Log embed; an on/off toggle persists the new
- * value and renders a Command Result embed whose footer checkbox reflects it. A
- * failed write (e.g. a read-only mount) renders a Log embed reporting that the
- * change did not stick, matching /lifecycle, which surfaces the failure rather
- * than claiming a success the user would not see survive a restart. Shared by the
+ * Apply a `/debug ephemeral` toggle for a channel and build its reply embed. The
+ * bare status query, a successful on/off toggle, and a failed write (e.g. a
+ * read-only mount) all render a Debug embed: as a `/debug` subcommand, every
+ * reply carries the Debug identity rather than the Command Result (toggle)
+ * treatment. The failure case reports that the change did not stick rather than
+ * claiming a success the user would not see survive a restart. Shared by the
  * slash and text paths.
  *
  * Also returns `effectiveEphemeral`: the channel's ACTUAL ephemeral-commands
@@ -266,26 +266,28 @@ function applyDebugEphemeral(
   const current = readEphemeralCommands(instancesDir, channelId);
   const outcome = resolveEphemeralCommand(current, desired);
   if (outcome.newValue === undefined) {
-    // Bare status query: a Command Result embed (matching /lifecycle) whose footer
-    // checkbox reflects the current state; nothing is persisted.
+    // Bare status query: a Debug embed reporting the current state; nothing is
+    // persisted.
     return {
-      embed: buildCommandResultEmbed(outcome.description, outcome.state),
+      embed: buildEmbed({ category: "debug", description: outcome.description }),
       effectiveEphemeral: current,
     };
   }
   if (!setEphemeralCommands(instancesDir, channelId, outcome.newValue)) {
     runtime.error(`[router] failed to persist ephemeral preference for channel ${channelId}`);
     return {
-      embed: buildLogEmbed(
-        "Could not save the ephemeral command preference. Please try again. (The change did not stick.)",
-      ),
+      embed: buildEmbed({
+        category: "debug",
+        description:
+          "Could not save the ephemeral command preference. Please try again. (The change did not stick.)",
+      }),
       // The write did not stick, so the channel keeps its current value.
       effectiveEphemeral: current,
     };
   }
   runtime.log(`[router] /debug ephemeral for channel ${channelId}: ${outcome.state}`);
   return {
-    embed: buildCommandResultEmbed(outcome.description, outcome.state),
+    embed: buildEmbed({ category: "debug", description: outcome.description }),
     effectiveEphemeral: outcome.newValue,
   };
 }

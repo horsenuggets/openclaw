@@ -327,7 +327,7 @@ const secretTestSubcommand: DebugSubcommand = {
       return debugNotice(
         "No Secret Value",
         "Provide a value, for example `secrettest my-test-value my-name`. This is a " +
-          "TESTING command: the value is sent as plaintext and stays visible in the channel, " +
+          "*testing* command » the value is sent as plaintext and stays visible in the channel, " +
           "so never pass anything truly sensitive (use `/secret` for that).",
       );
     }
