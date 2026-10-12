@@ -128,6 +128,8 @@ export type DiscordButton = {
   label: string;
   custom_id?: string;
   url?: string;
+  /** Rendered greyed-out and unclickable when true (used by the preview tool). */
+  disabled?: boolean;
 };
 export type DiscordActionRow = { type: 1; components: DiscordButton[] };
 export type ChannelReplyPayload =
@@ -548,15 +550,7 @@ export async function handleChannelCommand(
     // cannot click); humans with no argument get a confirmation button instead.
     if (!isUnregisterConfirmArg(ctx.args[0])) {
       await ctx.reply(
-        {
-          ...registrationReply(
-            "Unregister",
-            `Are you sure you want to unregister channel <#${ctx.channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
-          ),
-          components: [
-            unregisterButtons(ctx.channelId, ctx.userId, registrationGen(deps, ctx.channelId)),
-          ],
-        },
+        unregisterConfirmPrompt(ctx.channelId, ctx.userId, registrationGen(deps, ctx.channelId)),
         { ephemeral: true },
       );
       return;
@@ -600,6 +594,25 @@ export async function handleChannelCommand(
     ),
     { ephemeral: true },
   );
+}
+
+/**
+ * The `/channel unregister` confirmation prompt: the "are you sure" embed plus the
+ * confirm/cancel action row (bound to `gen`). Shared by the command handler and the
+ * preview tool so the real prompt and its preview never drift.
+ */
+function unregisterConfirmPrompt(
+  channelId: string,
+  initiatorId: string,
+  gen: string,
+): { embeds: DiscordEmbed[]; attachments: string[]; components: DiscordActionRow[] } {
+  return {
+    ...registrationReply(
+      "Unregister",
+      `Are you sure you want to unregister channel <#${channelId}>? This stops and removes the agent and its container, frees its port, and wipes all of its data.`,
+    ),
+    components: [unregisterButtons(channelId, initiatorId, gen)],
+  };
 }
 
 /** Reply shown after an unregister completes (or fails). */
@@ -803,6 +816,45 @@ export async function decideUnregisterClick(
         `[channel] unregister ${channelId} by ${params.clickerId} (button): ok=${result.ok}`,
       );
       return { ...unregisterResultReply(channelId, ownerId, result), components: [] };
+    },
+  };
+}
+
+/**
+ * The three render stages of the unregister confirm-button flow, for the
+ * `/debug unregisterflow` preview. `confirm` shows the real prompt but with the
+ * buttons disabled (the preview walks the stages itself; it must not be
+ * clickable). `interim` and `final` are exactly what a real confirm click
+ * produces. The adapter posts `confirm`, then edits the same message to `interim`
+ * then `final`, mirroring the live two-phase (buttons drop, then result lands).
+ */
+export type UnregisterFlowPreview = {
+  confirm: UnregisterUpdate;
+  interim: UnregisterUpdate;
+  final: UnregisterUpdate;
+};
+
+export function buildUnregisterFlowPreview(
+  channelId: string,
+  ownerId: string,
+): UnregisterFlowPreview {
+  // The preview is non-clickable, so the confirmation's nonce is irrelevant; use
+  // the unknown/unregistered marker and disable the buttons.
+  const prompt = unregisterConfirmPrompt(channelId, ownerId, "-");
+  const disabledButtons: DiscordActionRow[] = prompt.components.map((row) => ({
+    type: 1,
+    components: row.components.map((button) => ({ ...button, disabled: true })),
+  }));
+  return {
+    confirm: {
+      embeds: prompt.embeds,
+      attachments: prompt.attachments,
+      components: disabledButtons,
+    },
+    interim: { ...unregisterInterimReply(channelId, ownerId), components: [] },
+    final: {
+      ...unregisterResultReply(channelId, ownerId, { ok: true, message: "preview" }),
+      components: [],
     },
   };
 }

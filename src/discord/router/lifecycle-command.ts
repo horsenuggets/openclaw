@@ -44,7 +44,7 @@ export function resolveLifecycleCommand(
     return {
       newValue: true,
       description: current
-        ? `Lifecycle messages are already \`enabled\`. ${SEE}`
+        ? `Lifecycle messages were already \`enabled\`, so nothing changed. ${SEE}`
         : `Lifecycle messages are now \`enabled\`. ${SEE}`,
       state: "enabled",
     };
@@ -54,7 +54,7 @@ export function resolveLifecycleCommand(
       newValue: false,
       description: current
         ? `Lifecycle messages are now \`disabled\`. ${NO_SEE}`
-        : `Lifecycle messages are already \`disabled\`. ${NO_SEE}`,
+        : `Lifecycle messages were already \`disabled\`, so nothing changed. ${NO_SEE}`,
       state: "disabled",
     };
   }

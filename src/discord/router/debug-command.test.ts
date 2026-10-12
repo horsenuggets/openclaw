@@ -62,6 +62,27 @@ describe("ephemeral subcommand", () => {
   });
 });
 
+describe("unregisterflow subcommand", () => {
+  it("is registered", () => {
+    expect(DEBUG_SUBCOMMANDS.some((s) => s.name === "unregisterflow")).toBe(true);
+  });
+
+  it("targets the current channel when no id is given", () => {
+    expect(runDebugCommand("unregisterflow")).toEqual({ kind: "unregisterflow", channelId: null });
+  });
+
+  it("targets an explicit channel id", () => {
+    expect(runDebugCommand("unregisterflow 123456789012345678")).toEqual({
+      kind: "unregisterflow",
+      channelId: "123456789012345678",
+    });
+  });
+
+  it("rejects a non-snowflake channel id with a notice embed", () => {
+    expect(runDebugCommand("unregisterflow not-an-id").kind).toBe("embeds");
+  });
+});
+
 describe("tokenizeDebugCommand", () => {
   it("splits on whitespace", () => {
     expect(tokenizeDebugCommand("echo hello world")).toEqual(["echo", "hello", "world"]);
@@ -192,6 +213,12 @@ describe("buildDebugHelpEmbeds", () => {
           "TESTING ONLY: hand this channel's agent a secret like /secret, but passed as " +
           "plaintext (so it stays visible in the channel). Never use a real secret here; use " +
           "/secret for anything sensitive.",
+      },
+      {
+        name: "`unregisterflow [channelId]`",
+        value:
+          "Preview the two-phase unregister button flow (confirm -> interim -> final) in this " +
+          "channel, or a given channel id, without actually unregistering anything.",
       },
     ]);
     expect(embed.footer).toEqual({ text: "Debug", icon_url: "attachment://debug.png" });
