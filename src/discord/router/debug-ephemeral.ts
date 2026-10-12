@@ -6,9 +6,10 @@ import type { CommandResultState } from "./embed-categories.js";
  * behave identically. Kept pure (no I/O): the caller reads the current value,
  * passes it in, and persists `newValue` when present.
  *
- * Every outcome is a Command Result (matching `/lifecycle`): the footer checkbox
- * reflects the resulting state. A bare `/debug ephemeral` (desired === null) is a
- * status query with no `newValue` to persist; an explicit on/off sets it.
+ * A bare `/debug ephemeral` (desired === null) is a status query with no
+ * `newValue` to persist; an explicit on/off sets it. `state` is retained for the
+ * router's log line (the reply itself renders as a Debug embed, so there is no
+ * footer checkbox reflecting it).
  */
 
 export type EphemeralCommandOutcome = {
