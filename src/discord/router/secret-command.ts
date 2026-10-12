@@ -38,6 +38,16 @@ export const SECRET_NAME_INPUT_ID = "secret-name";
 /** Max length of a sanitized secret name (filesystem-friendly, bounded). */
 export const MAX_SECRET_NAME_LENGTH = 48;
 
+/**
+ * Embed subcategory headings for the secrets flow. The footer always carries
+ * the "Secrets" category label; these titles name the action so every embed
+ * (ack, notice, error) reads as one heading. `/secret` uses the private title;
+ * the `/debug secrettest` path uses the test-flavored one. Shared here so the
+ * router (gateway-events) and the builders below use the same strings.
+ */
+export const SECRET_EMBED_TITLE = "Send Secret";
+export const SECRET_TEST_EMBED_TITLE = "Send Test Secret";
+
 /** A Discord TextInput component (component type 4). */
 type DiscordTextInput = {
   type: 4;
@@ -218,7 +228,7 @@ export function secretReminderMessage(name: string, visibleInChannel = false): s
 export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
   return buildEmbed({
     category: "secrets",
-    title: "Send Secret",
+    title: SECRET_EMBED_TITLE,
     description:
       `The secret \`${name}\` was received and queued for delivery to this ` +
       `channel's OpenClaw agent. Keep in mind that secrets are temporary and they ` +
@@ -236,7 +246,7 @@ export function buildSecretReceivedEmbed(name: string): BuiltEmbed {
 export function buildSecretTestReceivedEmbed(name: string): BuiltEmbed {
   return buildEmbed({
     category: "secrets",
-    title: "Send Test Secret",
+    title: SECRET_TEST_EMBED_TITLE,
     description:
       `The test secret \`${name}\` was queued for delivery to this channel's OpenClaw agent. ` +
       `This is a TESTING command, so the value was sent as plaintext and is visible in this ` +
