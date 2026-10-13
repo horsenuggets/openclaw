@@ -13,7 +13,7 @@ import path from "node:path";
 
 export const CONNECTIONS_FILENAME = ".connections.json";
 
-export type ConnectionStatus = "linked" | "not_linked" | "needs_reauth";
+export type ConnectionStatus = "linked" | "not_linked" | "needs_reauth" | "connecting";
 
 export type StoredConnection = {
   connectorId: string;
@@ -32,6 +32,10 @@ const CONNECTION_STATUSES: ReadonlySet<string> = new Set<ConnectionStatus>([
   "linked",
   "not_linked",
   "needs_reauth",
+  // Transient "ping in progress" state the list shows while verifying a stored
+  // connection. Written by the live status check (the ping/heartbeat), never
+  // persisted as a resting state.
+  "connecting",
 ]);
 
 /**

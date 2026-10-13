@@ -234,7 +234,7 @@ describe("handleConnectCommand list", () => {
     const services = fields.find((f) => f.name === "Service")?.value ?? "";
     const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
     expect(services).toContain("Todoist");
-    expect(statuses).toContain("✅ Connected"); // linked, no account label
+    expect(statuses).toContain("✅ Connected!"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
     // Not-linked and coming-soon services never appear in the list, even when an
     // unavailable connector has a persisted linked record.
@@ -260,17 +260,18 @@ describe("handleConnectCommand list", () => {
       makeDeps({
         store: makeStore(true, seed).store,
         emoji: {
-          connected: "<:greencheckfilled:1>",
-          notConnected: "<:redxfilled:2>",
-          needsAuth: "<:warnfilled:3>",
+          connected: "<:bluecheckfilled:1>",
+          connecting: "<:bluecheckempty:2>",
+          notConnected: "<:redxfilled:3>",
+          needsAuth: "<:warningsquare:4>",
         },
       }),
     );
     const statuses = (embedOf(replies[0].payload).fields ?? []).find(
       (f) => f.name === "Status",
     )?.value;
-    expect(statuses).toContain("<:greencheckfilled:1> Connected");
-    expect(statuses).toContain("<:warnfilled:3> Needs authentication");
+    expect(statuses).toContain("<:bluecheckfilled:1> Connected!");
+    expect(statuses).toContain("<:warningsquare:4> Needs authentication");
   });
 
   it("shows a friendly note and no table when nothing is linked", async () => {

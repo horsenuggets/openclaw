@@ -6,6 +6,10 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/connections list` status column now uses custom app emojis (blue
+  filled check for connected, blue empty check for pinging, warning for needs-auth) and
+  the labels "Connected!", "Pinging...", and "Needs authentication". Adds a transient
+  `connecting` status for the upcoming ping/heartbeat check. (#152)
 - Discord router: the Connections embed accent color now matches its icon (`#a080ff`
   instead of the lighter `#c080ff`). (#151)
 - Discord router: `/connections list` now shows only linked accounts (connected or needs

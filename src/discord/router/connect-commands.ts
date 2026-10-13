@@ -135,6 +135,7 @@ export type ConnectCommandDeps = {
 /** Status glyphs for the `/connections list` table. */
 export type ConnectionEmoji = {
   connected: string;
+  connecting: string;
   notConnected: string;
   needsAuth: string;
 };
@@ -142,6 +143,7 @@ export type ConnectionEmoji = {
 /** Unicode fallbacks used when the bot's custom app emoji are unavailable. */
 export const DEFAULT_CONNECTION_EMOJI: ConnectionEmoji = {
   connected: "✅",
+  connecting: "⬜",
   notConnected: "❌",
   needsAuth: "⚠️",
 };
@@ -221,7 +223,10 @@ export function connectTextCommandHasToken(parsed: {
 function statusCell(connection: StoredConnection | null, emoji: ConnectionEmoji): string {
   const status: ConnectionStatus = connection?.status ?? "not_linked";
   if (status === "linked") {
-    return `${emoji.connected} Connected`;
+    return `${emoji.connected} Connected!`;
+  }
+  if (status === "connecting") {
+    return `${emoji.connecting} Pinging...`;
   }
   if (status === "needs_reauth") {
     return `${emoji.needsAuth} Needs authentication`;
