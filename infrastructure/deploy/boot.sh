@@ -290,10 +290,17 @@ else
       # Same fix for the writable /usr/local and /opt install prefixes: reconcile
       # does not run prepare_instance_dirs, so instances adopted before these mounts
       # existed lack usrlocal/ and opt/. Docker would then create the bind source as
-      # root and uid 1000 could not write /usr/local or /opt. Idempotent.
+      # root and uid 1000 could not write /usr/local or /opt. Idempotent. Fail closed
+      # like the home mount above: if the chown fails the box would start with
+      # unwritable install prefixes (npm -g, pipx, make install all EACCES), so skip
+      # the instance rather than launch it half-broken; other instances still boot.
       for sub in usrlocal opt; do
         mkdir -p "$INSTANCES_DIR/$channelId/$sub"
-        chown -R 1000:1000 "$INSTANCES_DIR/$channelId/$sub" 2>/dev/null || true
+        if ! chown -R 1000:1000 "$INSTANCES_DIR/$channelId/$sub" 2>/dev/null; then
+          echo "Skipping channel $channelId: could not chown its $sub mount to the agent uid" >&2
+          echo "  (would start with an unwritable install prefix)." >&2
+          exit 0
+        fi
       done
       OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
         docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
