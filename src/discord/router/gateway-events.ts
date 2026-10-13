@@ -23,6 +23,7 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
+import { simulateConnFlow } from "./connflow-preview.js";
 import {
   DEBUG_COMMAND_SPEC,
   type DebugResult,
@@ -608,7 +609,11 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         attachments: payload.attachments,
       });
     void (async () => {
-      if (!(await isAdmin(authorId))) {
+      // The trusted mock-user bot (OPENCLAW_MOCK_USER_BOT_ID, which is unset/empty
+      // on prod) may drive /debug for E2E, so let it past the admin gate alongside
+      // real admins. The slash path needs no equivalent: bots cannot invoke slash
+      // commands, so automation always arrives via this text path.
+      if (!allowedBotIds.has(authorId) && !(await isAdmin(authorId))) {
         runtime.log(`[router] denied /debug (text) from ${authorId} (not an admin)`);
         reply(buildPermissionDeniedEmbed(buildMissingPermissionText(DEBUG_COMMAND_SPEC.name)));
         return;
@@ -642,6 +647,16 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
             runtime,
           }),
         );
+      } else if (result.kind === "connflow") {
+        const out = await simulateConnFlow({
+          scenario: result.scenario,
+          tokens: result.tokens,
+          emoji: connectCommandDeps.emoji,
+        });
+        void discordSendReply(discordToken, channelId, commandMessageId, {
+          embeds: out.embeds,
+          attachments: out.attachments,
+        });
       } else if (result.kind === "embeds") {
         void discordSendReply(discordToken, channelId, commandMessageId, {
           embeds: result.embeds,
@@ -1064,6 +1079,16 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: [ack.embed],
             attachments: ack.attachments,
+          });
+        } else if (result.kind === "connflow") {
+          const out = await simulateConnFlow({
+            scenario: result.scenario,
+            tokens: result.tokens,
+            emoji: connectCommandDeps.emoji,
+          });
+          res = await editInteractionEmbedReply(applicationId, interactionToken, {
+            embeds: out.embeds,
+            attachments: out.attachments,
           });
         } else if (result.kind === "embeds") {
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
