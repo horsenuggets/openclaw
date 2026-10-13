@@ -19,8 +19,8 @@ All of it lives under `src/discord/router/`:
   denial ephemeral even on a channel set public via `/debug ephemeral off`.
   `handleMessageCreate` also carries a text-command path (`parseDebugTextCommand`) so an
   automation/tester bot that cannot invoke slash commands can drive `/debug` as a plain
-  message (admin-gated the same way; replies land in-channel since bots cannot send true
-  ephemerals).
+  message (admin-gated, but the trusted mock-user bot is allowed past the gate for E2E;
+  replies land in-channel since bots cannot send true ephemerals).
 - `router.ts` - registers `DEBUG_COMMAND_SPEC` with Discord on startup.
 - `embed-categories.ts` - the `debug` embed category (footer "Debug", icon `debug.png`,
   accent `#ff80e0`). See [embed-system.md](embed-system.md).
@@ -32,6 +32,11 @@ Invoke `/debug` in Discord and type the subcommand into the `command` option, fo
 
 - `/debug` (option omitted) or `/debug help` - prints the help embed listing every
   registered subcommand.
+- `/debug connflow [scenario] [subcommand] [args]` - previews the `/connections` flow
+  against canned scenario data, rendered under the Debug identity. Omit the scenario for
+  an info embed listing the scenarios. For example `/debug connflow 1 add notion` renders
+  exactly what a user with zero connections sees running `/connections add notion`. See
+  "connflow preview" below.
 - `/debug echo "hello world"` - replies with the raw text `hello world` as an individual
   message (no embed wrapper).
 - `/debug secrettest <secret-value> [secret-name]` - hands this channel's agent a secret
@@ -57,7 +62,10 @@ Behavior worth knowing:
   `/debug` in production; add the real role there instead. A non-admin gets the shared
   ephemeral permission-denied embed (`denyInteractionEphemeral` with
   `buildMissingPermissionText`), the same embed every other slash command uses to refuse
-  access.
+  access. One exception, on the text path only: the trusted mock-user bot
+  (`OPENCLAW_MOCK_USER_BOT_ID`, in `allowedBotIds`) is allowed past the gate so E2E tests
+  can drive `/debug`. That id is unset/empty in production, so it opens no real hole; the
+  slash path needs no equivalent because bots cannot invoke slash commands.
 - Replies are ephemeral by default (only the invoker sees them), so debug output stays out
   of the channel. The per-channel `ephemeralCommands` preference (default on) can flip a
   channel public via `/debug ephemeral off` so command output persists for inspection
@@ -73,6 +81,32 @@ Behavior worth knowing:
   rest are positional arguments.
 - An unrecognized subcommand returns a title-less Debug-category notice pointing at
   `/debug help`.
+
+## connflow Preview
+
+`connflow` drives the REAL `/connections` handler against canned scenario data and
+re-skins the result into the Debug category, so the connections UX can be previewed on
+demand (no live store, no network). It lives in `connflow-preview.ts`:
+
+- `CONNFLOW_SCENARIOS` is the scenario registry. Every scenario is an authorized,
+  registered channel: scenario 1 has zero connections, 2 is a mix (linked, needs-auth,
+  pinging), 3 is all linked. There is deliberately no "unregistered / register first"
+  scenario, because in production an unauthorized caller is denied by the owner gate (a
+  Log-category unauthorized notice) before the handler ever runs.
+- `simulateConnFlow({ scenario, tokens, emoji })` seeds an in-memory `ConnectionStore`,
+  wraps the real connector catalog with a network-free auth (real `begin()` instructions,
+  a stubbed successful `complete()`), runs `handleConnectCommand`, captures the reply
+  embeds, and re-skins them into Debug (color + "Debug" footer + `debug.png`). Pass the
+  sender's resolved connection glyphs so the preview matches what users see.
+- The `connflow` subcommand's `run` stays pure: no scenario prints the usage embed, an
+  unknown scenario returns a notice, and a valid scenario returns a `{ kind: "connflow" }`
+  descriptor. The router (`gateway-events.ts`, both the text and slash dispatch sites)
+  awaits `simulateConnFlow` and sends the embeds — the same async-preview pattern as
+  `unregisterflow`.
+
+A gitignored dev harness (`.prod-mirror/connflow-harness.ts`) renders the real
+`simulateConnFlow` output and posts it to a Lab thread as the Mirror bot, for eyeballing
+without a running gateway.
 
 ## Adding a Subcommand
 
@@ -137,16 +171,18 @@ notice, so a new subcommand only needs its registry entry plus `run`.
 - `isAdmin` is evaluated before the command is dispatched (and before the defer), so a
   non-admin's subcommand never runs.
 - There is an admin-gated text-command path (`parseDebugTextCommand`), added so an
-  automation/tester bot that cannot invoke slash commands can still drive `/debug`. It
-  runs the same `runDebugCommand`, but because a bot cannot send a true ephemeral, its
-  replies always post in-channel (visible); the slash path is ephemeral by default but
-  honors the channel's `ephemeralCommands` preference, so it too can be public when a
-  tester runs `/debug ephemeral off`. A non-admin's `/debug ...` text gets the same
-  permission-denied embed. Any `/debug` text (and a `/debug` referenced in a reply) is
-  reduced to just its sanitized subcommand label (`debugSubcommandLabel`) before it
-  reaches the router log, so neither a `secrettest` value nor a credential pasted as an
-  unknown subcommand is ever persisted there (the `secrettest` value still stays visible
-  in the channel by design). Two related guards keep those values out of the log and the
-  agent transcript: the router drops its own echoed replies (`authorId === applicationId`)
-  before logging or re-parsing them, and reconnect recovery skips any unanswered `/debug`
-  command (`parseDebugTextCommand`) rather than logging or routing its arguments.
+  automation/tester bot that cannot invoke slash commands can still drive `/debug`. The
+  trusted mock-user bot (`OPENCLAW_MOCK_USER_BOT_ID`, empty on prod) is allowed past this
+  gate so E2E tests can drive it. It runs the same `runDebugCommand`, but because a bot
+  cannot send a true ephemeral, its replies always post in-channel (visible); the slash
+  path is ephemeral by default but honors the channel's `ephemeralCommands` preference, so
+  it too can be public when a tester runs `/debug ephemeral off`. A non-admin's
+  `/debug ...` text gets the same permission-denied embed. Any `/debug` text (and a
+  `/debug` referenced in a reply) is reduced to just its sanitized subcommand label
+  (`debugSubcommandLabel`) before it reaches the router log, so neither a `secrettest`
+  value nor a credential pasted as an unknown subcommand is ever persisted there (the
+  `secrettest` value still stays visible in the channel by design). Two related guards
+  keep those values out of the log and the agent transcript: the router drops its own
+  echoed replies (`authorId === applicationId`) before logging or re-parsing them, and
+  reconnect recovery skips any unanswered `/debug` command (`parseDebugTextCommand`)
+  rather than logging or routing its arguments.

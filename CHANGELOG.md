@@ -6,6 +6,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: new `/debug connflow [scenario] [subcommand] [args]` previews the
+  `/connections` flow against canned scenarios (1 empty, 2 mixed, 3 all linked), driving
+  the real connections handler against in-memory, network-free data and re-skinning the
+  result into the Debug identity. Omitting the scenario prints an info embed. The trusted
+  mock-user bot is now allowed past the `/debug` text gate (test-scoped; the id is empty
+  on prod) so E2E tests can drive debug commands.
 - Discord router: `/connections list` is redesigned into a paginated two-column layout
   (Service Name / Service Status) with a "Currently Connected" count, a markdown block
   advertising the subcommands, and long service names truncated with an ellipsis. It
