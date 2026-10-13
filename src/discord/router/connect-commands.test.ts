@@ -219,6 +219,14 @@ describe("handleConnectCommand list", () => {
         accountLabel: "chris",
         linkedAt: "2026-01-01T00:00:00Z",
       },
+      // Unavailable ("coming soon") connector carrying a stale linked record: it
+      // must still be filtered out of the list per the coming-soon contract.
+      {
+        connectorId: "google",
+        status: "linked",
+        token: "g",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
@@ -228,7 +236,8 @@ describe("handleConnectCommand list", () => {
     expect(services).toContain("Todoist");
     expect(statuses).toContain("✅ Connected"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
-    // Not-linked and coming-soon services never appear in the list.
+    // Not-linked and coming-soon services never appear in the list, even when an
+    // unavailable connector has a persisted linked record.
     expect(services).not.toContain("Notion");
     expect(services).not.toContain("Google");
     expect(statuses).not.toContain("Not connected");

@@ -253,14 +253,18 @@ function listReply(
   attachments: string[];
 } {
   const byId = new Map(connections.map((c) => [c.connectorId, c]));
-  // Walk the catalog (for stable display order) but keep only connectors that have
-  // a live connection to show.
+  // Walk the catalog (for stable display order) but keep only available connectors
+  // that have a live connection to show. The store accepts any well-formed connector
+  // id/status, so an unavailable ("coming soon") connector could carry a stale linked
+  // record; filtering on `available` keeps it out per the coming-soon contract.
   const linked = registry
     .all()
     .map((connector) => ({ connector, connection: byId.get(connector.id) ?? null }))
     .filter(
       (entry): entry is { connector: Connector; connection: StoredConnection } =>
-        entry.connection !== null && entry.connection.status !== "not_linked",
+        entry.connector.available &&
+        entry.connection !== null &&
+        entry.connection.status !== "not_linked",
     );
   if (linked.length === 0) {
     return connectionsReply("Your Connections", LIST_EMPTY);
