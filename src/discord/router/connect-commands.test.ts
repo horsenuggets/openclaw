@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelReplyPayload } from "./channel-commands.js";
-import type { StoredConnection } from "./connections-store.js";
+import type { DisplayConnection, StoredConnection } from "./connections-store.js";
 import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
@@ -83,8 +83,8 @@ const USER = "111111111111111111";
 const INSTANCE_KEY = "instance-dir-key";
 
 /** In-memory store. `registered: false` makes every method behave as "no instance". */
-function makeStore(registered = true, seed: StoredConnection[] = []) {
-  const map = new Map<string, StoredConnection>(seed.map((c) => [c.connectorId, c]));
+function makeStore(registered = true, seed: DisplayConnection[] = []) {
+  const map = new Map<string, DisplayConnection>(seed.map((c) => [c.connectorId, c]));
   const store: ConnectionStore = {
     list: () => (registered ? [...map.values()] : null),
     get: (_c, id) => (registered ? (map.get(id) ?? null) : null),
@@ -211,7 +211,7 @@ describe("handleConnectCommand list", () => {
   });
 
   it("lists only linked services with a status glyph, not the whole catalog", async () => {
-    const seed: StoredConnection[] = [
+    const seed: DisplayConnection[] = [
       {
         connectorId: "todoist",
         status: "linked",
@@ -245,7 +245,7 @@ describe("handleConnectCommand list", () => {
   });
 
   it("uses injected custom emoji for the status glyphs", async () => {
-    const seed: StoredConnection[] = [
+    const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
       {
         connectorId: "notion",

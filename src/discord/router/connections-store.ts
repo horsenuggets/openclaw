@@ -13,11 +13,12 @@ import path from "node:path";
 
 export const CONNECTIONS_FILENAME = ".connections.json";
 
-export type ConnectionStatus = "linked" | "not_linked" | "needs_reauth" | "connecting";
+export type PersistedConnectionStatus = "linked" | "not_linked" | "needs_reauth";
+export type ConnectionStatus = PersistedConnectionStatus | "connecting";
 
 export type StoredConnection = {
   connectorId: string;
-  status: ConnectionStatus;
+  status: PersistedConnectionStatus;
   /** The secret for paste-token connectors. Absent once Phase 3 brokers tokens. */
   token?: string;
   /** Account label discovered during validation (e.g. the GitHub login). */
@@ -26,38 +27,40 @@ export type StoredConnection = {
   linkedAt: string;
 };
 
+/** A stored connection with a transient status layered on for display. */
+export type DisplayConnection = Omit<StoredConnection, "status"> & { status: ConnectionStatus };
+
 type ConnectionsFile = { ownerId: string; connections: Record<string, StoredConnection> };
 
-// Only resting statuses are persistable. `connecting` is a transient,
-// display-only state the live status check (the upcoming ping/heartbeat) layers
-// on in memory; it is deliberately absent here so a record that somehow carried
-// it (e.g. a process that exited mid-ping) is dropped on read rather than
-// reloaded as a durable "Pinging..." that never clears.
-const CONNECTION_STATUSES: ReadonlySet<string> = new Set<ConnectionStatus>([
+// `connecting` is a transient, display-only status and must never be persisted.
+const CONNECTION_STATUSES: ReadonlySet<string> = new Set<PersistedConnectionStatus>([
   "linked",
   "not_linked",
   "needs_reauth",
 ]);
 
 /**
- * Validate one stored record before it is handed to callers that dereference it
- * (e.g. `listReply` reading `connectorId`/`status`). A valid JSON file can still
- * hold a junk entry such as `{"github": null}`; dropping it here keeps a single
- * bad record from crashing the whole command.
+ * Parse one stored record before it is handed to callers that dereference it.
+ * Older writers may have persisted `connecting`; restore those records to their
+ * resting `linked` state so a transient ping cannot hide or discard credentials.
  */
-function isStoredConnection(value: unknown): value is StoredConnection {
+function parseStoredConnection(value: unknown): StoredConnection | null {
   if (!value || typeof value !== "object") {
-    return false;
+    return null;
   }
   const record = value as Record<string, unknown>;
-  return (
-    typeof record.connectorId === "string" &&
-    typeof record.status === "string" &&
-    CONNECTION_STATUSES.has(record.status) &&
-    typeof record.linkedAt === "string" &&
-    (record.token === undefined || typeof record.token === "string") &&
-    (record.accountLabel === undefined || typeof record.accountLabel === "string")
-  );
+  const status = record.status === "connecting" ? "linked" : record.status;
+  if (
+    typeof record.connectorId !== "string" ||
+    typeof status !== "string" ||
+    !CONNECTION_STATUSES.has(status) ||
+    typeof record.linkedAt !== "string" ||
+    (record.token !== undefined && typeof record.token !== "string") ||
+    (record.accountLabel !== undefined && typeof record.accountLabel !== "string")
+  ) {
+    return null;
+  }
+  return { ...record, status } as StoredConnection;
 }
 
 function filePath(instanceDir: string): string {
@@ -128,8 +131,9 @@ function readConnectionsFileForWrite(instanceDir: string, ownerId: string): Conn
     // crash a later dereference; a wrong-typed outer object still throws below.
     const clean: Record<string, StoredConnection> = {};
     for (const [id, record] of Object.entries(connections as Record<string, unknown>)) {
-      if (isStoredConnection(record)) {
-        clean[id] = record;
+      const parsed = parseStoredConnection(record);
+      if (parsed) {
+        clean[id] = parsed;
       }
     }
     return { ownerId, connections: clean };
@@ -161,6 +165,9 @@ export function saveConnection(
   ownerId: string,
   connection: StoredConnection,
 ): void {
+  if (!CONNECTION_STATUSES.has(connection.status)) {
+    throw new Error(`Cannot persist transient connection status: ${connection.status}`);
+  }
   const file = readConnectionsFileForWrite(instanceDir, ownerId);
   file.connections[connection.connectorId] = connection;
   writeConnectionsFile(instanceDir, file);

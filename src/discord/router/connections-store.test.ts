@@ -103,10 +103,7 @@ describe("connections-store", () => {
     expect(getConnection(dir, OWNER_A, "notion")).toBeNull();
   });
 
-  it("drops a persisted transient 'connecting' record rather than reloading it", () => {
-    // `connecting` is display-only; if a process exits mid-ping it must not be
-    // reloaded as a durable "Pinging..." that never clears, so the validator
-    // treats it as malformed and discards it on read.
+  it("restores a persisted transient 'connecting' record to linked without losing its token", () => {
     fs.writeFileSync(
       path.join(dir, CONNECTIONS_FILENAME),
       JSON.stringify({
@@ -121,8 +118,24 @@ describe("connections-store", () => {
         },
       }),
     );
-    expect(listConnections(dir, OWNER_A)).toEqual([]);
-    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
+    expect(getConnection(dir, OWNER_A, "todoist")).toMatchObject({
+      connectorId: "todoist",
+      status: "linked",
+      token: "t",
+    });
+    saveConnection(dir, OWNER_A, conn({ connectorId: "notion" }));
+    expect(getConnection(dir, OWNER_A, "todoist")?.token).toBe("t");
+  });
+
+  it("rejects transient statuses at the persistence boundary", () => {
+    const connecting = {
+      ...conn(),
+      status: "connecting",
+    } as unknown as StoredConnection;
+    expect(() => saveConnection(dir, OWNER_A, connecting)).toThrow(
+      "Cannot persist transient connection status: connecting",
+    );
+    expect(fs.existsSync(path.join(dir, CONNECTIONS_FILENAME))).toBe(false);
   });
 
   it("writes the file atomically (no leftover temp file)", () => {
