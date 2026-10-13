@@ -14,7 +14,13 @@
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./connections-store.js";
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
-import { buildEmbed } from "./embed-categories.js";
+import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
+import {
+  MAX_EMBEDS_PER_MESSAGE,
+  MAX_FIELD_VALUE_CHARS,
+  MAX_MESSAGE_TOTAL_CHARS,
+  TRUNCATION_RESERVE,
+} from "./embed-limits.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
 
@@ -229,25 +235,113 @@ function statusCell(connection: DisplayConnection | null, emoji: ConnectionEmoji
     return `${emoji.connecting} Pinging...`;
   }
   if (status === "needs_reauth") {
-    return `${emoji.needsAuth} Needs authentication`;
+    return `${emoji.needsAuth} Needs authentication.`;
   }
-  return `${emoji.notConnected} Not connected`;
+  return `${emoji.notConnected} Not connected.`;
 }
 
+const LIST_TITLE = "Your Connections";
 const LIST_DESCRIPTION =
-  "Accounts linked to this channel's agent. Use `/connections add <service>` to link " +
-  "another, or `/connections remove <service>` to unlink.";
+  "Below are accounts linked to this channel's agent. You can use the following " +
+  "subcommands to manage your connections...\n\n" +
+  "```markdown\n" +
+  "# Connect a new service\n/connections add <service>\n\n" +
+  "# Remove a service\n/connections remove <service>\n" +
+  "```";
 
 const LIST_EMPTY =
   "You have not linked any accounts yet. Use `/connections add <service>` to link one.";
 
+/** Column headers, repeated on every page so each embed is self-labeled. */
+const COLUMN_NAME = "Service Name";
+const COLUMN_STATUS = "Service Status";
+const COUNT_FIELD_NAME = "Currently Connected";
+/** Longer service names are truncated to this many characters with an ellipsis. */
+const NAME_MAX = 20;
+
+/** Truncate an over-long service name, replacing the tail with an ellipsis. */
+function truncateServiceName(label: string): string {
+  if (label.length <= NAME_MAX) {
+    return label;
+  }
+  return `${label.slice(0, NAME_MAX - 1).trimEnd()}\u2026`;
+}
+
+type ListRow = { name: string; cell: string };
+type ListPage = { names: string[]; cells: string[] };
+
 /**
- * Build the `/connections list` status embed as a Service/Status table, matching
- * the Property/Value layout of `/channel status`. Only services that are actually
- * linked (connected or needs re-auth) are listed: a service that is not linked
- * simply does not appear, and catalogued-but-unavailable ("coming soon") services
- * are not shown either. The list reflects the user's connections, not the catalog.
- * When nothing is linked, a friendly note is shown with no table.
+ * Pack the Service Name / Service Status columns across as many embeds as the
+ * shared Discord budget allows: each column value stays within the 1024-char
+ * field cap, the whole message stays within the 6000-char budget (which spans
+ * every embed, since the title, description, count field, and footer each appear
+ * once), and no more than 10 embeds are produced. Returns the per-page columns
+ * plus how many rows did not fit, so the caller can note the overflow.
+ */
+function packListPages(rows: ListRow[], fixedCost: number): { pages: ListPage[]; dropped: number } {
+  const headerCost = COLUMN_NAME.length + COLUMN_STATUS.length;
+  const budget = MAX_MESSAGE_TOTAL_CHARS - TRUNCATION_RESERVE;
+  const pages: ListPage[] = [{ names: [], cells: [] }];
+  let nameLen = 0;
+  let cellLen = 0;
+  // `used` counts the whole message: the fixed one-time cost plus one set of
+  // column headers for the first page.
+  let used = fixedCost + headerCost;
+  let index = 0;
+  for (; index < rows.length; index += 1) {
+    const row = rows[index];
+    // Each appended line adds its text plus a joining newline.
+    const nameCost = row.name.length + 1;
+    const cellCost = row.cell.length + 1;
+    const page = pages[pages.length - 1];
+    const fitsColumns =
+      nameLen + nameCost <= MAX_FIELD_VALUE_CHARS && cellLen + cellCost <= MAX_FIELD_VALUE_CHARS;
+    if (page.names.length > 0 && fitsColumns) {
+      if (used + nameCost + cellCost > budget) {
+        break;
+      }
+      page.names.push(row.name);
+      page.cells.push(row.cell);
+      nameLen += nameCost;
+      cellLen += cellCost;
+      used += nameCost + cellCost;
+      continue;
+    }
+    if (page.names.length === 0) {
+      // First row on a fresh page: it always goes here (a single row cannot be
+      // split), but still honor the message budget.
+      if (used + nameCost + cellCost > budget) {
+        break;
+      }
+      page.names.push(row.name);
+      page.cells.push(row.cell);
+      nameLen = nameCost;
+      cellLen = cellCost;
+      used += nameCost + cellCost;
+      continue;
+    }
+    // The current page is full (a column hit its cap): start a new embed if the
+    // 10-embed cap allows and the headers still fit the message budget.
+    if (pages.length >= MAX_EMBEDS_PER_MESSAGE || used + headerCost > budget) {
+      break;
+    }
+    pages.push({ names: [], cells: [] });
+    nameLen = 0;
+    cellLen = 0;
+    used += headerCost;
+    index -= 1; // retry this row on the new page
+  }
+  return { pages, dropped: rows.length - index };
+}
+
+/**
+ * Build the `/connections list` status embed: a two-column Service Name / Service
+ * Status layout with a "Currently Connected" count, paginated across embeds when
+ * it would breach Discord's limits. Only services that are actually linked
+ * (connected, re-auth needed, or a transient ping) are listed: a service that is
+ * not linked simply does not appear, and catalogued-but-unavailable ("coming
+ * soon") services are not shown either. The list reflects the user's connections,
+ * not the catalog. When nothing is linked, a friendly note is shown with no table.
  */
 function listReply(
   registry: ConnectorRegistry,
@@ -272,14 +366,57 @@ function listReply(
         entry.connection.status !== "not_linked",
     );
   if (linked.length === 0) {
-    return connectionsReply("Your Connections", LIST_EMPTY);
+    return connectionsReply(LIST_TITLE, LIST_EMPTY);
   }
-  const services = linked.map(({ connector }) => connector.label);
-  const statuses = linked.map(({ connection }) => statusCell(connection, emoji));
-  return connectionsReply("Your Connections", LIST_DESCRIPTION, [
-    { name: "Service", value: services.join("\n"), inline: true },
-    { name: "Status", value: statuses.join("\n"), inline: true },
-  ]);
+
+  const rows: ListRow[] = linked.map(({ connector, connection }) => ({
+    name: truncateServiceName(connector.label),
+    cell: statusCell(connection, emoji),
+  }));
+  const connected = linked.filter(({ connection }) => connection.status === "linked").length;
+  const total = linked.length;
+  const countValue = `\`${connected}/${total}\``;
+
+  const category = EMBED_CATEGORIES.connections;
+  // Fixed, once-per-message costs: title, description, footer text, and the count
+  // field (name + value) that only the first embed carries.
+  const fixedCost =
+    LIST_TITLE.length +
+    LIST_DESCRIPTION.length +
+    category.footerText.length +
+    COUNT_FIELD_NAME.length +
+    countValue.length;
+  const { pages, dropped } = packListPages(rows, fixedCost);
+
+  const lastIndex = pages.length - 1;
+  const embeds: DiscordEmbed[] = pages.map((page, index) => {
+    const embed: DiscordEmbed = { color: category.color };
+    const fields: DiscordEmbedField[] = [];
+    if (index === 0) {
+      embed.title = LIST_TITLE;
+      embed.description = LIST_DESCRIPTION;
+      fields.push({ name: COUNT_FIELD_NAME, value: countValue, inline: false });
+    }
+    fields.push(
+      { name: COLUMN_NAME, value: page.names.join("\n"), inline: true },
+      { name: COLUMN_STATUS, value: page.cells.join("\n"), inline: true },
+    );
+    if (index === lastIndex && dropped > 0) {
+      fields.push({
+        name: "\u2026",
+        value: `${dropped} more ${dropped === 1 ? "service" : "services"} not shown.`,
+        inline: false,
+      });
+    }
+    embed.fields = fields;
+    if (index === lastIndex) {
+      embed.footer = { text: category.footerText, icon_url: attachmentRef(category.icon) };
+      embed.timestamp = new Date().toISOString();
+    }
+    return embed;
+  });
+
+  return { embeds, attachments: [category.icon] };
 }
 
 const NOT_REGISTERED =
