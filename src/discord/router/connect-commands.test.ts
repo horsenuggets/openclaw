@@ -210,7 +210,7 @@ describe("handleConnectCommand list", () => {
     expect(replies[0].ephemeral).toBe(true);
   });
 
-  it("shows every connector with a status glyph in the Service/Status table", async () => {
+  it("lists only linked services with a status glyph, not the whole catalog", async () => {
     const seed: StoredConnection[] = [
       {
         connectorId: "todoist",
@@ -223,22 +223,27 @@ describe("handleConnectCommand list", () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
     const fields = embedOf(replies[0].payload).fields ?? [];
-    const services = fields.find((f) => f.name === "Service Name")?.value ?? "";
+    const services = fields.find((f) => f.name === "Service")?.value ?? "";
     const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
     expect(services).toContain("Todoist");
-    expect(services).toContain("Notion");
-    expect(services).toContain("Google");
     expect(statuses).toContain("✅ Connected"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
-    expect(statuses).toContain("❌ Not connected"); // Notion (available) not linked
-    // Google is not yet available, so it reads "Coming soon" rather than implying
-    // it could be connected right now.
-    expect(statuses).toContain("Coming soon");
+    // Not-linked and coming-soon services never appear in the list.
+    expect(services).not.toContain("Notion");
+    expect(services).not.toContain("Google");
+    expect(statuses).not.toContain("Not connected");
+    expect(statuses).not.toContain("Coming soon");
   });
 
   it("uses injected custom emoji for the status glyphs", async () => {
     const seed: StoredConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+      {
+        connectorId: "notion",
+        status: "needs_reauth",
+        token: "n",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(
@@ -248,7 +253,7 @@ describe("handleConnectCommand list", () => {
         emoji: {
           connected: "<:greencheckfilled:1>",
           notConnected: "<:redxfilled:2>",
-          needsAuth: "⚠️",
+          needsAuth: "<:warnfilled:3>",
         },
       }),
     );
@@ -256,19 +261,17 @@ describe("handleConnectCommand list", () => {
       (f) => f.name === "Status",
     )?.value;
     expect(statuses).toContain("<:greencheckfilled:1> Connected");
-    expect(statuses).toContain("<:redxfilled:2> Not connected");
+    expect(statuses).toContain("<:warnfilled:3> Needs authentication");
   });
 
-  it("still renders the service table plus a friendly note when nothing is linked", async () => {
+  it("shows a friendly note and no table when nothing is linked", async () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
     const embed = embedOf(replies[0].payload);
     expect(embed.title).toBe("Your Connections");
-    expect(embed.description).toContain("You have no services linked yet!");
-    // The discoverability table is always present, even on a fresh channel.
-    const services = embed.fields?.find((f) => f.name === "Service Name")?.value ?? "";
-    expect(services).toContain("Todoist");
-    expect(services).toContain("Google");
+    expect(embed.description).toContain("not linked any accounts yet");
+    // No catalog table when there is nothing to show.
+    expect(embed.fields ?? []).toHaveLength(0);
   });
 
   it("defaults a null subcommand to list", async () => {
