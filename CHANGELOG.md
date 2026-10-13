@@ -6,6 +6,9 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/connections list` now shows only linked accounts (connected or needs
+  re-auth). Not-connected and coming-soon services no longer appear; when nothing is
+  linked, a short note is shown instead of a catalog table. (#149)
 - Discord router: channel command embeds now use unified action-heading titles. Register
   and unregister share "Register New Channel" / "Unregister Channel", and the secret
   embeds follow the same pattern with "Send Secret" / "Send Test Secret". These

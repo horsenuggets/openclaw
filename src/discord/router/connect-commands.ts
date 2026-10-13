@@ -13,7 +13,7 @@
 
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import type { ConnectionStatus, StoredConnection } from "./connections-store.js";
-import { type ConnectorRegistry, connectorRegistry } from "./connectors.js";
+import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
@@ -230,16 +230,19 @@ function statusCell(connection: StoredConnection | null, emoji: ConnectionEmoji)
 }
 
 const LIST_DESCRIPTION =
-  "Below are the services you can link to this channel's agent and their current status. " +
-  "Use `/connections add <service>` to link one, or `/connections remove <service>` to unlink.";
+  "Accounts linked to this channel's agent. Use `/connections add <service>` to link " +
+  "another, or `/connections remove <service>` to unlink.";
+
+const LIST_EMPTY =
+  "You have not linked any accounts yet. Use `/connections add <service>` to link one.";
 
 /**
- * Build the `/connections list` status embed as a Service Name/Status table,
- * matching the Property/Value layout of `/channel status`. The table is always
- * rendered, even when nothing is linked yet: a freshly registered channel is
- * exactly when the user needs to discover what they can link, so every connector
- * shows (as "Not connected" or "Coming soon"). When nothing is linked a friendly
- * note is appended under the description.
+ * Build the `/connections list` status embed as a Service/Status table, matching
+ * the Property/Value layout of `/channel status`. Only services that are actually
+ * linked (connected or needs re-auth) are listed: a service that is not linked
+ * simply does not appear, and catalogued-but-unavailable ("coming soon") services
+ * are not shown either. The list reflects the user's connections, not the catalog.
+ * When nothing is linked, a friendly note is shown with no table.
  */
 function listReply(
   registry: ConnectorRegistry,
@@ -250,23 +253,26 @@ function listReply(
   attachments: string[];
 } {
   const byId = new Map(connections.map((c) => [c.connectorId, c]));
-  const services: string[] = [];
-  const statuses: string[] = [];
-  for (const connector of registry.all()) {
-    services.push(connector.label);
-    // A not-yet-available connector (e.g. Google) can never be linked yet, so
-    // show "Coming soon" rather than the "Not connected" cell, which would imply
-    // the user could connect it right now.
-    statuses.push(
-      connector.available ? statusCell(byId.get(connector.id) ?? null, emoji) : "Coming soon",
+  // Walk the catalog (for stable display order) but keep only available connectors
+  // that have a live connection to show. The store accepts any well-formed connector
+  // id/status, so an unavailable ("coming soon") connector could carry a stale linked
+  // record; filtering on `available` keeps it out per the coming-soon contract.
+  const linked = registry
+    .all()
+    .map((connector) => ({ connector, connection: byId.get(connector.id) ?? null }))
+    .filter(
+      (entry): entry is { connector: Connector; connection: StoredConnection } =>
+        entry.connector.available &&
+        entry.connection !== null &&
+        entry.connection.status !== "not_linked",
     );
+  if (linked.length === 0) {
+    return connectionsReply("Your Connections", LIST_EMPTY);
   }
-  const description =
-    connections.length === 0
-      ? `${LIST_DESCRIPTION}\n\n*You have no services linked yet!*`
-      : LIST_DESCRIPTION;
-  return connectionsReply("Your Connections", description, [
-    { name: "Service Name", value: services.join("\n"), inline: true },
+  const services = linked.map(({ connector }) => connector.label);
+  const statuses = linked.map(({ connection }) => statusCell(connection, emoji));
+  return connectionsReply("Your Connections", LIST_DESCRIPTION, [
+    { name: "Service", value: services.join("\n"), inline: true },
     { name: "Status", value: statuses.join("\n"), inline: true },
   ]);
 }
