@@ -43,7 +43,11 @@ Three container roles...
   a build (for example linux-arm64) it is simply absent rather than crash-looping.
 - `agents.channel-<id>` (`agent.yml`) - one container per registered Discord channel,
   project `agents-<id>`, image `openclaw-agent:latest`. Hardened » Read-only root,
-  `cap_drop: ALL`, `no-new-privileges`, non-root uid, tmpfs `/tmp`. Each box runs with
+  `cap_drop: ALL`, `no-new-privileges`, non-root uid (the `openclaw` user, uid 1000),
+  tmpfs `/tmp`. The image carries a general-purpose toolchain (node/npm, python/pip/pipx,
+  curl, build-essential, git) so the agent can install connection tooling at runtime;
+  those installs land in the writable, persistent `/usr/local` and `/opt` bind mounts (the
+  root FS stays read-only — mounts are exempt). Each box runs with
   `OPENCLAW_SKIP_CHANNELS=1` because it is a pure per-channel executor; the router does
   the routing.
 
@@ -74,7 +78,9 @@ Each registered channel is an instance directory, `~/.openclaw-instances/<channe
   layout lack it and are skipped on deploy or boot, so they must be re-registered.
 - `.onboarding.json` - provisioner-owned registration facts (owner id, isDM), used for
   owner gating. Written by the provisioner; the router only reads it.
-- `workspace/`, `state/`, `home/` - the box's mounted working directories.
+- `workspace/`, `state/`, `home/` - the box's mounted working directories. Plus
+  `usrlocal/` and `opt/`, which back the writable `/usr/local` and `/opt` install prefixes
+  so runtime-installed tooling persists per channel.
 - A shared auth store lives at `~/.openclaw-instances/shared/auth/` (OAuth profiles), and
   router-owned per-channel preferences (e.g. the `/lifecycle` banner toggle) live at
   `~/.openclaw-instances/shared/preferences/<channelId>.json`. Both are writable subtrees

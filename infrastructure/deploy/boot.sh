@@ -287,6 +287,14 @@ else
         echo "  (would start with an unwritable \$HOME)." >&2
         exit 0
       fi
+      # Same fix for the writable /usr/local and /opt install prefixes: reconcile
+      # does not run prepare_instance_dirs, so instances adopted before these mounts
+      # existed lack usrlocal/ and opt/. Docker would then create the bind source as
+      # root and uid 1000 could not write /usr/local or /opt. Idempotent.
+      for sub in usrlocal opt; do
+        mkdir -p "$INSTANCES_DIR/$channelId/$sub"
+        chown -R 1000:1000 "$INSTANCES_DIR/$channelId/$sub" 2>/dev/null || true
+      done
       OPENCLAW_CHANNEL_ID="$channelId" OPENCLAW_CHANNEL_PORT="$port" \
         docker compose -f ~/deploy/docker/agent.yml -p "agents-$channelId" up -d
     ) 8>"$INSTANCES_DIR/.lifecycle-$channelId.lock"

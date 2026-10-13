@@ -87,6 +87,16 @@ services:
       # connection creds that tools store under $HOME (e.g. gog's ~/.config/gogcli)
       # live here and survive restarts, isolated per channel.
       - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/home:/home/openclaw
+      # Writable, persistent, per-channel install prefixes. The root FS is read-only
+      # and the agent is non-root, so runtime tool installs (npm -g, pipx, a dropped
+      # binary, `make install`) have nowhere on / to go. These two bind mounts give
+      # the agent the conventional "locally installed software" locations — writable
+      # and surviving restarts/redeploys — WITHOUT relaxing read_only (mounts are
+      # exempt). /usr/local is already on PATH ahead of /usr/bin, so installs resolve
+      # and can override a base version. Both are empty in the base image, so an empty
+      # host dir shadows nothing; the ro gog sub-mount above layers on top of this.
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/usrlocal:/usr/local
+      - ~/.openclaw-instances/${OPENCLAW_CHANNEL_ID}/opt:/opt
       # NOTE: no shared auth-profiles.json / ~/.claude / credentials mount. The box
       # holds only THIS channel's own connection secrets (under /home, and any
       # skills.entries tokens in the read-only openclaw.json), never the
@@ -101,6 +111,14 @@ services:
       # shell: tool config/caches and $HOME-based creds (gog's ~/.config/gogcli)
       # land here and persist, rather than being co-mingled with OpenClaw's state.
       - HOME=/home/openclaw
+      # Point the package managers whose default prefix is a read-only system path
+      # (/usr) at the writable, persistent /usr/local mount so `npm -g` and `pipx`
+      # installs land there and survive restarts. /usr/local/bin is already on PATH.
+      # Tools that already default into $HOME (pip --user, cargo, go) need no redirect
+      # since HOME is persistent too.
+      - npm_config_prefix=/usr/local
+      - PIPX_HOME=/usr/local/pipx
+      - PIPX_BIN_DIR=/usr/local/bin
     logging:
       driver: json-file
       options:
