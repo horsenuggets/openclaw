@@ -21,6 +21,11 @@
  */
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
+import {
+  type ConnFlowScenario,
+  CONNFLOW_SCENARIOS,
+  getConnFlowScenario,
+} from "./connflow-preview.js";
 import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
 import {
   MAX_EMBEDS_PER_MESSAGE,
@@ -90,7 +95,14 @@ export type DebugResult =
    * real two-phase button, so the UX can be inspected without a live click.
    * `channelId` is an explicit target, or null to use the command's own channel.
    */
-  | { kind: "unregisterflow"; channelId: string | null };
+  | { kind: "unregisterflow"; channelId: string | null }
+  /**
+   * The `connflow` preview. Asks the router to run the real `/connections` handler
+   * against a canned scenario (via `simulateConnFlow`) and send the Debug-skinned
+   * embeds. `scenario` is the resolved scenario; `tokens` is the `/connections`
+   * subcommand plus its args (e.g. `["add", "notion"]`).
+   */
+  | { kind: "connflow"; scenario: ConnFlowScenario; tokens: string[] };
 
 /** Inputs handed to a subcommand's `run`. */
 export type DebugRunContext = {
@@ -392,6 +404,44 @@ const unregisterFlowSubcommand: DebugSubcommand = {
   },
 };
 
+/** The Debug-category usage notice listing every connflow scenario. */
+function connFlowUsage(): DebugResult {
+  const scenarioLines = CONNFLOW_SCENARIOS.map(
+    (s) => `\`${s.id}\` **${s.label}** — ${s.description}`,
+  ).join("\n");
+  return debugNotice(
+    "Preview the `/connections` flow against canned data, rendered under Debug. " +
+      "Pick a scenario, then the subcommand (and args) as if you were running " +
+      "`/connections`.\n\n" +
+      "Usage `/debug connflow <scenario> <subcommand> [args]`. For example, " +
+      "`/debug connflow 1 add notion` is the same as a user with zero connections running " +
+      "`/connections add notion`.\n\n" +
+      `**Scenarios**\n${scenarioLines}`,
+  );
+}
+
+const connFlowSubcommand: DebugSubcommand = {
+  name: "connflow",
+  usage: "connflow [scenario] [subcommand] [args]",
+  description:
+    "Preview the /connections flow against a canned scenario, rendered as Debug. Omit the scenario to list them.",
+  run: ({ args }) => {
+    const raw = args[0];
+    if (raw === undefined || raw === "") {
+      return connFlowUsage();
+    }
+    const id = Number(raw);
+    const scenario = Number.isInteger(id) ? getConnFlowScenario(id) : null;
+    if (!scenario) {
+      return debugNotice(
+        `\`${clamp(raw, MAX_ECHOED_NAME_CHARS)}\` is not a known connflow scenario. ` +
+          "Run `/debug connflow` (no scenario) to list them.",
+      );
+    }
+    return { kind: "connflow", scenario, tokens: args.slice(1) };
+  },
+};
+
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
@@ -401,6 +451,7 @@ const helpSubcommand: DebugSubcommand = {
 
 /** Every registered `/debug` subcommand. */
 export const DEBUG_SUBCOMMANDS: DebugSubcommand[] = [
+  connFlowSubcommand,
   echoSubcommand,
   ephemeralSubcommand,
   secretTestSubcommand,

@@ -288,6 +288,31 @@ describe("discord router channel-delete cleanup", () => {
     expect(logs.some((l) => l.includes("denied message from trusted-bot"))).toBe(false);
   });
 
+  it("lets the trusted mock-user bot run /debug for E2E", async () => {
+    vi.stubEnv("OPENCLAW_MOCK_USER_BOT_ID", "trusted-bot");
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    // The mock-user bot is not an admin, so without the allowlist bypass it would be
+    // denied. It must instead be allowed past the /debug gate so tests can drive it.
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "debug-bot-msg-1",
+      author: { id: "trusted-bot", bot: true },
+      guild_id: GUILD,
+      channel_id: CHANNEL,
+      content: "/debug help",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logs.some((l) => l.includes("denied /debug (text) from trusted-bot"))).toBe(false);
+    expect(logs.some((l) => l.includes("/debug (text) from trusted-bot: help"))).toBe(true);
+  });
+
   it("redacts a pasted /connections token from the MESSAGE_CREATE log", async () => {
     void start();
     await vi.advanceTimersByTimeAsync(0);

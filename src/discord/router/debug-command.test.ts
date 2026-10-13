@@ -83,6 +83,38 @@ describe("unregisterflow subcommand", () => {
   });
 });
 
+describe("connflow subcommand", () => {
+  it("is registered", () => {
+    expect(DEBUG_SUBCOMMANDS.some((s) => s.name === "connflow")).toBe(true);
+  });
+
+  it("lists the scenarios when no scenario is given", () => {
+    const result = runDebugCommand("connflow");
+    expect(result.kind).toBe("embeds");
+    if (result.kind !== "embeds") {
+      throw new Error("expected embeds");
+    }
+    const description = result.embeds[0].description ?? "";
+    expect(description).toContain("Scenarios");
+    expect(description).toContain("/debug connflow 1 add notion");
+  });
+
+  it("returns a connflow descriptor for a valid scenario plus subcommand", () => {
+    const result = runDebugCommand("connflow 1 add notion");
+    expect(result.kind).toBe("connflow");
+    if (result.kind !== "connflow") {
+      throw new Error("expected connflow");
+    }
+    expect(result.scenario.id).toBe(1);
+    expect(result.tokens).toEqual(["add", "notion"]);
+  });
+
+  it("rejects an unknown scenario with a notice embed", () => {
+    expect(runDebugCommand("connflow bogus").kind).toBe("embeds");
+    expect(runDebugCommand("connflow 99").kind).toBe("embeds");
+  });
+});
+
 describe("tokenizeDebugCommand", () => {
   it("splits on whitespace", () => {
     expect(tokenizeDebugCommand("echo hello world")).toEqual(["echo", "hello", "world"]);
@@ -199,6 +231,12 @@ describe("buildDebugHelpEmbeds", () => {
     );
     expect(embed.color).toBe(0xff80e0);
     expect(embed.fields).toEqual([
+      {
+        name: "`connflow [scenario] [subcommand] [args]`",
+        value:
+          "Preview the /connections flow against a canned scenario, rendered as Debug. Omit " +
+          "the scenario to list them.",
+      },
       { name: "`echo <message>`", value: "Sends the raw text as an individual message." },
       {
         name: "`ephemeral [on|off]`",
