@@ -103,6 +103,41 @@ describe("connections-store", () => {
     expect(getConnection(dir, OWNER_A, "notion")).toBeNull();
   });
 
+  it("restores a persisted transient 'connecting' record to linked without losing its token", () => {
+    fs.writeFileSync(
+      path.join(dir, CONNECTIONS_FILENAME),
+      JSON.stringify({
+        ownerId: OWNER_A,
+        connections: {
+          todoist: {
+            connectorId: "todoist",
+            status: "connecting",
+            token: "t",
+            linkedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+    expect(getConnection(dir, OWNER_A, "todoist")).toMatchObject({
+      connectorId: "todoist",
+      status: "linked",
+      token: "t",
+    });
+    saveConnection(dir, OWNER_A, conn({ connectorId: "notion" }));
+    expect(getConnection(dir, OWNER_A, "todoist")?.token).toBe("t");
+  });
+
+  it("rejects transient statuses at the persistence boundary", () => {
+    const connecting = {
+      ...conn(),
+      status: "connecting",
+    } as unknown as StoredConnection;
+    expect(() => saveConnection(dir, OWNER_A, connecting)).toThrow(
+      "Cannot persist transient connection status: connecting",
+    );
+    expect(fs.existsSync(path.join(dir, CONNECTIONS_FILENAME))).toBe(false);
+  });
+
   it("writes the file atomically (no leftover temp file)", () => {
     saveConnection(dir, OWNER_A, conn());
     const entries = fs.readdirSync(dir);

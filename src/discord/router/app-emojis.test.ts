@@ -72,17 +72,24 @@ describe("emojiRef", () => {
 describe("connectionEmojiFromMap", () => {
   it("uses the custom connected/not-connected/needs-auth glyphs when present", () => {
     expect(
-      connectionEmojiFromMap({ greencheckfilled: "1", redxfilled: "2", warningsquare: "3" }),
+      connectionEmojiFromMap({
+        bluecheckfilled: "1",
+        bluecheckempty: "2",
+        redxfilled: "3",
+        warningsquare: "4",
+      }),
     ).toEqual({
-      connected: "<:greencheckfilled:1>",
-      notConnected: "<:redxfilled:2>",
-      needsAuth: "<:warningsquare:3>",
+      connected: "<:bluecheckfilled:1>",
+      connecting: "<:bluecheckempty:2>",
+      notConnected: "<:redxfilled:3>",
+      needsAuth: "<:warningsquare:4>",
     });
   });
 
   it("falls back to unicode when the custom emoji are absent", () => {
     expect(connectionEmojiFromMap({})).toEqual({
       connected: "✅",
+      connecting: "⬜",
       notConnected: "❌",
       needsAuth: "⚠️",
     });

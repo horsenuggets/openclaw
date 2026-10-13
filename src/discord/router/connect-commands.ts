@@ -12,7 +12,7 @@
  */
 
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
-import type { ConnectionStatus, StoredConnection } from "./connections-store.js";
+import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./connections-store.js";
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 
@@ -89,8 +89,8 @@ export const CONNECTIONS_COMMAND_NAMES: readonly string[] = ["connections", "con
  */
 export type ConnectionStore = {
   /** All connections for the channel, or null when the channel is not registered. */
-  list: (channelId: string) => StoredConnection[] | null;
-  get: (channelId: string, connectorId: string) => StoredConnection | null;
+  list: (channelId: string) => DisplayConnection[] | null;
+  get: (channelId: string, connectorId: string) => DisplayConnection | null;
   /**
    * A unique identity for the channel's current registration, or null when the
    * channel is not registered. It changes across unregister/re-register even when
@@ -135,6 +135,7 @@ export type ConnectCommandDeps = {
 /** Status glyphs for the `/connections list` table. */
 export type ConnectionEmoji = {
   connected: string;
+  connecting: string;
   notConnected: string;
   needsAuth: string;
 };
@@ -142,6 +143,7 @@ export type ConnectionEmoji = {
 /** Unicode fallbacks used when the bot's custom app emoji are unavailable. */
 export const DEFAULT_CONNECTION_EMOJI: ConnectionEmoji = {
   connected: "✅",
+  connecting: "⬜",
   notConnected: "❌",
   needsAuth: "⚠️",
 };
@@ -218,10 +220,13 @@ export function connectTextCommandHasToken(parsed: {
  * The Status-column cell for a connector: a glyph plus a short label. Mirrors the
  * glyph-led cells of the `/channel status` table (see channel-commands.ts).
  */
-function statusCell(connection: StoredConnection | null, emoji: ConnectionEmoji): string {
+function statusCell(connection: DisplayConnection | null, emoji: ConnectionEmoji): string {
   const status: ConnectionStatus = connection?.status ?? "not_linked";
   if (status === "linked") {
-    return `${emoji.connected} Connected`;
+    return `${emoji.connected} Connected!`;
+  }
+  if (status === "connecting") {
+    return `${emoji.connecting} Pinging...`;
   }
   if (status === "needs_reauth") {
     return `${emoji.needsAuth} Needs authentication`;
@@ -246,7 +251,7 @@ const LIST_EMPTY =
  */
 function listReply(
   registry: ConnectorRegistry,
-  connections: StoredConnection[],
+  connections: DisplayConnection[],
   emoji: ConnectionEmoji,
 ): {
   embeds: DiscordEmbed[];
@@ -261,7 +266,7 @@ function listReply(
     .all()
     .map((connector) => ({ connector, connection: byId.get(connector.id) ?? null }))
     .filter(
-      (entry): entry is { connector: Connector; connection: StoredConnection } =>
+      (entry): entry is { connector: Connector; connection: DisplayConnection } =>
         entry.connector.available &&
         entry.connection !== null &&
         entry.connection.status !== "not_linked",

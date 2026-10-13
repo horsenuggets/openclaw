@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelReplyPayload } from "./channel-commands.js";
-import type { StoredConnection } from "./connections-store.js";
+import type { DisplayConnection, StoredConnection } from "./connections-store.js";
 import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
@@ -83,8 +83,8 @@ const USER = "111111111111111111";
 const INSTANCE_KEY = "instance-dir-key";
 
 /** In-memory store. `registered: false` makes every method behave as "no instance". */
-function makeStore(registered = true, seed: StoredConnection[] = []) {
-  const map = new Map<string, StoredConnection>(seed.map((c) => [c.connectorId, c]));
+function makeStore(registered = true, seed: DisplayConnection[] = []) {
+  const map = new Map<string, DisplayConnection>(seed.map((c) => [c.connectorId, c]));
   const store: ConnectionStore = {
     list: () => (registered ? [...map.values()] : null),
     get: (_c, id) => (registered ? (map.get(id) ?? null) : null),
@@ -211,7 +211,7 @@ describe("handleConnectCommand list", () => {
   });
 
   it("lists only linked services with a status glyph, not the whole catalog", async () => {
-    const seed: StoredConnection[] = [
+    const seed: DisplayConnection[] = [
       {
         connectorId: "todoist",
         status: "linked",
@@ -234,7 +234,7 @@ describe("handleConnectCommand list", () => {
     const services = fields.find((f) => f.name === "Service")?.value ?? "";
     const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
     expect(services).toContain("Todoist");
-    expect(statuses).toContain("✅ Connected"); // linked, no account label
+    expect(statuses).toContain("✅ Connected!"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
     // Not-linked and coming-soon services never appear in the list, even when an
     // unavailable connector has a persisted linked record.
@@ -245,12 +245,20 @@ describe("handleConnectCommand list", () => {
   });
 
   it("uses injected custom emoji for the status glyphs", async () => {
-    const seed: StoredConnection[] = [
+    const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
       {
         connectorId: "notion",
         status: "needs_reauth",
         token: "n",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
+      // Transient display-only state the live ping surfaces; exercises the
+      // `connecting` glyph + "Pinging..." branch of statusCell.
+      {
+        connectorId: "github",
+        status: "connecting",
+        token: "g",
         linkedAt: "2026-01-01T00:00:00Z",
       },
     ];
@@ -260,17 +268,19 @@ describe("handleConnectCommand list", () => {
       makeDeps({
         store: makeStore(true, seed).store,
         emoji: {
-          connected: "<:greencheckfilled:1>",
-          notConnected: "<:redxfilled:2>",
-          needsAuth: "<:warnfilled:3>",
+          connected: "<:bluecheckfilled:1>",
+          connecting: "<:bluecheckempty:2>",
+          notConnected: "<:redxfilled:3>",
+          needsAuth: "<:warningsquare:4>",
         },
       }),
     );
     const statuses = (embedOf(replies[0].payload).fields ?? []).find(
       (f) => f.name === "Status",
     )?.value;
-    expect(statuses).toContain("<:greencheckfilled:1> Connected");
-    expect(statuses).toContain("<:warnfilled:3> Needs authentication");
+    expect(statuses).toContain("<:bluecheckfilled:1> Connected!");
+    expect(statuses).toContain("<:bluecheckempty:2> Pinging...");
+    expect(statuses).toContain("<:warningsquare:4> Needs authentication");
   });
 
   it("shows a friendly note and no table when nothing is linked", async () => {
