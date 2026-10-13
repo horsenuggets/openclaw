@@ -810,7 +810,10 @@ prepare_instance_dirs() {
   # `home` is the box's real HOME mount (see agent.yml): a writable, persistent,
   # per-channel home so the agent behaves like a normal shell and $HOME-based tool
   # creds (e.g. gog's ~/.config/gogcli) persist here instead of in /state.
-  mkdir -p "$base/workspace" "$base/home" "$agent_dir"
+  # `usrlocal` and `opt` back the writable /usr/local and /opt mounts (see agent.yml):
+  # the box is read-only + non-root, so runtime tool installs (npm -g, pipx, dropped
+  # binaries) need these persistent per-channel prefixes to land in and survive.
+  mkdir -p "$base/workspace" "$base/home" "$base/usrlocal" "$base/opt" "$agent_dir"
 
   # Seed the placeholder OAuth profile under the canonical profile id so a config
   # referencing it resolves. The box runs token-free: it needs *a* bearer so pi-ai
@@ -850,7 +853,7 @@ JSON
 
   # The container runs as AGENT_UID:AGENT_GID; its writable mounts must be owned by
   # that uid or writes fail on the read-only-rootfs box.
-  if ! chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" "$base/home" 2>/dev/null; then
+  if ! chown -R "$AGENT_UID:$AGENT_GID" "$base/workspace" "$base/state" "$base/home" "$base/usrlocal" "$base/opt" 2>/dev/null; then
     echo "Error: could not make the writable mounts in $base accessible to the agent uid; not starting $channelId" >&2
     return 1
   fi
