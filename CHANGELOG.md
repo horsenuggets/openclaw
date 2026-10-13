@@ -6,6 +6,8 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: the Connections embed accent color now matches its icon (`#a080ff`
+  instead of the lighter `#c080ff`). (#151)
 - Discord router: `/connections list` now shows only linked accounts (connected or needs
   re-auth). Not-connected and coming-soon services no longer appear; when nothing is
   linked, a short note is shown instead of a catalog table. (#149)

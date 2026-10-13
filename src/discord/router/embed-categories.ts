@@ -45,7 +45,7 @@ export const EMBED_CATEGORIES: Record<EmbedCategoryKey, EmbedCategory> = {
     color: 0xffff80,
   },
   system: { footerText: "System", icon: "injected-system-prompt.png", color: 0x80ff80 },
-  connections: { footerText: "Connections", icon: "connections.png", color: 0xc080ff },
+  connections: { footerText: "Connections", icon: "connections.png", color: 0xa080ff },
   secrets: { footerText: "Secrets", icon: "secrets.png", color: 0x404cf2 },
   debug: { footerText: "Debug", icon: "debug.png", color: 0xff80e0 },
 };
