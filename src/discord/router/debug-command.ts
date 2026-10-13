@@ -22,24 +22,16 @@
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
+import {
+  MAX_EMBEDS_PER_MESSAGE,
+  MAX_FIELD_NAME_CHARS,
+  MAX_FIELD_VALUE_CHARS,
+  MAX_FIELDS_PER_EMBED,
+  MAX_MESSAGE_TOTAL_CHARS,
+  TRUNCATION_RESERVE,
+} from "./embed-limits.js";
 import { sanitizeSecretName } from "./secret-command.js";
 
-/** Discord embed limits the help overflow must respect. */
-const MAX_FIELDS_PER_EMBED = 25;
-/**
- * Discord caps the combined text of ALL embeds in one message at 6000
- * characters (title + description + every field name/value + footer text), not
- * per embed, and allows at most 10 embeds. Overflowing to more embeds only buys
- * room past the 25-field-per-embed cap; it does not raise this message-wide
- * budget. Packing stops at whichever limit comes first and appends a truncation
- * note so an oversized registry still renders instead of 400-ing.
- */
-const MAX_MESSAGE_TOTAL_CHARS = 6000;
-const MAX_EMBEDS_PER_MESSAGE = 10;
-/** Characters reserved from the message budget for the truncation note. */
-const TRUNCATION_RESERVE = 160;
-const MAX_FIELD_NAME_CHARS = 256;
-const MAX_FIELD_VALUE_CHARS = 1024;
 /** Upper bound for a user-echoed subcommand name in a notice embed. */
 const MAX_ECHOED_NAME_CHARS = 64;
 /** Discord message content limit; the `echo` output is clamped to it. */
