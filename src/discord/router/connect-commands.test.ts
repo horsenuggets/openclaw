@@ -376,6 +376,55 @@ describe("handleConnectCommand list", () => {
     }
   });
 
+  it("never emits an embed with empty column values when the budget runs out", async () => {
+    // Enough rows with long labels + a long custom warning emoji to exhaust the
+    // message-wide 6000-char budget. The old guard could push a final page whose
+    // headers fit but whose first row did not, leaving empty Service Name/Status
+    // field values that Discord rejects. Every produced page must carry rows.
+    const specs = Array.from({ length: 69 }, (_, i) => ({
+      id: `svc${i}`,
+      label: `Needs Auth Service ${i}`,
+      summary: "s",
+      services: ["X"],
+      available: true,
+      auth: new PasteTokenAuth({
+        url: `https://example.com/svc${i}`,
+        howto: "token",
+        validate: () => Promise.resolve({ ok: true }),
+      }),
+    }));
+    const registry = new ConnectorRegistry(specs);
+    const seed: DisplayConnection[] = specs.map((s) => ({
+      connectorId: s.id,
+      status: "needs_reauth" as const,
+      token: "t",
+      linkedAt: "2026-01-01T00:00:00Z",
+    }));
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(
+      ctx,
+      makeDeps({
+        registry,
+        store: makeStore(true, seed).store,
+        emoji: {
+          connected: "<:greencheckfilled:1557056834068807791>",
+          connecting: "<:bluecheckempty:1557056831040393348>",
+          notConnected: "<:redxfilled:1557056838418174022>",
+          needsAuth: "<:warningsquare:1557134247234379836>",
+        },
+      }),
+    );
+    const embeds = embedsOf(replies[0].payload);
+    // No embed may carry a Service Name / Service Status field with an empty value.
+    for (const embed of embeds) {
+      for (const field of embed.fields ?? []) {
+        if (field.name === "Service Name" || field.name === "Service Status") {
+          expect(field.value.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
   it("uses injected custom emoji for the status glyphs", async () => {
     const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },

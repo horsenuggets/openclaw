@@ -321,8 +321,14 @@ function packListPages(rows: ListRow[], fixedCost: number): { pages: ListPage[];
       continue;
     }
     // The current page is full (a column hit its cap): start a new embed if the
-    // 10-embed cap allows and the headers still fit the message budget.
-    if (pages.length >= MAX_EMBEDS_PER_MESSAGE || used + headerCost > budget) {
+    // 10-embed cap allows and the new page's headers plus this pending row still
+    // fit the message budget. Including the row cost here prevents pushing an
+    // empty page whose headers fit but whose first row would then break out,
+    // which Discord rejects as empty field values.
+    if (
+      pages.length >= MAX_EMBEDS_PER_MESSAGE ||
+      used + headerCost + nameCost + cellCost > budget
+    ) {
       break;
     }
     pages.push({ names: [], cells: [] });
