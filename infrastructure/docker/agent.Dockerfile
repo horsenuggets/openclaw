@@ -15,7 +15,10 @@
 #   `git init`; the seeded AGENTS.md tells it to commit). A generic, non-identifying
 #   system identity lets it commit with no per-box config.
 # - ca-certificates: TLS for anything the agent fetches.
-# - nodejs + npm: run npx-based MCP servers and install JS CLIs.
+# - nodejs + npm: run npx-based MCP servers and install JS CLIs. Installed from
+#   NodeSource (Node 22.x) rather than Noble's distro package, which ships Node
+#   18.19.1 — below OpenClaw's supported runtime baseline (Node 22.12+), so JS tooling
+#   targeting that baseline can refuse to install or fail at runtime.
 # - python3 + pip + pipx: install and isolate Python CLIs/tools.
 # - curl, unzip, jq: fetch, unpack, and parse during installs.
 # - build-essential: compile native deps some packages need.
@@ -27,10 +30,15 @@
 # `docker compose -f agent.yml build` or removing the openclaw-agent:latest image
 # so the next up rebuilds it.
 FROM ubuntu:24.04
+# Node 22.x from NodeSource (Noble's distro nodejs is 18.19.1, below the supported
+# baseline). curl + ca-certificates are needed to fetch the NodeSource setup script,
+# which adds the apt repo that provides nodejs (bundling npm) at the pinned major.
 RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y --no-install-recommends \
-    git ca-certificates curl unzip jq \
-    nodejs npm python3 python3-pip pipx build-essential \
+    git unzip jq \
+    nodejs python3 python3-pip pipx build-essential \
   && rm -rf /var/lib/apt/lists/* \
   && git config --system user.name "OpenClaw Agent" \
   && git config --system user.email "agent@openclaw.local" \
