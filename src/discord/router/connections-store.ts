@@ -28,14 +28,15 @@ export type StoredConnection = {
 
 type ConnectionsFile = { ownerId: string; connections: Record<string, StoredConnection> };
 
+// Only resting statuses are persistable. `connecting` is a transient,
+// display-only state the live status check (the upcoming ping/heartbeat) layers
+// on in memory; it is deliberately absent here so a record that somehow carried
+// it (e.g. a process that exited mid-ping) is dropped on read rather than
+// reloaded as a durable "Pinging..." that never clears.
 const CONNECTION_STATUSES: ReadonlySet<string> = new Set<ConnectionStatus>([
   "linked",
   "not_linked",
   "needs_reauth",
-  // Transient "ping in progress" state the list shows while verifying a stored
-  // connection. Written by the live status check (the ping/heartbeat), never
-  // persisted as a resting state.
-  "connecting",
 ]);
 
 /**

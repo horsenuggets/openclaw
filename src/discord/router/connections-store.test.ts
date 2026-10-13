@@ -103,6 +103,28 @@ describe("connections-store", () => {
     expect(getConnection(dir, OWNER_A, "notion")).toBeNull();
   });
 
+  it("drops a persisted transient 'connecting' record rather than reloading it", () => {
+    // `connecting` is display-only; if a process exits mid-ping it must not be
+    // reloaded as a durable "Pinging..." that never clears, so the validator
+    // treats it as malformed and discards it on read.
+    fs.writeFileSync(
+      path.join(dir, CONNECTIONS_FILENAME),
+      JSON.stringify({
+        ownerId: OWNER_A,
+        connections: {
+          todoist: {
+            connectorId: "todoist",
+            status: "connecting",
+            token: "t",
+            linkedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+    expect(listConnections(dir, OWNER_A)).toEqual([]);
+    expect(getConnection(dir, OWNER_A, "todoist")).toBeNull();
+  });
+
   it("writes the file atomically (no leftover temp file)", () => {
     saveConnection(dir, OWNER_A, conn());
     const entries = fs.readdirSync(dir);

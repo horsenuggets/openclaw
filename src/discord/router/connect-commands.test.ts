@@ -253,6 +253,14 @@ describe("handleConnectCommand list", () => {
         token: "n",
         linkedAt: "2026-01-01T00:00:00Z",
       },
+      // Transient display-only state the live ping surfaces; exercises the
+      // `connecting` glyph + "Pinging..." branch of statusCell.
+      {
+        connectorId: "github",
+        status: "connecting",
+        token: "g",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(
@@ -271,6 +279,7 @@ describe("handleConnectCommand list", () => {
       (f) => f.name === "Status",
     )?.value;
     expect(statuses).toContain("<:bluecheckfilled:1> Connected!");
+    expect(statuses).toContain("<:bluecheckempty:2> Pinging...");
     expect(statuses).toContain("<:warningsquare:4> Needs authentication");
   });
 
