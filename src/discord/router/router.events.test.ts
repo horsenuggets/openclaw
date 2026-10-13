@@ -2142,7 +2142,7 @@ describe("discord router channel-delete cleanup", () => {
       const embed = patches[0]?.embeds?.[0];
       expect(embed?.title).toBe("Send Secret");
       expect(embed?.footer?.text).toBe("Secrets");
-      expect(embed?.color).toBe(0xa08060);
+      expect(embed?.color).toBe(0x404cf2);
     });
 
     it("acks a missing value with a deferred ephemeral Secrets notice embed", async () => {
