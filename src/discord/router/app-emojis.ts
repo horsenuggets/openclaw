@@ -8,7 +8,7 @@ import { DEFAULT_CONNECTION_EMOJI } from "./connect-commands.js";
  * router/preview resolve their own emoji by name at startup, keeping the code free
  * of environment-specific ids and falling back to unicode when absent.
  *
- * Custom emoji names expected in the app: `bluecheckfilled` (connected),
+ * Custom emoji names expected in the app: `greencheckfilled` (connected),
  * `bluecheckempty` (connecting/pinging), `redxfilled` (not connected), and
  * `warningsquare` (needs authentication). Each falls back to a unicode glyph when
  * the named emoji is absent on the app.
@@ -75,7 +75,7 @@ export function emojiRef(map: Record<string, string>, name: string, fallback: st
 /** Build the connection status glyphs from a resolved app-emoji map (unicode fallback). */
 export function connectionEmojiFromMap(map: Record<string, string>): ConnectionEmoji {
   return {
-    connected: emojiRef(map, "bluecheckfilled", DEFAULT_CONNECTION_EMOJI.connected),
+    connected: emojiRef(map, "greencheckfilled", DEFAULT_CONNECTION_EMOJI.connected),
     connecting: emojiRef(map, "bluecheckempty", DEFAULT_CONNECTION_EMOJI.connecting),
     notConnected: emojiRef(map, "redxfilled", DEFAULT_CONNECTION_EMOJI.notConnected),
     needsAuth: emojiRef(map, "warningsquare", DEFAULT_CONNECTION_EMOJI.needsAuth),

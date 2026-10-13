@@ -181,6 +181,30 @@ function embedOf(payload: ChannelReplyPayload) {
   return obj.embeds[0];
 }
 
+/** Pull every embed out of a reply payload (fails if it is a string). */
+function embedsOf(payload: ChannelReplyPayload) {
+  expect(typeof payload).toBe("object");
+  const obj = payload as {
+    embeds: {
+      title?: string;
+      description?: string;
+      color?: number;
+      footer?: { text: string; icon_url?: string };
+      fields?: { name: string; value: string; inline?: boolean }[];
+    }[];
+  };
+  return obj.embeds;
+}
+
+/** Concatenate the Service Name / Service Status columns across every embed. */
+function columnText(payload: ChannelReplyPayload, column: "Service Name" | "Service Status") {
+  return embedsOf(payload)
+    .flatMap((e) => e.fields ?? [])
+    .filter((f) => f.name === column)
+    .map((f) => f.value)
+    .join("\n");
+}
+
 describe("handleConnectCommand list", () => {
   it("does not read connections after the authorized registration changes", async () => {
     let currentKey = "registration-a";
@@ -230,9 +254,8 @@ describe("handleConnectCommand list", () => {
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
-    const fields = embedOf(replies[0].payload).fields ?? [];
-    const services = fields.find((f) => f.name === "Service")?.value ?? "";
-    const statuses = fields.find((f) => f.name === "Status")?.value ?? "";
+    const services = columnText(replies[0].payload, "Service Name");
+    const statuses = columnText(replies[0].payload, "Service Status");
     expect(services).toContain("Todoist");
     expect(statuses).toContain("✅ Connected!"); // linked, no account label
     expect(statuses).not.toContain("(chris)"); // account label is not shown
@@ -242,6 +265,164 @@ describe("handleConnectCommand list", () => {
     expect(services).not.toContain("Google");
     expect(statuses).not.toContain("Not connected");
     expect(statuses).not.toContain("Coming soon");
+  });
+
+  it("shows a Currently Connected count and the subcommand description block", async () => {
+    const seed: DisplayConnection[] = [
+      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+      {
+        connectorId: "notion",
+        status: "needs_reauth",
+        token: "n",
+        linkedAt: "2026-01-01T00:00:00Z",
+      },
+      { connectorId: "github", status: "linked", token: "g", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
+    const first = embedOf(replies[0].payload);
+    expect(first.title).toBe("Your Connections");
+    // Two of the three shown services are in the `linked` state.
+    const count = (first.fields ?? []).find((f) => f.name === "Currently Connected");
+    expect(count?.value).toBe("`2/3`");
+    // The description advertises the add/remove subcommands in a markdown block.
+    expect(first.description).toContain("```markdown");
+    expect(first.description).toContain("/connections add <service>");
+    expect(first.description).toContain("/connections remove <service>");
+  });
+
+  it("truncates over-long service names with an ellipsis", async () => {
+    const registry = new ConnectorRegistry([
+      {
+        id: "verbose",
+        label: "Salesforce Marketing Cloud",
+        summary: "long",
+        services: ["X"],
+        available: true,
+        auth: new PasteTokenAuth({
+          url: "https://example.com/verbose",
+          howto: "token",
+          validate: () => Promise.resolve({ ok: true }),
+        }),
+      },
+    ]);
+    const seed: DisplayConnection[] = [
+      { connectorId: "verbose", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
+    ];
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(ctx, makeDeps({ registry, store: makeStore(true, seed).store }));
+    const services = columnText(replies[0].payload, "Service Name");
+    expect(services).toContain("\u2026");
+    expect(services).not.toContain("Salesforce Marketing Cloud");
+    // 19 kept characters plus the ellipsis stays within the 20-char budget.
+    expect(services.length).toBeLessThanOrEqual(20);
+  });
+
+  it("paginates across multiple embeds when a column would exceed the field cap", async () => {
+    // Build enough linked services that the Service Status column cannot fit in a
+    // single 1024-char field, forcing a second embed.
+    const specs = Array.from({ length: 60 }, (_, i) => ({
+      id: `svc${i}`,
+      label: `Service ${i}`,
+      summary: "s",
+      services: ["X"],
+      available: true,
+      auth: new PasteTokenAuth({
+        url: `https://example.com/svc${i}`,
+        howto: "token",
+        validate: () => Promise.resolve({ ok: true }),
+      }),
+    }));
+    const registry = new ConnectorRegistry(specs);
+    const seed: DisplayConnection[] = specs.map((s) => ({
+      connectorId: s.id,
+      status: "linked" as const,
+      token: "t",
+      linkedAt: "2026-01-01T00:00:00Z",
+    }));
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(
+      ctx,
+      makeDeps({
+        registry,
+        store: makeStore(true, seed).store,
+        // Realistic custom app emoji: long `<:name:id>` cells fill the Service
+        // Status column fast, so 60 rows cannot fit one 1024-char field.
+        emoji: {
+          connected: "<:greencheckfilled:1557056834068807791>",
+          connecting: "<:bluecheckempty:1557056831040393348>",
+          notConnected: "<:redxfilled:1557056838418174022>",
+          needsAuth: "<:warningsquare:1557134247234379836>",
+        },
+      }),
+    );
+    const embeds = embedsOf(replies[0].payload);
+    expect(embeds.length).toBeGreaterThan(1);
+    // Only the first embed carries the title/description/count; only the last the footer.
+    expect(embeds[0].title).toBe("Your Connections");
+    expect(embeds[0].footer).toBeUndefined();
+    expect(embeds[embeds.length - 1].footer?.text).toBe("Connections");
+    // Every embed repeats both column headers so each page is self-labeled.
+    for (const embed of embeds) {
+      const names = (embed.fields ?? []).map((f) => f.name);
+      expect(names).toContain("Service Name");
+      expect(names).toContain("Service Status");
+    }
+    // No single field value breaches the 1024-char cap.
+    for (const embed of embeds) {
+      for (const field of embed.fields ?? []) {
+        expect(field.value.length).toBeLessThanOrEqual(1024);
+      }
+    }
+  });
+
+  it("never emits an embed with empty column values when the budget runs out", async () => {
+    // Enough rows with long labels + a long custom warning emoji to exhaust the
+    // message-wide 6000-char budget. The old guard could push a final page whose
+    // headers fit but whose first row did not, leaving empty Service Name/Status
+    // field values that Discord rejects. Every produced page must carry rows.
+    const specs = Array.from({ length: 69 }, (_, i) => ({
+      id: `svc${i}`,
+      label: `Needs Auth Service ${i}`,
+      summary: "s",
+      services: ["X"],
+      available: true,
+      auth: new PasteTokenAuth({
+        url: `https://example.com/svc${i}`,
+        howto: "token",
+        validate: () => Promise.resolve({ ok: true }),
+      }),
+    }));
+    const registry = new ConnectorRegistry(specs);
+    const seed: DisplayConnection[] = specs.map((s) => ({
+      connectorId: s.id,
+      status: "needs_reauth" as const,
+      token: "t",
+      linkedAt: "2026-01-01T00:00:00Z",
+    }));
+    const { ctx, replies } = makeCtx("list");
+    await handleConnectCommand(
+      ctx,
+      makeDeps({
+        registry,
+        store: makeStore(true, seed).store,
+        emoji: {
+          connected: "<:greencheckfilled:1557056834068807791>",
+          connecting: "<:bluecheckempty:1557056831040393348>",
+          notConnected: "<:redxfilled:1557056838418174022>",
+          needsAuth: "<:warningsquare:1557134247234379836>",
+        },
+      }),
+    );
+    const embeds = embedsOf(replies[0].payload);
+    // No embed may carry a Service Name / Service Status field with an empty value.
+    for (const embed of embeds) {
+      for (const field of embed.fields ?? []) {
+        if (field.name === "Service Name" || field.name === "Service Status") {
+          expect(field.value.length).toBeGreaterThan(0);
+        }
+      }
+    }
   });
 
   it("uses injected custom emoji for the status glyphs", async () => {
@@ -275,12 +456,10 @@ describe("handleConnectCommand list", () => {
         },
       }),
     );
-    const statuses = (embedOf(replies[0].payload).fields ?? []).find(
-      (f) => f.name === "Status",
-    )?.value;
+    const statuses = columnText(replies[0].payload, "Service Status");
     expect(statuses).toContain("<:bluecheckfilled:1> Connected!");
     expect(statuses).toContain("<:bluecheckempty:2> Pinging...");
-    expect(statuses).toContain("<:warningsquare:4> Needs authentication");
+    expect(statuses).toContain("<:warningsquare:4> Needs authentication.");
   });
 
   it("shows a friendly note and no table when nothing is linked", async () => {

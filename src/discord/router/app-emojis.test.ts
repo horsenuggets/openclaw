@@ -73,13 +73,13 @@ describe("connectionEmojiFromMap", () => {
   it("uses the custom connected/not-connected/needs-auth glyphs when present", () => {
     expect(
       connectionEmojiFromMap({
-        bluecheckfilled: "1",
+        greencheckfilled: "1",
         bluecheckempty: "2",
         redxfilled: "3",
         warningsquare: "4",
       }),
     ).toEqual({
-      connected: "<:bluecheckfilled:1>",
+      connected: "<:greencheckfilled:1>",
       connecting: "<:bluecheckempty:2>",
       notConnected: "<:redxfilled:3>",
       needsAuth: "<:warningsquare:4>",

@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/connections list` is redesigned into a paginated two-column layout
+  (Service Name / Service Status) with a "Currently Connected" count, a markdown block
+  advertising the subcommands, and long service names truncated with an ellipsis. It
+  splits across multiple embeds when it would breach Discord's field or message limits,
+  reusing the shared caps in the new `embed-limits.ts`. Pagination accounts for the
+  pending row when starting a new embed, so it never emits an empty page that Discord
+  would reject. Connected now uses the green check emoji, and the needs-auth label gains a
+  trailing period.
 - Discord router: `/connections list` status column now uses custom app emojis (blue
   filled check for connected, blue empty check for pinging, warning for needs-auth) and
   the labels "Connected!", "Pinging...", and "Needs authentication". Adds a transient
