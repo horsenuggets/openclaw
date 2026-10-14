@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StoredConnection } from "./connections-store.js";
-import { PasteTokenAuth } from "./connector-auth.js";
+import { DirectAuth } from "./auth-flow.js";
 import { enabledSkillKeys, skillsEnabledByConnection } from "./connector-skills.js";
 import { ConnectorRegistry, connectorRegistry } from "./connectors.js";
 
@@ -18,7 +18,7 @@ function multiSkillRegistry(): ConnectorRegistry {
       services: ["Gmail", "Drive"],
       skills: ["gmail", "gdrive", "gdocs"],
       available: true,
-      auth: new PasteTokenAuth({
+      auth: new DirectAuth({
         url: "https://example.com",
         howto: "paste",
         validate: async () => ({ ok: true }),
@@ -73,7 +73,7 @@ describe("enabledSkillKeys", () => {
         services: ["x"],
         skills: ["dup", " DUP ", "only-a"],
         available: true,
-        auth: new PasteTokenAuth({
+        auth: new DirectAuth({
           url: "https://a",
           howto: "",
           validate: async () => ({ ok: true }),

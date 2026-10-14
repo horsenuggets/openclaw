@@ -1,10 +1,10 @@
-import type { AuthResult } from "./connector-auth.js";
+import type { AuthResult } from "./auth-flow.js";
 
 /**
- * Live token validation for the paste-token connectors. Each hits a cheap
+ * Live token validation for the direct-token connectors. Each hits a cheap
  * "who am I" endpoint to confirm the token works and to grab a friendly account
  * label. These are the `validate` closures composed into each connector's
- * `PasteTokenAuth` (see connectors.ts); that class owns the input guard and the
+ * `DirectAuth` (see connectors.ts); that class owns the input guard and the
  * network-error handling, so these stay focused on the single request. Kept out
  * of the command handler so it never touches the network and stays testable.
  */

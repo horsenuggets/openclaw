@@ -2,17 +2,18 @@
  * Connector catalog. A *connector* is a catalog entry (the Todoist connector,
  * same for everyone); a *connection* is one user's authenticated instance of it
  * (stored per-instance, see connections-store.ts). Each connector carries its
- * display metadata plus the auth strategy it uses to link (see connector-auth.ts);
- * the registry is the single lookup surface the router and handler share.
+ * display metadata plus the auth flow it uses to link (see auth-flow.ts); the
+ * registry is the single lookup surface the router and handler share.
  *
- * Phase 1 MVP ships the `PasteTokenAuth` connectors (Todoist, Notion, GitHub) end
- * to end. Google is catalogued with `CliAuth` (gog) but marked unavailable until
- * the in-container credential path is resolved, so `/connections` shows it as
- * "coming soon" rather than hiding the top-priority service.
+ * Phase 1 MVP ships the `DirectAuth` connectors (Todoist, Notion, GitHub) end to
+ * end — the user pastes a personal token. Google is catalogued with `CliAuth` (gog)
+ * but marked unavailable until the in-container credential path is resolved, so
+ * `/connections` shows it as "coming soon" rather than hiding the top-priority
+ * service; it will move to `OAuthPkceAuth` once client config and materialization land.
  */
 
+import { type AuthFlow, CliAuth, DirectAuth } from "./auth-flow.js";
 import { validateGithub, validateNotion, validateTodoist } from "./connect-validators.js";
-import { CliAuth, type ConnectorAuth, PasteTokenAuth } from "./connector-auth.js";
 
 export type Connector = {
   id: string;
@@ -32,8 +33,8 @@ export type Connector = {
   skills: readonly string[];
   /** False while the connector is catalogued but not wired yet (shown as coming soon). */
   available: boolean;
-  /** How this connector authenticates (paste a token, a CLI flow, OAuth, ...). */
-  auth: ConnectorAuth;
+  /** How this connector authenticates (a direct token paste, OAuth, a CLI flow). */
+  auth: AuthFlow;
 };
 
 /**
@@ -148,7 +149,7 @@ export const connectorRegistry = new ConnectorRegistry([
     services: ["Tasks", "Projects", "Labels"],
     skills: ["todoist"],
     available: true,
-    auth: new PasteTokenAuth({
+    auth: new DirectAuth({
       url: "https://app.todoist.com/app/settings/integrations/developer",
       howto: "Todoist » Settings » Integrations » Developer » copy your API token.",
       validate: validateTodoist,
@@ -161,7 +162,7 @@ export const connectorRegistry = new ConnectorRegistry([
     services: ["Pages", "Databases", "Comments"],
     skills: ["notion"],
     available: true,
-    auth: new PasteTokenAuth({
+    auth: new DirectAuth({
       url: "https://www.notion.so/my-integrations",
       howto:
         "Create an internal integration, copy its secret, then share the pages you want it to see.",
@@ -175,7 +176,7 @@ export const connectorRegistry = new ConnectorRegistry([
     services: ["Repos", "Issues", "Pull requests"],
     skills: ["github"],
     available: true,
-    auth: new PasteTokenAuth({
+    auth: new DirectAuth({
       url: "https://github.com/settings/personal-access-tokens",
       howto: "Create a fine-grained personal access token with the scopes you want to grant.",
       validate: validateGithub,

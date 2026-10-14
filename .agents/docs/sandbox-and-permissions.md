@@ -40,10 +40,37 @@ the box (its delivery target is a file the box can read). Because exec runs unat
 ## Connections
 
 `/connections` (`src/discord/router/connect-commands.ts`) links external accounts for the
-channel's agent. Paste-token connectors (Todoist, Notion, GitHub) are live; Google via gog
-is coming soon and is still marked unavailable in `connectors.ts` pending a shared OAuth
-client. Validated credentials are stored per instance in a `.connections.json` file
-(`connections-store.ts`) and resolved by the router (`router.ts`).
+channel's agent. Direct-token connectors (Todoist, Notion, GitHub) are live; Google via
+gog is coming soon and is still marked unavailable in `connectors.ts` pending client
+config and materialization. Validated credentials are stored per instance in a
+`.connections.json` file (`connections-store.ts`) and resolved by the router
+(`router.ts`).
+
+Each connector composes an *auth flow* (`auth-flow.ts`), described by two independent axes
+so the embed layer can present it without branching on the provider: `authKind` (`oauth` |
+`direct` | `cli` — the nature of the auth) and `delivery` (`paste` via
+`/connections add <service> <token>`, or `server-redirect` via a hosted callback), plus
+`outgoing` (`link` | `instructions` — how the user is told to start, following from
+`authKind`). The flow exposes `begin()` (what to show the user) and
+`complete(input, pending)` (verify + capture). Flows:
+
+- `DirectAuth` — the user already has a personal token; `begin()` shows instructions, the
+  user pastes the token via `/connections add <service> <token>`, and a per-service
+  `validate` closure (`connect-validators.ts`) confirms it. Todoist, Notion, GitHub.
+- `OAuthPkceAuth` — the standard OAuth authorization-code flow with PKCE (RFC 7636).
+  `begin()` mints a `code_verifier` + `code_challenge` (S256) + CSRF `state` and returns
+  the authorize URL plus an opaque `pending` blob (the verifier + state); the user
+  approves, lands on a loopback redirect (nothing needs to listen — the code is in the
+  URL), and pastes that URL (or the bare code) via `/connections add`; `complete()`
+  validates the state and exchanges the code + verifier for tokens. No client secret
+  (public client); the client id is read from the environment at call time, never
+  hardcoded. The MVP delivery is `paste`; a hosted `server-redirect` that auto-completes
+  is a later UX upgrade. NOTE: `complete()` is not yet wired to a catalog connector — the
+  handler must persist the `pending` blob between the two commands first, and a connector
+  must adopt the flow (Google, once client config + materialization land). The class is
+  complete and unit-tested in the meantime.
+- `CliAuth` — a local CLI login (gog); a placeholder until the in-container path is
+  resolved.
 
 A connector and a skill are two layers. A *connector* captures one credential; a *skill*
 is the installed tool that credential powers. One connector links to MANY skills:
@@ -57,7 +84,7 @@ nothing). These are the connection->skill LINKAGE only; actually injecting a cre
 into a box (env var, a `gh` login, a gog cred file — it varies per skill) is a separate
 materialization layer. Important » On prod the instances tree is mounted read-only (only
 `shared/auth` is writable), so writing `.connections.json` throws `EROFS` (the router
-catches it), which means paste-token connections are not currently persisted or
+catches it), which means direct-token connections are not currently persisted or
 materialized into the boxes in production. Treat the connection store as best-effort until
 that mount is made writable.
 
