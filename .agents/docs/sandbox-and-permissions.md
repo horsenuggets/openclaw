@@ -48,26 +48,27 @@ config and materialization. Validated credentials are stored per instance in a
 
 Each connector composes an *auth flow* (`auth-flow.ts`), described by two independent axes
 so the embed layer can present it without branching on the provider: `authKind` (`oauth` |
-`direct` | `cli` — the nature of the auth) and `delivery` (`paste` via `/secret`, or
-`server-redirect` via a hosted callback), plus `outgoing` (`link` | `instructions` — how
-the user is told to start, following from `authKind`). The flow exposes `begin()` (what to
-show the user) and `complete(input, pending)` (verify + capture). Flows:
+`direct` | `cli` — the nature of the auth) and `delivery` (`paste` via
+`/connections add <service> <token>`, or `server-redirect` via a hosted callback), plus
+`outgoing` (`link` | `instructions` — how the user is told to start, following from
+`authKind`). The flow exposes `begin()` (what to show the user) and
+`complete(input, pending)` (verify + capture). Flows:
 
 - `DirectAuth` — the user already has a personal token; `begin()` shows instructions, the
-  user pastes the token via `/secret`, and a per-service `validate` closure
-  (`connect-validators.ts`) confirms it. Todoist, Notion, GitHub.
+  user pastes the token via `/connections add <service> <token>`, and a per-service
+  `validate` closure (`connect-validators.ts`) confirms it. Todoist, Notion, GitHub.
 - `OAuthPkceAuth` — the standard OAuth authorization-code flow with PKCE (RFC 7636).
   `begin()` mints a `code_verifier` + `code_challenge` (S256) + CSRF `state` and returns
   the authorize URL plus an opaque `pending` blob (the verifier + state); the user
   approves, lands on a loopback redirect (nothing needs to listen — the code is in the
-  URL), and pastes that URL (or the bare code) via `/secret`; `complete()` validates the
-  state and exchanges the code + verifier for tokens. No client secret (public client);
-  the client id is read from the environment at call time, never hardcoded. The MVP
-  delivery is `paste`; a hosted `server-redirect` that auto-completes is a later UX
-  upgrade. NOTE: `complete()` is not yet wired to a catalog connector — the handler must
-  persist the `pending` blob between the two commands first, and a connector must adopt
-  the flow (Google, once client config + materialization land). The class is complete and
-  unit-tested in the meantime.
+  URL), and pastes that URL (or the bare code) via `/connections add`; `complete()`
+  validates the state and exchanges the code + verifier for tokens. No client secret
+  (public client); the client id is read from the environment at call time, never
+  hardcoded. The MVP delivery is `paste`; a hosted `server-redirect` that auto-completes
+  is a later UX upgrade. NOTE: `complete()` is not yet wired to a catalog connector — the
+  handler must persist the `pending` blob between the two commands first, and a connector
+  must adopt the flow (Google, once client config + materialization land). The class is
+  complete and unit-tested in the meantime.
 - `CliAuth` — a local CLI login (gog); a placeholder until the in-container path is
   resolved.
 

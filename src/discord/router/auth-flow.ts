@@ -10,7 +10,8 @@
  *   - `authKind` — the nature of the auth: a hosted `oauth` dance, a `direct`
  *     credential handoff (the user already has a token), or a local `cli` login.
  *   - `delivery` — how the credential comes back: `paste` (the user sends it via
- *     `/secret`) or `server-redirect` (a hosted callback completes it server-side).
+ *     `/connections add <service> <token>`) or `server-redirect` (a hosted callback
+ *     completes it server-side).
  * `outgoing` (how we tell the user to START — an authorize `link` vs. custom
  * `instructions`) follows from `authKind`, but is declared explicitly so the embed
  * layer can read it directly.
@@ -87,7 +88,8 @@ export interface AuthFlow {
 /**
  * Link by handing over a credential the user already has (a personal API token from
  * the service's settings). No authorize dance: the flow shows instructions, the user
- * pastes the token via `/secret`. The service-specific `validate` closure performs
+ * pastes the token via `/connections add <service> <token>`. The service-specific
+ * `validate` closure performs
  * the "who am I" network call; this class owns the input guard, the network-error
  * safety net, and defaulting the stored token to the pasted value.
  */
@@ -141,7 +143,7 @@ type PkcePending = { verifier: string; state: string };
  * Link through the OAuth 2.0 authorization-code flow with PKCE (RFC 7636). The user
  * opens the authorize URL, approves, and the provider redirects to a loopback URI
  * (nothing needs to listen — the code sits in the URL's query string); the user pastes
- * that redirect URL (or the bare code) via `/secret`, and `complete()` exchanges it,
+ * that redirect URL (or the bare code) via `/connections add`, and `complete()` exchanges it,
  * proving possession of the original code verifier. No client secret is used, so this
  * suits a public client; a provider that requires a secret needs the plain-OAuth flow.
  *
@@ -291,19 +293,18 @@ export class OAuthPkceAuth implements AuthFlow {
    */
   private parseInput(input: string): { code?: string; state?: string; structured: boolean } {
     const trimmed = input.trim();
-    const isRedirectUrl = trimmed.startsWith(this.spec.redirectUri);
+    const hasScheme = trimmed.includes("://");
     const hasCode = /(^|[?&])code=/.test(trimmed);
     const hasState = /(^|[?&])state=/.test(trimmed);
-    const isBareQuery = !trimmed.includes("://") && hasCode && hasState;
+    // A full URL is our redirect only if its origin + path match the configured
+    // redirect URI — a prefix check would let `http://127.0.0.1.evil.com/?...` pass.
+    const isRedirectUrl = hasScheme && this.matchesRedirect(trimmed);
+    const isBareQuery = !hasScheme && hasCode && hasState;
     if (isRedirectUrl || isBareQuery) {
       try {
         // Normalize a scheme-less bare query (`code=c&state=s`) against a loopback base
         // so it parses as a query rather than a path.
-        const toParse = trimmed.includes("://")
-          ? trimmed
-          : trimmed.startsWith("?")
-            ? trimmed
-            : `?${trimmed}`;
+        const toParse = hasScheme ? trimmed : trimmed.startsWith("?") ? trimmed : `?${trimmed}`;
         const url = new URL(toParse, "http://127.0.0.1");
         return {
           code: url.searchParams.get("code") ?? undefined,
@@ -315,6 +316,17 @@ export class OAuthPkceAuth implements AuthFlow {
       }
     }
     return { code: trimmed, structured: false };
+  }
+
+  /** True when `input` is a URL whose origin and path equal the configured redirect URI. */
+  private matchesRedirect(input: string): boolean {
+    try {
+      const got = new URL(input);
+      const want = new URL(this.spec.redirectUri);
+      return got.origin === want.origin && got.pathname === want.pathname;
+    } catch {
+      return false;
+    }
   }
 
   private async exchange(code: string, verifier: string, clientId: string): Promise<AuthResult> {

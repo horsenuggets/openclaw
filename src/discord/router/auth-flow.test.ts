@@ -308,6 +308,21 @@ describe("OAuthPkceAuth.complete", () => {
     });
   });
 
+  it("does not treat a look-alike host as the configured redirect URI", async () => {
+    const calls: TokenCall[] = [];
+    const auth = pkceAuth({ postForm: okPostForm(calls) });
+    const { pending } = auth.begin();
+    const state = (
+      JSON.parse(Buffer.from(pending ?? "", "base64").toString("utf8")) as { state: string }
+    ).state;
+    // Origin differs from http://127.0.0.1, so this is not parsed as our callback; it is
+    // kept whole as an opaque code (which the exchange will then reject), never granting
+    // it the redirect's state-extraction path.
+    const confusion = `http://127.0.0.1.evil.com/?code=x&state=${state}`;
+    await auth.complete(confusion, pending);
+    expect(calls[0]?.form.code).toBe(confusion);
+  });
+
   it("rejects a redirect URL that carries no state (no CSRF bypass)", async () => {
     const postForm = vi.fn(okPostForm([]));
     const auth = pkceAuth({ postForm });
