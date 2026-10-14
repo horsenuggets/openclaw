@@ -26,15 +26,9 @@ import {
   CONNFLOW_SCENARIOS,
   getConnFlowScenario,
 } from "./connflow-preview.js";
-import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
-import {
-  MAX_EMBEDS_PER_MESSAGE,
-  MAX_FIELD_NAME_CHARS,
-  MAX_FIELD_VALUE_CHARS,
-  MAX_FIELDS_PER_EMBED,
-  MAX_MESSAGE_TOTAL_CHARS,
-  TRUNCATION_RESERVE,
-} from "./embed-limits.js";
+import { buildEmbed } from "./embed-categories.js";
+import { MAX_FIELD_NAME_CHARS, MAX_FIELD_VALUE_CHARS } from "./embed-limits.js";
+import { buildPaginatedEmbeds } from "./embed-pagination.js";
 import { sanitizeSecretName } from "./secret-command.js";
 
 /** Upper bound for a user-echoed subcommand name in a notice embed. */
@@ -244,69 +238,21 @@ export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
   embeds: DiscordEmbed[];
   attachments: string[];
 } {
-  const category = EMBED_CATEGORIES.debug;
+  // One field per subcommand (``usage`` as the name, description as the value),
+  // clamped to the per-field caps, then packed across embeds by the shared builder.
   const fields: DiscordEmbedField[] = subcommands
     .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((sub) => ({
       name: clamp(`\`${sub.usage}\``, MAX_FIELD_NAME_CHARS),
       value: clamp(sub.description, MAX_FIELD_VALUE_CHARS),
     }));
-
-  // Pack fields across pages against the shared message budget. `used` counts
-  // the whole message (title + description + footer appear once), so it is never
-  // reset per page. A fixed slice is reserved up front for the truncation note
-  // so there is always room to append it if we stop early.
-  const pages: DiscordEmbedField[][] = [[]];
-  let used = HELP_TITLE.length + HELP_DESCRIPTION.length + category.footerText.length;
-  const budget = MAX_MESSAGE_TOTAL_CHARS - TRUNCATION_RESERVE;
-  let truncated = false;
-  for (const field of fields) {
-    const cost = field.name.length + field.value.length;
-    if (used + cost > budget) {
-      truncated = true;
-      break;
-    }
-    let page = pages[pages.length - 1];
-    if (page.length >= MAX_FIELDS_PER_EMBED) {
-      if (pages.length >= MAX_EMBEDS_PER_MESSAGE) {
-        truncated = true;
-        break;
-      }
-      page = [];
-      pages.push(page);
-    }
-    page.push(field);
-    used += cost;
-  }
-
-  if (truncated) {
-    const last = pages[pages.length - 1];
-    // Replace the final field when the last embed is already full, so appending
-    // the note never pushes the embed past the 25-field cap.
-    if (last.length >= MAX_FIELDS_PER_EMBED) {
-      last.pop();
-    }
-    last.push(TRUNCATION_FIELD);
-  }
-
-  const lastIndex = pages.length - 1;
-  const embeds: DiscordEmbed[] = pages.map((pageFields, index) => {
-    const embed: DiscordEmbed = { color: category.color };
-    if (index === 0) {
-      embed.title = HELP_TITLE;
-      embed.description = HELP_DESCRIPTION;
-    }
-    if (pageFields.length > 0) {
-      embed.fields = pageFields;
-    }
-    if (index === lastIndex) {
-      embed.footer = { text: category.footerText, icon_url: attachmentRef(category.icon) };
-      embed.timestamp = new Date().toISOString();
-    }
-    return embed;
+  return buildPaginatedEmbeds({
+    category: "debug",
+    title: HELP_TITLE,
+    description: HELP_DESCRIPTION,
+    groups: [fields],
+    truncationField: TRUNCATION_FIELD,
   });
-
-  return { embeds, attachments: [category.icon] };
 }
 
 const echoSubcommand: DebugSubcommand = {
