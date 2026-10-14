@@ -11,7 +11,7 @@
  */
 
 import type { StoredConnection } from "./connections-store.js";
-import type { ConnectorRegistry } from "./connectors.js";
+import { type ConnectorRegistry, normalizeSkillKey } from "./connectors.js";
 
 /**
  * Skill keys a single connection enables. Empty unless the connection is `linked`
@@ -40,12 +40,16 @@ export function enabledSkillKeys(
   connections: readonly StoredConnection[],
   registry: ConnectorRegistry,
 ): string[] {
+  // Dedup on the normalized key (identity is case/whitespace-insensitive) but keep
+  // the first spelling encountered, so the result honors both the deduped-union
+  // contract and the registry's case-insensitive skill identity.
   const seen = new Set<string>();
   const ordered: string[] = [];
   for (const connection of connections) {
     for (const skillKey of skillsEnabledByConnection(connection, registry)) {
-      if (!seen.has(skillKey)) {
-        seen.add(skillKey);
+      const key = normalizeSkillKey(skillKey);
+      if (!seen.has(key)) {
+        seen.add(key);
         ordered.push(skillKey);
       }
     }

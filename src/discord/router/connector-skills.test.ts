@@ -83,6 +83,25 @@ describe("enabledSkillKeys", () => {
     expect(enabledSkillKeys([connection("a", "linked")], registry)).toEqual(["dup", "only-a"]);
   });
 
+  it("dedupes case/whitespace variants of a skill, keeping the first spelling", () => {
+    const registry = new ConnectorRegistry([
+      {
+        id: "a",
+        label: "A",
+        summary: "",
+        services: ["x"],
+        skills: ["GOG", " gog "],
+        available: true,
+        auth: new PasteTokenAuth({
+          url: "https://a",
+          howto: "",
+          validate: async () => ({ ok: true }),
+        }),
+      },
+    ]);
+    expect(enabledSkillKeys([connection("a", "linked")], registry)).toEqual(["GOG"]);
+  });
+
   it("is empty when no connection is linked", () => {
     expect(
       enabledSkillKeys(

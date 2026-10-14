@@ -37,6 +37,15 @@ export type Connector = {
 };
 
 /**
+ * Canonical form of a skill key. Skill-key identity is case-insensitive and
+ * whitespace-insensitive, so every place that indexes, looks up, or dedupes a skill
+ * key must normalize through this one function to keep those operations consistent.
+ */
+export function normalizeSkillKey(skillKey: string): string {
+  return skillKey.trim().toLowerCase();
+}
+
+/**
  * Registry over the connector catalog: the single lookup surface for the router
  * (building slash-command choices) and the command handler (resolving a service
  * the user named). Lookups are case-insensitive.
@@ -57,7 +66,7 @@ export class ConnectorRegistry {
     this.bySkill = new Map();
     for (const connector of connectors) {
       for (const skillKey of connector.skills) {
-        const key = skillKey.toLowerCase();
+        const key = normalizeSkillKey(skillKey);
         const owner = this.bySkill.get(key);
         if (owner && owner.id !== connector.id) {
           throw new Error(
@@ -92,7 +101,7 @@ export class ConnectorRegistry {
     if (!skillKey) {
       return null;
     }
-    return this.bySkill.get(skillKey.trim().toLowerCase()) ?? null;
+    return this.bySkill.get(normalizeSkillKey(skillKey)) ?? null;
   }
 
   /** Connectors a user can link right now. */

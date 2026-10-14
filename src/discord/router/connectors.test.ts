@@ -74,6 +74,25 @@ describe("connectorRegistry.forSkill", () => {
     expect(connectorRegistry.forSkill(undefined)).toBeNull();
   });
 
+  it("indexes and looks up skill keys with the same normalization (trim + lowercase)", () => {
+    const connector: Connector = {
+      id: "spacey",
+      label: "Spacey",
+      summary: "",
+      services: ["x"],
+      skills: [" Spacey-Skill "],
+      available: true,
+      auth: new PasteTokenAuth({
+        url: "https://spacey",
+        howto: "",
+        validate: async () => ({ ok: true }),
+      }),
+    };
+    const registry = new ConnectorRegistry([connector]);
+    expect(registry.forSkill("spacey-skill")?.id).toBe("spacey");
+    expect(registry.forSkill("  SPACEY-SKILL  ")?.id).toBe("spacey");
+  });
+
   it("is the inverse of every connector's skills list", () => {
     for (const c of connectorRegistry.all()) {
       for (const skillKey of c.skills) {
