@@ -49,7 +49,8 @@ export const CONNECTIONS_COMMAND_SPEC = {
         },
         {
           name: "token",
-          description: "Paste your API token (omit to get setup instructions first)",
+          description:
+            "Paste your token, or the OAuth redirect URL (omit for setup instructions first)",
           type: 3,
           required: false,
         },

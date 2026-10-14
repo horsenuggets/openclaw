@@ -132,14 +132,16 @@ export class ConnectorRegistry {
  * the environment at call time rather than hardcoded, and the connector stays
  * unavailable until it is set (and the credential materializes into the box). The
  * loopback redirect follows the native-app flow (RFC 8252): the user approves and is
- * sent to `http://127.0.0.1`, where nothing need listen — the code is in the URL,
- * which they paste back. `access_type=offline` + `prompt=consent` ask Google for a
- * refresh token so the link can outlive the short-lived access token.
+ * sent to a `http://127.0.0.1:<port>` URL, where nothing need listen — the code is in
+ * the URL, which they paste back. Google's installed-app loopback requires a concrete
+ * port, so a fixed one is used; the deployment must register this exact redirect URI on
+ * its OAuth client. `access_type=offline` + `prompt=consent` ask Google for a refresh
+ * token so the link can outlive the short-lived access token.
  */
 const GOOGLE_AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v2/userinfo";
-const GOOGLE_REDIRECT_URI = "http://127.0.0.1";
+const GOOGLE_REDIRECT_URI = "http://127.0.0.1:8765";
 const GOOGLE_SCOPES: readonly string[] = [
   "openid",
   "email",
@@ -190,7 +192,7 @@ export const connectorRegistry = new ConnectorRegistry([
       extraAuthParams: { access_type: "offline", prompt: "consent" },
       howto:
         "Open the link to approve access to your Google account, then paste the " +
-        "http://127.0.0.1 URL your browser is sent to (it will not load — that is fine).",
+        "http://127.0.0.1:8765 URL your browser is sent to (it will not load — that is fine).",
       identify: identifyGoogleAccount,
     }),
   },

@@ -58,7 +58,7 @@ describe("Google OAuth configuration", () => {
     const url = new URL(prompt?.url ?? "");
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(url.searchParams.get("client_id")).toBe("test-client.apps.googleusercontent.com");
-    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1");
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:8765");
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("code_challenge")).toBeTruthy();
