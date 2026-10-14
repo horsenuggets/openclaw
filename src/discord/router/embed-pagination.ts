@@ -8,11 +8,13 @@
  *
  * Fields are supplied as ordered GROUPS. Every group after the first starts a new
  * embed (a forced section break), so a caller can keep, say, a header block on the
- * first embed and the list body on the next. Within a group, fields overflow onto
- * further embeds as the caps demand. The first embed carries the title and
- * description, the last carries the footer/icon/timestamp, every embed shares the
- * category color, and a truncation note is appended if the content exhausts the
- * message budget or the embed count.
+ * first embed and the list body on the next. Within a group, fields pack onto the
+ * current embed until the 25-field cap, then spill onto a further embed (though the
+ * shared 6000-char message budget usually bites first). The first embed carries the
+ * title and description, the last carries the footer/icon/timestamp, every embed
+ * shares the category color, and a truncation note is appended if the content
+ * exhausts the message budget or the embed count. Every field is clamped to the
+ * per-field name/value caps so a caller can never emit a payload Discord rejects.
  */
 
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
@@ -33,6 +35,21 @@ const DEFAULT_TRUNCATION_FIELD: DiscordEmbedField = {
   value: "Some entries were omitted because the list exceeded Discord's message limit.",
 };
 
+/** Clamp `text` to `max`, replacing the trailing character with an ellipsis. */
+function clampWithEllipsis(text: string, max: number): string {
+  if (text.length <= max) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}\u2026`;
+}
+
+/** Clamp a field's name/value to Discord's per-field caps so it is always valid. */
+function clampField(field: DiscordEmbedField): DiscordEmbedField {
+  const name = clampWithEllipsis(field.name, MAX_FIELD_NAME_CHARS);
+  const value = clampWithEllipsis(field.value, MAX_FIELD_VALUE_CHARS);
+  return name === field.name && value === field.value ? field : { ...field, name, value };
+}
+
 /**
  * Pack `groups` of fields into category-styled embeds. Returns the embeds plus the
  * single icon filename the footer-bearing last embed references.
@@ -50,16 +67,15 @@ export function buildPaginatedEmbeds(input: {
   const description = input.description ?? "";
 
   // `used` counts the whole message (title + description + footer appear once), so
-  // it is never reset per page. Reserve the ACTUAL cost of the truncation note (its
-  // name + value, each clamped to Discord's per-field caps) from the budget so there
-  // is always room to append it if we stop early, even when a caller supplies a note
-  // far larger than any fixed reserve.
-  const truncationField = input.truncationField ?? DEFAULT_TRUNCATION_FIELD;
+  // it is never reset per page. Clamp the truncation note to the per-field caps up
+  // front, then reserve its ACTUAL (clamped) cost from the budget so there is always
+  // room to append it if we stop early. Because the SAME clamped object is appended
+  // below, a caller-supplied note can neither breach the 1024 field cap nor push the
+  // combined message past the 6000 budget, no matter how large it arrives.
+  const truncationField = clampField(input.truncationField ?? DEFAULT_TRUNCATION_FIELD);
   const pages: DiscordEmbedField[][] = [[]];
   let used = title.length + description.length + category.footerText.length;
-  const truncationReserve =
-    Math.min(truncationField.name.length, MAX_FIELD_NAME_CHARS) +
-    Math.min(truncationField.value.length, MAX_FIELD_VALUE_CHARS);
+  const truncationReserve = truncationField.name.length + truncationField.value.length;
   const budget = MAX_MESSAGE_TOTAL_CHARS - truncationReserve;
   let truncated = false;
 
@@ -77,7 +93,11 @@ export function buildPaginatedEmbeds(input: {
       }
       pages.push([]);
     }
-    for (const field of group) {
+    for (const rawField of group) {
+      // Clamp each field to the per-field caps before measuring/pushing, so a caller
+      // cannot emit a field that breaches the 1024/256 caps and gets the payload
+      // rejected; `used` then tracks the real (clamped) message cost against 6000.
+      const field = clampField(rawField);
       const cost = field.name.length + field.value.length;
       if (used + cost > budget) {
         truncated = true;

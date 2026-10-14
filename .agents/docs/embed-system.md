@@ -25,11 +25,15 @@ at most 25 fields and 1024 chars per field value (per-embed caps), while the com
 of all embeds in the message (title + description + every field name/value + footer) must
 stay under 6000 characters (a per-message cap, not per-embed) across at most 10 embeds.
 Fields are supplied as ordered GROUPS: every group after the first starts a new embed (a
-forced section break), and within a group fields overflow onto further embeds as the caps
-demand. The title and description go on the first embed, the footer/icon/timestamp on the
-last, every embed shares the category color, and a truncation note is appended if the
-content exhausts the budget or the embed count. `chunkLinesIntoFields` is a companion that
-splits a long single-column list into several repeated-header fields under the 1024 cap.
+forced section break), and within a group fields pack onto the current embed until the
+25-field cap and only then spill onto a further embed (the shared 6000-char message budget
+usually bites first). The title and description go on the first embed, the
+footer/icon/timestamp on the last, every embed shares the category color, and a truncation
+note is appended if the content exhausts the budget or the embed count. Every field (and
+the truncation note) is clamped to the per-field name/value caps, so a caller can never
+emit a payload Discord rejects. `chunkLinesIntoFields` is a companion that splits a long
+single-column list into several repeated-header fields under the 1024 cap, truncating any
+single over-long line with an ellipsis.
 
 `buildDebugHelpEmbeds` (`debug-command.ts`) calls it with one group (the subcommand
 fields). `listReply` (`connect-commands.ts`) calls it with two groups, so
@@ -38,11 +42,12 @@ and the `/conn` subcommand previews (debug-help field style); the second carries
 "Currently Connected" `connected/total` count, a status "Legend" (one `"Label" -> glyph`
 line for each of the three live statuses), and the "Services" list, where each line is
 `glyph name` (the status shown by the glyph and decoded by the Legend). A long Services
-list is chunked under the 1024 cap and overflows onto further embeds with the header
-repeated. Over-long service names are truncated to 20 chars with an ellipsis. Only
-services in a live state (linked, re-auth needed, or a transient ping) appear; coming-soon
-connectors never do. When nothing is linked, a single embed shows a friendly note plus the
-subcommand previews.
+list is chunked under the 1024 cap into several repeated-header Services fields on the
+second embed, and if the shared message budget is exhausted a truncation note is appended.
+Over-long service names are truncated to 20 chars with an ellipsis. Only services in a
+live state (linked, re-auth needed, or a transient ping) appear; coming-soon connectors
+never do. When nothing is linked, a single embed shows a friendly note plus the subcommand
+previews.
 
 ## Icon Assets
 

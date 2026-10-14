@@ -71,6 +71,44 @@ describe("buildPaginatedEmbeds", () => {
     expect(lastField?.value).toBe("omitted-some");
   });
 
+  it("clamps an over-long caller truncation field so it never breaches the caps", () => {
+    const big = Array.from({ length: 400 }, (_, i) => field(`field-${i}`, "y".repeat(120)));
+    const { embeds } = buildPaginatedEmbeds({
+      category: "connections",
+      title: "T",
+      description: "D",
+      groups: [big],
+      // A pathological caller note far larger than the 1024 field cap and 6000 budget.
+      truncationField: { name: "note", value: "z".repeat(5000) },
+    });
+    const appended = (embeds.at(-1)?.fields ?? []).at(-1);
+    expect(appended?.value.length).toBeLessThanOrEqual(1024);
+    expect(appended?.value.endsWith("\u2026")).toBe(true);
+    // The whole message (clamped note included) stays within Discord's 6000 budget.
+    const total = embeds.reduce(
+      (n, e) =>
+        n +
+        (e.title?.length ?? 0) +
+        (e.description?.length ?? 0) +
+        (e.footer?.text.length ?? 0) +
+        (e.fields ?? []).reduce((m, f) => m + f.name.length + f.value.length, 0),
+      0,
+    );
+    expect(total).toBeLessThanOrEqual(6000);
+  });
+
+  it("clamps an over-long group field value to the per-field cap", () => {
+    const { embeds } = buildPaginatedEmbeds({
+      category: "connections",
+      title: "T",
+      description: "D",
+      groups: [[field("big", "q".repeat(3000))]],
+    });
+    const only = (embeds[0].fields ?? [])[0];
+    expect(only.value.length).toBeLessThanOrEqual(1024);
+    expect(only.value.endsWith("\u2026")).toBe(true);
+  });
+
   it("skips empty groups without emitting a blank embed", () => {
     const { embeds } = buildPaginatedEmbeds({
       category: "connections",

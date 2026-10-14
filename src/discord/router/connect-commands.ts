@@ -281,7 +281,8 @@ function legendValue(emoji: ConnectionEmoji): string {
  * the second carries the Currently Connected count, the status Legend, and the
  * Services list (one `glyph name` line per service, the status shown by the glyph
  * and decoded by the Legend). Both are packed by the shared buildPaginatedEmbeds,
- * so a long Services list overflows onto further embeds with the header repeated.
+ * so a long Services list repeats as several Services fields on the second embed,
+ * and if the shared message budget is exhausted a truncation note is appended.
  * Only services that are actually linked (connected, re-auth needed, or a transient
  * ping) are listed; catalogued-but-unavailable ("coming soon") services are not.
  * When nothing is linked, a single embed shows a friendly note plus the subcommands.
