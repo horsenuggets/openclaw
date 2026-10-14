@@ -1,0 +1,31 @@
+#!/bin/sh
+# Install dependencies when a new worktree (or clone) is first checked out, so
+# node_modules exists and the tracked git-hooks/pre-commit formatter (pnpm exec
+# oxfmt/prettier) actually runs instead of silently no-opping with
+# "Command oxfmt not found". Git runs post-checkout with: $1 = previous HEAD,
+# $2 = new HEAD, $3 = 1 for a branch checkout / 0 for a file checkout. A fresh
+# worktree or clone reports the all-zero oid as $1 with the branch flag set, so
+# we only act in that case and skip ordinary branch switches.
+PREV_HEAD=$1
+BRANCH_FLAG=$3
+
+[ "$BRANCH_FLAG" = "1" ] || exit 0
+case "$PREV_HEAD" in
+  *[!0]*) exit 0 ;; # not the all-zero oid, so this is a normal checkout
+esac
+
+# Opt-out for throwaway worktrees where deps are not needed.
+[ "${OPENCLAW_SKIP_WORKTREE_INSTALL:-}" = "1" ] && exit 0
+
+# Already populated (e.g. re-added worktree), nothing to do.
+[ -d node_modules ] && exit 0
+
+if [ -f pnpm-lock.yaml ] && command -v pnpm >/dev/null 2>&1; then
+  echo "post-checkout: installing dependencies for new worktree (pnpm install)..." >&2
+  CI=true pnpm install || echo "post-checkout: pnpm install failed; run it manually before committing." >&2
+else
+  echo "post-checkout: pnpm not found; run 'pnpm install' in this worktree before committing." >&2
+fi
+
+# Never block worktree creation on install result.
+exit 0
