@@ -553,6 +553,25 @@ export async function handleConnectCommand(
       deps.log(`[connect] ${connector.id} validation failed for ${ctx.userId}`);
       return;
     }
+    // Guard against a concurrent restart: the token exchange above is the only await
+    // here, so if `begin()` replaced the pending blob while it was in flight, this
+    // completion is stale. Reject it rather than persist the superseded account and
+    // clobber the newer attempt's pending. (No further await follows, so the value
+    // cannot change again between this check and the save/remove below.)
+    if (pending !== undefined && deps.pendingAuth.get(ctx.channelId, connector.id) !== pending) {
+      await ctx.reply(
+        connectionsReply(
+          `Link ${connector.label}`,
+          withScrubNote(
+            "A newer link attempt replaced this one. Please finish the most recent " +
+              `\`/connections add ${connector.id}\` you started.`,
+          ),
+        ),
+        { ephemeral: true },
+      );
+      deps.log(`[connect] ${connector.id} completion superseded for ${ctx.userId}`);
+      return;
+    }
     const saved = saveLinked(
       deps,
       ctx.channelId,

@@ -782,6 +782,34 @@ describe("handleConnectCommand add (OAuth two-step flow)", () => {
     expect(conn.map.has("oauthy")).toBe(false);
   });
 
+  it("rejects a stale completion when a newer begin replaced the pending blob", async () => {
+    const conn = makeStore();
+    const pending = makePendingAuth();
+    // The exchange (the only await) races a second begin: simulate that newer begin
+    // landing mid-flight by replacing the stored blob while postForm is in progress.
+    const postForm = () => {
+      pending.map.set("oauthy", "newer-blob-from-a-second-begin");
+      return okPostForm();
+    };
+    const deps = makeDeps({
+      store: conn.store,
+      registry: makeOAuthRegistry(postForm),
+      pendingAuth: pending.store,
+    });
+    await handleConnectCommand(makeCtx("add", ["oauthy"]).ctx, deps);
+    // Capture the first begin's state before postForm overwrites the blob mid-exchange.
+    const state = stateOf(pending.map.get("oauthy") ?? "");
+    const { ctx, replies } = makeCtx("add", [
+      "oauthy",
+      `http://127.0.0.1/?code=the-code&state=${state}`,
+    ]);
+    await handleConnectCommand(ctx, deps);
+    expect(embedOf(replies[0].payload).description).toContain("newer link attempt");
+    // Nothing is stored, and the newer attempt's pending blob survives.
+    expect(conn.map.has("oauthy")).toBe(false);
+    expect(pending.map.get("oauthy")).toBe("newer-blob-from-a-second-begin");
+  });
+
   it("begin: reports cleanly when pending storage is unavailable", async () => {
     const pending = makePendingAuth(false); // writes always fail (e.g. read-only mount)
     const deps = makeDeps({ registry: makeOAuthRegistry(okPostForm), pendingAuth: pending.store });
