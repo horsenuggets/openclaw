@@ -247,6 +247,17 @@ describe("OAuthPkceAuth.complete", () => {
     expect(calls[0]?.form.code).toBe("abc?def");
   });
 
+  it("keeps an opaque bare code that contains :// or a lone code= as the code", async () => {
+    const calls: TokenCall[] = [];
+    const auth = pkceAuth({ postForm: okPostForm(calls) });
+    const { pending } = auth.begin();
+    // Not the configured redirect URI, and no code+state query pair → treated as the code.
+    expect((await auth.complete("weird://opaque-code", pending)).ok).toBe(true);
+    expect(calls[0]?.form.code).toBe("weird://opaque-code");
+    expect((await auth.complete("xcode=notaquery", pending)).ok).toBe(true);
+    expect(calls[1]?.form.code).toBe("xcode=notaquery");
+  });
+
   it("resolves the lazy client id exactly once per completion", async () => {
     const calls: TokenCall[] = [];
     const clientId = vi.fn(() => "client-123");

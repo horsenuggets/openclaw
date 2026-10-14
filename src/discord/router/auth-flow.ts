@@ -38,9 +38,11 @@ export type AuthPrompt = {
   /** A URL the user opens (a token-creation page, or an OAuth authorize URL). */
   url?: string;
   /**
-   * Opaque flow state the caller must persist between `begin()` and `complete()` and
-   * hand back to `complete()` (for PKCE: the code verifier + CSRF state). Flows that
-   * carry no between-step state omit it; the handler shuttles it without inspecting it.
+   * Opaque flow state that must be persisted between `begin()` and `complete()` and
+   * handed back to `complete()` (for PKCE: the code verifier + CSRF state). Flows that
+   * carry no between-step state omit it. NOTE: the command handler does not yet persist
+   * or round-trip this — that wiring (and thus a live OAuth flow) is a follow-up; today
+   * only the flow's own tests exercise the round-trip. A flow treats it as opaque.
    */
   pending?: string;
 };
@@ -75,8 +77,9 @@ export interface AuthFlow {
   /**
    * Verify the user's input (a pasted token, a redirect URL, or nothing for CLI
    * flows) and return the credential to persist. `pending` is whatever `begin()` put
-   * in {@link AuthPrompt.pending}, round-tripped by the caller. Implementations must
-   * not throw for expected failures; return `{ ok: false, message }` instead.
+   * in {@link AuthPrompt.pending}; the caller is expected to round-trip it (not yet
+   * wired — see the note there). Implementations must not throw for expected failures;
+   * return `{ ok: false, message }` instead.
    */
   complete(input: string | undefined, pending?: string): Promise<AuthResult>;
 }
@@ -277,23 +280,30 @@ export class OAuthPkceAuth implements AuthFlow {
   }
 
   /**
-   * Pull the code (and state) out of either a redirect URL/query string or a bare code.
-   * `structured` is true for a redirect-shaped input, which must carry a verifiable
-   * state; a bare code (false) cannot and is the only input allowed to omit it.
+   * Pull the code (and state) out of a pasted callback, or keep an opaque bare code
+   * whole. A callback is recognized ONLY as the real redirect URL we sent the user to
+   * (it starts with the configured `redirectUri`) or the explicitly supported bare
+   * query that carries both `code` and `state` (`code=...&state=...`, with or without a
+   * leading `?`). Authorization codes are opaque and may themselves contain `://` or
+   * `code=`, so anything else is preserved verbatim as the code. `structured` is true
+   * only for a recognized callback, which must carry a verifiable state; a bare code
+   * (false) is the only input allowed to omit the state check.
    */
   private parseInput(input: string): { code?: string; state?: string; structured: boolean } {
     const trimmed = input.trim();
-    const hasScheme = trimmed.includes("://");
-    // Treat as a callback only for a real URL or a query string that actually carries a
-    // `code=` parameter (at the start or after a `?`/`&`). An opaque bare code that just
-    // happens to contain a `?` is not a callback and is kept whole.
-    const looksLikeCallbackQuery = /(^|[?&])code=/.test(trimmed);
-    if (hasScheme || looksLikeCallbackQuery) {
+    const isRedirectUrl = trimmed.startsWith(this.spec.redirectUri);
+    const hasCode = /(^|[?&])code=/.test(trimmed);
+    const hasState = /(^|[?&])state=/.test(trimmed);
+    const isBareQuery = !trimmed.includes("://") && hasCode && hasState;
+    if (isRedirectUrl || isBareQuery) {
       try {
-        // Normalize scheme-less inputs against a loopback base: a bare query string
-        // (`code=c&state=s`, no leading `?`) would otherwise parse as a path with no
-        // search params, so give it one.
-        const toParse = hasScheme ? trimmed : trimmed.includes("?") ? trimmed : `?${trimmed}`;
+        // Normalize a scheme-less bare query (`code=c&state=s`) against a loopback base
+        // so it parses as a query rather than a path.
+        const toParse = trimmed.includes("://")
+          ? trimmed
+          : trimmed.startsWith("?")
+            ? trimmed
+            : `?${trimmed}`;
         const url = new URL(toParse, "http://127.0.0.1");
         return {
           code: url.searchParams.get("code") ?? undefined,
