@@ -52,29 +52,31 @@ describe("simulateConnFlow re-skinning", () => {
 });
 
 describe("simulateConnFlow scenarios", () => {
-  it("scenario 1 list shows the empty note and no table", async () => {
+  it("scenario 1 list shows the empty note plus the subcommands in one embed", async () => {
     const out = await run(1, ["list"]);
     expect(out.embeds).toHaveLength(1);
     expect(out.embeds[0].title).toBe("Your Connections");
     expect(out.embeds[0].description).toContain("not linked any accounts yet");
-    expect(out.embeds[0].fields ?? []).toHaveLength(0);
+    const names = (out.embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).toContain("`/conn add <service>`");
+    expect(names).not.toContain("Services");
   });
 
-  it("scenario 2 list renders mixed statuses with the injected glyphs", async () => {
+  it("scenario 2 list renders mixed statuses as glyph-led service lines", async () => {
     const out = await run(2, ["list"]);
-    const names = column(out.embeds, "Service Name");
-    const statuses = column(out.embeds, "Service Status");
-    expect(names).toContain("Todoist");
-    expect(names).toContain("Notion");
-    expect(names).toContain("GitHub");
-    expect(statuses).toContain("<:greencheckfilled:1> Connected!");
-    expect(statuses).toContain("<:warningsquare:4> Needs authentication.");
-    expect(statuses).toContain("<:bluecheckempty:2> Pinging...");
+    const services = column(out.embeds, "Services");
+    expect(services).toContain("<:greencheckfilled:1> Todoist");
+    expect(services).toContain("<:warningsquare:4> Notion");
+    expect(services).toContain("<:bluecheckempty:2> GitHub");
+    const legend = column(out.embeds, "Legend");
+    expect(legend).toContain('"Connected!" \u2192 <:greencheckfilled:1>');
   });
 
   it("scenario 3 list reports every linkable service connected", async () => {
     const out = await run(3, ["list"]);
-    const count = (out.embeds[0].fields ?? []).find((f) => f.name === "Currently Connected");
+    const count = out.embeds
+      .flatMap((e) => e.fields ?? [])
+      .find((f) => f.name === "Currently Connected");
     expect(count?.value).toBe("`3/3`");
   });
 
