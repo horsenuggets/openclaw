@@ -66,17 +66,18 @@ export function buildPaginatedEmbeds(input: {
   const title = input.title ?? "";
   const description = input.description ?? "";
 
-  // `used` counts the whole message (title + description + footer appear once), so
-  // it is never reset per page. Clamp the truncation note to the per-field caps up
-  // front, then reserve its ACTUAL (clamped) cost from the budget so there is always
-  // room to append it if we stop early. Because the SAME clamped object is appended
-  // below, a caller-supplied note can neither breach the 1024 field cap nor push the
-  // combined message past the 6000 budget, no matter how large it arrives.
+  // Clamp the truncation note to the per-field caps up front so, if appended, it can
+  // never breach the 1024/256 field caps itself.
   const truncationField = clampField(input.truncationField ?? DEFAULT_TRUNCATION_FIELD);
+  const noteCost = truncationField.name.length + truncationField.value.length;
+
+  // `used` tracks the whole message cost (title + description + footer appear once),
+  // so it is never reset per page. We pack against the FULL 6000-char limit, not a
+  // pre-reserved budget: content that fits exactly is never needlessly dropped. Only
+  // when a field genuinely does not fit (or an embed/field cap is hit) do we flip
+  // `truncated` and, below, pop enough trailing content to make room for the note.
   const pages: DiscordEmbedField[][] = [[]];
   let used = title.length + description.length + category.footerText.length;
-  const truncationReserve = truncationField.name.length + truncationField.value.length;
-  const budget = MAX_MESSAGE_TOTAL_CHARS - truncationReserve;
   let truncated = false;
 
   for (let g = 0; g < input.groups.length && !truncated; g += 1) {
@@ -99,7 +100,7 @@ export function buildPaginatedEmbeds(input: {
       // rejected; `used` then tracks the real (clamped) message cost against 6000.
       const field = clampField(rawField);
       const cost = field.name.length + field.value.length;
-      if (used + cost > budget) {
+      if (used + cost > MAX_MESSAGE_TOTAL_CHARS) {
         truncated = true;
         break;
       }
@@ -118,11 +119,24 @@ export function buildPaginatedEmbeds(input: {
   }
 
   if (truncated) {
-    const last = pages[pages.length - 1];
-    // Replace the final field when the last embed is already full, so appending
-    // the note never pushes the embed past the 25-field cap.
-    if (last.length >= MAX_FIELDS_PER_EMBED) {
-      last.pop();
+    // Make room for the note: pop trailing fields until it fits the 6000 budget AND
+    // the last embed is under the 25-field cap. Each pop decrements `used` so the
+    // final appended message is always valid.
+    let last = pages[pages.length - 1];
+    while (
+      last.length > 0 &&
+      (used + noteCost > MAX_MESSAGE_TOTAL_CHARS || last.length >= MAX_FIELDS_PER_EMBED)
+    ) {
+      const dropped = last.pop();
+      if (dropped) {
+        used -= dropped.name.length + dropped.value.length;
+      }
+      // Drop a now-empty trailing page (never the first) so the note lands on a page
+      // that still has room for it.
+      if (last.length === 0 && pages.length > 1) {
+        pages.pop();
+        last = pages[pages.length - 1];
+      }
     }
     last.push(truncationField);
   }

@@ -71,6 +71,40 @@ describe("buildPaginatedEmbeds", () => {
     expect(lastField?.value).toBe("omitted-some");
   });
 
+  it("does not truncate when the full payload fits even though a note would not", () => {
+    // Footer is ~small; build fields whose total (with title/description/footer) lands
+    // just under 6000. A naive up-front note reserve would wrongly drop the last field.
+    const footerLen = CAT.footerText.length;
+    const base = "T".length + "D".length + footerLen;
+    // Fill to within a hair of 6000 using several large fields, each name "f".
+    const room = 6000 - base;
+    // 5 fields of ~equal size that sum to exactly `room` (name length 1 each counts too).
+    const perField = Math.floor(room / 5);
+    // cost = name(1) + value length; keep each <= 1024 so no per-field clamp fires.
+    const valueLen = Math.min(perField - 1, 1024);
+    const fields = Array.from({ length: 5 }, () => field("f", "x".repeat(valueLen)));
+    const { embeds } = buildPaginatedEmbeds({
+      category: "connections",
+      title: "T",
+      description: "D",
+      groups: [fields],
+    });
+    const rendered = embeds.flatMap((e) => e.fields ?? []);
+    // Every supplied field is present and no truncation note was added.
+    expect(rendered).toHaveLength(5);
+    expect(rendered.some((f) => f.name === "\u2026")).toBe(false);
+    const total = embeds.reduce(
+      (n, e) =>
+        n +
+        (e.title?.length ?? 0) +
+        (e.description?.length ?? 0) +
+        (e.footer?.text.length ?? 0) +
+        (e.fields ?? []).reduce((m, f) => m + f.name.length + f.value.length, 0),
+      0,
+    );
+    expect(total).toBeLessThanOrEqual(6000);
+  });
+
   it("clamps an over-long caller truncation field so it never breaches the caps", () => {
     const big = Array.from({ length: 400 }, (_, i) => field(`field-${i}`, "y".repeat(120)));
     const { embeds } = buildPaginatedEmbeds({
