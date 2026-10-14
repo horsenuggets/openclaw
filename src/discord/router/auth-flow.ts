@@ -198,21 +198,25 @@ export class OAuthPkceAuth implements AuthFlow {
     const verifier = base64url(random(32));
     const state = base64url(random(16));
     const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
-    // Seed provider extras first, then set the mandatory protocol params so an extra
-    // can never overwrite state / code_challenge / redirect_uri and silently weaken
-    // the PKCE and CSRF guarantees.
-    const params = new URLSearchParams(this.spec.extraAuthParams);
-    params.set("response_type", "code");
-    params.set("client_id", clientId);
-    params.set("redirect_uri", this.spec.redirectUri);
-    params.set("scope", this.spec.scopes.join(" "));
-    params.set("code_challenge", challenge);
-    params.set("code_challenge_method", "S256");
-    params.set("state", state);
+    // Build on the endpoint's own URL so any query it already carries (e.g. an
+    // `audience`) is preserved, then apply provider extras, then set the mandatory
+    // protocol params last so an extra can never overwrite state / code_challenge /
+    // redirect_uri and silently weaken the PKCE and CSRF guarantees.
+    const url = new URL(this.spec.authorizeEndpoint);
+    for (const [key, value] of Object.entries(this.spec.extraAuthParams ?? {})) {
+      url.searchParams.set(key, value);
+    }
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", this.spec.redirectUri);
+    url.searchParams.set("scope", this.spec.scopes.join(" "));
+    url.searchParams.set("code_challenge", challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+    url.searchParams.set("state", state);
     const pending: PkcePending = { verifier, state };
     return {
       howto: this.spec.howto,
-      url: `${this.spec.authorizeEndpoint}?${params.toString()}`,
+      url: url.toString(),
       pending: base64url(Buffer.from(JSON.stringify(pending), "utf8")),
     };
   }
@@ -276,10 +280,14 @@ export class OAuthPkceAuth implements AuthFlow {
    */
   private parseInput(input: string): { code?: string; state?: string; structured: boolean } {
     const trimmed = input.trim();
-    if (trimmed.includes("://") || trimmed.includes("?") || trimmed.includes("code=")) {
+    const hasScheme = trimmed.includes("://");
+    if (hasScheme || trimmed.includes("?") || trimmed.includes("code=")) {
       try {
-        // Tolerate a query-string fragment without a scheme by giving it a base.
-        const url = new URL(trimmed, "http://127.0.0.1");
+        // Normalize scheme-less inputs against a loopback base: a bare query string
+        // (`code=c&state=s`, no leading `?`) would otherwise parse as a path with no
+        // search params, so give it one.
+        const toParse = hasScheme ? trimmed : trimmed.includes("?") ? trimmed : `?${trimmed}`;
+        const url = new URL(toParse, "http://127.0.0.1");
         return {
           code: url.searchParams.get("code") ?? undefined,
           state: url.searchParams.get("state") ?? undefined,
@@ -314,7 +322,17 @@ export class OAuthPkceAuth implements AuthFlow {
     const now = this.spec.now ?? Date.now;
     const expiresAt =
       typeof body.expires_in === "number" ? now() + body.expires_in * 1000 : undefined;
-    const accountLabel = this.spec.identify ? await this.spec.identify(accessToken) : undefined;
+    // The account label is a nicety fetched AFTER the code is exchanged and consumed.
+    // A failure here must not discard the valid tokens (the code cannot be reused), so
+    // treat it as a missing label rather than failing the completed exchange.
+    let accountLabel: string | undefined;
+    if (this.spec.identify) {
+      try {
+        accountLabel = await this.spec.identify(accessToken);
+      } catch {
+        accountLabel = undefined;
+      }
+    }
     return {
       ok: true,
       token: accessToken,
@@ -323,6 +341,9 @@ export class OAuthPkceAuth implements AuthFlow {
     };
   }
 }
+
+/** Hard timeout for the token exchange, matching the direct-token validators. */
+const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
 
 /** Default token-exchange POST, used when the flow is not given a `postForm`. */
 async function defaultPostForm(
@@ -333,6 +354,9 @@ async function defaultPostForm(
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
     body: new URLSearchParams(form).toString(),
+    // Bound the request so an unresponsive token endpoint cannot hang the deferred
+    // Discord command for minutes.
+    signal: AbortSignal.timeout(TOKEN_EXCHANGE_TIMEOUT_MS),
   });
   let body: unknown = null;
   try {

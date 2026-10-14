@@ -131,6 +131,20 @@ describe("OAuthPkceAuth.begin", () => {
     expect(prompt.howto).toMatch(/not configured/i);
   });
 
+  it("preserves query parameters the authorize endpoint already carries", () => {
+    const auth = new OAuthPkceAuth({
+      authorizeEndpoint: "https://provider.example/authorize?audience=api",
+      tokenEndpoint: "https://provider.example/token",
+      clientId: () => "client-123",
+      redirectUri: "http://127.0.0.1",
+      scopes: ["read"],
+      randomBytes: (size: number) => Buffer.alloc(size, 7),
+    });
+    const url = new URL(auth.begin().url ?? "");
+    expect(url.searchParams.get("audience")).toBe("api");
+    expect(url.searchParams.get("response_type")).toBe("code");
+  });
+
   it("does not let provider extras override the security parameters", () => {
     const auth = new OAuthPkceAuth({
       authorizeEndpoint: "https://provider.example/authorize",
@@ -222,6 +236,35 @@ describe("OAuthPkceAuth.complete", () => {
     const result = await auth.complete("just-the-code", pending);
     expect(result.ok).toBe(true);
     expect(calls[0]?.form.code).toBe("just-the-code");
+  });
+
+  it("parses a scheme-less callback query string with no leading question mark", async () => {
+    const calls: TokenCall[] = [];
+    const auth = pkceAuth({ postForm: okPostForm(calls) });
+    const { pending } = auth.begin();
+    const state = (
+      JSON.parse(Buffer.from(pending ?? "", "base64").toString("utf8")) as { state: string }
+    ).state;
+    const result = await auth.complete(`code=the-code&state=${state}`, pending);
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.form.code).toBe("the-code");
+  });
+
+  it("keeps the tokens when the optional account lookup throws", async () => {
+    const auth = pkceAuth({
+      postForm: okPostForm([]),
+      identify: async () => {
+        throw new Error("profile endpoint 500");
+      },
+    });
+    const { pending } = auth.begin();
+    const result = await auth.complete("the-code", pending);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.token).toBe("at-abc");
+      expect(result.accountLabel).toBeUndefined();
+      expect(result.oauth?.refreshToken).toBe("rt-xyz");
+    }
   });
 
   it("rejects a state that does not match what begin minted", async () => {
