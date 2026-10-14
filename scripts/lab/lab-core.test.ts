@@ -16,6 +16,7 @@ import {
   isDateChannelName,
   LAB_EMBED_COLOR,
   nextThreadNumber,
+  parseExtraThreadMemberIds,
   pickHalf,
   reorderDayChannelsDescending,
   sanitizeThreadName,
@@ -47,6 +48,24 @@ describe("sanitizeThreadName", () => {
     expect(sanitizeThreadName("0123456789abcdefghijklmnopqrstu v")).toBe(
       "0123456789abcdefghijklmnopqrstu",
     );
+  });
+});
+
+describe("parseExtraThreadMemberIds", () => {
+  it("returns an empty list for undefined or empty input", () => {
+    expect(parseExtraThreadMemberIds(undefined)).toEqual([]);
+    expect(parseExtraThreadMemberIds("")).toEqual([]);
+    expect(parseExtraThreadMemberIds("   ")).toEqual([]);
+  });
+  it("splits on commas and whitespace and trims", () => {
+    expect(parseExtraThreadMemberIds("111, 222   333")).toEqual(["111", "222", "333"]);
+    expect(parseExtraThreadMemberIds(" 111 ,222 ")).toEqual(["111", "222"]);
+  });
+  it("dedupes, keeping first-seen order", () => {
+    expect(parseExtraThreadMemberIds("111,222,111,333,222")).toEqual(["111", "222", "333"]);
+  });
+  it("drops non-numeric junk tokens", () => {
+    expect(parseExtraThreadMemberIds("111, not-an-id, 222, <@333>")).toEqual(["111", "222"]);
   });
 });
 
