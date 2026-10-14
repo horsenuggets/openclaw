@@ -5,14 +5,14 @@
  * display metadata plus the auth flow it uses to link (see auth-flow.ts); the
  * registry is the single lookup surface the router and handler share.
  *
- * Phase 1 MVP ships the `DirectAuth` connectors (Todoist, Notion, GitHub) end to
- * end — the user pastes a personal token. Google is catalogued with `CliAuth` (gog)
- * but marked unavailable until the in-container credential path is resolved, so
- * `/connections` shows it as "coming soon" rather than hiding the top-priority
- * service; it will move to `OAuthPkceAuth` once client config and materialization land.
+ * The `DirectAuth` connectors (Todoist, Notion, GitHub) link end to end — the user
+ * pastes a personal token. Google uses `OAuthPkceAuth` (the two-step PKCE flow) but is
+ * marked unavailable until the deployment sets its client id and the captured credential
+ * materializes into the agent box, so `/connections` shows it as "coming soon" rather
+ * than hiding the top-priority service.
  */
 
-import { type AuthFlow, CliAuth, DirectAuth } from "./auth-flow.js";
+import { type AuthFlow, DirectAuth, OAuthPkceAuth } from "./auth-flow.js";
 import { validateGithub, validateNotion, validateTodoist } from "./connect-validators.js";
 
 export type Connector = {
@@ -126,6 +126,47 @@ export class ConnectorRegistry {
 }
 
 /**
+ * Google OAuth. Endpoints and scopes are public, universal constants (safe to keep
+ * in the repo). The client id is also public protocol config — it rides in every
+ * authorize URL, so it is NOT a secret — but it is per-deployment, so it is read from
+ * the environment at call time rather than hardcoded, and the connector stays
+ * unavailable until it is set (and the credential materializes into the box). The
+ * loopback redirect follows the native-app flow (RFC 8252): the user approves and is
+ * sent to a `http://127.0.0.1:<port>` URL, where nothing need listen — the code is in
+ * the URL, which they paste back. Google's installed-app loopback requires a concrete
+ * port, so a fixed one is used; the deployment must register this exact redirect URI on
+ * its OAuth client. `access_type=offline` + `prompt=consent` ask Google for a refresh
+ * token so the link can outlive the short-lived access token.
+ */
+const GOOGLE_AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_REDIRECT_URI = "http://127.0.0.1:8765";
+const GOOGLE_SCOPES: readonly string[] = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/contacts",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/documents",
+];
+
+/** Name the Google account from an access token via the userinfo endpoint. */
+async function identifyGoogleAccount(accessToken: string): Promise<string | undefined> {
+  const res = await fetch(GOOGLE_USERINFO_ENDPOINT, {
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    return undefined;
+  }
+  const body = (await res.json()) as { email?: unknown };
+  return typeof body.email === "string" ? body.email : undefined;
+}
+
+/**
  * The shared catalog, ordered for display. Order is intentional: the two
  * short-term priorities (Google, Todoist) come first.
  */
@@ -136,11 +177,24 @@ export const connectorRegistry = new ConnectorRegistry([
     summary: "Gmail, Calendar, Drive, Contacts, Sheets, and Docs via the gog CLI.",
     services: ["Gmail", "Calendar", "Drive", "Contacts", "Sheets", "Docs"],
     skills: ["gog"],
-    // Google needs the in-container credential path resolved first (see the
-    // "Resolve the no-credentials-in-box gap" task), so it is catalogued but not
-    // yet linkable in this prototype.
+    // Google authenticates via OAuth (PKCE, paste-based), but linking stays disabled
+    // until (a) the deployment sets OPENCLAW_GOOGLE_CLIENT_ID and (b) the captured
+    // credential actually materializes into the agent box (gog reads a credential
+    // file, not an env token — that is the materialization step). Flip to true once
+    // both land.
     available: false,
-    auth: new CliAuth({ tool: "gog" }),
+    auth: new OAuthPkceAuth({
+      authorizeEndpoint: GOOGLE_AUTHORIZE_ENDPOINT,
+      tokenEndpoint: GOOGLE_TOKEN_ENDPOINT,
+      clientId: () => process.env.OPENCLAW_GOOGLE_CLIENT_ID,
+      redirectUri: GOOGLE_REDIRECT_URI,
+      scopes: GOOGLE_SCOPES,
+      extraAuthParams: { access_type: "offline", prompt: "consent" },
+      howto:
+        "Open the link to approve access to your Google account, then paste the " +
+        "http://127.0.0.1:8765 URL your browser is sent to (it will not load — that is fine).",
+      identify: identifyGoogleAccount,
+    }),
   },
   {
     id: "todoist",

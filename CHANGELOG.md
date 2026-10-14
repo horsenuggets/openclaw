@@ -6,6 +6,15 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: wired the OAuth link end to end. `/connections add <service>` on an
+  OAuth connector now shows the authorize link and persists the PKCE `pending` blob
+  (verifier + CSRF state) via a new per-instance `PendingAuthStore`
+  (`pending-auth-store.ts`, owner-bound `.pending-auth.json`, instance-key guarded); the
+  follow-up `/connections add <service> <pasted-url-or-code>` loads that blob, completes
+  the exchange, stores the link, and clears the blob. Google adopts `OAuthPkceAuth` (real
+  endpoints + scopes, loopback redirect, client id from `OPENCLAW_GOOGLE_CLIENT_ID`,
+  account label via userinfo) but stays unavailable until that env is set and the
+  credential materializes into the box. Direct-token connectors are unchanged.
 - Discord router: reworked connector auth into an `AuthFlow` model (`auth-flow.ts`,
   renamed from `connector-auth.ts`) described by two independent axes — `authKind`
   (`oauth` | `direct` | `cli`) and `delivery` (`paste` | `server-redirect`), plus a

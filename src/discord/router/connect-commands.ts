@@ -6,9 +6,11 @@
  * and token validation are injected (ConnectCommandDeps) so this module never
  * touches the filesystem or network and stays unit-testable.
  *
- * Phase 1 MVP: `paste-token` connectors (Todoist, Notion, GitHub) link end to
- * end; Google is shown as coming soon. OAuth-PKCE and a router-side credential
- * broker are later phases.
+ * Direct-token connectors (Todoist, Notion, GitHub) link in one step: paste a token.
+ * OAuth connectors link in two steps: the first `add` shows an authorize link and
+ * stashes a `pending` blob (PKCE verifier + CSRF state) via the injected
+ * PendingAuthStore; the second `add` (with the pasted redirect URL or code) completes
+ * the exchange. A router-side credential broker is a later phase.
  */
 
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
@@ -47,7 +49,8 @@ export const CONNECTIONS_COMMAND_SPEC = {
         },
         {
           name: "token",
-          description: "Paste your API token (omit to get setup instructions first)",
+          description:
+            "Paste your token, or the OAuth redirect URL (omit for setup instructions first)",
           type: 3,
           required: false,
         },
@@ -116,8 +119,31 @@ export type ConnectionStore = {
 
 export type RemoveResult = "removed" | "absent" | "error";
 
+/**
+ * Storage for an in-flight OAuth link's between-step `pending` blob (the PKCE
+ * verifier + CSRF state), keyed by channel and connector. `begin()` mints the blob
+ * and the user finishes with a second `/connections add` command, so it must persist
+ * across the two calls. Backed per-instance by pending-auth-store.ts; injected here so
+ * the handler stays fs-free. Flows that carry no between-step state (direct tokens)
+ * never touch it.
+ */
+export type PendingAuthStore = {
+  /** The pending blob for a connector, or null when none is in flight. */
+  get: (channelId: string, connectorId: string) => string | null;
+  /**
+   * Persist the pending blob, but only if the channel still maps to the instance
+   * identified by `expectedKey` (same guard as the connection store). Returns false
+   * (writing nothing) when the registration changed or storage is unavailable.
+   */
+  save: (channelId: string, connectorId: string, pending: string, expectedKey: string) => boolean;
+  /** Drop the pending blob once the exchange completes (best-effort; never throws). */
+  remove: (channelId: string, connectorId: string) => void;
+};
+
 export type ConnectCommandDeps = {
   store: ConnectionStore;
+  /** Between-step storage for OAuth flows (see {@link PendingAuthStore}). */
+  pendingAuth: PendingAuthStore;
   /**
    * The connector catalog. Injected so tests can supply network-free connectors
    * while the router wires the real registry (with live token validation).
@@ -455,36 +481,96 @@ export async function handleConnectCommand(
 
     const token = ctx.args[1];
     if (!token) {
-      // No token yet: show setup instructions from the connector's auth flow. The
-      // user comes back with `/connections add <service> <token>` (or the slash
-      // command's token option).
+      // No token yet: show how to start linking. begin() returns instructions and,
+      // for OAuth, an authorize URL plus an opaque `pending` blob (the PKCE verifier
+      // + CSRF state) that complete() needs. Persist that blob, keyed to this
+      // instance, so the user's second command can finish the exchange.
       const prompt = connector.auth.begin();
+      if (prompt.pending) {
+        const stored = deps.pendingAuth.save(
+          ctx.channelId,
+          connector.id,
+          prompt.pending,
+          instanceKey,
+        );
+        if (!stored) {
+          await ctx.reply(
+            connectionsReply(
+              `Link ${connector.label}`,
+              withScrubNote(
+                "I could not start the link right now (its storage is unavailable, or the " +
+                  `channel's registration changed). Please try \`/connections add ${connector.id}\` again.`,
+              ),
+            ),
+            { ephemeral: true },
+          );
+          return;
+        }
+      }
       const howto = prompt.howto ? `\n\n${prompt.howto}` : "";
-      const link = prompt.url ? `\n${prompt.url}` : "";
+      const linkLine = prompt.url ? `\n${prompt.url}` : "";
+      // OAuth starts with an authorize link and finishes by pasting the redirect URL;
+      // a direct connector finishes by pasting the token itself.
+      const finish =
+        connector.auth.outgoing === "link"
+          ? "\n\nApprove access at the link above, then paste the URL you are redirected to " +
+            `(or the code it shows) with \`/connections add ${connector.id} <pasted>\`.`
+          : `\n\nThen run \`/connections add ${connector.id} <token>\` to finish. ` +
+            "Your message with the token is deleted right after so it does not stay in chat.";
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
-          `${connector.summary}${howto}${link}\n\nThen run \`/connections add ${connector.id} <token>\` to finish. ` +
-            `Your message with the token is deleted right after so it does not stay in chat.`,
+          `${connector.summary}${howto}${linkLine}${finish}`,
         ),
         { ephemeral: true },
       );
       return;
     }
 
-    const result = await connector.auth.complete(token);
+    // Finish the link. For OAuth, hand complete() the pending blob begin() stored so
+    // it can verify the CSRF state and exchange the code with the original verifier;
+    // a direct connector ignores it.
+    const pending = deps.pendingAuth.get(ctx.channelId, connector.id) ?? undefined;
+    const result = await connector.auth.complete(token, pending);
+    // OAuth and direct connectors fail differently: an OAuth user pasted a redirect
+    // URL/code and must restart the authorize dance, while a direct user re-pastes a
+    // token. Shape the copy off the flow so the retry instruction is actionable.
+    const isOAuth = connector.auth.outgoing === "link";
+    const reason = result.ok ? "" : result.message ? ` (${result.message})` : "";
     if (!result.ok) {
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
           withScrubNote(
-            `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
-              `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
+            isOAuth
+              ? `That did not work${reason}. Start over with \`/connections add ${connector.id}\`, ` +
+                  "approve again, and paste the new URL."
+              : `That token did not work${reason}. ` +
+                  `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
           ),
         ),
         { ephemeral: true },
       );
       deps.log(`[connect] ${connector.id} validation failed for ${ctx.userId}`);
+      return;
+    }
+    // Guard against a concurrent restart: the token exchange above is the only await
+    // here, so if `begin()` replaced the pending blob while it was in flight, this
+    // completion is stale. Reject it rather than persist the superseded account and
+    // clobber the newer attempt's pending. (No further await follows, so the value
+    // cannot change again between this check and the save/remove below.)
+    if (pending !== undefined && deps.pendingAuth.get(ctx.channelId, connector.id) !== pending) {
+      await ctx.reply(
+        connectionsReply(
+          `Link ${connector.label}`,
+          withScrubNote(
+            "A newer link attempt replaced this one. Please finish the most recent " +
+              `\`/connections add ${connector.id}\` you started.`,
+          ),
+        ),
+        { ephemeral: true },
+      );
+      deps.log(`[connect] ${connector.id} completion superseded for ${ctx.userId}`);
       return;
     }
     const saved = saveLinked(
@@ -496,13 +582,16 @@ export async function handleConnectCommand(
       instanceKey,
     );
     if (!saved) {
+      const retry = isOAuth
+        ? `start over with \`/connections add ${connector.id}\``
+        : `try \`/connections add ${connector.id} <token>\` again`;
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
           withScrubNote(
-            "I verified the token but could not store the link (the channel may have been " +
-              "unregistered, or its storage is unavailable). Please try " +
-              `\`/connections add ${connector.id} <token>\` again.`,
+            `I verified the ${isOAuth ? "authorization" : "token"} but could not store the link ` +
+              "(the channel may have been unregistered, or its storage is unavailable). " +
+              `Please ${retry}.`,
           ),
         ),
         { ephemeral: true },
@@ -510,6 +599,10 @@ export async function handleConnectCommand(
       deps.log(`[connect] ${connector.id} save failed for ${ctx.userId} (not persisted)`);
       return;
     }
+    // The link is stored, so any OAuth pending blob is consumed; drop it (no-op for
+    // direct connectors, which never stored one). Kept on failure above so the user
+    // can retry the paste against the same authorize session.
+    deps.pendingAuth.remove(ctx.channelId, connector.id);
     await ctx.reply(
       connectionsReply(
         "Connected!",
