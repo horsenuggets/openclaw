@@ -137,7 +137,7 @@ type PkcePending = { verifier: string; state: string };
 /**
  * Link through the OAuth 2.0 authorization-code flow with PKCE (RFC 7636). The user
  * opens the authorize URL, approves, and the provider redirects to a loopback URI
- * (nothing need listen — the code sits in the URL's query string); the user pastes
+ * (nothing needs to listen — the code sits in the URL's query string); the user pastes
  * that redirect URL (or the bare code) via `/secret`, and `complete()` exchanges it,
  * proving possession of the original code verifier. No client secret is used, so this
  * suits a public client; a provider that requires a secret needs the plain-OAuth flow.
@@ -188,20 +188,27 @@ export class OAuthPkceAuth implements AuthFlow {
   ) {}
 
   begin(): AuthPrompt {
+    const clientId = this.spec.clientId();
+    if (!clientId) {
+      // A missing client id is a configuration error; surface it rather than minting
+      // an authorize link with an empty client_id that only fails later at the provider.
+      return { howto: "This connector is not configured yet (missing OAuth client id)." };
+    }
     const random = this.spec.randomBytes ?? crypto.randomBytes;
     const verifier = base64url(random(32));
     const state = base64url(random(16));
     const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
-    const params = new URLSearchParams({
-      response_type: "code",
-      client_id: this.spec.clientId() ?? "",
-      redirect_uri: this.spec.redirectUri,
-      scope: this.spec.scopes.join(" "),
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      state,
-      ...this.spec.extraAuthParams,
-    });
+    // Seed provider extras first, then set the mandatory protocol params so an extra
+    // can never overwrite state / code_challenge / redirect_uri and silently weaken
+    // the PKCE and CSRF guarantees.
+    const params = new URLSearchParams(this.spec.extraAuthParams);
+    params.set("response_type", "code");
+    params.set("client_id", clientId);
+    params.set("redirect_uri", this.spec.redirectUri);
+    params.set("scope", this.spec.scopes.join(" "));
+    params.set("code_challenge", challenge);
+    params.set("code_challenge_method", "S256");
+    params.set("state", state);
     const pending: PkcePending = { verifier, state };
     return {
       howto: this.spec.howto,
@@ -214,6 +221,12 @@ export class OAuthPkceAuth implements AuthFlow {
     if (!input) {
       return { ok: false, message: "No authorization code provided" };
     }
+    if (!this.spec.clientId()) {
+      return {
+        ok: false,
+        message: "This connector is not configured yet (missing OAuth client id).",
+      };
+    }
     const flowState = this.parsePending(pending);
     if (!flowState) {
       return { ok: false, message: "Missing or invalid authorization state; start the link again" };
@@ -222,10 +235,12 @@ export class OAuthPkceAuth implements AuthFlow {
     if (!parsed.code) {
       return { ok: false, message: "Could not find an authorization code in what you pasted" };
     }
-    // A full redirect URL carries the CSRF state; verify it. A bare pasted code has
-    // none to check (some providers only surface the code), so it is accepted as-is.
-    if (parsed.state !== undefined && parsed.state !== flowState.state) {
-      return { ok: false, message: "Authorization state did not match; start the link again" };
+    // A redirect URL carries the CSRF state and must match exactly. Only a bare pasted
+    // code (no URL structure) may omit it, since some providers surface just the code.
+    if (parsed.structured) {
+      if (parsed.state !== flowState.state) {
+        return { ok: false, message: "Authorization state did not match; start the link again" };
+      }
     }
     try {
       return await this.exchange(parsed.code, flowState.verifier);
@@ -254,8 +269,12 @@ export class OAuthPkceAuth implements AuthFlow {
     return null;
   }
 
-  /** Pull the code (and state, when present) out of either a redirect URL or a bare code. */
-  private parseInput(input: string): { code?: string; state?: string } {
+  /**
+   * Pull the code (and state) out of either a redirect URL/query string or a bare code.
+   * `structured` is true for a redirect-shaped input, which must carry a verifiable
+   * state; a bare code (false) cannot and is the only input allowed to omit it.
+   */
+  private parseInput(input: string): { code?: string; state?: string; structured: boolean } {
     const trimmed = input.trim();
     if (trimmed.includes("://") || trimmed.includes("?") || trimmed.includes("code=")) {
       try {
@@ -264,12 +283,13 @@ export class OAuthPkceAuth implements AuthFlow {
         return {
           code: url.searchParams.get("code") ?? undefined,
           state: url.searchParams.get("state") ?? undefined,
+          structured: true,
         };
       } catch {
-        return {};
+        return { structured: true };
       }
     }
-    return { code: trimmed };
+    return { code: trimmed, structured: false };
   }
 
   private async exchange(code: string, verifier: string): Promise<AuthResult> {

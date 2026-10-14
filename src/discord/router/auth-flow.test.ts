@@ -116,11 +116,46 @@ describe("OAuthPkceAuth.begin", () => {
   });
 
   it("reads the client id lazily at begin time", () => {
-    let id: string | undefined;
+    let id: string | undefined = "first-id";
     const auth = pkceAuth({ clientId: () => id });
-    expect(new URL(auth.begin().url ?? "").searchParams.get("client_id")).toBe("");
+    expect(new URL(auth.begin().url ?? "").searchParams.get("client_id")).toBe("first-id");
     id = "later-id";
     expect(new URL(auth.begin().url ?? "").searchParams.get("client_id")).toBe("later-id");
+  });
+
+  it("refuses to mint a link when the client id is not configured", () => {
+    const auth = pkceAuth({ clientId: () => undefined });
+    const prompt = auth.begin();
+    expect(prompt.url).toBeUndefined();
+    expect(prompt.pending).toBeUndefined();
+    expect(prompt.howto).toMatch(/not configured/i);
+  });
+
+  it("does not let provider extras override the security parameters", () => {
+    const auth = new OAuthPkceAuth({
+      authorizeEndpoint: "https://provider.example/authorize",
+      tokenEndpoint: "https://provider.example/token",
+      clientId: () => "client-123",
+      redirectUri: "http://127.0.0.1",
+      scopes: ["read"],
+      // Hostile extras that try to weaken PKCE/CSRF.
+      extraAuthParams: {
+        code_challenge_method: "plain",
+        state: "attacker",
+        code_challenge: "attacker",
+        redirect_uri: "https://evil.example",
+      },
+      randomBytes: (size: number) => Buffer.alloc(size, 7),
+    });
+    const prompt = auth.begin();
+    const url = new URL(prompt.url ?? "");
+    const minted = JSON.parse(Buffer.from(prompt.pending ?? "", "base64").toString("utf8")) as {
+      state: string;
+    };
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("state")).toBe(minted.state);
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1");
+    expect(url.searchParams.get("code_challenge")).not.toBe("attacker");
   });
 });
 
@@ -197,6 +232,31 @@ describe("OAuthPkceAuth.complete", () => {
       ok: false,
       message: "Authorization state did not match; start the link again",
     });
+  });
+
+  it("rejects a redirect URL that carries no state (no CSRF bypass)", async () => {
+    const postForm = vi.fn(okPostForm([]));
+    const auth = pkceAuth({ postForm });
+    const { pending } = auth.begin();
+    const result = await auth.complete("http://127.0.0.1/?code=c", pending);
+    expect(result).toEqual({
+      ok: false,
+      message: "Authorization state did not match; start the link again",
+    });
+    expect(postForm).not.toHaveBeenCalled();
+  });
+
+  it("refuses the exchange when the client id is not configured", async () => {
+    const postForm = vi.fn(okPostForm([]));
+    const auth = pkceAuth({ postForm, clientId: () => undefined });
+    // pending from a configured run, to isolate the client-id guard.
+    const { pending } = pkceAuth().begin();
+    const result = await auth.complete("the-code", pending);
+    expect(result).toEqual({
+      ok: false,
+      message: "This connector is not configured yet (missing OAuth client id).",
+    });
+    expect(postForm).not.toHaveBeenCalled();
   });
 
   it("rejects when the pending state is missing or unparseable", async () => {

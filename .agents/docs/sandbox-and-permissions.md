@@ -59,14 +59,14 @@ show the user) and `complete(input, pending)` (verify + capture). Flows:
 - `OAuthPkceAuth` — the standard OAuth authorization-code flow with PKCE (RFC 7636).
   `begin()` mints a `code_verifier` + `code_challenge` (S256) + CSRF `state` and returns
   the authorize URL plus an opaque `pending` blob (the verifier + state); the user
-  approves, lands on a loopback redirect (nothing need listen — the code is in the URL),
-  and pastes that URL (or the bare code) via `/secret`; `complete()` validates the state
-  and exchanges the code + verifier for tokens. No client secret (public client); the
-  client id is read from the environment at call time, never hardcoded. The MVP delivery
-  is `paste`; a hosted `server-redirect` that auto-completes is a later UX upgrade. NOTE:
-  `complete()` is not yet wired to a catalog connector — the handler must persist the
-  `pending` blob between the two commands first, and a connector must adopt the flow
-  (Google, once client config + materialization land). The class is complete and
+  approves, lands on a loopback redirect (nothing needs to listen — the code is in the
+  URL), and pastes that URL (or the bare code) via `/secret`; `complete()` validates the
+  state and exchanges the code + verifier for tokens. No client secret (public client);
+  the client id is read from the environment at call time, never hardcoded. The MVP
+  delivery is `paste`; a hosted `server-redirect` that auto-completes is a later UX
+  upgrade. NOTE: `complete()` is not yet wired to a catalog connector — the handler must
+  persist the `pending` blob between the two commands first, and a connector must adopt
+  the flow (Google, once client config + materialization land). The class is complete and
   unit-tested in the meantime.
 - `CliAuth` — a local CLI login (gog); a placeholder until the in-container path is
   resolved.
