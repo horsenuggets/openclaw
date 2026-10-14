@@ -238,6 +238,26 @@ describe("OAuthPkceAuth.complete", () => {
     expect(calls[0]?.form.code).toBe("just-the-code");
   });
 
+  it("keeps an opaque bare code that happens to contain a question mark", async () => {
+    const calls: TokenCall[] = [];
+    const auth = pkceAuth({ postForm: okPostForm(calls) });
+    const { pending } = auth.begin();
+    const result = await auth.complete("abc?def", pending);
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.form.code).toBe("abc?def");
+  });
+
+  it("resolves the lazy client id exactly once per completion", async () => {
+    const calls: TokenCall[] = [];
+    const clientId = vi.fn(() => "client-123");
+    const auth = pkceAuth({ postForm: okPostForm(calls), clientId });
+    const { pending } = auth.begin();
+    clientId.mockClear(); // ignore begin()'s read; count only the completion
+    await auth.complete("the-code", pending);
+    expect(clientId).toHaveBeenCalledTimes(1);
+    expect(calls[0]?.form.client_id).toBe("client-123");
+  });
+
   it("parses a scheme-less callback query string with no leading question mark", async () => {
     const calls: TokenCall[] = [];
     const auth = pkceAuth({ postForm: okPostForm(calls) });

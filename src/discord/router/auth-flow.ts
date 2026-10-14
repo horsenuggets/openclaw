@@ -225,7 +225,10 @@ export class OAuthPkceAuth implements AuthFlow {
     if (!input) {
       return { ok: false, message: "No authorization code provided" };
     }
-    if (!this.spec.clientId()) {
+    // Resolve the lazy client id ONCE for this completion so the guard and the exchange
+    // can never disagree if configuration changes between the two reads.
+    const clientId = this.spec.clientId();
+    if (!clientId) {
       return {
         ok: false,
         message: "This connector is not configured yet (missing OAuth client id).",
@@ -247,7 +250,7 @@ export class OAuthPkceAuth implements AuthFlow {
       }
     }
     try {
-      return await this.exchange(parsed.code, flowState.verifier);
+      return await this.exchange(parsed.code, flowState.verifier, clientId);
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : "network error" };
     }
@@ -281,7 +284,11 @@ export class OAuthPkceAuth implements AuthFlow {
   private parseInput(input: string): { code?: string; state?: string; structured: boolean } {
     const trimmed = input.trim();
     const hasScheme = trimmed.includes("://");
-    if (hasScheme || trimmed.includes("?") || trimmed.includes("code=")) {
+    // Treat as a callback only for a real URL or a query string that actually carries a
+    // `code=` parameter (at the start or after a `?`/`&`). An opaque bare code that just
+    // happens to contain a `?` is not a callback and is kept whole.
+    const looksLikeCallbackQuery = /(^|[?&])code=/.test(trimmed);
+    if (hasScheme || looksLikeCallbackQuery) {
       try {
         // Normalize scheme-less inputs against a loopback base: a bare query string
         // (`code=c&state=s`, no leading `?`) would otherwise parse as a path with no
@@ -300,13 +307,13 @@ export class OAuthPkceAuth implements AuthFlow {
     return { code: trimmed, structured: false };
   }
 
-  private async exchange(code: string, verifier: string): Promise<AuthResult> {
+  private async exchange(code: string, verifier: string, clientId: string): Promise<AuthResult> {
     const post = this.spec.postForm ?? defaultPostForm;
     const res = await post(this.spec.tokenEndpoint, {
       grant_type: "authorization_code",
       code,
       redirect_uri: this.spec.redirectUri,
-      client_id: this.spec.clientId() ?? "",
+      client_id: clientId,
       code_verifier: verifier,
     });
     if (!res.ok) {
