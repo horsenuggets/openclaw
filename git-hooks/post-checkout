@@ -1,11 +1,14 @@
 #!/bin/sh
-# Install dependencies when a new worktree (or clone) is first checked out, so
-# node_modules exists and the tracked git-hooks/pre-commit formatter (pnpm exec
-# oxfmt/prettier) actually runs instead of silently no-opping with
-# "Command oxfmt not found". Git runs post-checkout with: $1 = previous HEAD,
-# $2 = new HEAD, $3 = 1 for a branch checkout / 0 for a file checkout. A fresh
-# worktree or clone reports the all-zero oid as $1 with the branch flag set, so
-# we only act in that case and skip ordinary branch switches.
+# Provision a new worktree (or clone) on first checkout so it behaves like the
+# main one: copy the gitignored env files and .prod-mirror rig dir that linked
+# worktrees never get, then install dependencies so the tracked
+# git-hooks/pre-commit formatter (pnpm exec oxfmt/prettier) actually runs
+# instead of silently no-opping with "Command oxfmt not found".
+#
+# Git runs post-checkout with: $1 = previous HEAD, $2 = new HEAD, $3 = 1 for a
+# branch checkout / 0 for a file checkout. A fresh worktree or clone reports the
+# all-zero oid as $1 with the branch flag set, so we only act in that case and
+# skip ordinary branch switches.
 PREV_HEAD=$1
 BRANCH_FLAG=$3
 
@@ -14,18 +17,43 @@ case "$PREV_HEAD" in
   *[!0]*) exit 0 ;; # not the all-zero oid, so this is a normal checkout
 esac
 
-# Opt-out for throwaway worktrees where deps are not needed.
+# Opt-out for throwaway worktrees that want nothing auto-provisioned.
 [ "${OPENCLAW_SKIP_WORKTREE_INSTALL:-}" = "1" ] && exit 0
 
-# Already populated (e.g. re-added worktree), nothing to do.
-[ -d node_modules ] && exit 0
-
-if [ -f pnpm-lock.yaml ] && command -v pnpm >/dev/null 2>&1; then
-  echo "post-checkout: installing dependencies for new worktree (pnpm install)..." >&2
-  CI=true pnpm install || echo "post-checkout: pnpm install failed; run it manually before committing." >&2
-else
-  echo "post-checkout: pnpm not found; run 'pnpm install' in this worktree before committing." >&2
+# Locate the main worktree (the parent of the shared git dir) to copy from. On a
+# fresh clone this resolves to the checkout itself, so the self-copy guard below
+# turns the copies into no-ops.
+main_root=""
+common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+if [ -n "$common_dir" ]; then
+  abs_common=$(unset CDPATH; cd -- "$common_dir" 2>/dev/null && pwd)
+  [ -n "$abs_common" ] && main_root=$(dirname "$abs_common")
 fi
 
-# Never block worktree creation on install result.
+if [ -n "$main_root" ] && [ "$main_root" != "$(pwd)" ]; then
+  # Gitignored secrets (0600); -p preserves the restrictive mode. Never clobber.
+  for env_file in .env .env.mirror; do
+    if [ -f "$main_root/$env_file" ] && [ ! -e "$env_file" ]; then
+      cp -p "$main_root/$env_file" "$env_file" &&
+        echo "post-checkout: copied $env_file from the main worktree." >&2
+    fi
+  done
+  # Prod-mirror rig scripts + box.env, needed for deploy --build from a branch.
+  if [ -d "$main_root/.prod-mirror" ] && [ ! -e .prod-mirror ]; then
+    cp -Rp "$main_root/.prod-mirror" .prod-mirror &&
+      echo "post-checkout: copied .prod-mirror from the main worktree." >&2
+  fi
+fi
+
+# Install deps unless this worktree already has them (e.g. a re-added worktree).
+if [ ! -d node_modules ]; then
+  if [ -f pnpm-lock.yaml ] && command -v pnpm >/dev/null 2>&1; then
+    echo "post-checkout: installing dependencies for new worktree (pnpm install)..." >&2
+    CI=true pnpm install || echo "post-checkout: pnpm install failed; run it manually before committing." >&2
+  else
+    echo "post-checkout: pnpm not found; run 'pnpm install' in this worktree before committing." >&2
+  fi
+fi
+
+# Never block worktree creation on provisioning results.
 exit 0
