@@ -12,5 +12,3 @@ export const MAX_EMBEDS_PER_MESSAGE = 10;
 export const MAX_FIELDS_PER_EMBED = 25;
 export const MAX_FIELD_NAME_CHARS = 256;
 export const MAX_FIELD_VALUE_CHARS = 1024;
-/** Characters reserved from the message budget for an appended truncation note. */
-export const TRUNCATION_RESERVE = 160;
