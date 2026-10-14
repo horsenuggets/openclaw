@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { PasteTokenAuth } from "./connector-auth.js";
 import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
 
+function connector(id: string, skills: string[]): Connector {
+  return {
+    id,
+    label: id,
+    summary: "",
+    services: ["x"],
+    skills,
+    available: true,
+    auth: new PasteTokenAuth({
+      url: `https://${id}`,
+      howto: "",
+      validate: async () => ({ ok: true }),
+    }),
+  };
+}
+
 describe("connectorRegistry.get", () => {
   it("resolves ids case-insensitively", () => {
     expect(connectorRegistry.get("todoist")?.label).toBe("Todoist");
@@ -71,6 +87,7 @@ describe("connectorRegistry.forSkill", () => {
   it("returns null for unknown or empty skill keys", () => {
     expect(connectorRegistry.forSkill("slack")).toBeNull();
     expect(connectorRegistry.forSkill("")).toBeNull();
+    expect(connectorRegistry.forSkill("   ")).toBeNull();
     expect(connectorRegistry.forSkill(undefined)).toBeNull();
   });
 
@@ -102,21 +119,18 @@ describe("connectorRegistry.forSkill", () => {
   });
 
   it("rejects a catalog where two connectors claim the same skill", () => {
-    const connector = (id: string, skills: string[]): Connector => ({
-      id,
-      label: id,
-      summary: "",
-      services: ["x"],
-      skills,
-      available: true,
-      auth: new PasteTokenAuth({
-        url: `https://${id}`,
-        howto: "",
-        validate: async () => ({ ok: true }),
-      }),
-    });
     expect(
       () => new ConnectorRegistry([connector("a", ["shared"]), connector("b", ["shared"])]),
     ).toThrow(/claimed by connectors/);
+  });
+
+  it("rejects skill claims that differ only by whitespace or casing", () => {
+    expect(
+      () => new ConnectorRegistry([connector("a", ["shared"]), connector("b", ["  SHARED  "])]),
+    ).toThrow(/claimed by connectors/);
+  });
+
+  it("rejects whitespace-only skill keys", () => {
+    expect(() => new ConnectorRegistry([connector("a", ["   "])])).toThrow(/empty skill key/);
   });
 });

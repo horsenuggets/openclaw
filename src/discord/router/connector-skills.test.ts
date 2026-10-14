@@ -64,14 +64,14 @@ describe("enabledSkillKeys", () => {
     expect(enabledSkillKeys(connections, connectorRegistry)).toEqual(["todoist", "github"]);
   });
 
-  it("dedupes a skill a connector lists more than once", () => {
+  it("normalizes and dedupes skill-key variants a connector lists more than once", () => {
     const registry = new ConnectorRegistry([
       {
         id: "a",
         label: "A",
         summary: "",
         services: ["x"],
-        skills: ["dup", "dup", "only-a"],
+        skills: ["dup", " DUP ", "only-a"],
         available: true,
         auth: new PasteTokenAuth({
           url: "https://a",
@@ -79,27 +79,13 @@ describe("enabledSkillKeys", () => {
           validate: async () => ({ ok: true }),
         }),
       },
+    ]);
+    expect(skillsEnabledByConnection(connection("a", "linked"), registry)).toEqual([
+      "dup",
+      " DUP ",
+      "only-a",
     ]);
     expect(enabledSkillKeys([connection("a", "linked")], registry)).toEqual(["dup", "only-a"]);
-  });
-
-  it("dedupes case/whitespace variants of a skill, keeping the first spelling", () => {
-    const registry = new ConnectorRegistry([
-      {
-        id: "a",
-        label: "A",
-        summary: "",
-        services: ["x"],
-        skills: ["GOG", " gog "],
-        available: true,
-        auth: new PasteTokenAuth({
-          url: "https://a",
-          howto: "",
-          validate: async () => ({ ok: true }),
-        }),
-      },
-    ]);
-    expect(enabledSkillKeys([connection("a", "linked")], registry)).toEqual(["GOG"]);
   });
 
   it("is empty when no connection is linked", () => {

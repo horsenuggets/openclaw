@@ -67,6 +67,9 @@ export class ConnectorRegistry {
     for (const connector of connectors) {
       for (const skillKey of connector.skills) {
         const key = normalizeSkillKey(skillKey);
+        if (!key) {
+          throw new Error(`Connector "${connector.id}" has an empty skill key`);
+        }
         const owner = this.bySkill.get(key);
         if (owner && owner.id !== connector.id) {
           throw new Error(
@@ -92,8 +95,8 @@ export class ConnectorRegistry {
   }
 
   /**
-   * The connector that owns a skill key (case-insensitive), or null when no
-   * connector enables it. This is the inverse of {@link Connector.skills}, and it
+   * The connector that owns a skill key (trimmed and case-insensitive), or null when
+   * no connector enables it. This is the inverse of {@link Connector.skills}, and it
    * is unambiguous: the constructor guarantees each skill belongs to exactly one
    * connector, so the lookup can never silently drop a competing owner.
    */
@@ -101,7 +104,11 @@ export class ConnectorRegistry {
     if (!skillKey) {
       return null;
     }
-    return this.bySkill.get(normalizeSkillKey(skillKey)) ?? null;
+    const key = normalizeSkillKey(skillKey);
+    if (!key) {
+      return null;
+    }
+    return this.bySkill.get(key) ?? null;
   }
 
   /** Connectors a user can link right now. */

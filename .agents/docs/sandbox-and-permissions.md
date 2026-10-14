@@ -61,6 +61,8 @@ catches it), which means paste-token connections are not currently persisted or
 materialized into the boxes in production. Treat the connection store as best-effort until
 that mount is made writable.
 
+Skill keys are trimmed and case-insensitive throughout registry lookup and resolution.
+
 The `/connections` slash-command reply is ephemeral by default, but — like `/debug` and
 `/lifecycle` — it now honors the per-channel `ephemeralCommands` preference: a channel set
 public via `/debug ephemeral off` defers its output with `flags: 0` so the result persists
