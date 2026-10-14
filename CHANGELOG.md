@@ -3,9 +3,11 @@
 Docs: https://docs.openclaw.ai
 
 ## 2026.2.4
-
 ### Changes
 
+- Discord router: replaced the Debug embed footer icon with the Material Symbols
+  `bug_report` glyph (36px, `#ff80e0`), dropping the viewfinder frame corners so the whole
+  bug shows.
 - Discord router: wired the OAuth link end to end. `/connections add <service>` on an
   OAuth connector now shows the authorize link and persists the PKCE `pending` blob
   (verifier + CSRF state) via a new per-instance `PendingAuthStore`
@@ -791,14 +793,12 @@ Docs: https://docs.openclaw.ai
 - macOS: fix cron payload summary rendering and ISO 8601 formatter concurrency safety.
 
 ## 2026.2.2-3
-
 ### Fixes
 
 - Update: ship legacy daemon-cli shim for pre-tsdown update imports (fixes daemon restart
   after npm update).
 
 ## 2026.2.2-2
-
 ### Changes
 
 - Docs: promote BlueBubbles as the recommended iMessage integration; mark imsg channel as
@@ -810,14 +810,12 @@ Docs: https://docs.openclaw.ai
   builds).
 
 ## 2026.2.2-1
-
 ### Fixes
 
 - CLI status: fall back to build-info for version detection (fixes "unknown" in beta
   builds). Thanks @gumadeira.
 
 ## 2026.2.2
-
 ### Changes
 
 - Feishu: add Feishu/Lark plugin support + docs. (#7313) Thanks @jiulingyun (openclaw-cn).
@@ -889,7 +887,6 @@ Docs: https://docs.openclaw.ai
   @joshp123.
 
 ## 2026.2.1
-
 ### Changes
 
 - Docs: onboarding/install/i18n/exec-approvals/Control UI/exe.dev/cacheRetention updates +
@@ -969,7 +966,6 @@ Docs: https://docs.openclaw.ai
   Thanks @MegaManSec.
 
 ## 2026.1.31
-
 ### Changes
 
 - Docs: onboarding/install/i18n/exec-approvals/Control UI/exe.dev/cacheRetention updates +
@@ -1049,7 +1045,6 @@ Docs: https://docs.openclaw.ai
   Thanks @MegaManSec.
 
 ## 2026.1.30
-
 ### Changes
 
 - CLI: add `completion` command (Zsh/Bash/PowerShell/Fish) and auto-setup during
@@ -1095,7 +1090,6 @@ Docs: https://docs.openclaw.ai
 - Build: skip redundant UI install step in Dockerfile. (#4584) Thanks @obviyus.
 
 ## 2026.1.29
-
 ### Changes
 
 - Rebrand: rename the npm package/CLI to `openclaw`, add a `openclaw` compatibility shim,
@@ -1286,7 +1280,6 @@ Docs: https://docs.openclaw.ai
   and CLI flags.
 
 ## 2026.1.24-3
-
 ### Fixes
 
 - Slack: fix image downloads failing due to missing Authorization header on cross-origin
@@ -1299,21 +1292,18 @@ Docs: https://docs.openclaw.ai
   @rmorse.
 
 ## 2026.1.24-2
-
 ### Fixes
 
 - Packaging: include dist/link-understanding output in npm tarball (fixes missing apply.js
   import on install).
 
 ## 2026.1.24-1
-
 ### Fixes
 
 - Packaging: include dist/shared output in npm tarball (fixes missing reasoning-tags
   import on install).
 
 ## 2026.1.24
-
 ### Highlights
 
 - Providers: Ollama discovery + docs; Venice guide upgrades + cross-links. (#1606) Thanks
@@ -1433,13 +1423,11 @@ Docs: https://docs.openclaw.ai
   Thanks @rohannagpal.
 
 ## 2026.1.23-1
-
 ### Fixes
 
 - Packaging: include dist/tts output in npm tarball (fixes missing dist/tts/tts.js).
 
 ## 2026.1.23
-
 ### Highlights
 
 - TTS: move Telegram TTS into core + enable model-driven TTS tags by default for
@@ -1549,7 +1537,6 @@ Docs: https://docs.openclaw.ai
 - Skills: gate bird Homebrew install to macOS. (#1569) Thanks @bradleypriest.
 
 ## 2026.1.22
-
 ### Changes
 
 - Highlight: Compaction safeguard now uses adaptive chunking, progressive fallback, and UI
@@ -1608,7 +1595,6 @@ Docs: https://docs.openclaw.ai
   tests. (ECID-1483)
 
 ## 2026.1.21-2
-
 ### Fixes
 
 - Control UI: ignore bootstrap identity placeholder text for avatar values and fall back
@@ -1618,7 +1604,6 @@ Docs: https://docs.openclaw.ai
   warnings. (#1447)
 
 ## 2026.1.21
-
 ### Changes
 
 - Highlight: Lobster optional plugin tool for typed workflows + approval gates.
@@ -1697,7 +1682,6 @@ Docs: https://docs.openclaw.ai
   @JustYannicc.
 
 ## 2026.1.20
-
 ### Changes
 
 - Control UI: add copy-as-markdown with error feedback. (#1345)
@@ -1985,7 +1969,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 @thewilloftheshadow, @tyler6204, @vignesh07, @visionik, @ysqander, @zerone0x.
 
 ## 2026.1.16-2
-
 ### Changes
 
 - CLI: stamp build commit into dist metadata so banners show the commit in npm installs.
@@ -1993,7 +1976,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   thanks @NicholasSpisak.
 
 ## 2026.1.16-1
-
 ### Highlights
 
 - Hooks: add hooks system with bundled hooks, CLI tooling, and docs. (#1028) — thanks
@@ -2161,7 +2143,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - Skills: fix skills watcher ignored list typing (tsc).
 
 ## 2026.1.15
-
 ### Highlights
 
 - Plugins: add provider auth registry + `openclaw models auth login` for plugin-driven
@@ -2310,7 +2291,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   turns. (#998)
 
 ## 2026.1.14-1
-
 ### Highlights
 
 - Web search: `web_search`/`web_fetch` tools (Brave API) + first-time setup in
@@ -2383,7 +2363,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   guard + merge patch for connection saves).
 
 ## 2026.1.14
-
 ### Changes
 
 - Usage: add MiniMax coding plan usage tracking.
@@ -2462,7 +2441,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   — thanks @peschee.
 
 ## 2026.1.13
-
 ### Fixes
 
 - Postinstall: treat already-applied pnpm patches as no-ops to avoid npm/bun install
@@ -2471,7 +2449,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   npm resolution.
 
 ## 2026.1.12-2
-
 ### Fixes
 
 - Packaging: include `dist/memory/**` in the npm tarball (fixes `ERR_MODULE_NOT_FOUND` for
@@ -2482,14 +2459,12 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   (#841, #845) — thanks @MatthieuBizien.
 
 ## 2026.1.12-1
-
 ### Fixes
 
 - Packaging: include `dist/channels/**` in the npm tarball (fixes `ERR_MODULE_NOT_FOUND`
   for `dist/channels/registry.js`).
 
 ## 2026.1.12
-
 ### Highlights
 
 - **BREAKING:** rename chat "providers" (Slack/Telegram/WhatsApp/…) to **channels** across
@@ -2607,7 +2582,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
 - Docs: add Amazon Bedrock provider notes and link from models/FAQ.
 
 ## 2026.1.11
-
 ### Highlights
 
 - Plugins are now first-class: loader + CLI management, plus the new Voice Call plugin.
@@ -2752,7 +2726,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   `/help`/`/commands`/`/status`/`/whoami` stripped before model).
 
 ## 2026.1.10
-
 ### Highlights
 
 - CLI: `openclaw status` now table-based + shows OS/update/gateway/daemon/agents/sessions;
@@ -2941,7 +2914,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   transcript incompatibilities (notably OpenAI Responses reasoning replay rules).
 
 ## 2026.1.9
-
 ### Highlights
 
 - Microsoft Teams provider: polling, attachments, outbound CLI send, per-channel policy.
@@ -3090,7 +3062,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   autonomously without manual re-authentication (#654 — thanks @radek-paclt).
 
 ## 2026.1.8
-
 ### Highlights
 
 - Security: DMs locked down by default across providers; pairing-first + allowlist
@@ -3173,7 +3144,6 @@ Thanks @AlexMikhalev, @CoreyH, @John-Rood, @KrauseFx, @MaudeBot, @Nachx639,
   bun for TS execution.
 
 ## 2026.1.5
-
 ### Highlights
 
 - Models: add image-specific model config (`agent.imageModel` + fallbacks) and scan
