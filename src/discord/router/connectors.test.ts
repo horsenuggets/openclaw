@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { connectorRegistry } from "./connectors.js";
+import { PasteTokenAuth } from "./connector-auth.js";
+import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
 
 describe("connectorRegistry.get", () => {
   it("resolves ids case-insensitively", () => {
@@ -79,5 +80,24 @@ describe("connectorRegistry.forSkill", () => {
         expect(connectorRegistry.forSkill(skillKey)?.id).toBe(c.id);
       }
     }
+  });
+
+  it("rejects a catalog where two connectors claim the same skill", () => {
+    const connector = (id: string, skills: string[]): Connector => ({
+      id,
+      label: id,
+      summary: "",
+      services: ["x"],
+      skills,
+      available: true,
+      auth: new PasteTokenAuth({
+        url: `https://${id}`,
+        howto: "",
+        validate: async () => ({ ok: true }),
+      }),
+    });
+    expect(
+      () => new ConnectorRegistry([connector("a", ["shared"]), connector("b", ["shared"])]),
+    ).toThrow(/claimed by connectors/);
   });
 });

@@ -64,14 +64,14 @@ describe("enabledSkillKeys", () => {
     expect(enabledSkillKeys(connections, connectorRegistry)).toEqual(["todoist", "github"]);
   });
 
-  it("dedupes skills shared across connectors", () => {
+  it("dedupes a skill a connector lists more than once", () => {
     const registry = new ConnectorRegistry([
       {
         id: "a",
         label: "A",
         summary: "",
         services: ["x"],
-        skills: ["shared", "only-a"],
+        skills: ["dup", "dup", "only-a"],
         available: true,
         auth: new PasteTokenAuth({
           url: "https://a",
@@ -79,25 +79,8 @@ describe("enabledSkillKeys", () => {
           validate: async () => ({ ok: true }),
         }),
       },
-      {
-        id: "b",
-        label: "B",
-        summary: "",
-        services: ["y"],
-        skills: ["shared", "only-b"],
-        available: true,
-        auth: new PasteTokenAuth({
-          url: "https://b",
-          howto: "",
-          validate: async () => ({ ok: true }),
-        }),
-      },
     ]);
-    const result = enabledSkillKeys(
-      [connection("a", "linked"), connection("b", "linked")],
-      registry,
-    );
-    expect(result).toEqual(["shared", "only-a", "only-b"]);
+    expect(enabledSkillKeys([connection("a", "linked")], registry)).toEqual(["dup", "only-a"]);
   });
 
   it("is empty when no connection is linked", () => {

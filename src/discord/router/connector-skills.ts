@@ -32,6 +32,9 @@ export function skillsEnabledByConnection(
  * The deduped union of skill keys enabled across an owner's connections, in first-
  * seen order. This is the single-credential-enables-many relationship applied to the
  * whole set: every `linked` connection contributes all of its connector's skills.
+ * Each skill belongs to exactly one connector (the registry enforces this), so two
+ * connectors cannot contribute the same skill; the dedup only guards a connector that
+ * harmlessly lists a skill twice.
  */
 export function enabledSkillKeys(
   connections: readonly StoredConnection[],

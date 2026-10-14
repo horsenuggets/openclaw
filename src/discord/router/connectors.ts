@@ -48,10 +48,23 @@ export class ConnectorRegistry {
 
   constructor(private readonly connectors: readonly Connector[]) {
     this.byId = new Map(connectors.map((c) => [c.id, c]));
+    // A skill belongs to exactly one connector (its credential materializes that
+    // skill). Build the reverse index fail-fast: a skill claimed by two connectors
+    // is a catalog bug — the credential that powers it would be ambiguous and the
+    // index would silently drop one owner — so reject it at construction rather than
+    // let `forSkill` return an arbitrary winner. A connector may list the same skill
+    // twice harmlessly (it still has one owner); only cross-connector claims throw.
     this.bySkill = new Map();
     for (const connector of connectors) {
       for (const skillKey of connector.skills) {
-        this.bySkill.set(skillKey.toLowerCase(), connector);
+        const key = skillKey.toLowerCase();
+        const owner = this.bySkill.get(key);
+        if (owner && owner.id !== connector.id) {
+          throw new Error(
+            `Skill "${skillKey}" is claimed by connectors "${owner.id}" and "${connector.id}"; each skill must belong to exactly one connector`,
+          );
+        }
+        this.bySkill.set(key, connector);
       }
     }
   }
@@ -71,7 +84,9 @@ export class ConnectorRegistry {
 
   /**
    * The connector that owns a skill key (case-insensitive), or null when no
-   * connector enables it. This is the inverse of {@link Connector.skills}.
+   * connector enables it. This is the inverse of {@link Connector.skills}, and it
+   * is unambiguous: the constructor guarantees each skill belongs to exactly one
+   * connector, so the lookup can never silently drop a competing owner.
    */
   forSkill(skillKey: string | undefined): Connector | null {
     if (!skillKey) {
