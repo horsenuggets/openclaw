@@ -406,6 +406,59 @@ describe("OAuthPkceAuth.complete", () => {
     const result = await auth.complete("code", pending);
     expect(result).toEqual({ ok: false, message: "socket hang up" });
   });
+
+  it("uses the default fetch path: form-encoded POST, JSON response (no injected postForm)", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ access_token: "at-default", token_type: "bearer" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const auth = pkceAuth(); // no postForm override → exercises defaultPostForm
+      const { pending } = auth.begin();
+      const result = await auth.complete("the-code", pending);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.token).toBe("at-default");
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://provider.example/token");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Record<string, string>)["content-type"]).toBe(
+        "application/x-www-form-urlencoded",
+      );
+      const body = new URLSearchParams(init.body as string);
+      expect(body.get("grant_type")).toBe("authorization_code");
+      expect(body.get("code")).toBe("the-code");
+      expect(body.get("code_verifier")).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("uses the default fetch path: a non-JSON error body still fails cleanly", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("not json");
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const auth = pkceAuth();
+      const { pending } = auth.begin();
+      const result = await auth.complete("the-code", pending);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.message).toMatch(/HTTP 500/);
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("CliAuth", () => {
