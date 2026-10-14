@@ -232,25 +232,25 @@ describe("buildDebugHelpEmbeds", () => {
     expect(embed.color).toBe(0xff80e0);
     expect(embed.fields).toEqual([
       {
-        name: "`connflow [scenario] [subcommand] [args]`",
+        name: "`/debug connflow [scenario] [subcommand] [args]`",
         value:
           "Preview the `/connections` flow against a canned scenario. Omit the scenario to list them.",
       },
-      { name: "`echo <message>`", value: "Sends the raw text as an individual message." },
+      { name: "`/debug echo <message>`", value: "Sends the raw text as an individual message." },
       {
-        name: "`ephemeral [on|off]`",
+        name: "`/debug ephemeral [on|off]`",
         value: "Set whether slash command replies are ephemeral or not.",
       },
-      { name: "`help`", value: "Displays this help message." },
+      { name: "`/debug help`", value: "Displays this help message." },
       {
-        name: "`secrettest <secret-value> [secret-name]`",
+        name: "`/debug secrettest <secret-value> [secret-name]`",
         value:
           "Hand this channel's agent a secret like `/secret`, but passed as plaintext so it " +
           "stays visible in the channel (for testing purposes). Never use a real secret here; " +
           "use `/secret` for anything sensitive.",
       },
       {
-        name: "`unregisterflow`",
+        name: "`/debug unregisterflow`",
         value:
           "Preview the unregister flow (confirm → interim → final) in this " +
           "channel, without actually unregistering anything.",
@@ -351,7 +351,7 @@ describe("buildDebugHelpEmbeds", () => {
       },
     ];
     const { embeds } = buildDebugHelpEmbeds(subs);
-    expect((embeds[0].fields ?? []).map((f) => f.name)).toEqual(["`alpha`", "`zed`"]);
+    expect((embeds[0].fields ?? []).map((f) => f.name)).toEqual(["`/debug alpha`", "`/debug zed`"]);
   });
 });
 

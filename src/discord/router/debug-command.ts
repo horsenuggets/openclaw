@@ -243,7 +243,7 @@ export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
   const fields: DiscordEmbedField[] = subcommands
     .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((sub) => ({
-      name: clamp(`\`${sub.usage}\``, MAX_FIELD_NAME_CHARS),
+      name: clamp(`\`/debug ${sub.usage}\``, MAX_FIELD_NAME_CHARS),
       value: clamp(sub.description, MAX_FIELD_VALUE_CHARS),
     }));
   return buildPaginatedEmbeds({
