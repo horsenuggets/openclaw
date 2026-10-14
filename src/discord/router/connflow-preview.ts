@@ -16,9 +16,9 @@
  * ever runs, so that path is not reachable here.
  */
 
+import type { AuthFlow, AuthPrompt, AuthResult } from "./auth-flow.js";
 import type { ChannelReplyPayload, DiscordEmbed } from "./channel-commands.js";
 import type { DisplayConnection, StoredConnection } from "./connections-store.js";
-import type { AuthPrompt, AuthResult, ConnectorAuth } from "./connector-auth.js";
 import {
   type ConnectionEmoji,
   type ConnectionStore,
@@ -99,11 +99,17 @@ function previewStore(connections: DisplayConnection[]): ConnectionStore {
   };
 }
 
-/** Canned auth: real instructions via `begin()`, a stubbed success via `complete()`. */
-class PreviewAuth implements ConnectorAuth {
-  constructor(private readonly real: ConnectorAuth) {}
-  get kind() {
-    return this.real.kind;
+/** Canned auth: real descriptors + instructions, a stubbed success via `complete()`. */
+class PreviewAuth implements AuthFlow {
+  constructor(private readonly real: AuthFlow) {}
+  get authKind() {
+    return this.real.authKind;
+  }
+  get outgoing() {
+    return this.real.outgoing;
+  }
+  get delivery() {
+    return this.real.delivery;
   }
   begin(): AuthPrompt {
     return this.real.begin();

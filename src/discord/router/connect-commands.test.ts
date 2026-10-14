@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelReplyPayload } from "./channel-commands.js";
 import type { DisplayConnection, StoredConnection } from "./connections-store.js";
+import { type AuthResult, CliAuth, DirectAuth } from "./auth-flow.js";
 import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
@@ -10,7 +11,6 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
 } from "./connect-commands.js";
-import { type AuthResult, CliAuth, PasteTokenAuth } from "./connector-auth.js";
 import { type Connector, ConnectorRegistry } from "./connectors.js";
 
 describe("parseConnectTextCommand", () => {
@@ -137,7 +137,7 @@ function makeRegistry(
     services,
     skills: [id],
     available: true,
-    auth: new PasteTokenAuth({
+    auth: new DirectAuth({
       url: `https://example.com/${id}`,
       howto: `Get your ${label} token.`,
       validate: (token) => (validate ? validate(id, token) : Promise.resolve({ ok: true })),
@@ -315,7 +315,7 @@ describe("handleConnectCommand list", () => {
         services: ["X"],
         skills: ["verbose"],
         available: true,
-        auth: new PasteTokenAuth({
+        auth: new DirectAuth({
           url: "https://example.com/verbose",
           howto: "token",
           validate: () => Promise.resolve({ ok: true }),
@@ -342,7 +342,7 @@ describe("handleConnectCommand list", () => {
       services: ["X"],
       skills: [`svc${i}`],
       available: true,
-      auth: new PasteTokenAuth({
+      auth: new DirectAuth({
         url: `https://example.com/svc${i}`,
         howto: "token",
         validate: () => Promise.resolve({ ok: true }),

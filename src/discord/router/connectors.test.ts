@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PasteTokenAuth } from "./connector-auth.js";
+import { DirectAuth } from "./auth-flow.js";
 import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
 
 function connector(id: string, skills: string[]): Connector {
@@ -10,7 +10,7 @@ function connector(id: string, skills: string[]): Connector {
     services: ["x"],
     skills,
     available: true,
-    auth: new PasteTokenAuth({
+    auth: new DirectAuth({
       url: `https://${id}`,
       howto: "",
       validate: async () => ({ ok: true }),
@@ -40,13 +40,15 @@ describe("connector catalog", () => {
   it("marks Google as catalogued but not yet available", () => {
     const google = connectorRegistry.get("google");
     expect(google?.available).toBe(false);
-    expect(google?.auth.kind).toBe("cli");
+    expect(google?.auth.authKind).toBe("cli");
   });
 
-  it("gives every paste-token connector a token howto and url", () => {
+  it("gives every direct connector a token howto and url, and sane descriptors", () => {
     for (const c of connectorRegistry.all()) {
-      if (c.auth.kind === "paste-token") {
+      if (c.auth.authKind === "direct") {
         expect(c.available).toBe(true);
+        expect(c.auth.outgoing).toBe("instructions");
+        expect(c.auth.delivery).toBe("paste");
         const prompt = c.auth.begin();
         expect(prompt.howto, `${c.id} howto`).toBeTruthy();
         expect(prompt.url, `${c.id} url`).toMatch(/^https:\/\//);
@@ -99,7 +101,7 @@ describe("connectorRegistry.forSkill", () => {
       services: ["x"],
       skills: [" Spacey-Skill "],
       available: true,
-      auth: new PasteTokenAuth({
+      auth: new DirectAuth({
         url: "https://spacey",
         howto: "",
         validate: async () => ({ ok: true }),

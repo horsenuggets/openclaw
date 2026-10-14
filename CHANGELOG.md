@@ -6,6 +6,18 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: reworked connector auth into an `AuthFlow` model (`auth-flow.ts`,
+  renamed from `connector-auth.ts`) described by two independent axes — `authKind`
+  (`oauth` | `direct` | `cli`) and `delivery` (`paste` | `server-redirect`), plus a
+  derived `outgoing` (`link` | `instructions`) — so a renderer can present any connector
+  without per-provider branching. `PasteTokenAuth` became `DirectAuth`. Added
+  `OAuthPkceAuth`, the standard OAuth authorization-code + PKCE flow (RFC 7636): `begin()`
+  mints a verifier + S256 challenge + CSRF state and returns the authorize URL with an
+  opaque `pending` blob; `complete()` accepts a pasted loopback redirect URL or a bare
+  code, validates the state, and exchanges the code + verifier for tokens (no client
+  secret; client id read from the environment at call time). The flow is fully unit-tested
+  but not yet wired to a catalog connector — persisting the `pending` blob between the two
+  commands and adopting the flow (Google) land in a follow-up alongside materialization.
 - Discord router: connectors now declare the skills they enable. Each catalog entry
   carries a `skills` list (`connectors.ts`), the registry indexes it in reverse via
   `forSkill(skillKey)`, and the new `connector-skills.ts` resolves an owner's connections
