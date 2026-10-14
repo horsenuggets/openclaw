@@ -20,11 +20,13 @@
 import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import { type EmbedCategoryKey, EMBED_CATEGORIES, attachmentRef } from "./embed-categories.js";
 import {
+  MAX_DESCRIPTION_CHARS,
   MAX_EMBEDS_PER_MESSAGE,
   MAX_FIELD_NAME_CHARS,
   MAX_FIELD_VALUE_CHARS,
   MAX_FIELDS_PER_EMBED,
   MAX_MESSAGE_TOTAL_CHARS,
+  MAX_TITLE_CHARS,
 } from "./embed-limits.js";
 
 /** One ordered run of fields. Each group after the first begins a new embed. */
@@ -63,8 +65,10 @@ export function buildPaginatedEmbeds(input: {
   truncationField?: DiscordEmbedField;
 }): { embeds: DiscordEmbed[]; attachments: string[] } {
   const category = EMBED_CATEGORIES[input.category];
-  const title = input.title ?? "";
-  const description = input.description ?? "";
+  // Clamp the fixed title/description to their own per-embed caps so the first embed
+  // is always valid independent of the message-wide budget.
+  const title = clampWithEllipsis(input.title ?? "", MAX_TITLE_CHARS);
+  const description = clampWithEllipsis(input.description ?? "", MAX_DESCRIPTION_CHARS);
 
   // Clamp the truncation note to the per-field caps up front so, if appended, it can
   // never breach the 1024/256 field caps itself.
@@ -138,7 +142,13 @@ export function buildPaginatedEmbeds(input: {
         last = pages[pages.length - 1];
       }
     }
-    last.push(truncationField);
+    // Only append the note if it still fits once no field can be popped (i.e. the
+    // first embed's fixed title/description/footer already fill the budget). This can
+    // only happen with pathological fixed text; dropping the note then keeps the
+    // payload valid rather than knowingly emitting an over-budget message.
+    if (used + noteCost <= MAX_MESSAGE_TOTAL_CHARS) {
+      last.push(truncationField);
+    }
   }
 
   const lastIndex = pages.length - 1;

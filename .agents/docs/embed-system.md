@@ -21,19 +21,21 @@ registration and command-result embeds (`channel-commands.ts`, `gateway-events.t
 
 `buildPaginatedEmbeds` (`embed-pagination.ts`) is the shared multi-embed builder. It
 respects two distinct Discord limits, centralized in `embed-limits.ts`: each embed holds
-at most 25 fields and 1024 chars per field value (per-embed caps), while the combined text
-of all embeds in the message (title + description + every field name/value + footer) must
-stay under 6000 characters (a per-message cap, not per-embed) across at most 10 embeds.
-Fields are supplied as ordered GROUPS: every group after the first starts a new embed (a
-forced section break), and within a group fields pack onto the current embed until the
-25-field cap and only then spill onto a further embed (the shared 6000-char message budget
-usually bites first). The title and description go on the first embed, the
-footer/icon/timestamp on the last, every embed shares the category color, and a truncation
-note is appended if the content exhausts the budget or the embed count. Every field (and
-the truncation note) is clamped to the per-field name/value caps, so a caller can never
-emit a payload Discord rejects. `chunkLinesIntoFields` is a companion that splits a long
-single-column list into several repeated-header fields under the 1024 cap, truncating any
-single over-long line with an ellipsis.
+at most 25 fields, 256 chars per field name, 1024 chars per field value, 256 chars of
+title, and 4096 chars of description (per-embed caps), while the combined text of all
+embeds in the message (title + description + every field name/value + footer) must stay
+under 6000 characters (a per-message cap, not per-embed) across at most 10 embeds. Fields
+are supplied as ordered GROUPS: every group after the first starts a new embed (a forced
+section break), and within a group fields pack onto the current embed until the 25-field
+cap and only then spill onto a further embed (the shared 6000-char message budget usually
+bites first). The title and description go on the first embed, the footer/icon/timestamp
+on the last, every embed shares the category color, and a truncation note is appended only
+when the content truly exhausts the 6000-char budget or the 10-embed count (never when the
+full payload fits). Every field, the title, the description, and the truncation note are
+clamped to their Discord caps, so a caller can never emit a payload Discord rejects.
+`chunkLinesIntoFields` is a companion that splits a long single-column list into several
+repeated-header fields under the 1024 cap, truncating any single over-long line with an
+ellipsis.
 
 `buildDebugHelpEmbeds` (`debug-command.ts`) calls it with one group (the subcommand
 fields). `listReply` (`connect-commands.ts`) calls it with two groups, so

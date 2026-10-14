@@ -9,24 +9,22 @@ Docs: https://docs.openclaw.ai
 - Discord router: `/connections list` is now two embeds by default — a header embed with
   the title, description, and `/conn` subcommand previews (debug-help field style), then a
   content embed with a "Currently Connected" count, a status "Legend", and a "Services"
-  list where each line is a status glyph plus the service name. The shared multi-embed
-  packing was extracted into `embed-pagination.ts` (`buildPaginatedEmbeds` +
-  `chunkLinesIntoFields`) and now backs both the connections list and `/debug help`; a
-  long Services list chunks under the field cap and overflows with the header repeated.
+  list where each line is a status glyph plus the service name (status shown by the glyph,
+  decoded by the Legend). Long service names are truncated with an ellipsis, and only
+  linked services appear; when nothing is linked a single embed shows a note plus the
+  subcommand previews. The shared multi-embed packing was extracted into
+  `embed-pagination.ts` (`buildPaginatedEmbeds` + `chunkLinesIntoFields`), backed by the
+  caps in the new `embed-limits.ts`, and now drives both the connections list and
+  `/debug help`. A long Services list repeats as several same-header fields on the second
+  embed, every field/title/description is clamped to Discord's per-element caps, and a
+  truncation note is appended only when the content truly exceeds the 6000-char message
+  budget or the 10-embed cap.
 - Discord router: new `/debug connflow [scenario] [subcommand] [args]` previews the
   `/connections` flow against canned scenarios (1 empty, 2 mixed, 3 all linked), driving
   the real connections handler against in-memory, network-free data and re-skinning the
   result into the Debug identity. Omitting the scenario prints an info embed. The trusted
   mock-user bot is now allowed past the `/debug` text gate (test-scoped; the id is empty
   on prod) so E2E tests can drive debug commands.
-- Discord router: `/connections list` is redesigned into a paginated two-column layout
-  (Service Name / Service Status) with a "Currently Connected" count, a markdown block
-  advertising the subcommands, and long service names truncated with an ellipsis. It
-  splits across multiple embeds when it would breach Discord's field or message limits,
-  reusing the shared caps in the new `embed-limits.ts`. Pagination accounts for the
-  pending row when starting a new embed, so it never emits an empty page that Discord
-  would reject. Connected now uses the green check emoji, and the needs-auth label gains a
-  trailing period.
 - Discord router: `/connections list` status column now uses custom app emojis (blue
   filled check for connected, blue empty check for pinging, warning for needs-auth) and
   the labels "Connected!", "Pinging...", and "Needs authentication". Adds a transient

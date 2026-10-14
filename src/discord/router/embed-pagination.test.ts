@@ -131,6 +131,19 @@ describe("buildPaginatedEmbeds", () => {
     expect(total).toBeLessThanOrEqual(6000);
   });
 
+  it("clamps an over-long title and description to their per-embed caps", () => {
+    const { embeds } = buildPaginatedEmbeds({
+      category: "connections",
+      title: "t".repeat(400),
+      description: "d".repeat(5000),
+      groups: [[field("a", "1")]],
+    });
+    expect((embeds[0].title ?? "").length).toBeLessThanOrEqual(256);
+    expect((embeds[0].description ?? "").length).toBeLessThanOrEqual(4096);
+    expect(embeds[0].title?.endsWith("\u2026")).toBe(true);
+    expect(embeds[0].description?.endsWith("\u2026")).toBe(true);
+  });
+
   it("clamps an over-long group field value to the per-field cap", () => {
     const { embeds } = buildPaginatedEmbeds({
       category: "connections",
