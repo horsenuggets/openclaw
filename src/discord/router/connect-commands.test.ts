@@ -294,7 +294,8 @@ describe("handleConnectCommand list", () => {
     const subNames = (embeds[0].fields ?? []).map((f) => f.name);
     expect(subNames).toContain("`/conn add <service>`");
     expect(subNames).toContain("`/conn remove <service>`");
-    expect(subNames).toContain("`/conn info <service>`");
+    // Only registered/handled subcommands are advertised (no `/conn info`).
+    expect(subNames).not.toContain("`/conn info <service>`");
     // Embed 2 carries the count (2 of 3 shown are linked) and a full legend.
     expect(fieldNamed(replies[0].payload, "Currently Connected")).toBe("`2/3`");
     const legend = fieldNamed(replies[0].payload, "Legend") ?? "";

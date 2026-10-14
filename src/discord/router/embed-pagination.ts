@@ -19,10 +19,10 @@ import type { DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import { type EmbedCategoryKey, EMBED_CATEGORIES, attachmentRef } from "./embed-categories.js";
 import {
   MAX_EMBEDS_PER_MESSAGE,
+  MAX_FIELD_NAME_CHARS,
   MAX_FIELD_VALUE_CHARS,
   MAX_FIELDS_PER_EMBED,
   MAX_MESSAGE_TOTAL_CHARS,
-  TRUNCATION_RESERVE,
 } from "./embed-limits.js";
 
 /** One ordered run of fields. Each group after the first begins a new embed. */
@@ -50,11 +50,17 @@ export function buildPaginatedEmbeds(input: {
   const description = input.description ?? "";
 
   // `used` counts the whole message (title + description + footer appear once), so
-  // it is never reset per page. A fixed slice is reserved for the truncation note
-  // so there is always room to append it if we stop early.
+  // it is never reset per page. Reserve the ACTUAL cost of the truncation note (its
+  // name + value, each clamped to Discord's per-field caps) from the budget so there
+  // is always room to append it if we stop early, even when a caller supplies a note
+  // far larger than any fixed reserve.
+  const truncationField = input.truncationField ?? DEFAULT_TRUNCATION_FIELD;
   const pages: DiscordEmbedField[][] = [[]];
   let used = title.length + description.length + category.footerText.length;
-  const budget = MAX_MESSAGE_TOTAL_CHARS - TRUNCATION_RESERVE;
+  const truncationReserve =
+    Math.min(truncationField.name.length, MAX_FIELD_NAME_CHARS) +
+    Math.min(truncationField.value.length, MAX_FIELD_VALUE_CHARS);
+  const budget = MAX_MESSAGE_TOTAL_CHARS - truncationReserve;
   let truncated = false;
 
   for (let g = 0; g < input.groups.length && !truncated; g += 1) {
@@ -98,7 +104,7 @@ export function buildPaginatedEmbeds(input: {
     if (last.length >= MAX_FIELDS_PER_EMBED) {
       last.pop();
     }
-    last.push(input.truncationField ?? DEFAULT_TRUNCATION_FIELD);
+    last.push(truncationField);
   }
 
   const lastIndex = pages.length - 1;
@@ -128,8 +134,9 @@ export function buildPaginatedEmbeds(input: {
 /**
  * Split `lines` into as many fields (all sharing `name`) as the per-field value cap
  * requires, so a long single-column list (e.g. the connections Services column) can
- * span several repeated-header fields. A line longer than `max` on its own still
- * occupies its own field rather than being dropped.
+ * span several repeated-header fields. A line longer than `max` on its own is
+ * truncated with an ellipsis to fit rather than dropped, so every returned field
+ * value stays within `max` and the payload is never rejected by Discord.
  */
 export function chunkLinesIntoFields(
   name: string,
@@ -139,7 +146,10 @@ export function chunkLinesIntoFields(
   const fields: DiscordEmbedField[] = [];
   let current: string[] = [];
   let length = 0;
-  for (const line of lines) {
+  for (const rawLine of lines) {
+    // Clamp any single over-long line so one line can never breach the field cap.
+    const line =
+      rawLine.length > max ? `${rawLine.slice(0, Math.max(0, max - 1)).trimEnd()}\u2026` : rawLine;
     const addition = current.length === 0 ? line.length : line.length + 1; // +1 for the newline
     if (current.length > 0 && length + addition > max) {
       fields.push({ name, value: current.join("\n") });

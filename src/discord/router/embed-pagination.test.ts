@@ -107,11 +107,14 @@ describe("chunkLinesIntoFields", () => {
     ).toEqual(lines);
   });
 
-  it("gives an over-long single line its own field rather than dropping it", () => {
+  it("truncates an over-long single line to fit the max rather than dropping it", () => {
     const long = "z".repeat(50);
     const fields = chunkLinesIntoFields("Services", ["short", long], 20);
     expect(fields).toHaveLength(2);
     expect(fields[0].value).toBe("short");
-    expect(fields[1].value).toBe(long);
+    // The over-long line is clamped to the cap with an ellipsis, never exceeding max.
+    expect(fields[1].value.length).toBeLessThanOrEqual(20);
+    expect(fields[1].value.endsWith("\u2026")).toBe(true);
+    expect(fields[1].value.startsWith("z")).toBe(true);
   });
 });

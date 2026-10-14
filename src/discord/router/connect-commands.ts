@@ -250,7 +250,6 @@ const LIST_EMPTY = "You have not linked any accounts yet. Use `/conn add <servic
 const SUBCOMMAND_FIELDS: DiscordEmbedField[] = [
   { name: "`/conn add <service>`", value: "Connect a new service." },
   { name: "`/conn remove <service>`", value: "Remove a service." },
-  { name: "`/conn info <service>`", value: "Get info about a service." },
 ];
 
 const COUNT_FIELD_NAME = "Currently Connected";
