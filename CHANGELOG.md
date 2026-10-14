@@ -6,6 +6,13 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: `/connections list` is now two embeds by default — a header embed with
+  the title, description, and `/conn` subcommand previews (debug-help field style), then a
+  content embed with a "Currently Connected" count, a status "Legend", and a "Services"
+  list where each line is a status glyph plus the service name. The shared multi-embed
+  packing was extracted into `embed-pagination.ts` (`buildPaginatedEmbeds` +
+  `chunkLinesIntoFields`) and now backs both the connections list and `/debug help`; a
+  long Services list chunks under the field cap and overflows with the header repeated.
 - Discord router: new `/debug connflow [scenario] [subcommand] [args]` previews the
   `/connections` flow against canned scenarios (1 empty, 2 mixed, 3 all linked), driving
   the real connections handler against in-memory, network-free data and re-skinning the
