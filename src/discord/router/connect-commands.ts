@@ -14,13 +14,8 @@
 import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
 import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./connections-store.js";
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
-import { EMBED_CATEGORIES, attachmentRef, buildEmbed } from "./embed-categories.js";
-import {
-  MAX_EMBEDS_PER_MESSAGE,
-  MAX_FIELD_VALUE_CHARS,
-  MAX_MESSAGE_TOTAL_CHARS,
-  TRUNCATION_RESERVE,
-} from "./embed-limits.js";
+import { buildEmbed } from "./embed-categories.js";
+import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
 
@@ -222,40 +217,46 @@ export function connectTextCommandHasToken(parsed: {
   return (parsed.subcommand ?? "").toLowerCase() === "add" && parsed.args.length >= 1;
 }
 
-/**
- * The Status-column cell for a connector: a glyph plus a short label. Mirrors the
- * glyph-led cells of the `/channel status` table (see channel-commands.ts).
- */
-function statusCell(connection: DisplayConnection | null, emoji: ConnectionEmoji): string {
-  const status: ConnectionStatus = connection?.status ?? "not_linked";
+/** The short status label shown in the Legend (also the word in each glyph key). */
+const STATUS_LABEL: Record<ConnectionStatus, string> = {
+  linked: "Connected!",
+  connecting: "Pinging...",
+  needs_reauth: "Needs authentication.",
+  not_linked: "Not connected.",
+};
+
+/** The status glyph (custom emoji, unicode fallback) for a display status. */
+function statusGlyph(status: ConnectionStatus, emoji: ConnectionEmoji): string {
   if (status === "linked") {
-    return `${emoji.connected} Connected!`;
+    return emoji.connected;
   }
   if (status === "connecting") {
-    return `${emoji.connecting} Pinging...`;
+    return emoji.connecting;
   }
   if (status === "needs_reauth") {
-    return `${emoji.needsAuth} Needs authentication.`;
+    return emoji.needsAuth;
   }
-  return `${emoji.notConnected} Not connected.`;
+  return emoji.notConnected;
 }
 
 const LIST_TITLE = "Your Connections";
 const LIST_DESCRIPTION =
   "Below are accounts linked to this channel's agent. You can use the following " +
-  "subcommands to manage your connections...\n\n" +
-  "```markdown\n" +
-  "# Connect a new service\n/connections add <service>\n\n" +
-  "# Remove a service\n/connections remove <service>\n" +
-  "```";
+  "subcommands to manage your connections...";
 
-const LIST_EMPTY =
-  "You have not linked any accounts yet. Use `/connections add <service>` to link one.";
+const LIST_EMPTY = "You have not linked any accounts yet. Use `/conn add <service>` to link one.";
 
-/** Column headers, repeated on every page so each embed is self-labeled. */
-const COLUMN_NAME = "Service Name";
-const COLUMN_STATUS = "Service Status";
+/** The subcommand previews, debug-help style (backtick usage + one-line value). */
+const SUBCOMMAND_FIELDS: DiscordEmbedField[] = [
+  { name: "`/conn add <service>`", value: "Connect a new service." },
+  { name: "`/conn remove <service>`", value: "Remove a service." },
+];
+
 const COUNT_FIELD_NAME = "Currently Connected";
+const LEGEND_FIELD_NAME = "Legend";
+const SERVICES_FIELD_NAME = "Services";
+/** Statuses listed in the Legend, in display order (every list uses only these). */
+const LEGEND_STATUSES: readonly ConnectionStatus[] = ["linked", "needs_reauth", "connecting"];
 /** Longer service names are truncated to this many characters with an ellipsis. */
 const NAME_MAX = 20;
 
@@ -267,87 +268,24 @@ function truncateServiceName(label: string): string {
   return `${label.slice(0, NAME_MAX - 1).trimEnd()}\u2026`;
 }
 
-type ListRow = { name: string; cell: string };
-type ListPage = { names: string[]; cells: string[] };
-
-/**
- * Pack the Service Name / Service Status columns across as many embeds as the
- * shared Discord budget allows: each column value stays within the 1024-char
- * field cap, the whole message stays within the 6000-char budget (which spans
- * every embed, since the title, description, count field, and footer each appear
- * once), and no more than 10 embeds are produced. Returns the per-page columns
- * plus how many rows did not fit, so the caller can note the overflow.
- */
-function packListPages(rows: ListRow[], fixedCost: number): { pages: ListPage[]; dropped: number } {
-  const headerCost = COLUMN_NAME.length + COLUMN_STATUS.length;
-  const budget = MAX_MESSAGE_TOTAL_CHARS - TRUNCATION_RESERVE;
-  const pages: ListPage[] = [{ names: [], cells: [] }];
-  let nameLen = 0;
-  let cellLen = 0;
-  // `used` counts the whole message: the fixed one-time cost plus one set of
-  // column headers for the first page.
-  let used = fixedCost + headerCost;
-  let index = 0;
-  for (; index < rows.length; index += 1) {
-    const row = rows[index];
-    // Each appended line adds its text plus a joining newline.
-    const nameCost = row.name.length + 1;
-    const cellCost = row.cell.length + 1;
-    const page = pages[pages.length - 1];
-    const fitsColumns =
-      nameLen + nameCost <= MAX_FIELD_VALUE_CHARS && cellLen + cellCost <= MAX_FIELD_VALUE_CHARS;
-    if (page.names.length > 0 && fitsColumns) {
-      if (used + nameCost + cellCost > budget) {
-        break;
-      }
-      page.names.push(row.name);
-      page.cells.push(row.cell);
-      nameLen += nameCost;
-      cellLen += cellCost;
-      used += nameCost + cellCost;
-      continue;
-    }
-    if (page.names.length === 0) {
-      // First row on a fresh page: it always goes here (a single row cannot be
-      // split), but still honor the message budget.
-      if (used + nameCost + cellCost > budget) {
-        break;
-      }
-      page.names.push(row.name);
-      page.cells.push(row.cell);
-      nameLen = nameCost;
-      cellLen = cellCost;
-      used += nameCost + cellCost;
-      continue;
-    }
-    // The current page is full (a column hit its cap): start a new embed if the
-    // 10-embed cap allows and the new page's headers plus this pending row still
-    // fit the message budget. Including the row cost here prevents pushing an
-    // empty page whose headers fit but whose first row would then break out,
-    // which Discord rejects as empty field values.
-    if (
-      pages.length >= MAX_EMBEDS_PER_MESSAGE ||
-      used + headerCost + nameCost + cellCost > budget
-    ) {
-      break;
-    }
-    pages.push({ names: [], cells: [] });
-    nameLen = 0;
-    cellLen = 0;
-    used += headerCost;
-    index -= 1; // retry this row on the new page
-  }
-  return { pages, dropped: rows.length - index };
+/** The Legend value: one `"Label" -> glyph` line per status (always all three). */
+function legendValue(emoji: ConnectionEmoji): string {
+  return LEGEND_STATUSES.map(
+    (status) => `"${STATUS_LABEL[status]}" \u2192 ${statusGlyph(status, emoji)}`,
+  ).join("\n");
 }
 
 /**
- * Build the `/connections list` status embed: a two-column Service Name / Service
- * Status layout with a "Currently Connected" count, paginated across embeds when
- * it would breach Discord's limits. Only services that are actually linked
- * (connected, re-auth needed, or a transient ping) are listed: a service that is
- * not linked simply does not appear, and catalogued-but-unavailable ("coming
- * soon") services are not shown either. The list reflects the user's connections,
- * not the catalog. When nothing is linked, a friendly note is shown with no table.
+ * Build the `/connections list` reply as two embeds in one message (by default):
+ * the first carries the title, description, and the `/conn` subcommand previews;
+ * the second carries the Currently Connected count, the status Legend, and the
+ * Services list (one `glyph name` line per service, the status shown by the glyph
+ * and decoded by the Legend). Both are packed by the shared buildPaginatedEmbeds,
+ * so a long Services list repeats as several Services fields on the second embed,
+ * and if the shared message budget is exhausted a truncation note is appended.
+ * Only services that are actually linked (connected, re-auth needed, or a transient
+ * ping) are listed; catalogued-but-unavailable ("coming soon") services are not.
+ * When nothing is linked, a single embed shows a friendly note plus the subcommands.
  */
 function listReply(
   registry: ConnectorRegistry,
@@ -372,57 +310,41 @@ function listReply(
         entry.connection.status !== "not_linked",
     );
   if (linked.length === 0) {
-    return connectionsReply(LIST_TITLE, LIST_EMPTY);
+    // Nothing linked: a single embed with the empty note and the subcommands, so
+    // the user still sees how to connect.
+    return buildPaginatedEmbeds({
+      category: "connections",
+      title: LIST_TITLE,
+      description: LIST_EMPTY,
+      groups: [SUBCOMMAND_FIELDS],
+    });
   }
 
-  const rows: ListRow[] = linked.map(({ connector, connection }) => ({
-    name: truncateServiceName(connector.label),
-    cell: statusCell(connection, emoji),
-  }));
   const connected = linked.filter(({ connection }) => connection.status === "linked").length;
   const total = linked.length;
-  const countValue = `\`${connected}/${total}\``;
+  const serviceLines = linked.map(
+    ({ connector, connection }) =>
+      `${statusGlyph(connection.status, emoji)} ${truncateServiceName(connector.label)}`,
+  );
 
-  const category = EMBED_CATEGORIES.connections;
-  // Fixed, once-per-message costs: title, description, footer text, and the count
-  // field (name + value) that only the first embed carries.
-  const fixedCost =
-    LIST_TITLE.length +
-    LIST_DESCRIPTION.length +
-    category.footerText.length +
-    COUNT_FIELD_NAME.length +
-    countValue.length;
-  const { pages, dropped } = packListPages(rows, fixedCost);
+  // Second embed's fields: the count, the legend, then the Services list chunked
+  // under the per-field cap (each chunk keeps the "Services" header).
+  const contentFields: DiscordEmbedField[] = [
+    { name: COUNT_FIELD_NAME, value: `\`${connected}/${total}\`` },
+    { name: LEGEND_FIELD_NAME, value: legendValue(emoji) },
+    ...chunkLinesIntoFields(SERVICES_FIELD_NAME, serviceLines),
+  ];
 
-  const lastIndex = pages.length - 1;
-  const embeds: DiscordEmbed[] = pages.map((page, index) => {
-    const embed: DiscordEmbed = { color: category.color };
-    const fields: DiscordEmbedField[] = [];
-    if (index === 0) {
-      embed.title = LIST_TITLE;
-      embed.description = LIST_DESCRIPTION;
-      fields.push({ name: COUNT_FIELD_NAME, value: countValue, inline: false });
-    }
-    fields.push(
-      { name: COLUMN_NAME, value: page.names.join("\n"), inline: true },
-      { name: COLUMN_STATUS, value: page.cells.join("\n"), inline: true },
-    );
-    if (index === lastIndex && dropped > 0) {
-      fields.push({
-        name: "\u2026",
-        value: `${dropped} more ${dropped === 1 ? "service" : "services"} not shown.`,
-        inline: false,
-      });
-    }
-    embed.fields = fields;
-    if (index === lastIndex) {
-      embed.footer = { text: category.footerText, icon_url: attachmentRef(category.icon) };
-      embed.timestamp = new Date().toISOString();
-    }
-    return embed;
+  return buildPaginatedEmbeds({
+    category: "connections",
+    title: LIST_TITLE,
+    description: LIST_DESCRIPTION,
+    groups: [SUBCOMMAND_FIELDS, contentFields],
+    truncationField: {
+      name: "\u2026",
+      value: "Some services were omitted because the list exceeded Discord's message limit.",
+    },
   });
-
-  return { embeds, attachments: [category.icon] };
 }
 
 const NOT_REGISTERED =

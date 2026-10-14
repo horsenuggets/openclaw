@@ -196,13 +196,20 @@ function embedsOf(payload: ChannelReplyPayload) {
   return obj.embeds;
 }
 
-/** Concatenate the Service Name / Service Status columns across every embed. */
-function columnText(payload: ChannelReplyPayload, column: "Service Name" | "Service Status") {
+/** Concatenate every "Services" field value across all embeds. */
+function servicesText(payload: ChannelReplyPayload) {
   return embedsOf(payload)
     .flatMap((e) => e.fields ?? [])
-    .filter((f) => f.name === column)
+    .filter((f) => f.name === "Services")
     .map((f) => f.value)
     .join("\n");
+}
+
+/** The first field with `name` anywhere across the message's embeds. */
+function fieldNamed(payload: ChannelReplyPayload, name: string) {
+  return embedsOf(payload)
+    .flatMap((e) => e.fields ?? [])
+    .find((f) => f.name === name)?.value;
 }
 
 describe("handleConnectCommand list", () => {
@@ -254,20 +261,18 @@ describe("handleConnectCommand list", () => {
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
-    const services = columnText(replies[0].payload, "Service Name");
-    const statuses = columnText(replies[0].payload, "Service Status");
-    expect(services).toContain("Todoist");
-    expect(statuses).toContain("✅ Connected!"); // linked, no account label
-    expect(statuses).not.toContain("(chris)"); // account label is not shown
+    const services = servicesText(replies[0].payload);
+    // Each service is one "glyph name" line; the default emoji is the unicode check.
+    expect(services).toContain("✅ Todoist");
+    expect(services).not.toContain("(chris)"); // account label is not shown
     // Not-linked and coming-soon services never appear in the list, even when an
     // unavailable connector has a persisted linked record.
     expect(services).not.toContain("Notion");
     expect(services).not.toContain("Google");
-    expect(statuses).not.toContain("Not connected");
-    expect(statuses).not.toContain("Coming soon");
+    expect(services).not.toContain("Coming soon");
   });
 
-  it("shows a Currently Connected count and the subcommand description block", async () => {
+  it("shows the subcommand previews, a Currently Connected count, and a legend", async () => {
     const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
       {
@@ -280,15 +285,23 @@ describe("handleConnectCommand list", () => {
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
-    const first = embedOf(replies[0].payload);
-    expect(first.title).toBe("Your Connections");
-    // Two of the three shown services are in the `linked` state.
-    const count = (first.fields ?? []).find((f) => f.name === "Currently Connected");
-    expect(count?.value).toBe("`2/3`");
-    // The description advertises the add/remove subcommands in a markdown block.
-    expect(first.description).toContain("```markdown");
-    expect(first.description).toContain("/connections add <service>");
-    expect(first.description).toContain("/connections remove <service>");
+    const embeds = embedsOf(replies[0].payload);
+    // Default layout is two embeds: a header embed and a content embed.
+    expect(embeds).toHaveLength(2);
+    expect(embeds[0].title).toBe("Your Connections");
+    expect(embeds[0].description).not.toContain("```"); // no markdown code block anymore
+    // Embed 1 advertises the /conn subcommands, debug-help style.
+    const subNames = (embeds[0].fields ?? []).map((f) => f.name);
+    expect(subNames).toContain("`/conn add <service>`");
+    expect(subNames).toContain("`/conn remove <service>`");
+    // Only registered/handled subcommands are advertised (no `/conn info`).
+    expect(subNames).not.toContain("`/conn info <service>`");
+    // Embed 2 carries the count (2 of 3 shown are linked) and a full legend.
+    expect(fieldNamed(replies[0].payload, "Currently Connected")).toBe("`2/3`");
+    const legend = fieldNamed(replies[0].payload, "Legend") ?? "";
+    expect(legend).toContain('"Connected!"');
+    expect(legend).toContain('"Needs authentication."');
+    expect(legend).toContain('"Pinging..."');
   });
 
   it("truncates over-long service names with an ellipsis", async () => {
@@ -311,16 +324,14 @@ describe("handleConnectCommand list", () => {
     ];
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ registry, store: makeStore(true, seed).store }));
-    const services = columnText(replies[0].payload, "Service Name");
+    const services = servicesText(replies[0].payload);
     expect(services).toContain("\u2026");
     expect(services).not.toContain("Salesforce Marketing Cloud");
-    // 19 kept characters plus the ellipsis stays within the 20-char budget.
-    expect(services.length).toBeLessThanOrEqual(20);
   });
 
-  it("paginates across multiple embeds when a column would exceed the field cap", async () => {
-    // Build enough linked services that the Service Status column cannot fit in a
-    // single 1024-char field, forcing a second embed.
+  it("chunks a long Services list into repeated-header fields under the 1024 cap", async () => {
+    // Enough linked services (with long custom-emoji glyphs) that the Services
+    // column cannot fit one 1024-char field, forcing multiple "Services" fields.
     const specs = Array.from({ length: 60 }, (_, i) => ({
       id: `svc${i}`,
       label: `Service ${i}`,
@@ -346,8 +357,6 @@ describe("handleConnectCommand list", () => {
       makeDeps({
         registry,
         store: makeStore(true, seed).store,
-        // Realistic custom app emoji: long `<:name:id>` cells fill the Service
-        // Status column fast, so 60 rows cannot fit one 1024-char field.
         emoji: {
           connected: "<:greencheckfilled:1557056834068807791>",
           connecting: "<:bluecheckempty:1557056831040393348>",
@@ -358,74 +367,25 @@ describe("handleConnectCommand list", () => {
     );
     const embeds = embedsOf(replies[0].payload);
     expect(embeds.length).toBeGreaterThan(1);
-    // Only the first embed carries the title/description/count; only the last the footer.
+    // Header embed first (no footer), footer on the last embed.
     expect(embeds[0].title).toBe("Your Connections");
     expect(embeds[0].footer).toBeUndefined();
     expect(embeds[embeds.length - 1].footer?.text).toBe("Connections");
-    // Every embed repeats both column headers so each page is self-labeled.
-    for (const embed of embeds) {
-      const names = (embed.fields ?? []).map((f) => f.name);
-      expect(names).toContain("Service Name");
-      expect(names).toContain("Service Status");
-    }
-    // No single field value breaches the 1024-char cap.
+    // The Services list is chunked into more than one repeated-header field.
+    const serviceFields = embeds
+      .flatMap((e) => e.fields ?? [])
+      .filter((f) => f.name === "Services");
+    expect(serviceFields.length).toBeGreaterThan(1);
+    // No single field value breaches the 1024-char cap, and none is empty.
     for (const embed of embeds) {
       for (const field of embed.fields ?? []) {
+        expect(field.value.length).toBeGreaterThan(0);
         expect(field.value.length).toBeLessThanOrEqual(1024);
       }
     }
   });
 
-  it("never emits an embed with empty column values when the budget runs out", async () => {
-    // Enough rows with long labels + a long custom warning emoji to exhaust the
-    // message-wide 6000-char budget. The old guard could push a final page whose
-    // headers fit but whose first row did not, leaving empty Service Name/Status
-    // field values that Discord rejects. Every produced page must carry rows.
-    const specs = Array.from({ length: 69 }, (_, i) => ({
-      id: `svc${i}`,
-      label: `Needs Auth Service ${i}`,
-      summary: "s",
-      services: ["X"],
-      available: true,
-      auth: new PasteTokenAuth({
-        url: `https://example.com/svc${i}`,
-        howto: "token",
-        validate: () => Promise.resolve({ ok: true }),
-      }),
-    }));
-    const registry = new ConnectorRegistry(specs);
-    const seed: DisplayConnection[] = specs.map((s) => ({
-      connectorId: s.id,
-      status: "needs_reauth" as const,
-      token: "t",
-      linkedAt: "2026-01-01T00:00:00Z",
-    }));
-    const { ctx, replies } = makeCtx("list");
-    await handleConnectCommand(
-      ctx,
-      makeDeps({
-        registry,
-        store: makeStore(true, seed).store,
-        emoji: {
-          connected: "<:greencheckfilled:1557056834068807791>",
-          connecting: "<:bluecheckempty:1557056831040393348>",
-          notConnected: "<:redxfilled:1557056838418174022>",
-          needsAuth: "<:warningsquare:1557134247234379836>",
-        },
-      }),
-    );
-    const embeds = embedsOf(replies[0].payload);
-    // No embed may carry a Service Name / Service Status field with an empty value.
-    for (const embed of embeds) {
-      for (const field of embed.fields ?? []) {
-        if (field.name === "Service Name" || field.name === "Service Status") {
-          expect(field.value.length).toBeGreaterThan(0);
-        }
-      }
-    }
-  });
-
-  it("uses injected custom emoji for the status glyphs", async () => {
+  it("uses injected custom emoji for the status glyphs in the services and legend", async () => {
     const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
       {
@@ -435,7 +395,7 @@ describe("handleConnectCommand list", () => {
         linkedAt: "2026-01-01T00:00:00Z",
       },
       // Transient display-only state the live ping surfaces; exercises the
-      // `connecting` glyph + "Pinging..." branch of statusCell.
+      // `connecting` glyph + "Pinging..." branch.
       {
         connectorId: "github",
         status: "connecting",
@@ -456,20 +416,32 @@ describe("handleConnectCommand list", () => {
         },
       }),
     );
-    const statuses = columnText(replies[0].payload, "Service Status");
-    expect(statuses).toContain("<:bluecheckfilled:1> Connected!");
-    expect(statuses).toContain("<:bluecheckempty:2> Pinging...");
-    expect(statuses).toContain("<:warningsquare:4> Needs authentication.");
+    // Each service line is "glyph name"; the status is shown by the glyph.
+    const services = servicesText(replies[0].payload);
+    expect(services).toContain("<:bluecheckfilled:1> Todoist");
+    expect(services).toContain("<:warningsquare:4> Notion");
+    expect(services).toContain("<:bluecheckempty:2> GitHub");
+    // The legend maps each label to its glyph, arrow style.
+    const legend = fieldNamed(replies[0].payload, "Legend") ?? "";
+    expect(legend).toContain('"Connected!" \u2192 <:bluecheckfilled:1>');
+    expect(legend).toContain('"Needs authentication." \u2192 <:warningsquare:4>');
+    expect(legend).toContain('"Pinging..." \u2192 <:bluecheckempty:2>');
   });
 
-  it("shows a friendly note and no table when nothing is linked", async () => {
+  it("shows a friendly note plus the subcommands in one embed when nothing is linked", async () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
-    const embed = embedOf(replies[0].payload);
-    expect(embed.title).toBe("Your Connections");
-    expect(embed.description).toContain("not linked any accounts yet");
-    // No catalog table when there is nothing to show.
-    expect(embed.fields ?? []).toHaveLength(0);
+    const embeds = embedsOf(replies[0].payload);
+    // A single embed when empty (no content embed to split to).
+    expect(embeds).toHaveLength(1);
+    expect(embeds[0].title).toBe("Your Connections");
+    expect(embeds[0].description).toContain("not linked any accounts yet");
+    // Still shows how to connect via the subcommand previews.
+    const names = (embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).toContain("`/conn add <service>`");
+    // No services/legend/count when there is nothing to list.
+    expect(names).not.toContain("Services");
+    expect(names).not.toContain("Currently Connected");
   });
 
   it("defaults a null subcommand to list", async () => {

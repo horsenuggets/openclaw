@@ -19,23 +19,37 @@ Specific builders » `buildWelcomeEmbed` (`onboarding.ts`), `buildLogEmbed`
 (`connect-commands.ts`), the `/debug` help and notice embeds (`debug-command.ts`), and the
 registration and command-result embeds (`channel-commands.ts`, `gateway-events.ts`).
 
-`buildDebugHelpEmbeds` (`debug-command.ts`) and the `/connections list` builder
-(`listReply` in `connect-commands.ts`) both return multiple embeds. They respect two
-distinct Discord limits, centralized in `embed-limits.ts`: each embed holds at most 25
-fields and 1024 chars per field value (per-embed caps), while the combined text of all
+`buildPaginatedEmbeds` (`embed-pagination.ts`) is the shared multi-embed builder. It
+respects two distinct Discord limits, centralized in `embed-limits.ts`: each embed holds
+at most 25 fields, 256 chars per field name, 1024 chars per field value, 256 chars of
+title, and 4096 chars of description (per-embed caps), while the combined text of all
 embeds in the message (title + description + every field name/value + footer) must stay
-under 6000 characters (a per-message cap, not per-embed) across at most 10 embeds. Both
-pack content across embeds accordingly, keeping the title and description on the first,
-the plain columns/fields in the middle, and the footer and timestamp on the last; if a
-limit is hit they stop and note the overflow so the message still renders. They build the
-embed objects directly (rather than via `buildEmbed`) so the non-last embeds can omit the
-footer.
+under 6000 characters (a per-message cap, not per-embed) across at most 10 embeds. Fields
+are supplied as ordered GROUPS: every group after the first starts a new embed (a forced
+section break), and within a group fields pack onto the current embed until the 25-field
+cap and only then spill onto a further embed (the shared 6000-char message budget usually
+bites first). The title and description go on the first embed, the footer/icon/timestamp
+on the last, every embed shares the category color, and a truncation note is appended only
+when the content truly exhausts the 6000-char budget or the 10-embed count (never when the
+full payload fits). Every field, the title, the description, and the truncation note are
+clamped to their Discord caps, so a caller can never emit a payload Discord rejects.
+`chunkLinesIntoFields` is a companion that splits a long single-column list into several
+repeated-header fields under the 1024 cap, truncating any single over-long line with an
+ellipsis.
 
-`listReply` lays out two inline columns, Service Name and Service Status, with the headers
-repeated on every page so each embed is self-labeled. The first embed also carries a
-non-inline "Currently Connected" `connected/total` count. Over-long service names are
-truncated to 20 chars with an ellipsis. Only services in a live state (linked, re-auth
-needed, or a transient ping) appear; coming-soon connectors never do.
+`buildDebugHelpEmbeds` (`debug-command.ts`) calls it with one group (the subcommand
+fields). `listReply` (`connect-commands.ts`) calls it with two groups, so
+`/connections list` is two embeds by default: the first carries the title, description,
+and the `/conn` subcommand previews (debug-help field style); the second carries a
+"Currently Connected" `connected/total` count, a status "Legend" (one `"Label" -> glyph`
+line for each of the three live statuses), and the "Services" list, where each line is
+`glyph name` (the status shown by the glyph and decoded by the Legend). A long Services
+list is chunked under the 1024 cap into several repeated-header Services fields on the
+second embed, and if the shared message budget is exhausted a truncation note is appended.
+Over-long service names are truncated to 20 chars with an ellipsis. Only services in a
+live state (linked, re-auth needed, or a transient ping) appear; coming-soon connectors
+never do. When nothing is linked, a single embed shows a friendly note plus the subcommand
+previews.
 
 ## Icon Assets
 
