@@ -5,11 +5,11 @@
  * display metadata plus the auth flow it uses to link (see auth-flow.ts); the
  * registry is the single lookup surface the router and handler share.
  *
- * Phase 1 MVP ships the `DirectAuth` connectors (Todoist, Notion, GitHub) end to
- * end — the user pastes a personal token. Google is catalogued with `CliAuth` (gog)
- * but marked unavailable until the in-container credential path is resolved, so
- * `/connections` shows it as "coming soon" rather than hiding the top-priority
- * service; it will move to `OAuthPkceAuth` once client config and materialization land.
+ * The `DirectAuth` connectors (Todoist, Notion, GitHub) link end to end — the user
+ * pastes a personal token. Google uses `OAuthPkceAuth` (the two-step PKCE flow) but is
+ * marked unavailable until the deployment sets its client id and the captured credential
+ * materializes into the agent box, so `/connections` shows it as "coming soon" rather
+ * than hiding the top-priority service.
  */
 
 import { type AuthFlow, DirectAuth, OAuthPkceAuth } from "./auth-flow.js";
@@ -127,8 +127,10 @@ export class ConnectorRegistry {
 
 /**
  * Google OAuth. Endpoints and scopes are public, universal constants (safe to keep
- * in the repo); only the per-deployment client id is secret, so it is read from the
- * environment at call time and the connector stays unavailable until it is set. The
+ * in the repo). The client id is also public protocol config — it rides in every
+ * authorize URL, so it is NOT a secret — but it is per-deployment, so it is read from
+ * the environment at call time rather than hardcoded, and the connector stays
+ * unavailable until it is set (and the credential materializes into the box). The
  * loopback redirect follows the native-app flow (RFC 8252): the user approves and is
  * sent to `http://127.0.0.1`, where nothing need listen — the code is in the URL,
  * which they paste back. `access_type=offline` + `prompt=consent` ask Google for a

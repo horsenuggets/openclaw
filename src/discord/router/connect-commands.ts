@@ -531,13 +531,21 @@ export async function handleConnectCommand(
     // a direct connector ignores it.
     const pending = deps.pendingAuth.get(ctx.channelId, connector.id) ?? undefined;
     const result = await connector.auth.complete(token, pending);
+    // OAuth and direct connectors fail differently: an OAuth user pasted a redirect
+    // URL/code and must restart the authorize dance, while a direct user re-pastes a
+    // token. Shape the copy off the flow so the retry instruction is actionable.
+    const isOAuth = connector.auth.outgoing === "link";
+    const reason = result.ok ? "" : result.message ? ` (${result.message})` : "";
     if (!result.ok) {
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
           withScrubNote(
-            `That token did not work${result.message ? ` (${result.message})` : ""}. ` +
-              `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
+            isOAuth
+              ? `That did not work${reason}. Start over with \`/connections add ${connector.id}\`, ` +
+                  "approve again, and paste the new URL."
+              : `That token did not work${reason}. ` +
+                  `Double-check it and try \`/connections add ${connector.id} <token>\` again.`,
           ),
         ),
         { ephemeral: true },
@@ -554,13 +562,16 @@ export async function handleConnectCommand(
       instanceKey,
     );
     if (!saved) {
+      const retry = isOAuth
+        ? `start over with \`/connections add ${connector.id}\``
+        : `try \`/connections add ${connector.id} <token>\` again`;
       await ctx.reply(
         connectionsReply(
           `Link ${connector.label}`,
           withScrubNote(
-            "I verified the token but could not store the link (the channel may have been " +
-              "unregistered, or its storage is unavailable). Please try " +
-              `\`/connections add ${connector.id} <token>\` again.`,
+            `I verified the ${isOAuth ? "authorization" : "token"} but could not store the link ` +
+              "(the channel may have been unregistered, or its storage is unavailable). " +
+              `Please ${retry}.`,
           ),
         ),
         { ephemeral: true },

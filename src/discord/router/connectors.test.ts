@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DirectAuth } from "./auth-flow.js";
 import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
 
@@ -43,6 +43,40 @@ describe("connector catalog", () => {
     expect(google?.auth.authKind).toBe("oauth");
     expect(google?.auth.outgoing).toBe("link");
     expect(google?.auth.delivery).toBe("paste");
+  });
+});
+
+describe("Google OAuth configuration", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("builds the Google authorize URL with the expected endpoints, scopes, and PKCE", () => {
+    vi.stubEnv("OPENCLAW_GOOGLE_CLIENT_ID", "test-client.apps.googleusercontent.com");
+    const prompt = connectorRegistry.get("google")?.auth.begin();
+    expect(prompt?.pending).toBeTruthy();
+    const url = new URL(prompt?.url ?? "");
+    expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(url.searchParams.get("client_id")).toBe("test-client.apps.googleusercontent.com");
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1");
+    expect(url.searchParams.get("response_type")).toBe("code");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("code_challenge")).toBeTruthy();
+    expect(url.searchParams.get("state")).toBeTruthy();
+    expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("prompt")).toBe("consent");
+    const scope = url.searchParams.get("scope") ?? "";
+    expect(scope).toContain("openid");
+    expect(scope).toContain("email");
+    expect(scope).toContain("https://www.googleapis.com/auth/gmail.modify");
+    expect(scope).toContain("https://www.googleapis.com/auth/calendar");
+  });
+
+  it("refuses to mint an authorize link when the client id is not configured", () => {
+    vi.stubEnv("OPENCLAW_GOOGLE_CLIENT_ID", "");
+    const prompt = connectorRegistry.get("google")?.auth.begin();
+    expect(prompt?.url).toBeUndefined();
+    expect(prompt?.pending).toBeUndefined();
   });
 
   it("gives every direct connector a token howto and url, and sane descriptors", () => {
