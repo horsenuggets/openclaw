@@ -135,6 +135,7 @@ function makeRegistry(
     label,
     summary: `${label} summary`,
     services,
+    skills: [id],
     available: true,
     auth: new PasteTokenAuth({
       url: `https://example.com/${id}`,
@@ -148,6 +149,7 @@ function makeRegistry(
       label: "Google",
       summary: "Google summary",
       services: ["Gmail"],
+      skills: ["gog"],
       available: false,
       auth: new CliAuth({ tool: "gog" }),
     },
@@ -311,6 +313,7 @@ describe("handleConnectCommand list", () => {
         label: "Salesforce Marketing Cloud",
         summary: "long",
         services: ["X"],
+        skills: ["verbose"],
         available: true,
         auth: new PasteTokenAuth({
           url: "https://example.com/verbose",
@@ -337,6 +340,7 @@ describe("handleConnectCommand list", () => {
       label: `Service ${i}`,
       summary: "s",
       services: ["X"],
+      skills: [`svc${i}`],
       available: true,
       auth: new PasteTokenAuth({
         url: `https://example.com/svc${i}`,

@@ -52,4 +52,32 @@ describe("connector catalog", () => {
         .map((c) => c.id),
     ).toEqual(["google", "todoist"]);
   });
+
+  it("gives every connector at least one skill to enable", () => {
+    for (const c of connectorRegistry.all()) {
+      expect(c.skills.length, `${c.id} skills`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("connectorRegistry.forSkill", () => {
+  it("resolves a skill key back to its connector (case-insensitive)", () => {
+    expect(connectorRegistry.forSkill("todoist")?.id).toBe("todoist");
+    expect(connectorRegistry.forSkill("GOG")?.id).toBe("google");
+    expect(connectorRegistry.forSkill("  github ")?.id).toBe("github");
+  });
+
+  it("returns null for unknown or empty skill keys", () => {
+    expect(connectorRegistry.forSkill("slack")).toBeNull();
+    expect(connectorRegistry.forSkill("")).toBeNull();
+    expect(connectorRegistry.forSkill(undefined)).toBeNull();
+  });
+
+  it("is the inverse of every connector's skills list", () => {
+    for (const c of connectorRegistry.all()) {
+      for (const skillKey of c.skills) {
+        expect(connectorRegistry.forSkill(skillKey)?.id).toBe(c.id);
+      }
+    }
+  });
 });

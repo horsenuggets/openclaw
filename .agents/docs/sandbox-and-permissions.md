@@ -43,11 +43,23 @@ the box (its delivery target is a file the box can read). Because exec runs unat
 channel's agent. Paste-token connectors (Todoist, Notion, GitHub) are live; Google via gog
 is coming soon and is still marked unavailable in `connectors.ts` pending a shared OAuth
 client. Validated credentials are stored per instance in a `.connections.json` file
-(`connections-store.ts`) and resolved by the router (`router.ts`). Important » On prod the
-instances tree is mounted read-only (only `shared/auth` is writable), so writing
-`.connections.json` throws `EROFS` (the router catches it), which means paste-token
-connections are not currently persisted or materialized into the boxes in production.
-Treat the connection store as best-effort until that mount is made writable.
+(`connections-store.ts`) and resolved by the router (`router.ts`).
+
+A connector and a skill are two layers. A *connector* captures one credential; a *skill*
+is the installed tool that credential powers. One connector links to MANY skills:
+`Connector.skills` (`connectors.ts`) lists the skill keys a single captured credential
+enables, so linking Google is meant to light up every Google skill at once. The registry
+indexes this both ways — `get(id)` for the connector, `forSkill(skillKey)` for the
+inverse. `connector-skills.ts` holds the pure resolver: `skillsEnabledByConnection` /
+`enabledSkillKeys` map an owner's connections to the deduped set of skill keys they enable
+(only a `linked` connection enables its skills; `needs_reauth`/`not_linked` enable
+nothing). These are the connection->skill LINKAGE only; actually injecting a credential
+into a box (env var, a `gh` login, a gog cred file — it varies per skill) is a separate
+materialization layer. Important » On prod the instances tree is mounted read-only (only
+`shared/auth` is writable), so writing `.connections.json` throws `EROFS` (the router
+catches it), which means paste-token connections are not currently persisted or
+materialized into the boxes in production. Treat the connection store as best-effort until
+that mount is made writable.
 
 The `/connections` slash-command reply is ephemeral by default, but — like `/debug` and
 `/lifecycle` — it now honors the per-channel `ephemeralCommands` preference: a channel set

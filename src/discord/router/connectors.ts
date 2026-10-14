@@ -22,6 +22,14 @@ export type Connector = {
   summary: string;
   /** Services the connection exposes, e.g. ["Tasks", "Projects"]. */
   services: readonly string[];
+  /**
+   * Skill keys (SKILL.md `name`/`skillKey`) this connector's single credential
+   * enables. One connector links to MANY skills: a Google credential enables every
+   * Google skill, a Todoist token enables the Todoist skill, and so on. Materializing
+   * one captured credential enables this whole set at once (the mechanics of injecting
+   * that credential per skill live elsewhere; this is only the linkage).
+   */
+  skills: readonly string[];
   /** False while the connector is catalogued but not wired yet (shown as coming soon). */
   available: boolean;
   /** How this connector authenticates (paste a token, a CLI flow, OAuth, ...). */
@@ -35,9 +43,17 @@ export type Connector = {
  */
 export class ConnectorRegistry {
   private readonly byId: Map<string, Connector>;
+  /** Reverse index from a skill key to the connector that enables it. */
+  private readonly bySkill: Map<string, Connector>;
 
   constructor(private readonly connectors: readonly Connector[]) {
     this.byId = new Map(connectors.map((c) => [c.id, c]));
+    this.bySkill = new Map();
+    for (const connector of connectors) {
+      for (const skillKey of connector.skills) {
+        this.bySkill.set(skillKey.toLowerCase(), connector);
+      }
+    }
   }
 
   /** Every connector, in display order. */
@@ -51,6 +67,17 @@ export class ConnectorRegistry {
       return null;
     }
     return this.byId.get(id.trim().toLowerCase()) ?? null;
+  }
+
+  /**
+   * The connector that owns a skill key (case-insensitive), or null when no
+   * connector enables it. This is the inverse of {@link Connector.skills}.
+   */
+  forSkill(skillKey: string | undefined): Connector | null {
+    if (!skillKey) {
+      return null;
+    }
+    return this.bySkill.get(skillKey.trim().toLowerCase()) ?? null;
   }
 
   /** Connectors a user can link right now. */
@@ -76,6 +103,7 @@ export const connectorRegistry = new ConnectorRegistry([
     label: "Google",
     summary: "Gmail, Calendar, Drive, Contacts, Sheets, and Docs via the gog CLI.",
     services: ["Gmail", "Calendar", "Drive", "Contacts", "Sheets", "Docs"],
+    skills: ["gog"],
     // Google needs the in-container credential path resolved first (see the
     // "Resolve the no-credentials-in-box gap" task), so it is catalogued but not
     // yet linkable in this prototype.
@@ -87,6 +115,7 @@ export const connectorRegistry = new ConnectorRegistry([
     label: "Todoist",
     summary: "Read and manage your Todoist tasks, projects, and labels.",
     services: ["Tasks", "Projects", "Labels"],
+    skills: ["todoist"],
     available: true,
     auth: new PasteTokenAuth({
       url: "https://app.todoist.com/app/settings/integrations/developer",
@@ -99,6 +128,7 @@ export const connectorRegistry = new ConnectorRegistry([
     label: "Notion",
     summary: "Read and edit Notion pages and databases you share with the integration.",
     services: ["Pages", "Databases", "Comments"],
+    skills: ["notion"],
     available: true,
     auth: new PasteTokenAuth({
       url: "https://www.notion.so/my-integrations",
@@ -112,6 +142,7 @@ export const connectorRegistry = new ConnectorRegistry([
     label: "GitHub",
     summary: "Access repositories, issues, and pull requests on your behalf.",
     services: ["Repos", "Issues", "Pull requests"],
+    skills: ["github"],
     available: true,
     auth: new PasteTokenAuth({
       url: "https://github.com/settings/personal-access-tokens",

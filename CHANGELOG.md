@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: connectors now declare the skills they enable. Each catalog entry
+  carries a `skills` list (`connectors.ts`), the registry indexes it in reverse via
+  `forSkill(skillKey)`, and the new `connector-skills.ts` resolves an owner's connections
+  to the deduped set of skill keys they enable (`skillsEnabledByConnection` /
+  `enabledSkillKeys`; only a linked connection counts). This is the
+  one-connector-many-skills linkage layer — a single captured credential is meant to
+  enable a connector's whole skill set — kept separate from the per-skill credential
+  materialization that injects it into a box.
 - Discord router: `/connections list` is now two embeds by default — a header embed with
   the title, description, and `/conn` subcommand previews (debug-help field style), then a
   content embed with a "Currently Connected" count, a status "Legend", and a "Services"
