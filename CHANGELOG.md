@@ -6,6 +6,9 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: replaced the Debug embed footer icon with the Material Symbols
+  `bug_report` glyph (36px, `#ff80e0`), dropping the viewfinder frame corners so the whole
+  bug shows.
 - Discord router: wired the OAuth link end to end. `/connections add <service>` on an
   OAuth connector now shows the authorize link and persists the PKCE `pending` blob
   (verifier + CSRF state) via a new per-instance `PendingAuthStore`
