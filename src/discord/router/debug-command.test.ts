@@ -234,18 +234,14 @@ describe("buildDebugHelpEmbeds", () => {
       {
         name: "`connflow [scenario] [subcommand] [args]`",
         value:
-          "Preview the /connections flow against a canned scenario, rendered as Debug. Omit " +
-          "the scenario to list them.",
+          "Preview the `/connections` flow against a canned scenario. Omit the scenario to list them.",
       },
       { name: "`echo <message>`", value: "Sends the raw text as an individual message." },
       {
         name: "`ephemeral [on|off]`",
-        value:
-          "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` " +
-          "replies are ephemeral (`/channel` and `/secret` always are). Omit the argument " +
-          "to see the current status.",
+        value: "Set whether slash command replies are ephemeral or not.",
       },
-      { name: "`help`", value: "Prints this help message." },
+      { name: "`help`", value: "Displays this help message." },
       {
         name: "`secrettest <secret-value> [secret-name]`",
         value:
@@ -254,10 +250,10 @@ describe("buildDebugHelpEmbeds", () => {
           "use `/secret` for anything sensitive.",
       },
       {
-        name: "`unregisterflow [channelId]`",
+        name: "`unregisterflow`",
         value:
-          "Preview the two-phase unregister button flow (confirm -> interim -> final) in this " +
-          "channel, or a given channel id, without actually unregistering anything.",
+          "Preview the unregister flow (confirm → interim → final) in this " +
+          "channel, without actually unregistering anything.",
       },
     ]);
     expect(embed.footer).toEqual({ text: "Debug", icon_url: "attachment://debug.png" });
