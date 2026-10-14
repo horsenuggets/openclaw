@@ -103,7 +103,7 @@ function readLastMs(lastPath: string): number | null {
  * step — and the whitelist ids are still added even when the human listing fails,
  * since they need no member scan.
  */
-async function addEveryoneToThread(client: LabDiscord, threadId: string): Promise<void> {
+export async function addEveryoneToThread(client: LabDiscord, threadId: string): Promise<void> {
   // Verbose by design: this follow-up step can fail transiently (a rate-limited
   // or flaky member listing abandons the auto-add for ALL humans), so every
   // outcome is narrated. A quiet one-line skip was easy to miss, especially when
