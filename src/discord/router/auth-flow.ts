@@ -284,7 +284,8 @@ export class OAuthPkceAuth implements AuthFlow {
   /**
    * Pull the code (and state) out of a pasted callback, or keep an opaque bare code
    * whole. A callback is recognized ONLY as the real redirect URL we sent the user to
-   * (it starts with the configured `redirectUri`) or the explicitly supported bare
+   * (a URL whose origin and path match the configured `redirectUri`, via
+   * {@link matchesRedirect} — never a loose prefix) or the explicitly supported bare
    * query that carries both `code` and `state` (`code=...&state=...`, with or without a
    * leading `?`). Authorization codes are opaque and may themselves contain `://` or
    * `code=`, so anything else is preserved verbatim as the code. `structured` is true
