@@ -317,8 +317,9 @@ export function resolveEphemeralArgs(
 const ephemeralSubcommand: DebugSubcommand = {
   name: "ephemeral",
   usage: "ephemeral [on|off]",
-  description:
-    "Show or set whether this channel's `/debug`, `/lifecycle`, and `/connections` replies are ephemeral (`/channel` and `/secret` always are). Omit the argument to see the current status.",
+  // [TODO] `/channel` does not need to be ephemeral. Fix this in a separate worktree and
+  // remove this comment.
+  description: "Set whether slash command replies are ephemeral or not.",
   run: ({ args }) => {
     const resolved = resolveEphemeralArgs(args);
     if ("invalid" in resolved) {
@@ -334,11 +335,13 @@ const ephemeralSubcommand: DebugSubcommand = {
 /** A Discord snowflake token (17-20 digits), for the optional channel argument. */
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 
+// [TODO] Remove the ability to use a specified channel ID in a separate worktree, then
+// remove this comment.
 const unregisterFlowSubcommand: DebugSubcommand = {
   name: "unregisterflow",
-  usage: "unregisterflow [channelId]",
+  usage: "unregisterflow",
   description:
-    "Preview the two-phase unregister button flow (confirm -> interim -> final) in this channel, or a given channel id, without actually unregistering anything.",
+    "Preview the unregister flow (confirm → interim → final) in this channel, without actually unregistering anything.",
   run: ({ args }) => {
     const raw = args[0];
     if (raw !== undefined && raw !== "" && !SNOWFLAKE_RE.test(raw)) {
@@ -370,7 +373,7 @@ const connFlowSubcommand: DebugSubcommand = {
   name: "connflow",
   usage: "connflow [scenario] [subcommand] [args]",
   description:
-    "Preview the /connections flow against a canned scenario, rendered as Debug. Omit the scenario to list them.",
+    "Preview the `/connections` flow against a canned scenario. Omit the scenario to list them.",
   run: ({ args }) => {
     const raw = args[0];
     if (raw === undefined || raw === "") {
@@ -391,7 +394,7 @@ const connFlowSubcommand: DebugSubcommand = {
 const helpSubcommand: DebugSubcommand = {
   name: "help",
   usage: "help",
-  description: "Prints this help message.",
+  description: "Displays this help message.",
   run: ({ subcommands }) => ({ kind: "embeds", ...buildDebugHelpEmbeds(subcommands) }),
 };
 
