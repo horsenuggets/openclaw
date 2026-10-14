@@ -46,10 +46,15 @@ if [ -n "$main_root" ] && [ "$main_root" != "$(pwd)" ]; then
 fi
 
 # Install deps unless this worktree already has them (e.g. a re-added worktree).
+# Pass --ignore-scripts: a freshly added worktree may hold an untrusted branch,
+# and pnpm would otherwise run that branch's package.json lifecycle scripts
+# (prepare/postinstall/...) as arbitrary code right after we copied local secrets
+# in. Scripts stay off; this install only needs to populate node_modules so the
+# pre-commit formatter resolves. Re-run a full `pnpm install` for native rebuilds.
 if [ ! -d node_modules ]; then
   if [ -f pnpm-lock.yaml ] && command -v pnpm >/dev/null 2>&1; then
-    echo "post-checkout: installing dependencies for new worktree (pnpm install)..." >&2
-    CI=true pnpm install || echo "post-checkout: pnpm install failed; run it manually before committing." >&2
+    echo "post-checkout: installing dependencies for new worktree (pnpm install --ignore-scripts)..." >&2
+    CI=true pnpm install --ignore-scripts || echo "post-checkout: pnpm install failed; run it manually before committing." >&2
   else
     echo "post-checkout: pnpm not found; run 'pnpm install' in this worktree before committing." >&2
   fi
