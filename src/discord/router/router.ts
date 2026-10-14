@@ -18,6 +18,7 @@ import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandDeps,
   type ConnectionStore,
+  type PendingAuthStore,
 } from "./connect-commands.js";
 import {
   getConnection,
@@ -51,6 +52,7 @@ import { LIFECYCLE_COMMAND_SPEC } from "./lifecycle-command.js";
 import { createSharedAuthTokenResolver, startModelProxyServer } from "./model-proxy.js";
 import { createNoticeDebouncer } from "./notice-debounce.js";
 import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
+import { getPendingAuth, removePendingAuth, savePendingAuth } from "./pending-auth-store.js";
 import { removeUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
@@ -757,12 +759,52 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
     },
   };
+  // Between-step storage for OAuth links: begin() mints a PKCE `pending` blob that
+  // the user's second `/connections add` command needs. Backed by each instance's
+  // `.pending-auth.json`, owner-bound and instance-key guarded like the token store.
+  const pendingAuthStore: PendingAuthStore = {
+    get: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      return inst && ownerId ? getPendingAuth(inst.instanceDir, ownerId, connectorId) : null;
+    },
+    save: (channelId, connectorId, pending, expectedKey) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId || currentConnectionRegistrationKey(channelId) !== expectedKey) {
+        return false;
+      }
+      try {
+        savePendingAuth(inst.instanceDir, ownerId, connectorId, pending);
+        return true;
+      } catch (err) {
+        // Same read-only-mount (EROFS) caveat as the connection store; degrade to a
+        // clean "could not start" reply rather than hanging the interaction.
+        runtime.error(`[router] failed to persist pending auth for ${channelId}: ${String(err)}`);
+        return false;
+      }
+    },
+    remove: (channelId, connectorId) => {
+      const inst = instances.get(channelId);
+      const ownerId = describeInstance(channelId)?.ownerId;
+      if (!inst || !ownerId) {
+        return;
+      }
+      try {
+        removePendingAuth(inst.instanceDir, ownerId, connectorId);
+      } catch (err) {
+        // Best-effort cleanup; a failure here does not affect the stored link.
+        runtime.error(`[router] failed to clear pending auth for ${channelId}: ${String(err)}`);
+      }
+    },
+  };
   // Resolve this bot's own custom application emoji (connected/not-connected
   // glyphs) by name, so the /connections list table renders them. Falls back to
   // unicode when the emoji are not present on the app.
   const connectionEmoji = connectionEmojiFromMap(await fetchAppEmojiMap(discordToken));
   const connectCommandDeps: ConnectCommandDeps = {
     store: connectionStore,
+    pendingAuth: pendingAuthStore,
     registry: connectorRegistry,
     emoji: connectionEmoji,
     log: (message) => runtime.log(message),

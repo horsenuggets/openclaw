@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelReplyPayload } from "./channel-commands.js";
 import type { DisplayConnection, StoredConnection } from "./connections-store.js";
-import { type AuthResult, CliAuth, DirectAuth } from "./auth-flow.js";
+import { type AuthResult, CliAuth, DirectAuth, OAuthPkceAuth } from "./auth-flow.js";
 import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
   type ConnectCommandDeps,
   type ConnectionStore,
+  type PendingAuthStore,
   connectTextCommandHasToken,
   handleConnectCommand,
   parseConnectTextCommand,
@@ -101,6 +102,25 @@ function makeStore(registered = true, seed: DisplayConnection[] = []) {
   return { store, map };
 }
 
+/** In-memory pending-auth store. `writable: false` models storage being unavailable. */
+function makePendingAuth(writable = true) {
+  const map = new Map<string, string>();
+  const store: PendingAuthStore = {
+    get: (_c, id) => map.get(id) ?? null,
+    save: (_c, id, pending, expectedKey) => {
+      if (!writable || expectedKey !== INSTANCE_KEY) {
+        return false;
+      }
+      map.set(id, pending);
+      return true;
+    },
+    remove: (_c, id) => {
+      map.delete(id);
+    },
+  };
+  return { store, map };
+}
+
 function makeCtx(
   subcommand: string | null,
   args: string[] = [],
@@ -162,11 +182,46 @@ function makeRegistry(
 function makeDeps(over: Partial<ConnectCommandDeps> = {}): ConnectCommandDeps {
   return {
     store: over.store ?? makeStore().store,
+    pendingAuth: over.pendingAuth ?? makePendingAuth().store,
     registry: over.registry ?? makeRegistry(),
     now: () => new Date("2026-01-01T00:00:00.000Z"),
     log: () => {},
     ...over,
   };
+}
+
+/** A registry with one available OAuth-PKCE connector, network-free via `postForm`. */
+function makeOAuthRegistry(
+  postForm: (
+    url: string,
+    form: Record<string, string>,
+  ) => Promise<{ ok: boolean; status: number; body: unknown }>,
+): ConnectorRegistry {
+  return new ConnectorRegistry([
+    {
+      id: "oauthy",
+      label: "OAuthy",
+      summary: "OAuthy summary",
+      services: ["Stuff"],
+      skills: ["oauthy"],
+      available: true,
+      auth: new OAuthPkceAuth({
+        authorizeEndpoint: "https://provider.example/authorize",
+        tokenEndpoint: "https://provider.example/token",
+        clientId: () => "client-123",
+        redirectUri: "http://127.0.0.1",
+        scopes: ["read"],
+        howto: "Approve access.",
+        postForm,
+        randomBytes: (size: number) => Buffer.alloc(size, 7),
+      }),
+    },
+  ]);
+}
+
+/** Decode the CSRF state out of a stored pending blob (base64 JSON). */
+function stateOf(pending: string): string {
+  return (JSON.parse(Buffer.from(pending, "base64").toString("utf8")) as { state: string }).state;
 }
 
 /** Pull the first embed out of a reply payload (fails if it is a string). */
@@ -655,5 +710,84 @@ describe("handleConnectCommand remove", () => {
     expect(description).toContain("storage is unavailable");
     expect(description).toContain("still linked");
     expect(description).not.toContain("nothing to remove");
+  });
+});
+
+describe("handleConnectCommand add (OAuth two-step flow)", () => {
+  const okPostForm = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      body: { access_token: "at-oauthy", refresh_token: "rt-oauthy", expires_in: 3600 },
+    });
+
+  it("begin: shows the authorize link and stashes a pending blob", async () => {
+    const pending = makePendingAuth();
+    const deps = makeDeps({ registry: makeOAuthRegistry(okPostForm), pendingAuth: pending.store });
+    const { ctx, replies } = makeCtx("add", ["oauthy"]);
+    await handleConnectCommand(ctx, deps);
+    const description = embedOf(replies[0].payload).description ?? "";
+    expect(description).toContain("https://provider.example/authorize");
+    expect(description).toContain("paste the URL you are redirected to");
+    // The PKCE verifier + state are persisted for the finishing command.
+    expect(pending.map.get("oauthy")).toBeTruthy();
+  });
+
+  it("complete: exchanges the pasted redirect URL, stores the link, clears pending", async () => {
+    const conn = makeStore();
+    const pending = makePendingAuth();
+    const calls: { form: Record<string, string> }[] = [];
+    const postForm = (_url: string, form: Record<string, string>) => {
+      calls.push({ form });
+      return okPostForm();
+    };
+    const deps = makeDeps({
+      store: conn.store,
+      registry: makeOAuthRegistry(postForm),
+      pendingAuth: pending.store,
+    });
+
+    // Step 1: begin stores the pending blob.
+    await handleConnectCommand(makeCtx("add", ["oauthy"]).ctx, deps);
+    const state = stateOf(pending.map.get("oauthy") ?? "");
+
+    // Step 2: paste the loopback redirect URL to finish.
+    const { ctx, replies } = makeCtx("add", [
+      "oauthy",
+      `http://127.0.0.1/?code=the-code&state=${state}`,
+    ]);
+    await handleConnectCommand(ctx, deps);
+
+    expect(embedOf(replies[0].payload).title).toBe("Connected!");
+    expect(conn.map.get("oauthy")).toMatchObject({
+      connectorId: "oauthy",
+      status: "linked",
+      token: "at-oauthy",
+    });
+    expect(calls[0]?.form.code).toBe("the-code");
+    // The pending blob is consumed once the link is stored.
+    expect(pending.map.has("oauthy")).toBe(false);
+  });
+
+  it("complete without a prior begin fails (no pending state) and stores nothing", async () => {
+    const conn = makeStore();
+    const deps = makeDeps({
+      store: conn.store,
+      registry: makeOAuthRegistry(okPostForm),
+      pendingAuth: makePendingAuth().store,
+    });
+    const { ctx, replies } = makeCtx("add", ["oauthy", "http://127.0.0.1/?code=c&state=s"]);
+    await handleConnectCommand(ctx, deps);
+    expect(embedOf(replies[0].payload).description).toContain("did not work");
+    expect(conn.map.has("oauthy")).toBe(false);
+  });
+
+  it("begin: reports cleanly when pending storage is unavailable", async () => {
+    const pending = makePendingAuth(false); // writes always fail (e.g. read-only mount)
+    const deps = makeDeps({ registry: makeOAuthRegistry(okPostForm), pendingAuth: pending.store });
+    const { ctx, replies } = makeCtx("add", ["oauthy"]);
+    await handleConnectCommand(ctx, deps);
+    expect(embedOf(replies[0].payload).description).toContain("could not start the link");
+    expect(pending.map.has("oauthy")).toBe(false);
   });
 });

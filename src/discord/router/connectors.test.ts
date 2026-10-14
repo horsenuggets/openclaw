@@ -37,10 +37,12 @@ describe("connector catalog", () => {
     expect(connectorRegistry.availableIds()).toBe("todoist, notion, github");
   });
 
-  it("marks Google as catalogued but not yet available", () => {
+  it("gives Google an OAuth flow but keeps it unavailable until configured", () => {
     const google = connectorRegistry.get("google");
     expect(google?.available).toBe(false);
-    expect(google?.auth.authKind).toBe("cli");
+    expect(google?.auth.authKind).toBe("oauth");
+    expect(google?.auth.outgoing).toBe("link");
+    expect(google?.auth.delivery).toBe("paste");
   });
 
   it("gives every direct connector a token howto and url, and sane descriptors", () => {

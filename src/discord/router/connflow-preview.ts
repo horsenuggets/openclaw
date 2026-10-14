@@ -23,6 +23,7 @@ import {
   type ConnectionEmoji,
   type ConnectionStore,
   DEFAULT_CONNECTION_EMOJI,
+  type PendingAuthStore,
   handleConnectCommand,
 } from "./connect-commands.js";
 import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
@@ -96,6 +97,21 @@ function previewStore(connections: DisplayConnection[]): ConnectionStore {
       return true;
     },
     remove: (_channelId, id) => (map.delete(id) ? "removed" : "absent"),
+  };
+}
+
+/** An in-memory pending-auth store for the preview (OAuth begin/complete round-trip). */
+function previewPendingAuth(): PendingAuthStore {
+  const map = new Map<string, string>();
+  return {
+    get: (_channelId, connectorId) => map.get(connectorId) ?? null,
+    save: (_channelId, connectorId, pending) => {
+      map.set(connectorId, pending);
+      return true;
+    },
+    remove: (_channelId, connectorId) => {
+      map.delete(connectorId);
+    },
   };
 }
 
@@ -176,6 +192,7 @@ export async function simulateConnFlow(input: {
     },
     {
       store: previewStore(scenario.connections),
+      pendingAuth: previewPendingAuth(),
       registry: previewRegistry(),
       emoji: input.emoji ?? DEFAULT_CONNECTION_EMOJI,
       ...(input.now ? { now: input.now } : {}),

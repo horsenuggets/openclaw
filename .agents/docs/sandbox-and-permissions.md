@@ -57,20 +57,22 @@ so the embed layer can present it without branching on the provider: `authKind` 
 - `DirectAuth` — the user already has a personal token; `begin()` shows instructions, the
   user pastes the token via `/connections add <service> <token>`, and a per-service
   `validate` closure (`connect-validators.ts`) confirms it. Todoist, Notion, GitHub.
-- `OAuthPkceAuth` — the standard OAuth authorization-code flow with PKCE (RFC 7636).
-  `begin()` mints a `code_verifier` + `code_challenge` (S256) + CSRF `state` and returns
-  the authorize URL plus an opaque `pending` blob (the verifier + state); the user
-  approves, lands on a loopback redirect (nothing needs to listen — the code is in the
-  URL), and pastes that URL (or the bare code) via `/connections add`; `complete()`
-  validates the state and exchanges the code + verifier for tokens. No client secret
-  (public client); the client id is read from the environment at call time, never
-  hardcoded. The MVP delivery is `paste`; a hosted `server-redirect` that auto-completes
-  is a later UX upgrade. NOTE: `complete()` is not yet wired to a catalog connector — the
-  handler must persist the `pending` blob between the two commands first, and a connector
-  must adopt the flow (Google, once client config + materialization land). The class is
-  complete and unit-tested in the meantime.
-- `CliAuth` — a local CLI login (gog); a placeholder until the in-container path is
-  resolved.
+- `OAuthPkceAuth` — the standard OAuth authorization-code flow with PKCE (RFC 7636), a
+  two-step link. The first `/connections add <service>` calls `begin()`, which mints a
+  `code_verifier` + `code_challenge` (S256) + CSRF `state`, shows the authorize link, and
+  returns an opaque `pending` blob (the verifier + state); the handler stashes that blob
+  via the `PendingAuthStore` (`pending-auth-store.ts`, a per-instance `.pending-auth.json`
+  keyed by connector id, owner-bound and instance-key guarded like the token store). The
+  user approves, lands on a loopback redirect (nothing needs to listen — the code is in
+  the URL), and runs a second `/connections add <service> <pasted-url-or-code>`; the
+  handler loads the `pending` blob, `complete()` validates the state and exchanges the
+  code + verifier for tokens, and the blob is cleared on success. No client secret (public
+  client); the client id is read from the environment at call time, never hardcoded. The
+  MVP delivery is `paste`; a hosted `server-redirect` that auto-completes is a later UX
+  upgrade. Google uses this flow but stays unavailable (see below) until
+  `OPENCLAW_GOOGLE_CLIENT_ID` is set and the credential materializes into the box.
+- `CliAuth` — a local CLI login placeholder; no catalog connector uses it now (Google
+  moved to `OAuthPkceAuth`), but it is retained as the shape for a future CLI-login flow.
 
 A connector and a skill are two layers. A *connector* captures one credential; a *skill*
 is the installed tool that credential powers. One connector links to MANY skills:
