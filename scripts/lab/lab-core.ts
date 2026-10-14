@@ -240,6 +240,29 @@ export function humanMemberIds(
   return [...ids];
 }
 
+/**
+ * Parse a whitelist of extra member ids (comma/whitespace separated) to always add
+ * to a new thread on top of the human members — e.g. the Mock User bot, which the
+ * human-member scan skips. Kept out of the repo: the ids come from the gitignored
+ * `.env.mirror` (`OPENCLAW_LAB_EXTRA_THREAD_MEMBER_IDS`). Only digit-run snowflakes
+ * are kept (junk tokens are dropped), de-duplicated, in first-seen order.
+ */
+export function parseExtraThreadMemberIds(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const token of raw.split(/[\s,]+/)) {
+    const id = token.trim();
+    if (/^\d+$/.test(id) && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
 /** The intro embed posted when a new Testing day channel is created. */
 export function buildDateChannelEmbed(now: Date): LabEmbed {
   const name = dateChannelName(now);

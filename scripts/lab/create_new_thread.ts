@@ -11,8 +11,11 @@
  *
  * Every non-bot member of the Lab server is always added to the new thread as a
  * follow-up so all testers see it. Auto-adding needs the Mirror bot's Server
- * Members privileged intent; without it the add is skipped with a warning and the
- * thread is still created.
+ * Members privileged intent; without it the human add is skipped with a warning and
+ * the thread is still created. Any ids in `OPENCLAW_LAB_EXTRA_THREAD_MEMBER_IDS` (a
+ * gitignored `.env.mirror` whitelist, e.g. the Mock User bot) are added too, so a bot
+ * the human scan skips still joins — and those are added even when the human listing
+ * is unavailable, since they need no member scan.
  *
  * Thread numbering reads the current max and adds one, so near-simultaneous or
  * rapid back-to-back runs could read the same max and create threads out of
@@ -38,6 +41,7 @@ import {
   dateChannelName,
   humanMemberIds,
   nextThreadNumber,
+  parseExtraThreadMemberIds,
   reorderDayChannelsDescending,
   sanitizeThreadName,
   TESTING_CATEGORY,
@@ -93,34 +97,42 @@ function readLastMs(lastPath: string): number | null {
 }
 
 /**
- * Add every non-bot Lab member to the thread. Failures (most often the Server
- * Members intent being disabled) warn rather than throw, so a created thread is
- * never lost over an optional follow-up step.
+ * Add every non-bot Lab member to the thread, plus any explicit whitelist ids (e.g.
+ * the Mock User bot). Failures (most often the Server Members intent being disabled)
+ * warn rather than throw, so a created thread is never lost over an optional follow-up
+ * step — and the whitelist ids are still added even when the human listing fails,
+ * since they need no member scan.
  */
 async function addEveryoneToThread(client: LabDiscord, threadId: string): Promise<void> {
   // Verbose by design: this follow-up step can fail transiently (a rate-limited
   // or flaky member listing abandons the auto-add for ALL humans), so every
   // outcome is narrated. A quiet one-line skip was easy to miss, especially when
   // the command's output is piped through a filter, which hid a real miss before.
-  let ids: string[];
+  const whitelist = parseExtraThreadMemberIds(process.env.OPENCLAW_LAB_EXTRA_THREAD_MEMBER_IDS);
+  let humans: string[] = [];
   try {
     console.log("Auto-add: listing Lab members...");
-    ids = humanMemberIds(await client.listGuildMembers());
+    humans = humanMemberIds(await client.listGuildMembers());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Loud and explicit: the whole auto-add is abandoned here, so NO humans were
-    // added. The intent hint only applies to a 403 (listing blocked); other
-    // failures (auth, network, rate limits, 5xx) are unrelated to the intent.
-    console.warn(`Auto-add: SKIPPED, could not list members (no humans added): ${message}`);
+    // Loud and explicit: the human listing failed, so NO humans were added (the
+    // whitelist ids below are still added — they need no scan). The intent hint only
+    // applies to a 403 (listing blocked); other failures (auth, network, rate limits,
+    // 5xx) are unrelated to the intent.
+    console.warn(`Auto-add: could not list members (no humans added): ${message}`);
     if (/\b403\b/.test(message)) {
       console.warn("Auto-add: enable the Mirror bot's Server Members intent to auto-add members.");
     }
-    return;
+  }
+  // Humans first, then any whitelist ids not already present (first-seen order).
+  const ids = [...new Set([...humans, ...whitelist])];
+  if (whitelist.length > 0) {
+    console.log(`Auto-add: whitelist ids to include: ${whitelist.join(", ")}.`);
   }
   console.log(
     ids.length > 0
-      ? `Auto-add: ${ids.length} non-bot member(s) to add: ${ids.join(", ")}.`
-      : "Auto-add: no non-bot members found to add.",
+      ? `Auto-add: ${ids.length} member(s) to add: ${ids.join(", ")}.`
+      : "Auto-add: no members found to add.",
   );
   // Add each member independently: one bad id (invalid or inaccessible between
   // listing and insertion) must not abort the rest or fail the whole command.
