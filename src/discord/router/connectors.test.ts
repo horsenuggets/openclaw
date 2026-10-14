@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { connectorRegistry } from "./connectors.js";
+import { PasteTokenAuth } from "./connector-auth.js";
+import { type Connector, ConnectorRegistry, connectorRegistry } from "./connectors.js";
+
+function connector(id: string, skills: string[]): Connector {
+  return {
+    id,
+    label: id,
+    summary: "",
+    services: ["x"],
+    skills,
+    available: true,
+    auth: new PasteTokenAuth({
+      url: `https://${id}`,
+      howto: "",
+      validate: async () => ({ ok: true }),
+    }),
+  };
+}
 
 describe("connectorRegistry.get", () => {
   it("resolves ids case-insensitively", () => {
@@ -51,5 +68,69 @@ describe("connector catalog", () => {
         .slice(0, 2)
         .map((c) => c.id),
     ).toEqual(["google", "todoist"]);
+  });
+
+  it("gives every connector at least one skill to enable", () => {
+    for (const c of connectorRegistry.all()) {
+      expect(c.skills.length, `${c.id} skills`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("connectorRegistry.forSkill", () => {
+  it("resolves a skill key back to its connector (case-insensitive)", () => {
+    expect(connectorRegistry.forSkill("todoist")?.id).toBe("todoist");
+    expect(connectorRegistry.forSkill("GOG")?.id).toBe("google");
+    expect(connectorRegistry.forSkill("  github ")?.id).toBe("github");
+  });
+
+  it("returns null for unknown or empty skill keys", () => {
+    expect(connectorRegistry.forSkill("slack")).toBeNull();
+    expect(connectorRegistry.forSkill("")).toBeNull();
+    expect(connectorRegistry.forSkill("   ")).toBeNull();
+    expect(connectorRegistry.forSkill(undefined)).toBeNull();
+  });
+
+  it("indexes and looks up skill keys with the same normalization (trim + lowercase)", () => {
+    const connector: Connector = {
+      id: "spacey",
+      label: "Spacey",
+      summary: "",
+      services: ["x"],
+      skills: [" Spacey-Skill "],
+      available: true,
+      auth: new PasteTokenAuth({
+        url: "https://spacey",
+        howto: "",
+        validate: async () => ({ ok: true }),
+      }),
+    };
+    const registry = new ConnectorRegistry([connector]);
+    expect(registry.forSkill("spacey-skill")?.id).toBe("spacey");
+    expect(registry.forSkill("  SPACEY-SKILL  ")?.id).toBe("spacey");
+  });
+
+  it("is the inverse of every connector's skills list", () => {
+    for (const c of connectorRegistry.all()) {
+      for (const skillKey of c.skills) {
+        expect(connectorRegistry.forSkill(skillKey)?.id).toBe(c.id);
+      }
+    }
+  });
+
+  it("rejects a catalog where two connectors claim the same skill", () => {
+    expect(
+      () => new ConnectorRegistry([connector("a", ["shared"]), connector("b", ["shared"])]),
+    ).toThrow(/claimed by connectors/);
+  });
+
+  it("rejects skill claims that differ only by whitespace or casing", () => {
+    expect(
+      () => new ConnectorRegistry([connector("a", ["shared"]), connector("b", ["  SHARED  "])]),
+    ).toThrow(/claimed by connectors/);
+  });
+
+  it("rejects whitespace-only skill keys", () => {
+    expect(() => new ConnectorRegistry([connector("a", ["   "])])).toThrow(/empty skill key/);
   });
 });
