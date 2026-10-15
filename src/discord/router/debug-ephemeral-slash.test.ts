@@ -20,8 +20,9 @@ vi.mock("./channel-commands.js", async (orig) => ({
 
 import type { GatewayContext } from "./gateway-events.js";
 import type { RouterRuntime } from "./types.js";
+import { buildUnregisterCustomId, handleChannelCommand } from "./channel-commands.js";
 import { editInteractionEmbedReply } from "./discord-api.js";
-import { handleSlashInteraction } from "./gateway-events.js";
+import { handleComponentInteraction, handleSlashInteraction } from "./gateway-events.js";
 import { readEphemeralCommands, setEphemeralCommands } from "./preferences-store.js";
 
 const CHANNEL = "123456789012345678";
@@ -101,16 +102,23 @@ type AuthDeps = {
  * decide whether the defer honors the preference (authorized) or is forced
  * ephemeral (unauthorized denial).
  */
+type CapturedRequest = { url: string; method?: string; body: Record<string, unknown> };
+
 async function runChannelSlash(
   subcommand: string,
   auth: AuthDeps = {},
-): Promise<{ callbacks: Callback[] }> {
+): Promise<{ callbacks: Callback[]; requests: CapturedRequest[] }> {
   const callbacks: Callback[] = [];
+  const requests: CapturedRequest[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
-      if (typeof url === "string" && url.includes("/callback")) {
-        callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+      if (typeof url === "string") {
+        const body = JSON.parse((init?.body as string) ?? "{}");
+        requests.push({ url, method: init?.method, body });
+        if (url.includes("/callback")) {
+          callbacks.push(body);
+        }
       }
       return {
         ok: true,
@@ -152,7 +160,7 @@ async function runChannelSlash(
       user: { id: "u1" },
     } as never);
     await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
-    return { callbacks };
+    return { callbacks, requests };
   } finally {
     vi.unstubAllGlobals();
   }
@@ -441,6 +449,50 @@ it("defers a whitelisted non-admin register of their own DM public when the pref
   expect(dm.callbacks[0]?.data?.flags).toBe(0);
 });
 
+it("routes a late /channel denial (after a public defer) to an ephemeral follow-up", async () => {
+  // The preflight gate authorizes before the defer, but the handler re-checks
+  // authorization after it (owner/admin revalidation, the stale-registration nonce
+  // guard), and in that sub-second window the re-check can flip to a denial. On a
+  // public-preference channel the deferred reply is already public, so that late
+  // denial must NOT be edited into the public placeholder: it is delivered as an
+  // ephemeral follow-up (flags 64) and the public message is neutralized. Model the
+  // flip by having the stubbed handler emit an {ephemeral:true} denial reply.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  vi.mocked(handleChannelCommand).mockImplementationOnce(async (ctx) => {
+    void ctx.reply(
+      { embeds: [{ description: "You are not authorized." }], attachments: [] },
+      { ephemeral: true },
+    );
+  });
+  // Authorized preflight (admin unregister of a channel owned by the caller) so the
+  // defer is public; the late denial comes from the handler, not the preflight.
+  const { callbacks, requests } = await runChannelSlash("unregister", { owner: "u1" });
+  // The defer is public (flags 0).
+  expect(callbacks[0]?.type).toBe(5);
+  expect(callbacks[0]?.data?.flags).toBe(0);
+  // An ephemeral follow-up (POST to the webhook base URL, flags 64) carries the
+  // denial. The public @original edit does not: strings go through fetch, embeds
+  // through the mocked editor, so assert the ephemeral POST exists and is private.
+  await vi.waitFor(() => {
+    const followup = requests.find(
+      (r) =>
+        r.method === "POST" &&
+        r.url.endsWith("/webhooks/app/tok") &&
+        (r.body as { flags?: number }).flags === 64,
+    );
+    expect(followup).toBeDefined();
+  });
+  // The public placeholder is neutralized (a plain-content @original PATCH), never
+  // left showing the denial text.
+  const neutralize = requests.find(
+    (r) => r.method === "PATCH" && r.url.includes("/messages/@original"),
+  );
+  expect(neutralize).toBeDefined();
+  expect((neutralize?.body as { content?: string } | undefined)?.content).toBe(
+    "This request was handled privately.",
+  );
+});
+
 it("keeps /secret ephemeral even when the channel preference is public", async () => {
   // /secret is always ephemeral regardless of `ephemeralCommands`: it opens a
   // modal (type 9) so the secret value is never visible, so it must not inherit a
@@ -493,6 +545,73 @@ it("rolls back the ephemeral toggle when the defer request throws", async () => 
     await vi.waitFor(() => expect(deferCalls).toBeGreaterThan(0));
     expect(publicWhileDeferring).toBe(true);
     await vi.waitFor(() => expect(readEphemeralCommands(instancesDir, CHANNEL)).toBe(true));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("routes a denied unregister confirm click to an ephemeral follow-up and neutralizes the public prompt", async () => {
+  // A public unregister confirmation prompt (public-preference channel) can be shown
+  // to an admin who then loses admin before clicking Confirm, so decideUnregisterClick
+  // returns `denied`. That permission denial must NOT be edited into the public
+  // confirmation message: it is delivered as an ephemeral follow-up (flags 64) and
+  // the public message is replaced with a neutral, non-revealing note.
+  const requests: { url: string; method?: string; body: Record<string, unknown> }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === "string") {
+        requests.push({
+          url,
+          method: init?.method,
+          body: JSON.parse((init?.body as string) ?? "{}"),
+        });
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    }) as unknown as typeof fetch,
+  );
+  try {
+    // Channel registered to someone else; clicker is neither owner nor admin, so the
+    // click resolves to `denied`. registrationNonce "g1" matches the button's gen.
+    const channelCommandDeps = {
+      describeInstance: () => ({ ownerId: "owner-other" }),
+      registrationNonce: () => "g1",
+      isAdmin: async () => false,
+      log: () => {},
+    };
+    const ctx = {
+      applicationId: "app",
+      runtime,
+      channelGuild: new Map<string, string>(),
+      channelCommandDeps,
+      unregisterInFlight: new Set<string>(),
+    } as unknown as GatewayContext;
+    const customId = buildUnregisterCustomId("confirm", CHANNEL, "u1", "g1");
+    handleComponentInteraction(ctx, {
+      id: "int1",
+      token: "tok",
+      channel_id: CHANNEL,
+      guild_id: "987654321098765432",
+      data: { custom_id: customId },
+      user: { id: "u1" },
+    } as never);
+    // The ephemeral follow-up (POST to the webhook base URL, flags 64) carries the
+    // denial embed.
+    await vi.waitFor(() => {
+      const followup = requests.find(
+        (r) =>
+          r.method === "POST" &&
+          r.url.endsWith("/webhooks/app/tok") &&
+          (r.body as { flags?: number }).flags === 64,
+      );
+      expect(followup).toBeDefined();
+    });
+    // The initial ack is a type-7 "processing" update (drops the buttons), never the
+    // denial. The public message is subsequently neutralized via the mocked
+    // editInteractionEmbedReply, so the denial text never shows publicly.
+    const ack = requests.find((r) => r.url.includes("/callback"));
+    expect(ack).toBeDefined();
+    expect((ack?.body as { type?: number } | undefined)?.type).toBe(7);
   } finally {
     vi.unstubAllGlobals();
   }

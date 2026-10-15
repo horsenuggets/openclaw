@@ -775,6 +775,24 @@ export function buildUnregisterAckUpdate(channelId: string): UnregisterUpdate {
 }
 
 /**
+ * The neutral replacement for a public confirmation message when the click is
+ * DENIED (e.g. the clicker's admin role was revoked between opening the prompt and
+ * clicking Confirm). The denial itself is delivered as a private ephemeral
+ * follow-up; this leaves the public message with a non-revealing note instead of
+ * the permission-denied embed, so a confirmation shown on a public-preference
+ * channel never leaks the denial. Owner-agnostic and button-free.
+ */
+export function buildUnregisterNeutralUpdate(channelId: string): UnregisterUpdate {
+  return {
+    ...registrationReply(
+      UNREGISTER_EMBED_TITLE,
+      `The unregister request for channel <#${channelId}> was not completed.`,
+    ),
+    components: [],
+  };
+}
+
+/**
  * The decision for a click on an unregister confirmation button. The router
  * adapter owns the Discord I/O; this stays transport-agnostic. The `confirm`
  * outcome is two-phase: the adapter renders `interim` immediately (dropping the

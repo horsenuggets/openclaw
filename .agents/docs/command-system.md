@@ -86,8 +86,14 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   `/channel` register/unregister (authorization now evaluated BEFORE the defer via
   `isAuthorizedForChannelCommand`, so a denial forces an ephemeral defer while an
   authorized caller defers on the preference) both do this so a non-admin probe cannot
-  publish a permission embed to the channel. `/channel status` never denies, so it always
-  follows the channel's `ephemeralCommands` preference like the conversational commands.
+  publish a permission embed to the channel. For `/channel`, authorization is also
+  re-checked AFTER the defer (the owner/admin revalidation and the stale-registration
+  nonce guard, plus the unregister confirm-button click), so a role revoked in that window
+  could still produce a late denial on an already-public deferred reply; those late
+  denials are delivered as a separate EPHEMERAL follow-up (flags 64) and the public
+  placeholder is neutralized rather than edited with the denial, keeping the invariant
+  intact. `/channel status` never denies, so it always follows the channel's
+  `ephemeralCommands` preference like the conversational commands.
   `buildPermissionDeniedEmbed` builds the Log-category embed; `denyInteractionEphemeral`
   defers the interaction ephemerally (or skips the defer when the handler already deferred
   ephemerally) and edits the embed into the reply. Two notice flavors feed it:
