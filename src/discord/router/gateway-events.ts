@@ -520,6 +520,14 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         `[router] /connections ${connectCmd.subcommand ?? ""} from ${authorId} in ${channelId} (msg ${commandMessageId}, token=${hasToken})`,
       );
     };
+    // `available` is a read-only listing of the static connector catalog: it reveals
+    // nothing channel-specific and writes nothing, so it is not owner-gated. Dispatch it
+    // directly (even in an unregistered guild channel, which has no owner and would
+    // otherwise be denied). It never carries a token, so there is nothing to scrub.
+    if ((connectCmd.subcommand ?? "").toLowerCase() === "available") {
+      dispatchConnect();
+      return;
+    }
     // Owner-gate the caller: /connections reads and writes the channel's stored
     // credentials, so only its owner may drive it (the slash path gates via
     // runForOwner; this is the text-command equivalent). Gate in any guild channel,
@@ -1400,12 +1408,21 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           }
         })();
       };
-      // Owner-gate every caller, reusing the /secret and /lifecycle gate:
-      // /connections reads and writes the channel's stored credentials, so only its
-      // owner may drive it, and group DMs are rejected (runForOwner fails closed). An
-      // unregistered channel has no owner, so the gate denies with the standard
-      // notice rather than leaking the "not registered yet" hint to a non-owner.
-      runForOwner(interactionChannelId, dispatch);
+      // `available` is a read-only listing of the static connector catalog: it reveals
+      // nothing channel-specific and writes nothing, so it is not owner-gated. Dispatch
+      // it directly so it works even in an unregistered guild channel (which has no
+      // owner and would otherwise be denied). Every other subcommand (list/add/remove)
+      // touches the channel's stored credentials and stays owner-gated below.
+      if ((subOpt?.name ?? "").toLowerCase() === "available") {
+        dispatch();
+      } else {
+        // Owner-gate every other caller, reusing the /secret and /lifecycle gate:
+        // /connections reads and writes the channel's stored credentials, so only its
+        // owner may drive it, and group DMs are rejected (runForOwner fails closed). An
+        // unregistered channel has no owner, so the gate denies with the standard
+        // notice rather than leaking the "not registered yet" hint to a non-owner.
+        runForOwner(interactionChannelId, dispatch);
+      }
     }
   }
 }

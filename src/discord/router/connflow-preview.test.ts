@@ -58,7 +58,7 @@ describe("simulateConnFlow scenarios", () => {
     expect(out.embeds[0].title).toBe("Your Connections");
     expect(out.embeds[0].description).toContain("not linked any accounts yet");
     const names = (out.embeds[0].fields ?? []).map((f) => f.name);
-    expect(names).toContain("`/conn add <service>`");
+    expect(names).toContain("`/connections add <service>`");
     expect(names).not.toContain("Services");
   });
 

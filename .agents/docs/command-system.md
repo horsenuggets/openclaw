@@ -13,9 +13,12 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   startup and shutdown notification banners for a channel.
 - `/secret` (`secret-command.ts`, `SECRET_COMMAND_SPEC`) - hand the channel's agent a
   sensitive value through a modal popup. The value never appears in the channel or logs.
-- `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, or remove
-  external accounts (Todoist, Notion, GitHub by pasted token; Google is coming soon) for
-  the channel's agent. See [sandbox-and-permissions.md](sandbox-and-permissions.md).
+- `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, show every
+  available service for, or remove external accounts (Todoist, Notion, GitHub by pasted
+  token; Google is listed and selectable but its connect flow is not wired yet, so
+  `/connections add google` shows a TODO placeholder) for the channel's agent. The
+  `available` subcommand lists every catalogued service. See
+  [sandbox-and-permissions.md](sandbox-and-permissions.md).
 - `/debug` (`debug-command.ts`, `DEBUG_COMMAND_SPEC`) - an admin-only console for
   inspecting internal state. Rather than registering each tool as its own slash command,
   the subcommand is entered as free text into a single `command` option (for example
@@ -97,13 +100,16 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   this behavior by calling the shared helper rather than inventing their own denial.
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
-  `.onboarding.json`) may use them. Non-owners get the channel-ownership denial embed
-  (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
+  `.onboarding.json`) may use them. `/connections available` is the exception: it lists
+  only the static connector catalog, so it is accessible before registration and without
+  an owner check. Non-owners of all other gated commands get the channel-ownership denial
+  embed (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
   `denyInteractionEphemeral`). The gate runs regardless of registration state » an
   unregistered channel has no owner, so `isAuthorizedForChannel` fails closed and denies
-  rather than letting the command fall through to a "not registered yet" reply that would
+  rather than letting a command fall through to a "not registered yet" reply that would
   leak the registration state to a non-owner. A 1:1 DM is exempt (the caller is its own
-  owner), and on an unregistered DM the command still reports that it is not registered.
+  owner), and on an unregistered DM other connections commands still report that it is not
+  registered.
 - `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
   state rather than one channel's agent. The admin check runs BEFORE the interaction is
