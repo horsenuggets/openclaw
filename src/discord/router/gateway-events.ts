@@ -666,6 +666,7 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
         void discordSendReply(discordToken, channelId, commandMessageId, {
           embeds: out.embeds,
           attachments: out.attachments,
+          ...(out.components ? { components: out.components } : {}),
         });
       } else if (result.kind === "embeds") {
         void discordSendReply(discordToken, channelId, commandMessageId, {
@@ -1102,6 +1103,7 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           res = await editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: out.embeds,
             attachments: out.attachments,
+            ...(out.components ? { components: out.components } : {}),
           });
         } else if (result.kind === "embeds") {
           res = await editInteractionEmbedReply(applicationId, interactionToken, {

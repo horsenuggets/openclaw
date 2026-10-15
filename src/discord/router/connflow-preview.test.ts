@@ -112,6 +112,9 @@ describe("simulateConnFlow scenarios", () => {
     );
     // Debug identity, not Connections.
     expect(out.embeds[0].color).toBe(DEBUG.color);
+    // The Reauthenticate button is forwarded through the Debug re-skin.
+    const buttons = (out.components ?? []).flatMap((row) => row.components ?? []);
+    expect(buttons.map((b) => b.label)).toContain("Reauthenticate");
   });
 });
 
