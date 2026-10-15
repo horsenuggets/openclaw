@@ -2,7 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadRouterConfig, readInstancePort, resolveProxyBindHost } from "./config.js";
+import {
+  loadRouterConfig,
+  readInstancePort,
+  readInstanceToken,
+  resolveProxyBindHost,
+} from "./config.js";
 
 let dir: string;
 
@@ -25,6 +30,37 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
   delete process.env.OPENCLAW_1468768406504476936_PORT;
+});
+
+describe("readInstanceToken", () => {
+  it("reads gateway.auth.token from openclaw.json", () => {
+    const d = path.join(dir, "1468768406504476936");
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(
+      path.join(d, "openclaw.json"),
+      JSON.stringify({ gateway: { auth: { token: "tok-123" } } }),
+    );
+    expect(readInstanceToken(d)).toBe("tok-123");
+  });
+
+  it("reflects a rotated token on the next read (no caching)", () => {
+    const d = path.join(dir, "1468768406504476936");
+    fs.mkdirSync(d, { recursive: true });
+    const configPath = path.join(d, "openclaw.json");
+    fs.writeFileSync(configPath, JSON.stringify({ gateway: { auth: { token: "old" } } }));
+    expect(readInstanceToken(d)).toBe("old");
+    fs.writeFileSync(configPath, JSON.stringify({ gateway: { auth: { token: "new" } } }));
+    expect(readInstanceToken(d)).toBe("new");
+  });
+
+  it("returns undefined when the config or token is missing", () => {
+    const missing = path.join(dir, "nope");
+    expect(readInstanceToken(missing)).toBeUndefined();
+    const d = path.join(dir, "1468768406504476936");
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, "openclaw.json"), JSON.stringify({ gateway: {} }));
+    expect(readInstanceToken(d)).toBeUndefined();
+  });
 });
 
 describe("readInstancePort", () => {

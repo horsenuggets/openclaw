@@ -13,7 +13,12 @@ import {
   type ProvisioningClient,
 } from "./channel-commands.js";
 import { ChannelQueue } from "./channel-queue.js";
-import { loadRouterConfig, refreshToken, resolveProxyBindHost } from "./config.js";
+import {
+  loadRouterConfig,
+  readInstanceToken,
+  refreshToken,
+  resolveProxyBindHost,
+} from "./config.js";
 import {
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandDeps,
@@ -248,8 +253,14 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     // gateway token and may only post to its own channel or DM its own owner, so
     // one box cannot drive the shared bot into another instance's destination.
     authorizeSend: ({ channelId, userId, callerToken }) => {
+      // Read each instance's token fresh from disk so a rotated token (new value
+      // on disk + container restart) is honored immediately; fall back to the
+      // cached map value if the file read yields nothing.
       const tokensByChannel = new Map<string, string | undefined>(
-        [...instances].map(([cid, inst]) => [cid, inst.token]),
+        [...instances].map(([cid, inst]) => [
+          cid,
+          readInstanceToken(inst.instanceDir) ?? inst.token,
+        ]),
       );
       return authorizeProxySend({
         callerToken,

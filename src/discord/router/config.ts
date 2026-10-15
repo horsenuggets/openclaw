@@ -76,6 +76,27 @@ export type RouterConfig = {
 };
 
 /**
+ * Read an instance's `gateway.auth.token` fresh from its openclaw.json. Used by
+ * the container-proxy authorizer so a token rotation (new token on disk + a
+ * container restart) takes effect immediately instead of being masked by a stale
+ * value cached in the in-memory instances map. Returns undefined when the file is
+ * missing/unreadable or carries no token.
+ */
+export function readInstanceToken(instanceDir: string): string | undefined {
+  const configPath = path.join(instanceDir, "openclaw.json");
+  if (!fs.existsSync(configPath)) {
+    return undefined;
+  }
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const token = raw?.gateway?.auth?.token;
+    return typeof token === "string" && token ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Read an instance's port from its `.port` dotfile. Returns undefined when
  * the file is missing or does not contain a positive integer.
  */
