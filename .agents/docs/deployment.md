@@ -70,6 +70,15 @@ is an internal function called during add, not a standalone subcommand.)
   per-channel lifecycle operation under this lock to preserve the guarantee.
 - Port allocation skips currently-listening ports to avoid bind clashes, and each gateway
   also opens a dynamic secondary port that is not recorded in `.port`.
+- `OPENCLAW_SKIP_BOOTSTRAP` is a mirror-rig-only debug toggle read at provision time: when
+  truthy, workspace seeding drops just `BOOTSTRAP.md` so first-run onboarding never fires
+  (the agent keeps its persona). Default OFF so onboarding runs like prod. Pass it INLINE
+  on the launch/deploy command (e.g.
+  `OPENCLAW_SKIP_BOOTSTRAP=1 ./scripts/prod-mirror.sh deploy`); never bake it into a
+  committed or gitignored env file. Rig debug env vars follow this convention generally »
+  pass them inline on the launch command, do not store them. A missing `BOOTSTRAP.md` is
+  now logged by the router when it skips onboarding. See
+  [prod-mirror-e2e-testing.md](prod-mirror-e2e-testing.md) for the e2e workflow.
 
 ## Deploy Gotchas
 

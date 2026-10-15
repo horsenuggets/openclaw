@@ -671,7 +671,18 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
     // already sent by the command handler, so ordering stays correct.
     kickOnboarding: (channelId, ownerId) => {
       const instance = instances.get(channelId);
-      if (!instance || !bootstrapExists(instance)) {
+      if (!instance) {
+        return;
+      }
+      if (!bootstrapExists(instance)) {
+        // No BOOTSTRAP.md means first-run onboarding (the welcome embed +
+        // greeting) can never fire for this channel. The usual cause on the
+        // mirror rig is OPENCLAW_SKIP_BOOTSTRAP being set at provision time,
+        // which seeds the workspace then deletes BOOTSTRAP.md. Log it so the
+        // skip is traceable instead of a silent no-op.
+        runtime.log(
+          `[router] skipping onboarding for channel ${channelId}: BOOTSTRAP.md absent (likely OPENCLAW_SKIP_BOOTSTRAP set at provision time)`,
+        );
         return;
       }
       void runOnboardingKick({

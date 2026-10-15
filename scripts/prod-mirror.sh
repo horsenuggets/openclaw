@@ -210,7 +210,16 @@ start_provisioner() {
   echo "Starting the provisioner inside the box..."
   docker exec "$CONTAINER" bash -c \
     'pkill -f deploy/bin/provisioner 2>/dev/null || true' >/dev/null 2>&1 || true
-  docker exec -d "$CONTAINER" bash -c \
+  # Forward the per-run OPENCLAW_SKIP_BOOTSTRAP debug toggle from this script's
+  # shell into the provisioner process (which is what reads it at provision time,
+  # via openclawctl seed_workspace). It is intentionally NOT written to box.env, so
+  # without this passthrough an inline `OPENCLAW_SKIP_BOOTSTRAP=1 prod-mirror.sh
+  # deploy` would never reach the provisioner and onboarding would still fire.
+  # Unset => default-off, so it is only passed when the caller sets it.
+  local skip_env=()
+  [ -n "${OPENCLAW_SKIP_BOOTSTRAP:-}" ] &&
+    skip_env=(-e "OPENCLAW_SKIP_BOOTSTRAP=$OPENCLAW_SKIP_BOOTSTRAP")
+  docker exec -d "${skip_env[@]}" "$CONTAINER" bash -c \
     'set -a; . "$HOME/.env" 2>/dev/null; set +a;
      [ -n "${OPENCLAW_PROVISIONER_PORT:-}" ] && [ -n "${OPENCLAW_PROVISIONER_TOKEN:-}" ] || exit 0;
      exec "$HOME/deploy/bin/provisioner" >/var/log/provisioner.log 2>&1'
