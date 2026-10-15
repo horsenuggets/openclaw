@@ -533,8 +533,10 @@ purge_container() {
 # (SOUL.md et al.) but skips the first-run onboarding ritual the router drives off
 # BOOTSTRAP.md. This is deliberately narrower than agents.defaults.skipBootstrap,
 # which suppresses every workspace file and leaves the agent persona-less. Default
-# off so the onboarding path is exercised like prod; flip it in .env.mirror for a
-# quick functional test that should not pay the name-dance.
+# off so the onboarding path is exercised like prod. Pass it INLINE on the launch
+# or deploy command (e.g. OPENCLAW_SKIP_BOOTSTRAP=1 ./scripts/prod-mirror.sh deploy)
+# for a quick functional test that should not pay the name-dance; do not bake it into
+# any committed or gitignored env file.
 skip_bootstrap_enabled() {
   case "$(printf '%s' "${OPENCLAW_SKIP_BOOTSTRAP:-}" | tr '[:upper:]' '[:lower:]')" in
     1 | true | yes | on) return 0 ;;
