@@ -34,6 +34,16 @@ export function startContainerProxyServer(opts: {
   sendSystemEmbed?: SendSystemEmbedFn;
   /** Route a message through the standard DM pipeline. Injected by the router. */
   routeMessage?: RouteMessageFn;
+  /**
+   * Authorize a `/discord/send` before it runs: the caller presents its
+   * per-instance token (proxy auth header) and the destination must belong to
+   * it. Injected by the router; when absent (dev/tests/standalone) sends are
+   * allowed so the proxy keeps working without the multi-instance registry.
+   */
+  authorizeSend?: (opts: { channelId?: string; userId?: string; callerToken?: string }) => {
+    ok: boolean;
+    reason?: string;
+  };
   /** Listen port; defaults to the fixed proxy port. Tests pass 0 for ephemeral. */
   port?: number;
   /**
@@ -95,6 +105,23 @@ export function startContainerProxyServer(opts: {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "text and one of userId or channelId are required" }));
             return;
+          }
+          // Authorize the caller against the destination before sending as the
+          // shared bot: a box may only post to its own channel or DM its owner.
+          if (opts.authorizeSend) {
+            const header = req.headers["x-openclaw-proxy-auth"];
+            const callerToken = Array.isArray(header) ? header[0] : header;
+            const decision = opts.authorizeSend({
+              channelId: data.channelId,
+              userId: data.userId,
+              callerToken,
+            });
+            if (!decision.ok) {
+              runtime.log(`[proxy] send denied: ${decision.reason ?? "unauthorized"}`);
+              res.writeHead(403, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: decision.reason ?? "unauthorized" }));
+              return;
+            }
           }
           if (!opts.discordSend) {
             res.writeHead(503, { "Content-Type": "application/json" });

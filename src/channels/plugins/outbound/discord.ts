@@ -20,11 +20,17 @@ async function sendViaProxy(
   proxyUrl: string,
   to: string,
   text: string,
-  opts?: { mediaUrl?: string; replyToId?: string },
+  opts?: { mediaUrl?: string; replyToId?: string; authToken?: string },
 ): Promise<{ messageId: string; channelId: string }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // Present this instance's per-instance gateway token so the router can
+  // authorize the destination (own channel / own owner) before sending.
+  if (opts?.authToken) {
+    headers["x-openclaw-proxy-auth"] = opts.authToken;
+  }
   const resp = await fetch(`${proxyUrl}/discord/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       userId: to,
       text,
@@ -56,6 +62,7 @@ export const discordOutbound: ChannelOutboundAdapter = {
     if (config.proxyUrl) {
       const result = await sendViaProxy(config.proxyUrl, to, processed, {
         replyToId: replyToId ?? undefined,
+        authToken: cfg.gateway?.auth?.token,
       });
       return { channel: "discord", ...result };
     }
@@ -77,6 +84,7 @@ export const discordOutbound: ChannelOutboundAdapter = {
       const result = await sendViaProxy(config.proxyUrl, to, processed, {
         mediaUrl,
         replyToId: replyToId ?? undefined,
+        authToken: cfg.gateway?.auth?.token,
       });
       return { channel: "discord", ...result };
     }

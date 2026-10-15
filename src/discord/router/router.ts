@@ -55,6 +55,7 @@ import { bootstrapExists, runOnboardingKick } from "./onboarding.js";
 import { getPendingAuth, removePendingAuth, savePendingAuth } from "./pending-auth-store.js";
 import { removeUserPreferences } from "./preferences-store.js";
 import { createHttpProvisioningClient } from "./provisioning.js";
+import { authorizeProxySend } from "./proxy-authz.js";
 import { channelSessionKey, routeMessage } from "./route-message.js";
 import { isConversationalBot, isLifecycleBanner } from "./router-filters.js";
 import { SECRET_COMMAND_SPEC } from "./secret-command.js";
@@ -242,6 +243,21 @@ export async function startRouter(config: RouterConfig, runtime: RouterRuntime):
       }
       channelQueue.enqueue(channelId, { authorId: userId, messageContent: message });
       return Promise.resolve();
+    },
+    // Authorize agent-initiated sends: the caller presents its per-instance
+    // gateway token and may only post to its own channel or DM its own owner, so
+    // one box cannot drive the shared bot into another instance's destination.
+    authorizeSend: ({ channelId, userId, callerToken }) => {
+      const tokensByChannel = new Map<string, string | undefined>(
+        [...instances].map(([cid, inst]) => [cid, inst.token]),
+      );
+      return authorizeProxySend({
+        callerToken,
+        channelId,
+        userId,
+        tokensByChannel,
+        resolveOwner: (cid) => describeInstance(cid)?.ownerId,
+      });
     },
   });
 

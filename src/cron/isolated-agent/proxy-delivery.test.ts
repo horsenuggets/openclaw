@@ -122,6 +122,21 @@ describe("deliverDiscordViaProxy", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("sends the per-instance auth token as the proxy auth header", async () => {
+    const fetchImpl = vi.fn(async () => okResponse()) as unknown as typeof fetch;
+    await deliverDiscordViaProxy({
+      proxyUrl: "http://proxy:18800",
+      to: "123456789012345678",
+      toKind: "channel",
+      payloads: [{ text: "hi" }],
+      authToken: "instance-token",
+      fetchImpl,
+    });
+    const [, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["x-openclaw-proxy-auth"]).toBe("instance-token");
+  });
+
   it("throws on a non-2xx proxy response", async () => {
     const fetchImpl = vi.fn(
       async () => new Response("boom", { status: 500 }),

@@ -41,10 +41,21 @@ function resolveTargetField(
   return parsed?.kind === "user" ? { userId: id } : { channelId: id };
 }
 
-async function postSend(fetchImpl: typeof fetch, base: string, body: ProxySendBody): Promise<void> {
+async function postSend(
+  fetchImpl: typeof fetch,
+  base: string,
+  body: ProxySendBody,
+  authToken?: string,
+): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // Present the instance's per-instance gateway token so the router can
+  // authorize the destination before sending as the shared bot.
+  if (authToken) {
+    headers["x-openclaw-proxy-auth"] = authToken;
+  }
   const resp = await fetchImpl(`${base}/discord/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -58,11 +69,13 @@ export async function deliverDiscordViaProxy(params: {
   to: string;
   toKind?: DiscordProxyTargetKind;
   payloads: ReplyPayload[];
+  authToken?: string;
   fetchImpl?: typeof fetch;
 }): Promise<void> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const base = params.proxyUrl.replace(/\/+$/, "");
   const target = resolveTargetField(params.to, params.toKind ?? "channel");
+  const authToken = params.authToken;
   for (const payload of params.payloads) {
     const text = payload.text?.trim() ?? "";
     const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
@@ -72,7 +85,7 @@ export async function deliverDiscordViaProxy(params: {
     if (text) {
       for (const chunk of chunkMarkdownText(text, DISCORD_TEXT_LIMIT)) {
         if (chunk.trim()) {
-          await postSend(fetchImpl, base, { ...target, text: chunk });
+          await postSend(fetchImpl, base, { ...target, text: chunk }, authToken);
         }
       }
     }
@@ -86,7 +99,7 @@ export async function deliverDiscordViaProxy(params: {
       if (!/^https?:\/\//i.test(mediaUrl)) {
         continue;
       }
-      await postSend(fetchImpl, base, { ...target, text: mediaUrl });
+      await postSend(fetchImpl, base, { ...target, text: mediaUrl }, authToken);
     }
   }
 }

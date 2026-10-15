@@ -461,6 +461,7 @@ export async function runCronIsolatedAgentTurn(params: {
           to: proxyTo,
           toKind: params.job.delivery?.toKind ?? "channel",
           payloads: deliveryPayloads,
+          authToken: cfgWithAgentDefaults.gateway?.auth?.token,
         });
       } catch (err) {
         if (!deliveryBestEffort) {

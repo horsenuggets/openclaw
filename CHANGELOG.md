@@ -6,6 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Discord router: authorize container-proxy sends so one agent box cannot drive the shared
+  bot into another instance's destination. Every box can reach the proxy over the agent
+  bridge, and it sends with the router's bot token, so the `/discord/send` endpoint now
+  requires the caller's per-instance `gateway.auth.token` (presented as
+  `x-openclaw-proxy-auth`) and authorizes the destination: a channel send must target the
+  caller's own channel and a DM send must target the caller's registered owner. Closes the
+  cross-instance messaging gap on both the channel and the pre-existing DM path. Added a
+  pure `authorizeProxySend` with regression tests rejecting cross-instance sends.
 - Cron: fixed isolated-job announce delivery failing with "Unsupported channel: discord"
   in the Docker multi-user architecture. Agent containers run with
   `OPENCLAW_SKIP_CHANNELS=1` and no registered Discord plugin, so the normal outbound path
