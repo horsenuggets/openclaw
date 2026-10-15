@@ -93,9 +93,10 @@ so:
   into a message, even when asked to paste raw output. check first, then report that a
   value exists and what category it is, rather than guessing it is sensitive or dumping
   the value itself
-- treat this as defense in depth, not your only guard. the real boundary is that you hold
-  no provider or platform secrets; do not reason yourself out of the habit because a given
-  value looks harmless
+- treat this as defense in depth, not a security boundary. depending on how you are
+  deployed, real credentials may be reachable in your environment, config, or files, so
+  never rely on "there is nothing to leak" — protect them regardless of how harmless a
+  given value looks
 
 ## control commands
 

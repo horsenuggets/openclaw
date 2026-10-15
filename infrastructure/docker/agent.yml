@@ -47,10 +47,14 @@ services:
     tmpfs:
       # /tmp is RAM-backed (tmpfs). Uncapped it defaults to half the host RAM, so
       # the agent could fill it and OOM the whole DinD host (every co-tenant box +
-      # the router). A size= cap bounds that to a fixed amount; mode=1777 keeps the
-      # usual world-writable-sticky /tmp semantics. This is a mount option, so it
-      # needs no cgroup controller delegation (unlike mem_limit below).
-      - /tmp:size=512m,mode=1777
+      # the router). size= caps the data pages and nr_inodes= caps the inode table
+      # -- BOTH are needed: size= alone bounds file *contents* but not metadata, and
+      # the default inode budget scales with host RAM, so a flood of empty files
+      # could still pressure RAM outside the size= quota. size= is NOT a total-RAM
+      # cap for the container (that needs mem_limit, below); it only bounds this
+      # mount. mode=1777 keeps the usual world-writable-sticky /tmp semantics. These
+      # are mount options, so they need no cgroup controller delegation.
+      - /tmp:size=512m,nr_inodes=262144,mode=1777
     cap_drop:
       - ALL
     security_opt:
