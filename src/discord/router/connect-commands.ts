@@ -13,14 +13,19 @@
  * the exchange. A router-side credential broker is a later phase.
  */
 
-import type { ChannelReply, DiscordEmbed, DiscordEmbedField } from "./channel-commands.js";
+import type {
+  ChannelReply,
+  DiscordActionRow,
+  DiscordEmbed,
+  DiscordEmbedField,
+} from "./channel-commands.js";
 import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./connections-store.js";
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
 import { buildSubcommandFields } from "./subcommand-fields.js";
 
-export type ConnectSubcommand = "list" | "add" | "remove" | "available";
+export type ConnectSubcommand = "list" | "add" | "remove" | "available" | "info";
 
 /** Service choices for the slash command, built from the catalog. */
 const SERVICE_CHOICES = connectorRegistry.all().map((c) => ({ name: c.label, value: c.id }));
@@ -37,6 +42,20 @@ export const CONNECTIONS_COMMAND_SPEC = {
   options: [
     { name: "list", description: "Show your linked accounts and their status", type: 1 },
     { name: "available", description: "List every service you can link", type: 1 },
+    {
+      name: "info",
+      description: "Show stats about one of your connections",
+      type: 1,
+      options: [
+        {
+          name: "service",
+          description: "Which service to inspect",
+          type: 3, // STRING
+          required: true,
+          choices: SERVICE_CHOICES,
+        },
+      ],
+    },
     {
       name: "add",
       description: "Link a service to this agent",
@@ -196,19 +215,49 @@ export type ConnectCommandContext = {
   scrubCommandMessage?: () => Promise<boolean>;
 };
 
-/** Build a Connections-category embed reply. */
+/** Build a Connections-category embed reply, optionally carrying an action row. */
 function connectionsReply(
   title: string,
   description: string,
   fields?: DiscordEmbedField[],
-): { embeds: DiscordEmbed[]; attachments: string[] } {
+  components?: DiscordActionRow[],
+): { embeds: DiscordEmbed[]; attachments: string[]; components?: DiscordActionRow[] } {
   const built = buildEmbed({
     category: "connections",
     title,
     description,
     ...(fields ? { fields } : {}),
   });
-  return { embeds: [built.embed], attachments: built.attachments };
+  return {
+    embeds: [built.embed],
+    attachments: built.attachments,
+    ...(components ? { components } : {}),
+  };
+}
+
+/** custom_id prefix for the `/connections info` Reauthenticate button. */
+export const CONN_REAUTH_PREFIX = "conn:reauth";
+
+/** The text the Reauthenticate button replies with (no reauth flow is wired yet). */
+export const CONN_REAUTH_TODO = "TODO";
+
+/** Build the Reauthenticate button custom_id, namespaced by connector id. */
+export function buildReauthCustomId(connectorId: string): string {
+  return `${CONN_REAUTH_PREFIX}:${connectorId}`;
+}
+
+/**
+ * Parse a Reauthenticate button custom_id, returning the connector id or null for
+ * unrelated ids. The connector id may itself be any catalog id; only the fixed
+ * two-segment prefix is matched so the id is taken verbatim as the remainder.
+ */
+export function parseReauthCustomId(customId: string): { connectorId: string } | null {
+  const prefix = `${CONN_REAUTH_PREFIX}:`;
+  if (!customId.startsWith(prefix)) {
+    return null;
+  }
+  const connectorId = customId.slice(prefix.length);
+  return connectorId ? { connectorId } : null;
 }
 
 /**
@@ -413,6 +462,70 @@ function availableReply(registry: ConnectorRegistry): {
   ]);
 }
 
+/**
+ * The status sentence appended to the `/connections info` description. `not_linked`
+ * never reaches the stats view (it is handled by the not-linked branch), but keep the
+ * map total over ConnectionStatus so every case is covered.
+ */
+const INFO_STATUS_SENTENCE: Record<ConnectionStatus, string> = {
+  linked: "You are currently connected!",
+  connecting: "We are attempting to connect you now!",
+  needs_reauth: "Pinging has failed; you may need to reauthenticate.",
+  not_linked: "You are not connected.",
+};
+
+const INFO_SERVICES_FIELD_NAME = "Services Available";
+
+/** Human label for how a connector authenticates, derived from its auth flow. */
+function authTypeLabel(connector: Connector): string {
+  // Derive from the flow, never per-id: OAuth connectors run a hosted dance, every
+  // other flow (direct token paste, CLI) hands over a token the user already holds.
+  return connector.auth.authKind === "oauth" ? "OAuth" : "Pasted token";
+}
+
+/**
+ * Build the `/connections info <service>` stats view for a LINKED connection: a
+ * Connections embed titled `Your Connections » <Label>` with the per-connection
+ * stats as inline fields (Status glyph, Account, Linked date, Auth Type, Last Ping)
+ * plus a non-inline Services Available list, and a Primary "Reauthenticate" button.
+ */
+function infoReply(
+  connector: Connector,
+  connection: DisplayConnection,
+  emoji: ConnectionEmoji,
+): { embeds: DiscordEmbed[]; attachments: string[]; components?: DiscordActionRow[] } {
+  const linkedUnix = Math.floor(new Date(connection.linkedAt).getTime() / 1000);
+  const linkedValue = Number.isFinite(linkedUnix) ? `<t:${linkedUnix}:D>` : "Unknown";
+  const fields: DiscordEmbedField[] = [
+    { name: "Status", value: statusGlyph(connection.status, emoji), inline: true },
+    { name: "Account", value: connection.accountLabel ?? "Unknown", inline: true },
+    { name: "Linked", value: linkedValue, inline: true },
+    { name: "Auth Type", value: authTypeLabel(connector), inline: true },
+    // No last-ping time is tracked yet; the field is present with a TODO value on
+    // purpose until ping tracking lands.
+    { name: "Last Ping", value: "TODO", inline: true },
+    { name: INFO_SERVICES_FIELD_NAME, value: connector.services.join(", "), inline: false },
+  ];
+  const reauthRow: DiscordActionRow = {
+    type: 1,
+    components: [
+      {
+        type: 2,
+        style: 1, // primary
+        label: "Reauthenticate",
+        custom_id: buildReauthCustomId(connector.id),
+      },
+    ],
+  };
+  return connectionsReply(
+    `${LIST_TITLE} \u00bb ${connector.label}`,
+    `Below are some stats about your current **${connector.label}** connection. ` +
+      INFO_STATUS_SENTENCE[connection.status],
+    fields,
+    [reauthRow],
+  );
+}
+
 const NOT_REGISTERED =
   "This channel is not registered yet. Run `/channel register` first, then link your accounts.";
 
@@ -453,6 +566,46 @@ export async function handleConnectCommand(
     // Read-only, owner-safe listing of every catalogued service. No registration or
     // ownership check: it reveals nothing channel-specific, just the static catalog.
     await ctx.reply(availableReply(deps.registry), { ephemeral: true });
+    return;
+  }
+
+  if (sub === "info") {
+    const connector = deps.registry.get(ctx.args[0]);
+    if (!connector) {
+      // Unknown service: reuse the shared Available Services field, mirroring `add`.
+      await ctx.reply(
+        connectionsReply("Info", `\`${ctx.args[0] ?? ""}\` is not a valid service.`, [
+          availableServicesField(deps.registry),
+        ]),
+        { ephemeral: true },
+      );
+      return;
+    }
+    if (!registrationIsCurrent()) {
+      await registrationChanged();
+      return;
+    }
+    const connections = deps.store.list(ctx.channelId);
+    if (connections === null) {
+      await ctx.reply(connectionsReply(`${LIST_TITLE} \u00bb ${connector.label}`, NOT_REGISTERED), {
+        ephemeral: true,
+      });
+      return;
+    }
+    const connection = deps.store.get(ctx.channelId, connector.id);
+    if (!connection || connection.status === "not_linked") {
+      await ctx.reply(
+        connectionsReply(
+          `${LIST_TITLE} \u00bb ${connector.label}`,
+          `You have not linked ${connector.label} yet. ` +
+            `Use \`/connections add ${connector.id}\` to link it.`,
+        ),
+        { ephemeral: true },
+      );
+      return;
+    }
+    const emoji = deps.emoji ?? DEFAULT_CONNECTION_EMOJI;
+    await ctx.reply(infoReply(connector, connection, emoji), { ephemeral: true });
     return;
   }
 
@@ -704,7 +857,7 @@ export async function handleConnectCommand(
   await ctx.reply(
     connectionsReply(
       "Help",
-      "Usage: `/connections list`, `/connections available`, `/connections add <service> <token>`, or `/connections remove <service>`.",
+      "Usage: `/connections list`, `/connections available`, `/connections info <service>`, `/connections add <service> <token>`, or `/connections remove <service>`.",
     ),
     { ephemeral: true },
   );

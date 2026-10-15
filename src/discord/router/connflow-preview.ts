@@ -17,7 +17,7 @@
  */
 
 import type { AuthFlow, AuthPrompt, AuthResult } from "./auth-flow.js";
-import type { ChannelReplyPayload, DiscordEmbed } from "./channel-commands.js";
+import type { ChannelReplyPayload, DiscordActionRow, DiscordEmbed } from "./channel-commands.js";
 import type { DisplayConnection, StoredConnection } from "./connections-store.js";
 import {
   type ConnectionEmoji,
@@ -149,7 +149,10 @@ function previewRegistry(): ConnectorRegistry {
 }
 
 /** Re-skin connections embeds into the Debug category (color + footer + icon). */
-function reskinToDebug(embeds: DiscordEmbed[]): { embeds: DiscordEmbed[]; attachments: string[] } {
+function reskinToDebug(
+  embeds: DiscordEmbed[],
+  components: DiscordActionRow[],
+): { embeds: DiscordEmbed[]; attachments: string[]; components?: DiscordActionRow[] } {
   const debug = EMBED_CATEGORIES.debug;
   const reskinned = embeds.map((embed) => {
     const next: DiscordEmbed = { ...embed, color: debug.color };
@@ -160,7 +163,13 @@ function reskinToDebug(embeds: DiscordEmbed[]): { embeds: DiscordEmbed[]; attach
     }
     return next;
   });
-  return { embeds: reskinned, attachments: [debug.icon] };
+  // Forward any action rows (e.g. the /connections info Reauthenticate button) so the
+  // Debug preview renders the full reply, buttons included.
+  return {
+    embeds: reskinned,
+    attachments: [debug.icon],
+    ...(components.length > 0 ? { components } : {}),
+  };
 }
 
 /**
@@ -174,9 +183,10 @@ export async function simulateConnFlow(input: {
   tokens: string[];
   emoji?: ConnectionEmoji;
   now?: () => Date;
-}): Promise<{ embeds: DiscordEmbed[]; attachments: string[] }> {
+}): Promise<{ embeds: DiscordEmbed[]; attachments: string[]; components?: DiscordActionRow[] }> {
   const { scenario, tokens } = input;
   const captured: DiscordEmbed[] = [];
+  const capturedComponents: DiscordActionRow[] = [];
   await handleConnectCommand(
     {
       subcommand: tokens[0] ?? "list",
@@ -187,6 +197,9 @@ export async function simulateConnFlow(input: {
       reply: (payload: ChannelReplyPayload) => {
         if (typeof payload !== "string") {
           captured.push(...payload.embeds);
+          if (payload.components) {
+            capturedComponents.push(...payload.components);
+          }
         }
       },
     },
@@ -199,5 +212,5 @@ export async function simulateConnFlow(input: {
       log: () => {},
     },
   );
-  return reskinToDebug(captured);
+  return reskinToDebug(captured, capturedComponents);
 }

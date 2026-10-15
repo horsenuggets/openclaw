@@ -3,14 +3,17 @@ import type { ChannelReplyPayload } from "./channel-commands.js";
 import type { DisplayConnection, StoredConnection } from "./connections-store.js";
 import { type AuthResult, CliAuth, DirectAuth, OAuthPkceAuth } from "./auth-flow.js";
 import {
+  CONN_REAUTH_TODO,
   CONNECTIONS_COMMAND_SPECS,
   type ConnectCommandContext,
   type ConnectCommandDeps,
   type ConnectionStore,
   type PendingAuthStore,
+  buildReauthCustomId,
   connectTextCommandHasToken,
   handleConnectCommand,
   parseConnectTextCommand,
+  parseReauthCustomId,
 } from "./connect-commands.js";
 import { type Connector, ConnectorRegistry } from "./connectors.js";
 
@@ -62,6 +65,31 @@ describe("CONNECTIONS_COMMAND_SPECS", () => {
       // Group DMs (context 2) are excluded, like /secret: no owner to gate on.
       expect(spec.contexts).toEqual([0, 1]);
     }
+  });
+
+  it("includes an info subcommand with a required service option", () => {
+    for (const spec of CONNECTIONS_COMMAND_SPECS) {
+      const info = spec.options?.find((o) => o.name === "info");
+      expect(info?.type).toBe(1); // subcommand
+      const service = info?.options?.find((o) => o.name === "service");
+      expect(service?.type).toBe(3); // STRING
+      expect(service?.required).toBe(true);
+      expect((service?.choices ?? []).map((c) => c.value)).toContain("todoist");
+    }
+  });
+});
+
+describe("reauth custom_id", () => {
+  it("round-trips a namespaced connector id", () => {
+    expect(buildReauthCustomId("github")).toBe("conn:reauth:github");
+    expect(parseReauthCustomId("conn:reauth:github")).toEqual({ connectorId: "github" });
+    expect(CONN_REAUTH_TODO).toBe("TODO");
+  });
+
+  it("returns null for unrelated or empty ids", () => {
+    expect(parseReauthCustomId("chan-unreg:1:2:3")).toBeNull();
+    expect(parseReauthCustomId("conn:reauth:")).toBeNull();
+    expect(parseReauthCustomId("conn:reauth")).toBeNull();
   });
 });
 
@@ -535,6 +563,143 @@ describe("handleConnectCommand available", () => {
     expect(fieldNamed(replies[0].payload, "Available Services")).toContain(
       "`google` \u2192 Google",
     );
+  });
+});
+
+/** A linked DisplayConnection seed for the info view. */
+function linkFixture(
+  connectorId: string,
+  status: DisplayConnection["status"] = "linked",
+  over: Partial<DisplayConnection> = {},
+): DisplayConnection {
+  return {
+    connectorId,
+    status,
+    accountLabel: "me@example.com",
+    linkedAt: "2026-01-02T03:04:05.000Z",
+    ...over,
+  };
+}
+
+/** Pull the first action row's buttons from a reply payload. */
+function buttonsOf(payload: ChannelReplyPayload) {
+  expect(typeof payload).toBe("object");
+  const obj = payload as {
+    components?: {
+      type: number;
+      components: { type: number; style?: number; label?: string; custom_id?: string }[];
+    }[];
+  };
+  return obj.components?.[0]?.components ?? [];
+}
+
+describe("handleConnectCommand info", () => {
+  it("renders the linked stats view with glyph, account, timestamp, auth type, and services", async () => {
+    const { ctx, replies } = makeCtx("info", ["todoist"]);
+    await handleConnectCommand(
+      ctx,
+      makeDeps({ store: makeStore(true, [linkFixture("todoist", "linked")]).store }),
+    );
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Your Connections \u00bb Todoist");
+    expect(embed.description).toBe(
+      "Below are some stats about your current **Todoist** connection. You are currently connected!",
+    );
+    // linkedAt 2026-01-02T03:04:05Z -> unix seconds 1767323045.
+    const unix = Math.floor(new Date("2026-01-02T03:04:05.000Z").getTime() / 1000);
+    const fields = embed.fields ?? [];
+    const byName = (n: string) => fields.find((f) => f.name === n);
+    expect(byName("Status")?.value).toBe("\u2705"); // connected default glyph
+    expect(byName("Status")?.inline).toBe(true);
+    expect(byName("Account")?.value).toBe("me@example.com");
+    expect(byName("Account")?.inline).toBe(true);
+    expect(byName("Linked")?.value).toBe(`<t:${unix}:D>`);
+    expect(byName("Linked")?.inline).toBe(true);
+    // Todoist is a direct (paste-token) connector.
+    expect(byName("Auth Type")?.value).toBe("Pasted token");
+    expect(byName("Last Ping")?.value).toBe("TODO");
+    expect(byName("Last Ping")?.inline).toBe(true);
+    expect(byName("Services Available")?.value).toBe("Tasks, Projects, Labels");
+    expect(byName("Services Available")?.inline).toBe(false);
+    expect(replies[0].ephemeral).toBe(true);
+  });
+
+  it("uses the connecting status sentence and glyph", async () => {
+    const { ctx, replies } = makeCtx("info", ["todoist"]);
+    await handleConnectCommand(
+      ctx,
+      makeDeps({ store: makeStore(true, [linkFixture("todoist", "connecting")]).store }),
+    );
+    const embed = embedOf(replies[0].payload);
+    expect(embed.description).toContain("We are attempting to connect you now!");
+    expect((embed.fields ?? []).find((f) => f.name === "Status")?.value).toBe("\u2b1c"); // connecting
+  });
+
+  it("uses the needs_reauth status sentence and glyph", async () => {
+    const { ctx, replies } = makeCtx("info", ["notion"]);
+    await handleConnectCommand(
+      ctx,
+      makeDeps({ store: makeStore(true, [linkFixture("notion", "needs_reauth")]).store }),
+    );
+    const embed = embedOf(replies[0].payload);
+    expect(embed.description).toContain("Pinging has failed; you may need to reauthenticate.");
+    expect((embed.fields ?? []).find((f) => f.name === "Status")?.value).toBe("\u26a0\ufe0f");
+  });
+
+  it("labels Auth Type OAuth for an oauth connector", async () => {
+    const registry = makeOAuthRegistry(() => Promise.resolve({ ok: true, status: 200, body: {} }));
+    const { ctx, replies } = makeCtx("info", ["oauthy"]);
+    await handleConnectCommand(
+      ctx,
+      makeDeps({ registry, store: makeStore(true, [linkFixture("oauthy", "linked")]).store }),
+    );
+    const embed = embedOf(replies[0].payload);
+    expect((embed.fields ?? []).find((f) => f.name === "Auth Type")?.value).toBe("OAuth");
+  });
+
+  it("includes a primary Reauthenticate button with a namespaced custom_id", async () => {
+    const { ctx, replies } = makeCtx("info", ["github"]);
+    await handleConnectCommand(
+      ctx,
+      makeDeps({ store: makeStore(true, [linkFixture("github", "linked")]).store }),
+    );
+    const buttons = buttonsOf(replies[0].payload);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toMatchObject({
+      type: 2,
+      style: 1, // primary
+      label: "Reauthenticate",
+      custom_id: "conn:reauth:github",
+    });
+  });
+
+  it("rejects an unknown service, listing every catalogued service", async () => {
+    const { ctx, replies } = makeCtx("info", ["slack"]);
+    await handleConnectCommand(ctx, makeDeps());
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Info");
+    expect(embed.description).toContain("`slack` is not a valid service");
+    expect(fieldNamed(replies[0].payload, "Available Services")).toContain(
+      "`google` \u2192 Google",
+    );
+  });
+
+  it("tells the user a catalogued-but-unlinked service is not linked", async () => {
+    const { ctx, replies } = makeCtx("info", ["notion"]);
+    // Store registered but empty: notion is catalogued yet not linked here.
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Your Connections \u00bb Notion");
+    expect(embed.description).toContain("You have not linked Notion yet.");
+    expect(embed.description).toContain("/connections add notion");
+    // No stats fields or button on the not-linked branch.
+    expect(buttonsOf(replies[0].payload)).toHaveLength(0);
+  });
+
+  it("requires a registered channel", async () => {
+    const { ctx, replies } = makeCtx("info", ["todoist"]);
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
+    expect(embedOf(replies[0].payload).description).toContain("not registered yet");
   });
 });
 
