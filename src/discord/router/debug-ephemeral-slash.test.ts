@@ -77,12 +77,30 @@ async function runDebugSlash(params: {
 }
 
 /**
+ * Minimal `channelCommandDeps` shape the authorization predicate consults before
+ * the defer. The defaults model an authorized caller (whitelist configured,
+ * caller is admin, channel registered to the caller) so a bare call defers on the
+ * preference; individual cases override to model an unauthorized caller.
+ */
+type AuthDeps = {
+  whitelistConfigured?: boolean;
+  isAdmin?: boolean;
+  isWhitelisted?: boolean;
+  owner?: string | null;
+};
+
+/**
  * Drive a `/channel <subcommand>` slash interaction, capturing the interaction
  * callbacks so a test can assert the defer's ephemerality. handleChannelCommand
- * is stubbed to a no-op: the defer fires before it, so the preference-derived
- * flag is already observable.
+ * is stubbed to a no-op, but the authorization predicate that picks the defer
+ * flag runs for real against the injected `channelCommandDeps`, so the deps
+ * decide whether the defer honors the preference (authorized) or is forced
+ * ephemeral (unauthorized denial).
  */
-async function runChannelSlash(subcommand: string): Promise<{ callbacks: Callback[] }> {
+async function runChannelSlash(
+  subcommand: string,
+  auth: AuthDeps = {},
+): Promise<{ callbacks: Callback[] }> {
   const callbacks: Callback[] = [];
   vi.stubGlobal(
     "fetch",
@@ -98,6 +116,13 @@ async function runChannelSlash(subcommand: string): Promise<{ callbacks: Callbac
     }) as unknown as typeof fetch,
   );
   try {
+    const registered = auth.owner !== undefined;
+    const channelCommandDeps = {
+      whitelistConfigured: () => auth.whitelistConfigured ?? true,
+      isAdmin: async () => auth.isAdmin ?? true,
+      isWhitelisted: async () => auth.isWhitelisted ?? true,
+      describeInstance: () => (registered ? { ownerId: auth.owner } : null),
+    };
     const ctx = {
       applicationId: "app",
       runtime,
@@ -105,9 +130,7 @@ async function runChannelSlash(subcommand: string): Promise<{ callbacks: Callbac
       instances: new Map(),
       channelQueue: new Map(),
       channelGuild: new Map<string, string>(),
-      // handleChannelCommand is mocked to a no-op, so deps are unused here; the
-      // defer flag (the thing under test) is sent before it runs.
-      channelCommandDeps: {} as never,
+      channelCommandDeps,
       isAdmin: async () => true,
     } as unknown as GatewayContext;
     handleSlashInteraction(ctx, {
@@ -335,17 +358,45 @@ it("defers /channel status public when the channel preference is public", async 
   expect(callbacks[0]?.data?.flags).toBe(0);
 });
 
-it("keeps /channel register and unregister ephemeral even when the preference is public", async () => {
-  // register/unregister are gated inside handleChannelCommand (after the defer), so
-  // they must stay ephemeral: Discord fixes ephemerality at defer time, and a public
-  // defer would publish a permission-denied embed to the channel, leaking a
-  // non-owner's probe. Only `status` (never denies) honors the public preference.
+it("defers an authorized /channel register and unregister public when the preference is public", async () => {
+  // Authorization now runs BEFORE the defer, so an authorized caller's SUCCESS can
+  // honor the public preference and defer public (flags 0), just like status.
+  // register: whitelist configured + caller is admin. unregister: channel
+  // registered to the caller ("u1", the interaction user).
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
-  for (const subcommand of ["register", "unregister"]) {
-    const { callbacks } = await runChannelSlash(subcommand);
-    expect(callbacks[0]?.type).toBe(5);
-    expect(callbacks[0]?.data?.flags).toBe(64);
-  }
+  const register = await runChannelSlash("register", { isAdmin: true });
+  expect(register.callbacks[0]?.type).toBe(5);
+  expect(register.callbacks[0]?.data?.flags).toBe(0);
+  const unregister = await runChannelSlash("unregister", { owner: "u1" });
+  expect(unregister.callbacks[0]?.type).toBe(5);
+  expect(unregister.callbacks[0]?.data?.flags).toBe(0);
+});
+
+it("defers an authorized /channel register and unregister ephemeral when the preference is private (default)", async () => {
+  // A new channel is private by default, so even an authorized success defers
+  // ephemeral (flags 64), following the preference.
+  const register = await runChannelSlash("register", { isAdmin: true });
+  expect(register.callbacks[0]?.type).toBe(5);
+  expect(register.callbacks[0]?.data?.flags).toBe(64);
+  const unregister = await runChannelSlash("unregister", { owner: "u1" });
+  expect(unregister.callbacks[0]?.type).toBe(5);
+  expect(unregister.callbacks[0]?.data?.flags).toBe(64);
+});
+
+it("forces /channel register and unregister denials ephemeral even when the preference is public", async () => {
+  // An UNAUTHORIZED caller must never get a public defer: Discord fixes
+  // ephemerality at defer time, so a public defer would publish the permission-
+  // denied embed to the channel and leak the probe. Authorization runs before the
+  // defer, so the denial path forces flags 64 regardless of the public preference.
+  // register: caller is neither admin nor whitelisted. unregister: channel owned by
+  // someone else and the caller is not an admin.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  const register = await runChannelSlash("register", { isAdmin: false, isWhitelisted: false });
+  expect(register.callbacks[0]?.type).toBe(5);
+  expect(register.callbacks[0]?.data?.flags).toBe(64);
+  const unregister = await runChannelSlash("unregister", { isAdmin: false, owner: "someone-else" });
+  expect(unregister.callbacks[0]?.type).toBe(5);
+  expect(unregister.callbacks[0]?.data?.flags).toBe(64);
 });
 
 it("keeps /secret ephemeral even when the channel preference is public", async () => {

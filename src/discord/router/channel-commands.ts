@@ -410,6 +410,60 @@ function formatStatus(status: InstanceStatus | null): {
 
 const OWNER_MENTION_FALLBACK = "another user";
 
+/**
+ * Whether the caller passes the permission gate for a `/channel` subcommand,
+ * i.e. whether the command can produce a (possibly public) SUCCESS rather than a
+ * permission denial. Evaluated against the SAME predicates the command handler
+ * uses so the two never drift:
+ *
+ * - `status` (and any unknown subcommand) always returns true: status is open to
+ *   everyone and never denies, and the help fallback is not sensitive.
+ * - `register` requires the whitelist to be configured AND the caller to be an
+ *   admin or whitelisted. The downstream on-behalf / self / guild-DM / already-
+ *   registered checks are refinements that only an already-authorized caller can
+ *   reach, so they do not affect the top-level authorize-vs-deny decision here.
+ * - `unregister` requires the channel to be registered AND the caller to be its
+ *   owner or an admin.
+ *
+ * Callers use this to decide a Discord interaction's defer ephemerality BEFORE
+ * the type-5 defer: an authorized caller may defer publicly (honoring the
+ * channel's ephemeral preference) so a SUCCESS shows to the channel, while an
+ * unauthorized caller must take the ephemeral-denial path so a permission denial
+ * never leaks publicly. Discord fixes a reply's ephemerality at defer time, so
+ * this decision cannot be deferred until inside the command handler.
+ */
+export async function isAuthorizedForChannelCommand(
+  sub: string | null,
+  userId: string,
+  channelId: string,
+  deps: Pick<
+    ChannelCommandDeps,
+    "whitelistConfigured" | "isAdmin" | "isWhitelisted" | "describeInstance"
+  >,
+): Promise<boolean> {
+  const name = (sub ?? "").toLowerCase();
+  if (name === "register") {
+    if (!deps.whitelistConfigured()) {
+      return false;
+    }
+    return (await deps.isAdmin(userId)) || (await deps.isWhitelisted(userId));
+  }
+  if (name === "unregister") {
+    const status = deps.describeInstance(channelId);
+    if (!status) {
+      // Nothing to remove: not a permission denial, so a public "nothing here"
+      // reply is fine and should follow the channel preference.
+      return true;
+    }
+    if (status.ownerId === userId) {
+      return true;
+    }
+    return await deps.isAdmin(userId);
+  }
+  // status and any unknown subcommand never deny.
+  return true;
+}
+
 /** Dispatch a parsed `/channel` command. Transport-agnostic. */
 export async function handleChannelCommand(
   ctx: ChannelCommandContext,

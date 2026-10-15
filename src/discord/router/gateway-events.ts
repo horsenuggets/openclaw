@@ -12,6 +12,7 @@ import {
   buildUnregisterFlowPreview,
   decideUnregisterClick,
   handleChannelCommand,
+  isAuthorizedForChannelCommand,
   parseChannelTextCommand,
   parseUnregisterCustomId,
 } from "./channel-commands.js";
@@ -1236,28 +1237,23 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       // the daemon's command timeout plus readiness polling, well beyond Discord's
       // ~3s window, and the result is delivered by editing the deferred reply.
       //
-      // Nothing in /channel is secret (only /secret is always ephemeral), so where
-      // it can it honors the channel's `ephemeralCommands` preference like /debug,
-      // /lifecycle, and /connections. But register/unregister are gated
-      // (whitelist/admin/owner) INSIDE handleChannelCommand, AFTER this defer, and a
-      // denial must ALWAYS be ephemeral: Discord fixes a reply's ephemerality at
-      // defer time, so a public defer here would publish the permission-denied embed
+      // Nothing in /channel is secret (only /secret is always ephemeral), so every
+      // subcommand honors the channel's `ephemeralCommands` preference on SUCCESS,
+      // like /debug, /lifecycle, and /connections. But register/unregister are
+      // gated (whitelist/admin/owner), and a permission denial must ALWAYS be
+      // ephemeral: Discord fixes a reply's ephemerality at defer time, so a public
+      // defer for an unauthorized caller would publish the permission-denied embed
       // to the whole channel and leak that a non-owner probed registration,
       // violating the "every denial is ephemeral" invariant
-      // (.agents/docs/command-system.md). So only `status` (open to everyone, never
-      // denies) follows the channel preference; register/unregister (and any unknown
-      // subcommand) stay ephemeral. An owner-only fix, extracting the gate before the
-      // defer, would duplicate the register/unregister authorization logic.
-      const channelDeferEphemeral =
-        subOpt?.name === "status" ? ephemeralFlags(interactionChannelId) : 64;
-      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: 5,
-          data: { flags: channelDeferEphemeral },
-        }),
-      }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
+      // (.agents/docs/command-system.md).
+      //
+      // So evaluate the SAME authorization predicate the command handler uses
+      // BEFORE this defer (a couple of role/registration lookups, well inside the
+      // ~3s window): an authorized caller defers with the channel preference so a
+      // SUCCESS can show publicly, while an unauthorized caller defers ephemerally
+      // (flags 64) so the handler's denial embed stays private. status (open to
+      // everyone, never denies) and any unknown subcommand always resolve as
+      // authorized, so they follow the preference as before.
       const editReply = (payload: ChannelReplyPayload) => {
         // Embed replies upload their category icons (attachment://), so route
         // them through the attachment-aware editor; strings stay plain content.
@@ -1292,17 +1288,46 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           })
           .catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
       };
-      void handleChannelCommand(
-        {
-          subcommand: subOpt?.name ?? null,
-          args,
-          channelId: interactionChannelId,
+      // The authorization lookup is async, so the defer (and the handler it
+      // precedes) runs inside a fire-and-forget IIFE; the enclosing dispatch
+      // handler stays synchronous like the other command branches.
+      void (async () => {
+        const channelAuthorized = await isAuthorizedForChannelCommand(
+          subOpt?.name ?? null,
           userId,
-          isDM: !d.guild_id,
-          reply: (payload) => editReply(payload),
-        },
-        channelCommandDeps,
-      );
+          interactionChannelId,
+          channelCommandDeps,
+        );
+        const channelDeferEphemeral = channelAuthorized ? ephemeralFlags(interactionChannelId) : 64;
+        try {
+          const deferResp = await fetch(
+            `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: 5, data: { flags: channelDeferEphemeral } }),
+            },
+          );
+          if (!deferResp.ok) {
+            runtime.error(`[router] channel defer failed (${deferResp.status})`);
+            return;
+          }
+        } catch (err) {
+          runtime.error(`[router] channel defer failed: ${String(err)}`);
+          return;
+        }
+        await handleChannelCommand(
+          {
+            subcommand: subOpt?.name ?? null,
+            args,
+            channelId: interactionChannelId,
+            userId,
+            isDM: !d.guild_id,
+            reply: (payload) => editReply(payload),
+          },
+          channelCommandDeps,
+        );
+      })();
     }
   }
 
