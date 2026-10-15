@@ -11,7 +11,9 @@ Docs: https://docs.openclaw.ai
   so a missing first-run welcome embed is traceable. Documented the mirror-rig-only
   `OPENCLAW_SKIP_BOOTSTRAP` toggle in the agent docs and `.env.template`: default off so
   onboarding runs like prod, pass it inline on the launch/deploy command when skipping
-  onboarding, and never bake it into any env file.
+  onboarding, and never bake it into any env file. `scripts/prod-mirror.sh` now forwards
+  an inline `OPENCLAW_SKIP_BOOTSTRAP` into the box's provisioner process so the inline
+  convention actually reaches workspace seeding.
 - Discord router: replaced the Debug embed footer icon with the Material Symbols
   `bug_report` glyph (36px, `#ff80e0`), dropping the viewfinder frame corners so the whole
   bug shows.
