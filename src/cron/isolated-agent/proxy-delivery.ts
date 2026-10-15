@@ -76,11 +76,16 @@ export async function deliverDiscordViaProxy(params: {
         }
       }
     }
-    // Send each media URL as its own message. The proxy appends a `mediaUrl`
-    // field onto the text body, so we pass the URL in exactly one field (as the
-    // text) to avoid duplicating it and blowing the 2000-char limit. Discord
-    // auto-embeds a bare media URL in message content.
+    // Send each media URL as its own message, passing the URL in exactly one
+    // field (the text) so the proxy does not double-append it and blow the
+    // 2000-char limit. Discord auto-embeds a bare media URL in message content.
+    // The container proxy can only post URLs, not upload files, so a non-http
+    // media reference (e.g. a local `./path.png`) is skipped rather than posted
+    // as a broken path; the text summary still delivers.
     for (const mediaUrl of mediaUrls) {
+      if (!/^https?:\/\//i.test(mediaUrl)) {
+        continue;
+      }
       await postSend(fetchImpl, base, { ...target, text: mediaUrl });
     }
   }

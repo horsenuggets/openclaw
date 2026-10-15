@@ -96,6 +96,20 @@ describe("deliverDiscordViaProxy", () => {
     expect(sent[1]).toEqual({ channelId: "123456789012345678", text: "http://x/img.png" });
   });
 
+  it("skips non-http media (local paths) but still sends the text", async () => {
+    const fetchImpl = vi.fn(async () => okResponse()) as unknown as typeof fetch;
+    await deliverDiscordViaProxy({
+      proxyUrl: "http://proxy:18800",
+      to: "123456789012345678",
+      toKind: "channel",
+      payloads: [{ text: "look", mediaUrls: ["./screenshots/image.png"] }],
+      fetchImpl,
+    });
+    const sent = bodies(fetchImpl);
+    // Only the text message goes out; the local path is not posted as text.
+    expect(sent).toEqual([{ channelId: "123456789012345678", text: "look" }]);
+  });
+
   it("skips empty-text payloads with no media", async () => {
     const fetchImpl = vi.fn(async () => okResponse()) as unknown as typeof fetch;
     await deliverDiscordViaProxy({
