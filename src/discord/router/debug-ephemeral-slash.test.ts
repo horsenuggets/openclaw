@@ -10,6 +10,14 @@ vi.mock("./discord-api.js", async (orig) => ({
   editInteractionEmbedReply: vi.fn(async () => ({ ok: true, status: 200 })),
 }));
 
+// /channel's defer (the thing under test for the /channel cases) fires before
+// handleChannelCommand, so stub the command itself to a no-op and keep the test
+// focused on the defer flag rather than the slow register/status machinery.
+vi.mock("./channel-commands.js", async (orig) => ({
+  ...(await orig<typeof import("./channel-commands.js")>()),
+  handleChannelCommand: vi.fn(async () => {}),
+}));
+
 import type { GatewayContext } from "./gateway-events.js";
 import type { RouterRuntime } from "./types.js";
 import { editInteractionEmbedReply } from "./discord-api.js";
@@ -59,6 +67,101 @@ async function runDebugSlash(params: {
       channel: { type: 0 },
       guild_id: "987654321098765432",
       data: { name: "debug", options: [{ name: "command", value: params.command }] },
+      user: { id: "u1" },
+    } as never);
+    await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
+    return { callbacks };
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
+/**
+ * Drive a `/channel <subcommand>` slash interaction, capturing the interaction
+ * callbacks so a test can assert the defer's ephemerality. handleChannelCommand
+ * is stubbed to a no-op: the defer fires before it, so the preference-derived
+ * flag is already observable.
+ */
+async function runChannelSlash(): Promise<{ callbacks: Callback[] }> {
+  const callbacks: Callback[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/callback")) {
+        callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ attachments: [] }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch,
+  );
+  try {
+    const ctx = {
+      applicationId: "app",
+      runtime,
+      instancesDir,
+      instances: new Map(),
+      channelQueue: new Map(),
+      channelGuild: new Map<string, string>(),
+      // handleChannelCommand is mocked to a no-op, so deps are unused here; the
+      // defer flag (the thing under test) is sent before it runs.
+      channelCommandDeps: {} as never,
+      isAdmin: async () => true,
+    } as unknown as GatewayContext;
+    handleSlashInteraction(ctx, {
+      id: "int1",
+      channel_id: CHANNEL,
+      token: "tok",
+      channel: { type: 0 },
+      guild_id: "987654321098765432",
+      data: { name: "channel", options: [{ name: "status" }] },
+      user: { id: "u1" },
+    } as never);
+    await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
+    return { callbacks };
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
+/**
+ * Drive a `/secret` slash interaction in a 1:1 DM (so the owner gate passes) and
+ * capture the modal-open callback so a test can confirm /secret stays ephemeral
+ * regardless of the channel preference. A /secret modal (type 9) is inherently
+ * ephemeral, so it never carries the channel's public flag.
+ */
+async function runSecretSlash(): Promise<{ callbacks: Callback[] }> {
+  const callbacks: Callback[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/callback")) {
+        callbacks.push(JSON.parse((init?.body as string) ?? "{}"));
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    }) as unknown as typeof fetch,
+  );
+  try {
+    const ctx = {
+      applicationId: "app",
+      runtime,
+      instancesDir,
+      instances: new Map(),
+      channelQueue: new Map(),
+      channelGuild: new Map<string, string>(),
+      describeInstance: () => undefined,
+      isAdmin: async () => true,
+    } as unknown as GatewayContext;
+    // A 1:1 DM (channel.type === 1, no guild_id) passes runForOwner untouched, so
+    // the modal opens without a registered owner.
+    handleSlashInteraction(ctx, {
+      id: "int1",
+      channel_id: CHANNEL,
+      token: "tok",
+      channel: { type: 1 },
+      data: { name: "secret" },
       user: { id: "u1" },
     } as never);
     await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
@@ -212,6 +315,36 @@ it("rolls back the ephemeral toggle when the defer ack is rejected", async () =>
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it("defers /channel ephemeral when the channel preference is private (default)", async () => {
+  // A new channel is private by default, so /channel now defers ephemeral (flags
+  // 64), honoring the preference rather than being forced ephemeral.
+  const { callbacks } = await runChannelSlash();
+  expect(callbacks[0]?.type).toBe(5);
+  expect(callbacks[0]?.data?.flags).toBe(64);
+});
+
+it("defers /channel public when the channel preference is public", async () => {
+  // `/debug ephemeral off` opts the channel out of ephemeral replies; /channel
+  // now follows that preference and defers public (flags 0), unlike before when it
+  // was always ephemeral.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  const { callbacks } = await runChannelSlash();
+  expect(callbacks[0]?.type).toBe(5);
+  expect(callbacks[0]?.data?.flags).toBe(0);
+});
+
+it("keeps /secret ephemeral even when the channel preference is public", async () => {
+  // /secret is always ephemeral regardless of `ephemeralCommands`: it opens a
+  // modal (type 9) so the secret value is never visible, so it must not inherit a
+  // public channel preference.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  const { callbacks } = await runSecretSlash();
+  const modal = callbacks.find((cb) => cb.type === 9);
+  expect(modal).toBeDefined();
+  // The modal callback carries no public flag; a modal is inherently private.
+  expect(modal?.data?.flags).toBeUndefined();
 });
 
 it("rolls back the ephemeral toggle when the defer request throws", async () => {

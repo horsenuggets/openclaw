@@ -801,9 +801,10 @@ export function handleMessageCreate(ctx: GatewayContext, d: MessageCreateData): 
 }
 
 /**
- * Handle a slash-command interaction (`/lifecycle`, `/channel`). Responds
- * ephemerally; `/channel` defers first because register can exceed Discord's
- * ~3s window, then edits the deferred reply with the result.
+ * Handle a slash-command interaction (`/lifecycle`, `/channel`). Reply
+ * ephemerality follows the channel's `ephemeralCommands` preference (only
+ * `/secret` is always ephemeral); `/channel` defers first because register can
+ * exceed Discord's ~3s window, then edits the deferred reply with the result.
  */
 export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionData): void {
   const {
@@ -1229,23 +1230,20 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
     }
     const userId = d.member?.user?.id ?? d.user?.id;
     if (userId) {
-      // Acknowledge immediately with a deferred, ALWAYS-ephemeral response:
-      // register can take up to the daemon's command timeout plus readiness
-      // polling, well beyond Discord's ~3s window, and the result is delivered by
-      // editing the deferred reply. /channel is deliberately exempt from the
-      // channel's `ephemeralCommands` preference (unlike conversational command
-      // output): its gating (whitelist/admin/owner) is checked inside
-      // handleChannelCommand AFTER this defer, so deferring public would edit a
-      // permission-denied embed into a channel-visible reply and leak that a
-      // non-owner probed registration, violating the "every denial is ephemeral"
-      // invariant (.agents/docs/command-system.md). Every /channel reply already
-      // asks for ephemeral, so fixing the defer ephemeral matches that intent.
+      // Acknowledge immediately with a deferred response: register can take up to
+      // the daemon's command timeout plus readiness polling, well beyond Discord's
+      // ~3s window, and the result is delivered by editing the deferred reply.
+      // Nothing in /channel is secret (only /secret is always ephemeral), so it
+      // honors the channel's `ephemeralCommands` preference like /debug,
+      // /lifecycle, and /connections. The defer flag must match that preference up
+      // front, since Discord fixes a reply's ephemerality when the interaction is
+      // first answered.
       void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: 5,
-          data: { flags: 64 },
+          data: { flags: ephemeralFlags(interactionChannelId) },
         }),
       }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
       const editReply = (payload: ChannelReplyPayload) => {
