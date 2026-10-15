@@ -353,20 +353,26 @@ const unregisterFlowSubcommand: DebugSubcommand = {
   },
 };
 
-/** The Debug-category usage notice listing every connflow scenario. */
+/**
+ * The Debug-category usage notice: a short description plus a fenced usage block,
+ * then one non-inline field per canned scenario (name `Scenario #<id>`, value the
+ * scenario's one-line description). Driven by {@link CONNFLOW_SCENARIOS} so the
+ * fields stay in sync with the catalog.
+ */
 function connFlowUsage(): DebugResult {
-  const scenarioLines = CONNFLOW_SCENARIOS.map(
-    (s) => `\`${s.id}\` **${s.label}** — ${s.description}`,
-  ).join("\n");
-  return debugNotice(
-    "Preview the `/connections` flow against canned data, rendered under Debug. " +
-      "Pick a scenario, then the subcommand (and args) as if you were running " +
-      "`/connections`.\n\n" +
-      "Usage `/debug connflow <scenario> <subcommand> [args]`. For example, " +
-      "`/debug connflow 1 add notion` is the same as a user with zero connections running " +
-      "`/connections add notion`.\n\n" +
-      `**Scenarios**\n${scenarioLines}`,
-  );
+  const description =
+    "Preview the `/connections` flow against canned data. Pick a scenario, then the " +
+    "subcommand (and args) as if you were running `/connections`.\n" +
+    "```sh\n" +
+    "# Usage\n" +
+    "/debug connflow <scenario> [subcommand] [args]\n" +
+    "```";
+  const fields: DiscordEmbedField[] = CONNFLOW_SCENARIOS.map((s) => ({
+    name: `Scenario #${s.id}`,
+    value: s.description,
+  }));
+  const built = buildEmbed({ category: "debug", description, fields });
+  return { kind: "embeds", embeds: [built.embed], attachments: built.attachments };
 }
 
 const connFlowSubcommand: DebugSubcommand = {

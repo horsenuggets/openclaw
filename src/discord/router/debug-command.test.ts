@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiscordEmbed } from "./channel-commands.js";
+import { CONNFLOW_SCENARIOS } from "./connflow-preview.js";
 import {
   DEBUG_COMMAND_SPEC,
   DEBUG_SUBCOMMANDS,
@@ -88,15 +89,30 @@ describe("connflow subcommand", () => {
     expect(DEBUG_SUBCOMMANDS.some((s) => s.name === "connflow")).toBe(true);
   });
 
-  it("lists the scenarios when no scenario is given", () => {
+  it("lists the scenarios as per-scenario fields when no scenario is given", () => {
     const result = runDebugCommand("connflow");
     expect(result.kind).toBe("embeds");
     if (result.kind !== "embeds") {
       throw new Error("expected embeds");
     }
     const description = result.embeds[0].description ?? "";
-    expect(description).toContain("Scenarios");
-    expect(description).toContain("/debug connflow 1 add notion");
+    expect(description).toContain("Preview the `/connections` flow against canned data");
+    expect(description).toContain("/debug connflow <scenario> [subcommand] [args]");
+    const fields = result.embeds[0].fields ?? [];
+    // One non-inline field per scenario, driven by the catalog.
+    expect(fields).toHaveLength(CONNFLOW_SCENARIOS.length);
+    expect(fields[0]).toEqual({
+      name: "Scenario #1",
+      value: "No connections have been linked.",
+    });
+    expect(fields[1]).toEqual({
+      name: "Scenario #2",
+      value: "Some linked, one needing re-auth, one mid-ping.",
+    });
+    expect(fields[2]).toEqual({
+      name: "Scenario #3",
+      value: "A handful of services, all successfully linked.",
+    });
   });
 
   it("returns a connflow descriptor for a valid scenario plus subcommand", () => {

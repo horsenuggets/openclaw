@@ -57,7 +57,7 @@ export const CONNFLOW_SCENARIOS: readonly ConnFlowScenario[] = [
   {
     id: 1,
     label: "No connections",
-    description: "Registered channel with nothing linked yet.",
+    description: "No connections have been linked.",
     connections: [],
   },
   {
@@ -73,7 +73,7 @@ export const CONNFLOW_SCENARIOS: readonly ConnFlowScenario[] = [
   {
     id: 3,
     label: "All linked",
-    description: "Every linkable service connected.",
+    description: "A handful of services, all successfully linked.",
     connections: [link("todoist", "linked"), link("notion", "linked"), link("github", "linked")],
   },
 ];
