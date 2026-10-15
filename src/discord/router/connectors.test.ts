@@ -33,10 +33,6 @@ describe("connectorRegistry.get", () => {
 });
 
 describe("connector catalog", () => {
-  it("lists every catalogued id alphabetically (no coming-soon gating)", () => {
-    expect(connectorRegistry.catalogIds()).toBe("github, google, notion, todoist");
-  });
-
   it("marks every direct connector as available (connect flow wired)", () => {
     expect(connectorRegistry.available().map((c) => c.id)).toEqual(["todoist", "notion", "github"]);
   });

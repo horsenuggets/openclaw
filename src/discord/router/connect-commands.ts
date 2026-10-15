@@ -273,15 +273,19 @@ const LIST_DESCRIPTION =
   "subcommands to manage your connections...";
 
 const LIST_EMPTY =
-  "You have not linked any accounts yet. Use `/connections add <service>` to link one.";
+  "You have not linked any accounts yet. Below are all of the currently-registered " +
+  "subcommands under the `/connections` command...";
 
 /**
  * The subcommand previews, debug-help style (backtick usage + one-line value).
- * Rendered via the shared helper (same shape as `/debug help`), preserving the
- * authored add-before-remove order.
+ * Rendered via the shared helper (same shape as `/debug help`), in the authored
+ * order that matches the `/connections` command surface.
  */
 const SUBCOMMAND_FIELDS: DiscordEmbedField[] = buildSubcommandFields("/connections", [
   { usage: "add <service>", description: "Connect a new service." },
+  { usage: "available", description: "List out available services you can connect to." },
+  { usage: "info <service>", description: "Get info about a service." },
+  { usage: "list", description: "List your currently-linked accounts." },
   { usage: "remove <service>", description: "Remove a service." },
 ]);
 
@@ -382,21 +386,30 @@ const AVAILABLE_DESCRIPTION = "Every service you can link to this channel's agen
 const AVAILABLE_FIELD_NAME = "Available Services";
 
 /**
- * Build the `/connections available` reply: a single Connections-category embed with
- * an "Available Services" field listing every catalogued connector, one `` `id` ->
- * Label `` line, sorted alphabetically by id. Read-only and owner-safe (static catalog).
+ * The "Available Services" field: one `` `id` -> Label `` line per catalogued
+ * connector, sorted alphabetically by id. Shared by the `available` subcommand and
+ * the unknown-service error so both show the same canonical list.
  */
-function availableReply(registry: ConnectorRegistry): {
-  embeds: DiscordEmbed[];
-  attachments: string[];
-} {
+function availableServicesField(registry: ConnectorRegistry): DiscordEmbedField {
   const lines = registry
     .all()
     .toSorted((a, b) => a.id.localeCompare(b.id))
     .map((c) => `\`${c.id}\` \u2192 ${c.label}`)
     .join("\n");
+  return { name: AVAILABLE_FIELD_NAME, value: lines };
+}
+
+/**
+ * Build the `/connections available` reply: a single Connections-category embed with
+ * an "Available Services" field listing every catalogued connector. Read-only and
+ * owner-safe (static catalog).
+ */
+function availableReply(registry: ConnectorRegistry): {
+  embeds: DiscordEmbed[];
+  attachments: string[];
+} {
   return connectionsReply(AVAILABLE_TITLE, AVAILABLE_DESCRIPTION, [
-    { name: AVAILABLE_FIELD_NAME, value: lines },
+    availableServicesField(registry),
   ]);
 }
 
@@ -485,10 +498,7 @@ export async function handleConnectCommand(
         ? "That is not a valid service."
         : `\`${ctx.args[0] ?? ""}\` is not a valid service.`;
       await ctx.reply(
-        connectionsReply(
-          "Connect",
-          withScrubNote(`${named} Valid services: ${deps.registry.catalogIds()}.`),
-        ),
+        connectionsReply("Connect", withScrubNote(named), [availableServicesField(deps.registry)]),
         { ephemeral: true },
       );
       return;
@@ -661,10 +671,9 @@ export async function handleConnectCommand(
     const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
       await ctx.reply(
-        connectionsReply(
-          "Disconnect",
-          `\`${ctx.args[0] ?? ""}\` is not a valid service. Valid services: ${deps.registry.catalogIds()}.`,
-        ),
+        connectionsReply("Disconnect", `\`${ctx.args[0] ?? ""}\` is not a valid service.`, [
+          availableServicesField(deps.registry),
+        ]),
         { ephemeral: true },
       );
       return;

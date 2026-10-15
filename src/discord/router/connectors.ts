@@ -122,18 +122,6 @@ export class ConnectorRegistry {
   available(): Connector[] {
     return this.connectors.filter((c) => c.available);
   }
-
-  /**
-   * Every catalogued connector id, sorted alphabetically (for error messages and
-   * the `available` listing). All catalogued services are selectable now, so this
-   * lists them all rather than only the wired ("available") ones.
-   */
-  catalogIds(): string {
-    return this.connectors
-      .map((c) => c.id)
-      .toSorted((a, b) => a.localeCompare(b))
-      .join(", ");
-  }
 }
 
 /**

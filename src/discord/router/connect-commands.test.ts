@@ -345,12 +345,13 @@ describe("handleConnectCommand list", () => {
     expect(embeds).toHaveLength(2);
     expect(embeds[0].title).toBe("Your Connections");
     expect(embeds[0].description).not.toContain("```"); // no markdown code block anymore
-    // Embed 1 advertises the /connections subcommands, debug-help style.
+    // Embed 1 advertises every /connections subcommand, debug-help style.
     const subNames = (embeds[0].fields ?? []).map((f) => f.name);
     expect(subNames).toContain("`/connections add <service>`");
+    expect(subNames).toContain("`/connections available`");
+    expect(subNames).toContain("`/connections info <service>`");
+    expect(subNames).toContain("`/connections list`");
     expect(subNames).toContain("`/connections remove <service>`");
-    // Only registered/handled subcommands are advertised (no `/connections info`).
-    expect(subNames).not.toContain("`/connections info <service>`");
     // Embed 2 carries the count (2 of 3 shown are linked) and a full legend.
     expect(fieldNamed(replies[0].payload, "Currently Connected")).toBe("`2/3`");
     const legend = fieldNamed(replies[0].payload, "Legend") ?? "";
@@ -493,9 +494,14 @@ describe("handleConnectCommand list", () => {
     expect(embeds).toHaveLength(1);
     expect(embeds[0].title).toBe("Your Connections");
     expect(embeds[0].description).toContain("not linked any accounts yet");
-    // Still shows how to connect via the subcommand previews.
+    expect(embeds[0].description).toContain("currently-registered subcommands");
+    // Shows every subcommand, debug-help style.
     const names = (embeds[0].fields ?? []).map((f) => f.name);
     expect(names).toContain("`/connections add <service>`");
+    expect(names).toContain("`/connections available`");
+    expect(names).toContain("`/connections info <service>`");
+    expect(names).toContain("`/connections list`");
+    expect(names).toContain("`/connections remove <service>`");
     // No services/legend/count when there is nothing to list.
     expect(names).not.toContain("Services");
     expect(names).not.toContain("Currently Connected");
@@ -538,8 +544,11 @@ describe("handleConnectCommand add", () => {
     await handleConnectCommand(ctx, makeDeps());
     const description = embedOf(replies[0].payload).description ?? "";
     expect(description).toContain("`slack` is not a valid service");
-    // All four catalogued ids are offered, sorted alphabetically.
-    expect(description).toContain("github, google, notion, todoist");
+    expect(description).not.toContain("Valid services");
+    // The services are offered via the shared Available Services field.
+    const avail = fieldNamed(replies[0].payload, "Available Services") ?? "";
+    expect(avail).toContain("`github` \u2192 GitHub");
+    expect(avail).toContain("`todoist` \u2192 Todoist");
   });
 
   it("shows a TODO placeholder for a not-yet-wired connector (Google)", async () => {
