@@ -301,6 +301,7 @@ function mergeCronDelivery(
     mode: existing?.mode ?? "none",
     channel: existing?.channel,
     to: existing?.to,
+    toKind: existing?.toKind,
     bestEffort: existing?.bestEffort,
   };
 
@@ -314,6 +315,9 @@ function mergeCronDelivery(
   if ("to" in patch) {
     const to = typeof patch.to === "string" ? patch.to.trim() : "";
     next.to = to ? to : undefined;
+  }
+  if ("toKind" in patch) {
+    next.toKind = patch.toKind === "channel" || patch.toKind === "user" ? patch.toKind : undefined;
   }
   if (typeof patch.bestEffort === "boolean") {
     next.bestEffort = patch.bestEffort;

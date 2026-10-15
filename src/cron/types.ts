@@ -16,6 +16,10 @@ export type CronDelivery = {
   mode: CronDeliveryMode;
   channel?: CronMessageChannel;
   to?: string;
+  // Kind of the `to` target, when known from the originating session. Lets
+  // container-proxy delivery pick a direct channel post vs a DM open without
+  // re-parsing the id. Optional and purely advisory for the normal send path.
+  toKind?: "channel" | "user";
   bestEffort?: boolean;
 };
 

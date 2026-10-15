@@ -256,6 +256,7 @@ describe("cron tool", () => {
       mode: "announce",
       channel: "slack",
       to: "general",
+      toKind: "channel",
     });
   });
 
@@ -281,6 +282,7 @@ describe("cron tool", () => {
       mode: "announce",
       channel: "telegram",
       to: "-1001234567890:topic:99",
+      toKind: "channel",
     });
   });
 
@@ -304,6 +306,7 @@ describe("cron tool", () => {
     expect(call?.params?.delivery).toEqual({
       mode: "announce",
       to: "alice",
+      toKind: "user",
     });
   });
 

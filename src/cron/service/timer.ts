@@ -91,8 +91,10 @@ export async function executeJob(
       job.schedule.kind === "at" && status === "ok" && job.deleteAfterRun === true;
 
     if (!shouldDelete) {
-      if (job.schedule.kind === "at" && status === "ok") {
-        // One-shot job completed successfully; disable it.
+      if (job.schedule.kind === "at") {
+        // One-shot jobs run exactly once. Disable after any terminal outcome,
+        // including error/skipped: an "at" time is in the past once it fires, so
+        // rescheduling would re-run it every tick in a tight loop.
         job.enabled = false;
         job.state.nextRunAtMs = undefined;
       } else if (job.enabled) {

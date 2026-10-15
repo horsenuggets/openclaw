@@ -60,6 +60,71 @@ describe("container proxy server", () => {
     expect(discordSend).toHaveBeenCalledWith("chan-1", "hi\nhttp://x/img.png");
   });
 
+  it("posts directly to a channel id for /discord/send (no DM open)", async () => {
+    const openDMChannel = vi.fn(async () => "dm-should-not-be-used");
+    const discordSend = vi.fn(async () => ({ messageId: "m-2" }));
+    const base = await start({ runtime, openDMChannel, discordSend });
+
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "thread-42", text: "ping" }),
+    });
+
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toMatchObject({ ok: true, messageId: "m-2", channelId: "thread-42" });
+    // A channel target must post straight to that channel, never open a DM.
+    expect(openDMChannel).not.toHaveBeenCalled();
+    expect(discordSend).toHaveBeenCalledWith("thread-42", "ping");
+  });
+
+  it("sends to a channel id even when openDMChannel is not wired", async () => {
+    const discordSend = vi.fn(async () => ({ messageId: "m-3" }));
+    const base = await start({ runtime, discordSend });
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "thread-7", text: "hi" }),
+    });
+    expect(resp.status).toBe(200);
+    expect(discordSend).toHaveBeenCalledWith("thread-7", "hi");
+  });
+
+  it("rejects a send the authorizer denies (cross-instance) with 403", async () => {
+    const discordSend = vi.fn(async () => ({ messageId: "m-1" }));
+    const authorizeSend = vi.fn(() => ({
+      ok: false,
+      reason: "channel send must target the caller's own channel",
+    }));
+    const base = await start({ runtime, discordSend, authorizeSend });
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-openclaw-proxy-auth": "token-a" },
+      body: JSON.stringify({ channelId: "someone-elses-channel", text: "hi" }),
+    });
+    expect(resp.status).toBe(403);
+    expect(discordSend).not.toHaveBeenCalled();
+    // The authorizer sees the destination and the presented caller token.
+    expect(authorizeSend).toHaveBeenCalledWith({
+      channelId: "someone-elses-channel",
+      userId: undefined,
+      callerToken: "token-a",
+    });
+  });
+
+  it("allows a send the authorizer approves", async () => {
+    const discordSend = vi.fn(async () => ({ messageId: "m-1" }));
+    const authorizeSend = vi.fn(() => ({ ok: true }));
+    const base = await start({ runtime, discordSend, authorizeSend });
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-openclaw-proxy-auth": "token-a" },
+      body: JSON.stringify({ channelId: "own-channel", text: "hi" }),
+    });
+    expect(resp.status).toBe(200);
+    expect(discordSend).toHaveBeenCalledWith("own-channel", "hi");
+  });
+
   it("rejects /discord/send without required fields", async () => {
     const base = await start({ runtime, openDMChannel: vi.fn(), discordSend: vi.fn() });
     const resp = await fetch(`${base}/discord/send`, {

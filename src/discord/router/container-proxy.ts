@@ -34,6 +34,16 @@ export function startContainerProxyServer(opts: {
   sendSystemEmbed?: SendSystemEmbedFn;
   /** Route a message through the standard DM pipeline. Injected by the router. */
   routeMessage?: RouteMessageFn;
+  /**
+   * Authorize a `/discord/send` before it runs: the caller presents its
+   * per-instance token (proxy auth header) and the destination must belong to
+   * it. Injected by the router; when absent (dev/tests/standalone) sends are
+   * allowed so the proxy keeps working without the multi-instance registry.
+   */
+  authorizeSend?: (opts: { channelId?: string; userId?: string; callerToken?: string }) => {
+    ok: boolean;
+    reason?: string;
+  };
   /** Listen port; defaults to the fixed proxy port. Tests pass 0 for ephemeral. */
   port?: number;
   /**
@@ -83,22 +93,53 @@ export function startContainerProxyServer(opts: {
         try {
           const data = JSON.parse(body) as {
             userId?: string;
+            channelId?: string;
             text?: string;
             mediaUrl?: string;
             replyToId?: string;
           };
-          if (!data.userId || !data.text) {
+          // Two target modes: a bare channelId posts straight to that channel
+          // (guild channels/threads, e.g. cron/heartbeat delivery), while a userId
+          // is first resolved to a DM channel. Exactly one must be provided.
+          if (!data.text || (!data.userId && !data.channelId)) {
             res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "userId and text are required" }));
+            res.end(JSON.stringify({ error: "text and one of userId or channelId are required" }));
             return;
           }
-          if (!opts.discordSend || !opts.openDMChannel) {
+          // Authorize the caller against the destination before sending as the
+          // shared bot: a box may only post to its own channel or DM its owner.
+          if (opts.authorizeSend) {
+            const header = req.headers["x-openclaw-proxy-auth"];
+            const callerToken = Array.isArray(header) ? header[0] : header;
+            const decision = opts.authorizeSend({
+              channelId: data.channelId,
+              userId: data.userId,
+              callerToken,
+            });
+            if (!decision.ok) {
+              runtime.log(`[proxy] send denied: ${decision.reason ?? "unauthorized"}`);
+              res.writeHead(403, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: decision.reason ?? "unauthorized" }));
+              return;
+            }
+          }
+          if (!opts.discordSend) {
             res.writeHead(503, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "discord send not available" }));
             return;
           }
 
-          const channelId = await opts.openDMChannel(data.userId);
+          let channelId: string | null;
+          if (data.channelId) {
+            channelId = data.channelId;
+          } else {
+            if (!opts.openDMChannel) {
+              res.writeHead(503, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "discord send not available" }));
+              return;
+            }
+            channelId = await opts.openDMChannel(data.userId!);
+          }
           if (!channelId) {
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "could not open DM channel" }));
@@ -112,7 +153,9 @@ export function startContainerProxyServer(opts: {
           }
 
           const result = await opts.discordSend(channelId, content);
-          runtime.log(`[proxy] sent message to ${data.userId} via channel ${channelId}`);
+          runtime.log(
+            `[proxy] sent message to ${data.channelId ?? data.userId} via channel ${channelId}`,
+          );
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(
