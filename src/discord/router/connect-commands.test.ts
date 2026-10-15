@@ -618,6 +618,25 @@ describe("handleConnectCommand add", () => {
     expect(embedOf(replies[0].payload).description).toContain("is not a valid service");
   });
 
+  it("does not echo args[0] in the unknown-service error when a token was scrubbed", async () => {
+    // Service omitted: `/connections add <token>` puts the credential in args[0]. The
+    // reply is delivered publicly (the text adapter cannot honor the ephemeral hint),
+    // so the error must stay generic and never contain the pasted secret.
+    const scrubCommandMessage = vi.fn(async () => true);
+    const { ctx, replies } = makeCtx("add", ["ghp_supersecret_token"], { scrubCommandMessage });
+    await handleConnectCommand(ctx, makeDeps());
+    const description = embedOf(replies[0].payload).description ?? "";
+    expect(description).toContain("That is not a valid service.");
+    expect(description).not.toContain("ghp_supersecret_token");
+  });
+
+  it("still names the unknown id when no token was pasted (slash command, safe)", async () => {
+    // No scrub callback => args[0] is a plain service name, safe to surface.
+    const { ctx, replies } = makeCtx("add", ["slack"]);
+    await handleConnectCommand(ctx, makeDeps());
+    expect(embedOf(replies[0].payload).description).toContain("`slack` is not a valid service");
+  });
+
   it("scrubs a pasted token before the not-yet-wired TODO placeholder", async () => {
     const scrubCommandMessage = vi.fn(async () => true);
     const { ctx, replies } = makeCtx("add", ["google", "tok_secret"], { scrubCommandMessage });

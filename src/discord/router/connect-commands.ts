@@ -475,12 +475,19 @@ export async function handleConnectCommand(
 
     const connector = deps.registry.get(ctx.args[0]);
     if (!connector) {
+      // Never echo ctx.args[0] back when a token-carrying text command was scrubbed:
+      // if the user omitted the service (`/connections add <token>`), args[0] IS the
+      // credential, and the reply is delivered publicly despite the ephemeral hint
+      // (the text adapter cannot send ephemerally). Only name the unknown id when no
+      // scrub callback is present (slash command, or a text command with no token),
+      // where args[0] is safe to surface.
+      const named = ctx.scrubCommandMessage
+        ? "That is not a valid service."
+        : `\`${ctx.args[0] ?? ""}\` is not a valid service.`;
       await ctx.reply(
         connectionsReply(
           "Connect",
-          withScrubNote(
-            `\`${ctx.args[0] ?? ""}\` is not a valid service. Valid services: ${deps.registry.catalogIds()}.`,
-          ),
+          withScrubNote(`${named} Valid services: ${deps.registry.catalogIds()}.`),
         ),
         { ephemeral: true },
       );
