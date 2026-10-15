@@ -376,6 +376,57 @@ describe("CronService", () => {
     await store.cleanup();
   });
 
+  it("disables a one-shot job after a delivery error instead of looping", async () => {
+    const store = await makeStorePath();
+    // An isolated one-shot whose delivery fails must not reschedule: an "at" time
+    // is in the past once it fires, so retrying would re-run every tick.
+    const runIsolatedAgentJob = vi.fn(async () => ({
+      status: "error" as const,
+      error: "Unsupported channel: discord",
+    }));
+
+    const cron = new CronService({
+      storePath: store.storePath,
+      cronEnabled: true,
+      log: noopLogger,
+      enqueueSystemEvent: vi.fn(),
+      requestHeartbeatNow: vi.fn(),
+      runIsolatedAgentJob,
+    });
+
+    await cron.start();
+    const atMs = Date.parse("2025-12-13T00:00:01.000Z");
+    const job = await cron.add({
+      name: "one-shot that errors",
+      enabled: true,
+      schedule: { kind: "at", at: new Date(atMs).toISOString() },
+      sessionTarget: "isolated",
+      wakeMode: "next-heartbeat",
+      payload: { kind: "agentTurn", message: "do it" },
+      delivery: { mode: "announce", channel: "discord", to: "chan-1" },
+    });
+
+    vi.setSystemTime(new Date("2025-12-13T00:00:01.000Z"));
+    await vi.runOnlyPendingTimersAsync();
+
+    // It ran exactly once and is now disabled with no next run. The list() await
+    // lets the locked execute chain settle before we assert.
+    const jobs = await cron.list({ includeDisabled: true });
+    expect(runIsolatedAgentJob).toHaveBeenCalledTimes(1);
+    const updated = jobs.find((j) => j.id === job.id);
+    expect(updated?.enabled).toBe(false);
+    expect(updated?.state.nextRunAtMs).toBeUndefined();
+    expect(updated?.state.lastStatus).toBe("error");
+
+    // No further runs even after time advances past the original "at" time.
+    vi.setSystemTime(new Date("2025-12-13T00:05:00.000Z"));
+    await vi.runOnlyPendingTimersAsync();
+    expect(runIsolatedAgentJob).toHaveBeenCalledTimes(1);
+
+    cron.stop();
+    await store.cleanup();
+  });
+
   it("rejects unsupported session/payload combinations", async () => {
     const store = await makeStorePath();
 
