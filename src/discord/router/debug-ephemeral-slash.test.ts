@@ -108,6 +108,7 @@ type CapturedRequest = { url: string; method?: string; body: Record<string, unkn
 async function runChannelSlash(
   subcommand: string,
   auth: AuthDeps = {},
+  options: { neutralizeFails?: boolean } = {},
 ): Promise<{ callbacks: Callback[]; requests: CapturedRequest[] }> {
   const callbacks: Callback[] = [];
   const requests: CapturedRequest[] = [];
@@ -120,6 +121,17 @@ async function runChannelSlash(
         if (url.includes("/callback")) {
           callbacks.push(body);
         }
+      }
+      // Force the neutralizing PATCH (editInteractionContentReply to @original) to
+      // fail, to prove a late denial follow-up is WITHHELD when the public message
+      // cannot be neutralized.
+      if (
+        options.neutralizeFails &&
+        init?.method === "PATCH" &&
+        typeof url === "string" &&
+        url.includes("/messages/@original")
+      ) {
+        return { ok: false, status: 500, json: async () => ({}) } as unknown as Response;
       }
       return {
         ok: true,
@@ -494,6 +506,37 @@ it("routes a late /channel denial (after a public defer) to an ephemeral follow-
   expect((neutralize?.body as { content?: string } | undefined)?.content).toBe(
     "This request was handled privately.",
   );
+});
+
+it("withholds the late /channel denial follow-up when the neutralizing edit fails", async () => {
+  // The follow-up POST must complete the neutralize FIRST. If the neutralizing edit
+  // of the public placeholder fails, the ephemeral denial follow-up is withheld
+  // rather than risk a public denial (Discord could otherwise treat the POST as
+  // completing the public original response).
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  vi.mocked(handleChannelCommand).mockImplementationOnce(async (ctx) => {
+    void ctx.reply(
+      { embeds: [{ description: "You are not authorized." }], attachments: [] },
+      { ephemeral: true, denied: true },
+    );
+  });
+  const { requests } = await runChannelSlash(
+    "unregister",
+    { owner: "u1" },
+    { neutralizeFails: true },
+  );
+  // The neutralize PATCH was attempted and failed; no ephemeral (flags 64) follow-up
+  // POST should have been sent.
+  await vi.waitFor(() => {
+    const neutralize = requests.find(
+      (r) => r.method === "PATCH" && r.url.includes("/messages/@original"),
+    );
+    expect(neutralize).toBeDefined();
+  });
+  const followup = requests.find(
+    (r) => r.method === "POST" && (r.body as { flags?: number }).flags === 64,
+  );
+  expect(followup).toBeUndefined();
 });
 
 it("edits a SUCCESS /channel reply into the public deferred reply (not the private path)", async () => {
