@@ -6,6 +6,17 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Cron: fixed isolated-job announce delivery failing with "Unsupported channel: discord"
+  in the Docker multi-user architecture. Agent containers run with
+  `OPENCLAW_SKIP_CHANNELS=1` and no registered Discord plugin, so the normal outbound path
+  could not resolve the channel; cron now delivers through the router's container proxy
+  when `channels.discord.proxyUrl` is set. The container proxy `/discord/send` endpoint
+  accepts a `channelId` to post straight to a channel or thread (instead of only opening a
+  DM by `userId`), and the cron delivery target records whether its peer is a channel or a
+  user so the right path is chosen. Also fixed a one-shot (`at`) job that errored on
+  delivery retrying every scheduler tick in a tight loop; one-shot jobs now disable after
+  any terminal outcome.
+
 - Discord router: replaced the Debug embed footer icon with the Material Symbols
   `bug_report` glyph (36px, `#ff80e0`), dropping the viewfinder frame corners so the whole
   bug shows.

@@ -201,6 +201,7 @@ function inferDeliveryFromSessionKey(agentSessionKey?: string): CronDelivery | n
   if (markerIndex === -1) {
     return null;
   }
+  const marker = parts[markerIndex];
   const peerId = parts
     .slice(markerIndex + 1)
     .join(":")
@@ -218,6 +219,9 @@ function inferDeliveryFromSessionKey(agentSessionKey?: string): CronDelivery | n
   if (channel) {
     delivery.channel = channel;
   }
+  // Remember whether the peer is a DM user or a channel/group so container-proxy
+  // delivery can post directly to a channel vs open a DM, without re-guessing.
+  delivery.toKind = marker === "dm" ? "user" : "channel";
   return delivery;
 }
 

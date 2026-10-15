@@ -57,6 +57,7 @@ import {
   pickSummaryFromPayloads,
   sanitizeHeartbeatDeliveryPayloads,
 } from "./helpers.js";
+import { deliverDiscordViaProxy } from "./proxy-delivery.js";
 import { resolveCronSession } from "./session.js";
 
 function matchesMessagingToolDeliveryTarget(
@@ -428,6 +429,42 @@ export async function runCronIsolatedAgentTurn(params: {
     );
 
   if (deliveryRequested && !skipHeartbeatDelivery && !skipMessagingToolDelivery) {
+    // Docker multi-user: the agent container runs with OPENCLAW_SKIP_CHANNELS=1 and
+    // no registered Discord plugin, so the normal outbound path cannot resolve
+    // "discord" (resolvedDelivery.error is "Unsupported channel: discord"). When the
+    // instance is configured to reach the router via a container proxy, deliver
+    // straight through it instead. The peer kind (channel vs DM) was captured at job
+    // creation so we post to a channel directly or open a DM as appropriate.
+    const discordChannel =
+      resolvedDelivery.channel === "discord" || deliveryPlan.channel === "discord";
+    const discordProxyUrl = discordChannel
+      ? cfgWithAgentDefaults.channels?.discord?.proxyUrl?.trim()
+      : undefined;
+    if (discordProxyUrl) {
+      const proxyTo = (params.job.delivery?.to ?? deliveryPlan.to ?? resolvedDelivery.to)?.trim();
+      if (!proxyTo) {
+        const message = "cron delivery target is missing";
+        if (!deliveryBestEffort) {
+          return { status: "error", error: message, summary, outputText };
+        }
+        logWarn(`[cron:${params.job.id}] ${message}`);
+        return { status: "ok", summary, outputText };
+      }
+      try {
+        await deliverDiscordViaProxy({
+          proxyUrl: discordProxyUrl,
+          to: proxyTo,
+          toKind: params.job.delivery?.toKind ?? "channel",
+          payloads: deliveryPayloads,
+        });
+      } catch (err) {
+        if (!deliveryBestEffort) {
+          return { status: "error", summary, outputText, error: String(err) };
+        }
+        logWarn(`[cron:${params.job.id}] ${String(err)}`);
+      }
+      return { status: "ok", summary, outputText };
+    }
     if (resolvedDelivery.error) {
       if (!deliveryBestEffort) {
         return {

@@ -83,22 +83,36 @@ export function startContainerProxyServer(opts: {
         try {
           const data = JSON.parse(body) as {
             userId?: string;
+            channelId?: string;
             text?: string;
             mediaUrl?: string;
             replyToId?: string;
           };
-          if (!data.userId || !data.text) {
+          // Two target modes: a bare channelId posts straight to that channel
+          // (guild channels/threads, e.g. cron/heartbeat delivery), while a userId
+          // is first resolved to a DM channel. Exactly one must be provided.
+          if (!data.text || (!data.userId && !data.channelId)) {
             res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "userId and text are required" }));
+            res.end(JSON.stringify({ error: "text and one of userId or channelId are required" }));
             return;
           }
-          if (!opts.discordSend || !opts.openDMChannel) {
+          if (!opts.discordSend) {
             res.writeHead(503, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "discord send not available" }));
             return;
           }
 
-          const channelId = await opts.openDMChannel(data.userId);
+          let channelId: string | null;
+          if (data.channelId) {
+            channelId = data.channelId;
+          } else {
+            if (!opts.openDMChannel) {
+              res.writeHead(503, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "discord send not available" }));
+              return;
+            }
+            channelId = await opts.openDMChannel(data.userId!);
+          }
           if (!channelId) {
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "could not open DM channel" }));
@@ -112,7 +126,9 @@ export function startContainerProxyServer(opts: {
           }
 
           const result = await opts.discordSend(channelId, content);
-          runtime.log(`[proxy] sent message to ${data.userId} via channel ${channelId}`);
+          runtime.log(
+            `[proxy] sent message to ${data.channelId ?? data.userId} via channel ${channelId}`,
+          );
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(

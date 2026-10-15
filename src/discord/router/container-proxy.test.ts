@@ -60,6 +60,36 @@ describe("container proxy server", () => {
     expect(discordSend).toHaveBeenCalledWith("chan-1", "hi\nhttp://x/img.png");
   });
 
+  it("posts directly to a channel id for /discord/send (no DM open)", async () => {
+    const openDMChannel = vi.fn(async () => "dm-should-not-be-used");
+    const discordSend = vi.fn(async () => ({ messageId: "m-2" }));
+    const base = await start({ runtime, openDMChannel, discordSend });
+
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "thread-42", text: "ping" }),
+    });
+
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toMatchObject({ ok: true, messageId: "m-2", channelId: "thread-42" });
+    // A channel target must post straight to that channel, never open a DM.
+    expect(openDMChannel).not.toHaveBeenCalled();
+    expect(discordSend).toHaveBeenCalledWith("thread-42", "ping");
+  });
+
+  it("sends to a channel id even when openDMChannel is not wired", async () => {
+    const discordSend = vi.fn(async () => ({ messageId: "m-3" }));
+    const base = await start({ runtime, discordSend });
+    const resp = await fetch(`${base}/discord/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "thread-7", text: "hi" }),
+    });
+    expect(resp.status).toBe(200);
+    expect(discordSend).toHaveBeenCalledWith("thread-7", "hi");
+  });
+
   it("rejects /discord/send without required fields", async () => {
     const base = await start({ runtime, openDMChannel: vi.fn(), discordSend: vi.fn() });
     const resp = await fetch(`${base}/discord/send`, {
