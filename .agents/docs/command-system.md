@@ -83,8 +83,10 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   a reply's ephemerality at defer time and it cannot be changed afterward, any command
   that can deny must either authorize before its first interaction response or let the
   denial issue its own ephemeral defer; `/debug` (admin gate before the defer) and
-  `/channel` (always-ephemeral defer, exempt from the preference) both do this so a
-  non-admin probe cannot publish a permission embed to the channel.
+  `/channel` register/unregister (always-ephemeral defer, since their owner/admin gate
+  runs after the defer) both do this so a non-admin probe cannot publish a permission
+  embed to the channel. `/channel status` never denies, so it instead follows the
+  channel's `ephemeralCommands` preference like the conversational commands.
   `buildPermissionDeniedEmbed` builds the Log-category embed; `denyInteractionEphemeral`
   defers the interaction ephemerally (or skips the defer when the handler already deferred
   ephemerally) and edits the embed into the reply. Two notice flavors feed it:
@@ -114,9 +116,10 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   default on) controls whether slash-command OUTPUT is ephemeral.
   `/debug ephemeral [on|off]` reads/sets it; turning it off makes command results persist
   in-channel so they can be inspected during testing. It governs the conversational
-  command replies (`/debug`, `/lifecycle`, `/connections` output); `/channel` is
-  deliberately exempt and always replies ephemerally, and permission denials are always
-  ephemeral regardless.
+  command replies (`/debug`, `/lifecycle`, `/connections`, and `/channel status` output);
+  `/channel register` and `/channel unregister` stay always-ephemeral because their gate
+  runs after the defer (a public defer would leak a denial), and permission denials are
+  always ephemeral regardless.
 - Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.
