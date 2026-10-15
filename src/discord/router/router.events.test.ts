@@ -449,6 +449,60 @@ describe("discord router channel-delete cleanup", () => {
     expect(payload.message_reference?.message_id).toBe("unreg-conn-msg");
   });
 
+  it("serves text /connections available in an unregistered guild channel without owner-gating", async () => {
+    // `available` is a read-only listing of the static connector catalog, so it is
+    // exempt from the owner gate: a stranger in an unregistered guild channel (no
+    // owner to gate on) must get the catalog, never the unauthorized denial.
+    const UNREG = "000000000000000000";
+    const STRANGER = "444444444444444444";
+    const posts: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (
+          typeof url === "string" &&
+          url.includes(`/channels/${UNREG}/messages`) &&
+          init?.method === "POST"
+        ) {
+          posts.push(init);
+          return new Response(JSON.stringify({ id: "reply-1" }), { status: 200 });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "app-123" }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    void start();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = FakeWebSocket.instances[0];
+    ws.emit("open");
+    ws.hello();
+    ws.ready();
+
+    ws.dispatch("MESSAGE_CREATE", {
+      id: "unreg-avail-msg",
+      author: { id: STRANGER },
+      guild_id: GUILD,
+      channel_id: UNREG,
+      content: "/connections available",
+      attachments: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Not denied: no denial log, and the reply carries the catalog listing.
+    expect(logs.some((l) => l.includes(`denied /connections from ${STRANGER}`))).toBe(false);
+    expect(posts).toHaveLength(1);
+    const payload = payloadOf(posts[0]) as {
+      embeds?: { description?: string; fields?: { name: string; value: string }[] }[];
+    };
+    const avail = payload.embeds?.[0].fields?.find((f) => f.name === "Available Services");
+    expect(avail?.value).toContain("`google` \u2192 Google");
+    expect(payload.embeds?.[0].description).not.toContain("not authorized");
+  });
+
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
     // OPENCLAW_ROUTER_OWNER_GATED_BOT_IDS lets an E2E driver bot exercise the
     // unauthorized-access denial: unlike a trusted conversational bot it does not
