@@ -19,11 +19,6 @@ export type EphemeralCommandOutcome = {
   state: CommandResultState;
 };
 
-const ON =
-  "`/debug`, `/lifecycle`, and `/connections` replies in this channel will be ephemeral, visible only to the person who ran them (`/channel` and `/secret` are always ephemeral).";
-const OFF =
-  "`/debug`, `/lifecycle`, and `/connections` replies in this channel will be posted normally so they stay visible for everyone (`/channel` and `/secret` stay ephemeral).";
-
 export function resolveEphemeralCommand(
   current: boolean,
   desired: boolean | null,
@@ -31,8 +26,8 @@ export function resolveEphemeralCommand(
   if (desired === null) {
     return {
       description: current
-        ? "Ephemeral command replies are currently `enabled`. Use `/debug ephemeral off` to disable."
-        : "Ephemeral command replies are currently `disabled`. Use `/debug ephemeral on` to enable.",
+        ? "Ephemeral command replies are currently `enabled`."
+        : "Ephemeral command replies are currently `disabled`.",
       state: current ? "enabled" : "disabled",
     };
   }
@@ -40,16 +35,16 @@ export function resolveEphemeralCommand(
     return {
       newValue: true,
       description: current
-        ? `Ephemeral command replies were already \`enabled\`, so nothing changed. ${ON}`
-        : `Ephemeral command replies are now \`enabled\`. ${ON}`,
+        ? "Ephemeral command replies were already `enabled`, so nothing changed."
+        : "Ephemeral command replies are now `enabled`.",
       state: "enabled",
     };
   }
   return {
     newValue: false,
     description: current
-      ? `Ephemeral command replies are now \`disabled\`. ${OFF}`
-      : `Ephemeral command replies were already \`disabled\`, so nothing changed. ${OFF}`,
+      ? "Ephemeral command replies are now `disabled`."
+      : "Ephemeral command replies were already `disabled`, so nothing changed.",
     state: "disabled",
   };
 }
