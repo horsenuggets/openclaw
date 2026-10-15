@@ -94,6 +94,25 @@ describe("simulateConnFlow scenarios", () => {
     expect(out.embeds[0].title).toBe("Connected!");
     expect(out.embeds[0].description).toContain("is now linked");
   });
+
+  it("info renders a linked connection's stats view (scenario 3)", async () => {
+    const out = await run(3, ["info", "todoist"]);
+    expect(out.embeds[0].title).toBe("Your Connections \u00bb Todoist");
+    expect(out.embeds[0].description).toContain("You are currently connected!");
+    const names = (out.embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "Status",
+        "Account",
+        "Linked",
+        "Auth Type",
+        "Last Ping",
+        "Services Available",
+      ]),
+    );
+    // Debug identity, not Connections.
+    expect(out.embeds[0].color).toBe(DEBUG.color);
+  });
 });
 
 describe("CONNFLOW_SCENARIOS", () => {

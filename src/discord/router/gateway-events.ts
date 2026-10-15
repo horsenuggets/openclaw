@@ -17,11 +17,13 @@ import {
 } from "./channel-commands.js";
 import { setUserPreference } from "./config.js";
 import {
+  CONN_REAUTH_TODO,
   CONNECTIONS_COMMAND_NAMES,
   type ConnectCommandDeps,
   connectTextCommandHasToken,
   handleConnectCommand,
   parseConnectTextCommand,
+  parseReauthCustomId,
 } from "./connect-commands.js";
 import { simulateConnFlow } from "./connflow-preview.js";
 import {
@@ -1554,14 +1556,13 @@ export function handleModalSubmit(ctx: GatewayContext, d: ModalSubmitData): void
 }
 
 /**
- * Handle a message-component interaction (buttons). Currently only the
- * `/channel unregister` confirmation buttons.
+ * Handle a message-component interaction (buttons): the `/channel unregister`
+ * confirmation buttons and the `/connections info` Reauthenticate button.
  */
 export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInteractionData): void {
   const { applicationId, runtime, channelGuild, channelCommandDeps, unregisterInFlight } = ctx;
 
   const customId = d.data?.custom_id;
-  const parsed = customId ? parseUnregisterCustomId(customId) : null;
   const clickerId = d.member?.user?.id ?? d.user?.id;
   const interactionId = d.id;
   const interactionToken = d.token;
@@ -1569,6 +1570,20 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     channelGuild.set(d.channel_id, d.guild_id);
   }
 
+  // The `/connections info` Reauthenticate button. No reauth flow is wired yet, so
+  // answer with an ephemeral TODO (a plain type-4 response). Handled before the
+  // unregister parse since its custom_id namespace is disjoint.
+  const reauth = customId ? parseReauthCustomId(customId) : null;
+  if (reauth && interactionId && interactionToken) {
+    void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: 4, data: { content: CONN_REAUTH_TODO, flags: 64 } }),
+    }).catch((err) => runtime.error(`[router] reauth button response failed: ${String(err)}`));
+    return;
+  }
+
+  const parsed = customId ? parseUnregisterCustomId(customId) : null;
   if (!parsed || !clickerId || !customId) {
     return;
   }
