@@ -94,8 +94,12 @@ Rules...
 - Default OFF (unset). Leave it unset so the onboarding path is exercised like prod; the
   onboarding e2e only works when bootstrap runs.
 - Pass it INLINE on the launch/deploy command when you want to skip onboarding for a quick
-  functional test, e.g. `OPENCLAW_SKIP_BOOTSTRAP=1 ./scripts/prod-mirror.sh deploy`. It is
-  read from the process env at provision time, so inline is all it takes.
+  functional test, e.g. `OPENCLAW_SKIP_BOOTSTRAP=1 ./scripts/prod-mirror.sh up` or
+  `... deploy`. `prod-mirror.sh` forwards it from its own shell into the box's provisioner
+  process (`start_provisioner` adds `docker exec -e OPENCLAW_SKIP_BOOTSTRAP=...` only when
+  it is set), which is what reads it at provision time (via `openclawctl` workspace
+  seeding). The provisioner must be (re)started for a change to take effect, so pass it on
+  an `up`/`deploy` run, not after the box is already up.
 - Never bake it into a committed or gitignored env file (`.env`, `.env.mirror`,
   `.prod-mirror/*`). It is a per-run debug flag, not configuration. This is the general
   convention for rig debug env vars » pass them inline on the launch command, do not store
