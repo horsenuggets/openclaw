@@ -411,54 +411,85 @@ function formatStatus(status: InstanceStatus | null): {
 const OWNER_MENTION_FALLBACK = "another user";
 
 /**
+ * The call context the authorization predicate needs to decide authorize-vs-deny
+ * for a `/channel` subcommand. Mirrors the fields the command handler branches
+ * on, so the preflight gate and the handler never drift.
+ */
+export type ChannelCommandAuthInput = {
+  sub: string | null;
+  userId: string;
+  channelId: string;
+  /** True in a 1:1 DM. A whitelisted non-admin may only register their own DM. */
+  isDM: boolean;
+  /**
+   * The raw `owner` argument for register (args[0]), or undefined. Registering on
+   * someone else's behalf is admin-only, so a non-admin targeting another owner is
+   * a denial that must be computed BEFORE the defer.
+   */
+  ownerArg?: string | undefined;
+};
+
+/**
  * Whether the caller passes the permission gate for a `/channel` subcommand,
- * i.e. whether the command can produce a (possibly public) SUCCESS rather than a
- * permission denial. Evaluated against the SAME predicates the command handler
- * uses so the two never drift:
+ * i.e. whether the command can produce a (possibly public) SUCCESS or an
+ * informational reply rather than a PERMISSION DENIAL. Must stay complete with
+ * respect to every denial branch in {@link handleChannelCommand}, because the
+ * caller selects an interaction's defer ephemerality from this result BEFORE the
+ * type-5 defer: an authorized caller may defer publicly (honoring the channel's
+ * ephemeral preference) so a SUCCESS shows to the channel, while any denial must
+ * take the ephemeral path so a permission denial never leaks publicly. Discord
+ * fixes a reply's ephemerality at defer time, so this decision cannot be deferred
+ * until inside the handler.
  *
  * - `status` (and any unknown subcommand) always returns true: status is open to
  *   everyone and never denies, and the help fallback is not sensitive.
  * - `register` requires the whitelist to be configured AND the caller to be an
- *   admin or whitelisted. The downstream on-behalf / self / guild-DM / already-
- *   registered checks are refinements that only an already-authorized caller can
- *   reach, so they do not affect the top-level authorize-vs-deny decision here.
+ *   admin or whitelisted, AND (for a non-admin whitelisted caller) the channel to
+ *   be a DM registered to themselves: the handler denies a non-admin who targets
+ *   another owner or who registers a guild channel. The `isSelf` (bot owner) and
+ *   already-registered outcomes are informational yellow embeds, NOT permission
+ *   denials, so they stay public.
  * - `unregister` requires the channel to be registered AND the caller to be its
  *   owner or an admin.
- *
- * Callers use this to decide a Discord interaction's defer ephemerality BEFORE
- * the type-5 defer: an authorized caller may defer publicly (honoring the
- * channel's ephemeral preference) so a SUCCESS shows to the channel, while an
- * unauthorized caller must take the ephemeral-denial path so a permission denial
- * never leaks publicly. Discord fixes a reply's ephemerality at defer time, so
- * this decision cannot be deferred until inside the command handler.
  */
 export async function isAuthorizedForChannelCommand(
-  sub: string | null,
-  userId: string,
-  channelId: string,
+  input: ChannelCommandAuthInput,
   deps: Pick<
     ChannelCommandDeps,
     "whitelistConfigured" | "isAdmin" | "isWhitelisted" | "describeInstance"
   >,
 ): Promise<boolean> {
-  const name = (sub ?? "").toLowerCase();
+  const name = (input.sub ?? "").toLowerCase();
   if (name === "register") {
     if (!deps.whitelistConfigured()) {
       return false;
     }
-    return (await deps.isAdmin(userId)) || (await deps.isWhitelisted(userId));
+    if (await deps.isAdmin(input.userId)) {
+      // Admins clear every register denial (on-behalf, guild channel).
+      return true;
+    }
+    if (!(await deps.isWhitelisted(input.userId))) {
+      return false;
+    }
+    // Whitelisted non-admin: the handler denies registering on another's behalf
+    // or registering a guild channel, so both are denials here too.
+    const requestedOwner = parseUserMention(input.ownerArg);
+    if (requestedOwner && requestedOwner !== input.userId) {
+      return false;
+    }
+    return input.isDM;
   }
   if (name === "unregister") {
-    const status = deps.describeInstance(channelId);
+    const status = deps.describeInstance(input.channelId);
     if (!status) {
       // Nothing to remove: not a permission denial, so a public "nothing here"
       // reply is fine and should follow the channel preference.
       return true;
     }
-    if (status.ownerId === userId) {
+    if (status.ownerId === input.userId) {
       return true;
     }
-    return await deps.isAdmin(userId);
+    return await deps.isAdmin(input.userId);
   }
   // status and any unknown subcommand never deny.
   return true;

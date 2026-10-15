@@ -87,6 +87,10 @@ type AuthDeps = {
   isAdmin?: boolean;
   isWhitelisted?: boolean;
   owner?: string | null;
+  /** Drive the interaction as a 1:1 DM (no guild_id) rather than a guild channel. */
+  isDM?: boolean;
+  /** register's `owner` option (a user id), to exercise the on-behalf gate. */
+  ownerArg?: string;
 };
 
 /**
@@ -133,13 +137,18 @@ async function runChannelSlash(
       channelCommandDeps,
       isAdmin: async () => true,
     } as unknown as GatewayContext;
+    const subOptions = auth.ownerArg ? [{ name: "owner", value: auth.ownerArg }] : undefined;
     handleSlashInteraction(ctx, {
       id: "int1",
       channel_id: CHANNEL,
       token: "tok",
-      channel: { type: 0 },
-      guild_id: "987654321098765432",
-      data: { name: "channel", options: [{ name: subcommand }] },
+      // A 1:1 DM has channel.type 1 and no guild_id; a guild channel has type 0.
+      channel: { type: auth.isDM ? 1 : 0 },
+      ...(auth.isDM ? {} : { guild_id: "987654321098765432" }),
+      data: {
+        name: "channel",
+        options: [{ name: subcommand, ...(subOptions ? { options: subOptions } : {}) }],
+      },
       user: { id: "u1" },
     } as never);
     await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
@@ -397,6 +406,39 @@ it("forces /channel register and unregister denials ephemeral even when the pref
   const unregister = await runChannelSlash("unregister", { isAdmin: false, owner: "someone-else" });
   expect(unregister.callbacks[0]?.type).toBe(5);
   expect(unregister.callbacks[0]?.data?.flags).toBe(64);
+});
+
+it("forces a whitelisted non-admin register denial ephemeral when the handler would deny", async () => {
+  // A whitelisted non-admin is denied by the handler when registering a guild
+  // channel or registering on another user's behalf. The preflight gate must mirror
+  // those denials so the public preference never leaks a permission-denied embed.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  // Guild channel (not a DM): denied.
+  const guild = await runChannelSlash("register", { isAdmin: false, isWhitelisted: true });
+  expect(guild.callbacks[0]?.type).toBe(5);
+  expect(guild.callbacks[0]?.data?.flags).toBe(64);
+  // On another user's behalf, even in their own DM: denied.
+  const onBehalf = await runChannelSlash("register", {
+    isAdmin: false,
+    isWhitelisted: true,
+    isDM: true,
+    ownerArg: "<@999999999999999999>",
+  });
+  expect(onBehalf.callbacks[0]?.type).toBe(5);
+  expect(onBehalf.callbacks[0]?.data?.flags).toBe(64);
+});
+
+it("defers a whitelisted non-admin register of their own DM public when the preference is public", async () => {
+  // The one register a whitelisted non-admin IS allowed: their own DM, no on-behalf
+  // owner. That success honors the public preference like any other.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  const dm = await runChannelSlash("register", {
+    isAdmin: false,
+    isWhitelisted: true,
+    isDM: true,
+  });
+  expect(dm.callbacks[0]?.type).toBe(5);
+  expect(dm.callbacks[0]?.data?.flags).toBe(0);
 });
 
 it("keeps /secret ephemeral even when the channel preference is public", async () => {

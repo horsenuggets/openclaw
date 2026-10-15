@@ -1293,9 +1293,15 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       // handler stays synchronous like the other command branches.
       void (async () => {
         const channelAuthorized = await isAuthorizedForChannelCommand(
-          subOpt?.name ?? null,
-          userId,
-          interactionChannelId,
+          {
+            sub: subOpt?.name ?? null,
+            userId,
+            channelId: interactionChannelId,
+            isDM: !d.guild_id,
+            // args[0] is register's `owner` (unregister's `confirm` is irrelevant
+            // to the gate), so only a register on-behalf target is read here.
+            ownerArg: subOpt?.name === "register" ? args[0] : undefined,
+          },
           channelCommandDeps,
         );
         const channelDeferEphemeral = channelAuthorized ? ephemeralFlags(interactionChannelId) : 64;
