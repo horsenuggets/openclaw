@@ -20,7 +20,7 @@ import { buildEmbed } from "./embed-categories.js";
 import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
 import { buildSubcommandFields } from "./subcommand-fields.js";
 
-export type ConnectSubcommand = "list" | "add" | "remove";
+export type ConnectSubcommand = "list" | "add" | "remove" | "available";
 
 /** Service choices for the slash command, built from the catalog. */
 const SERVICE_CHOICES = connectorRegistry.all().map((c) => ({ name: c.label, value: c.id }));
@@ -36,6 +36,7 @@ export const CONNECTIONS_COMMAND_SPEC = {
   contexts: [0, 1],
   options: [
     { name: "list", description: "Show your linked accounts and their status", type: 1 },
+    { name: "available", description: "List every service you can link", type: 1 },
     {
       name: "add",
       description: "Link a service to this agent",
@@ -271,14 +272,15 @@ const LIST_DESCRIPTION =
   "Below are accounts linked to this channel's agent. You can use the following " +
   "subcommands to manage your connections...";
 
-const LIST_EMPTY = "You have not linked any accounts yet. Use `/conn add <service>` to link one.";
+const LIST_EMPTY =
+  "You have not linked any accounts yet. Use `/connections add <service>` to link one.";
 
 /**
  * The subcommand previews, debug-help style (backtick usage + one-line value).
  * Rendered via the shared helper (same shape as `/debug help`), preserving the
  * authored add-before-remove order.
  */
-const SUBCOMMAND_FIELDS: DiscordEmbedField[] = buildSubcommandFields("/conn", [
+const SUBCOMMAND_FIELDS: DiscordEmbedField[] = buildSubcommandFields("/connections", [
   { usage: "add <service>", description: "Connect a new service." },
   { usage: "remove <service>", description: "Remove a service." },
 ]);
@@ -308,14 +310,14 @@ function legendValue(emoji: ConnectionEmoji): string {
 
 /**
  * Build the `/connections list` reply as two embeds in one message (by default):
- * the first carries the title, description, and the `/conn` subcommand previews;
- * the second carries the Currently Connected count, the status Legend, and the
- * Services list (one `glyph name` line per service, the status shown by the glyph
+ * the first carries the title, description, and the `/connections` subcommand
+ * previews; the second carries the Currently Connected count, the status Legend, and
+ * the Services list (one `glyph name` line per service, the status shown by the glyph
  * and decoded by the Legend). Both are packed by the shared buildPaginatedEmbeds,
  * so a long Services list repeats as several Services fields on the second embed,
  * and if the shared message budget is exhausted a truncation note is appended.
  * Only services that are actually linked (connected, re-auth needed, or a transient
- * ping) are listed; catalogued-but-unavailable ("coming soon") services are not.
+ * ping) are listed, regardless of whether the connector's connect flow is wired.
  * When nothing is linked, a single embed shows a friendly note plus the subcommands.
  */
 function listReply(
@@ -327,18 +329,15 @@ function listReply(
   attachments: string[];
 } {
   const byId = new Map(connections.map((c) => [c.connectorId, c]));
-  // Walk the catalog (for stable display order) but keep only available connectors
-  // that have a live connection to show. The store accepts any well-formed connector
-  // id/status, so an unavailable ("coming soon") connector could carry a stale linked
-  // record; filtering on `available` keeps it out per the coming-soon contract.
+  // Walk the catalog (for stable display order) and keep every connector that has a
+  // live connection to show. The `available` flag no longer gates listing: a linked
+  // record is shown whether or not its connect flow is wired.
   const linked = registry
     .all()
     .map((connector) => ({ connector, connection: byId.get(connector.id) ?? null }))
     .filter(
       (entry): entry is { connector: Connector; connection: DisplayConnection } =>
-        entry.connector.available &&
-        entry.connection !== null &&
-        entry.connection.status !== "not_linked",
+        entry.connection !== null && entry.connection.status !== "not_linked",
     );
   if (linked.length === 0) {
     // Nothing linked: a single embed with the empty note and the subcommands, so
@@ -378,6 +377,29 @@ function listReply(
   });
 }
 
+const AVAILABLE_TITLE = "Connections";
+const AVAILABLE_DESCRIPTION = "Every service you can link to this channel's agent.";
+const AVAILABLE_FIELD_NAME = "Available Services";
+
+/**
+ * Build the `/connections available` reply: a single Connections-category embed with
+ * an "Available Services" field listing every catalogued connector, one `` `id` ->
+ * Label `` line, sorted alphabetically by id. Read-only and owner-safe (static catalog).
+ */
+function availableReply(registry: ConnectorRegistry): {
+  embeds: DiscordEmbed[];
+  attachments: string[];
+} {
+  const lines = registry
+    .all()
+    .toSorted((a, b) => a.id.localeCompare(b.id))
+    .map((c) => `\`${c.id}\` \u2192 ${c.label}`)
+    .join("\n");
+  return connectionsReply(AVAILABLE_TITLE, AVAILABLE_DESCRIPTION, [
+    { name: AVAILABLE_FIELD_NAME, value: lines },
+  ]);
+}
+
 const NOT_REGISTERED =
   "This channel is not registered yet. Run `/channel register` first, then link your accounts.";
 
@@ -411,6 +433,13 @@ export async function handleConnectCommand(
     }
     const emoji = deps.emoji ?? DEFAULT_CONNECTION_EMOJI;
     await ctx.reply(listReply(deps.registry, connections, emoji), { ephemeral: true });
+    return;
+  }
+
+  if (sub === "available") {
+    // Read-only, owner-safe listing of every catalogued service. No registration or
+    // ownership check: it reveals nothing channel-specific, just the static catalog.
+    await ctx.reply(availableReply(deps.registry), { ephemeral: true });
     return;
   }
 
@@ -450,7 +479,7 @@ export async function handleConnectCommand(
         connectionsReply(
           "Connect",
           withScrubNote(
-            `That is not a service I recognize. Available: ${deps.registry.availableIds()}.`,
+            `\`${ctx.args[0] ?? ""}\` is not a valid service. Valid services: ${deps.registry.catalogIds()}.`,
           ),
         ),
         { ephemeral: true },
@@ -458,14 +487,13 @@ export async function handleConnectCommand(
       return;
     }
     if (!connector.available) {
+      // The connect flow for this service is not implemented yet: show a blank TODO
+      // placeholder rather than running begin(). It is still listed and selectable.
       await ctx.reply(
-        connectionsReply(
-          "Connect",
-          withScrubNote(
-            `${connector.label} linking is coming soon. For now you can link: ${deps.registry.availableIds()}.`,
-          ),
-        ),
-        { ephemeral: true },
+        connectionsReply(`Connect \u00bb ${connector.label}`, withScrubNote("TODO")),
+        {
+          ephemeral: true,
+        },
       );
       return;
     }
@@ -628,7 +656,7 @@ export async function handleConnectCommand(
       await ctx.reply(
         connectionsReply(
           "Disconnect",
-          `That is not a service I recognize. Available: ${deps.registry.availableIds()}.`,
+          `\`${ctx.args[0] ?? ""}\` is not a valid service. Valid services: ${deps.registry.catalogIds()}.`,
         ),
         { ephemeral: true },
       );
@@ -660,7 +688,7 @@ export async function handleConnectCommand(
   await ctx.reply(
     connectionsReply(
       "Help",
-      "Usage: `/connections list`, `/connections add <service> <token>`, or `/connections remove <service>`.",
+      "Usage: `/connections list`, `/connections available`, `/connections add <service> <token>`, or `/connections remove <service>`.",
     ),
     { ephemeral: true },
   );

@@ -13,9 +13,12 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   startup and shutdown notification banners for a channel.
 - `/secret` (`secret-command.ts`, `SECRET_COMMAND_SPEC`) - hand the channel's agent a
   sensitive value through a modal popup. The value never appears in the channel or logs.
-- `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, or remove
-  external accounts (Todoist, Notion, GitHub by pasted token; Google is coming soon) for
-  the channel's agent. See [sandbox-and-permissions.md](sandbox-and-permissions.md).
+- `/connections` with the `/conn` alias (`connect-commands.ts`) - link, list, show every
+  available service for, or remove external accounts (Todoist, Notion, GitHub by pasted
+  token; Google is listed and selectable but its connect flow is not wired yet, so
+  `/connections add google` shows a TODO placeholder) for the channel's agent. The
+  `available` subcommand lists every catalogued service. See
+  [sandbox-and-permissions.md](sandbox-and-permissions.md).
 - `/debug` (`debug-command.ts`, `DEBUG_COMMAND_SPEC`) - an admin-only console for
   inspecting internal state. Rather than registering each tool as its own slash command,
   the subcommand is entered as free text into a single `command` option (for example

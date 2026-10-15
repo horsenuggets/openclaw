@@ -33,11 +33,15 @@ describe("connectorRegistry.get", () => {
 });
 
 describe("connector catalog", () => {
-  it("lists only wired services as available", () => {
-    expect(connectorRegistry.availableIds()).toBe("todoist, notion, github");
+  it("lists every catalogued id alphabetically (no coming-soon gating)", () => {
+    expect(connectorRegistry.catalogIds()).toBe("github, google, notion, todoist");
   });
 
-  it("gives Google an OAuth flow but keeps it unavailable until configured", () => {
+  it("marks every direct connector as available (connect flow wired)", () => {
+    expect(connectorRegistry.available().map((c) => c.id)).toEqual(["todoist", "notion", "github"]);
+  });
+
+  it("gives Google an OAuth flow but keeps its connect flow unwired until configured", () => {
     const google = connectorRegistry.get("google");
     expect(google?.available).toBe(false);
     expect(google?.auth.authKind).toBe("oauth");

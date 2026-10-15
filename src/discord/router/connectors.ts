@@ -6,10 +6,11 @@
  * registry is the single lookup surface the router and handler share.
  *
  * The `DirectAuth` connectors (Todoist, Notion, GitHub) link end to end — the user
- * pastes a personal token. Google uses `OAuthPkceAuth` (the two-step PKCE flow) but is
- * marked unavailable until the deployment sets its client id and the captured credential
- * materializes into the agent box, so `/connections` shows it as "coming soon" rather
- * than hiding the top-priority service.
+ * pastes a personal token. Google uses `OAuthPkceAuth` (the two-step PKCE flow) but its
+ * `available` flag is still false because the connect flow is not wired yet (the
+ * deployment client id plus credential materialization are pending). Every catalogued
+ * connector — Google included — is listed and selectable; `available` only gates whether
+ * the real `begin()` flow runs or a TODO placeholder is shown.
  */
 
 import { type AuthFlow, DirectAuth, OAuthPkceAuth } from "./auth-flow.js";
@@ -31,7 +32,12 @@ export type Connector = {
    * that credential per skill live elsewhere; this is only the linkage).
    */
   skills: readonly string[];
-  /** False while the connector is catalogued but not wired yet (shown as coming soon). */
+  /**
+   * Whether this connector's connect flow is implemented yet. It no longer gates
+   * listing, choices, or validation — every catalogued connector is selectable.
+   * When false, `/connections add <service>` shows a TODO placeholder instead of
+   * running the real `begin()` flow.
+   */
   available: boolean;
   /** How this connector authenticates (a direct token paste, OAuth, a CLI flow). */
   auth: AuthFlow;
@@ -112,15 +118,20 @@ export class ConnectorRegistry {
     return this.bySkill.get(key) ?? null;
   }
 
-  /** Connectors a user can link right now. */
+  /** Connectors whose connect flow is wired up (the `add` flow is implemented). */
   available(): Connector[] {
     return this.connectors.filter((c) => c.available);
   }
 
-  /** Comma-separated ids a user can add right now (for error messages). */
-  availableIds(): string {
-    return this.available()
+  /**
+   * Every catalogued connector id, sorted alphabetically (for error messages and
+   * the `available` listing). All catalogued services are selectable now, so this
+   * lists them all rather than only the wired ("available") ones.
+   */
+  catalogIds(): string {
+    return this.connectors
       .map((c) => c.id)
+      .toSorted((a, b) => a.localeCompare(b))
       .join(", ");
   }
 }
@@ -177,11 +188,12 @@ export const connectorRegistry = new ConnectorRegistry([
     summary: "Gmail, Calendar, Drive, Contacts, Sheets, and Docs via the gog CLI.",
     services: ["Gmail", "Calendar", "Drive", "Contacts", "Sheets", "Docs"],
     skills: ["gog"],
-    // Google authenticates via OAuth (PKCE, paste-based), but linking stays disabled
-    // until (a) the deployment sets OPENCLAW_GOOGLE_CLIENT_ID and (b) the captured
-    // credential actually materializes into the agent box (gog reads a credential
-    // file, not an env token — that is the materialization step). Flip to true once
-    // both land.
+    // Google authenticates via OAuth (PKCE, paste-based), but the connect flow is not
+    // wired yet: it needs (a) the deployment to set OPENCLAW_GOOGLE_CLIENT_ID and (b) the
+    // captured credential to materialize into the agent box (gog reads a credential file,
+    // not an env token — that is the materialization step). Until then `available` stays
+    // false and `/connections add google` shows a TODO placeholder; it is still listed
+    // and selectable. Flip to true once both land.
     available: false,
     auth: new OAuthPkceAuth({
       authorizeEndpoint: GOOGLE_AUTHORIZE_ENDPOINT,

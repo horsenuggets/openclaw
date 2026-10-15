@@ -298,7 +298,7 @@ describe("handleConnectCommand list", () => {
     expect(replies[0].ephemeral).toBe(true);
   });
 
-  it("lists only linked services with a status glyph, not the whole catalog", async () => {
+  it("lists linked services with a status glyph, not the whole catalog", async () => {
     const seed: DisplayConnection[] = [
       {
         connectorId: "todoist",
@@ -307,8 +307,8 @@ describe("handleConnectCommand list", () => {
         accountLabel: "chris",
         linkedAt: "2026-01-01T00:00:00Z",
       },
-      // Unavailable ("coming soon") connector carrying a stale linked record: it
-      // must still be filtered out of the list per the coming-soon contract.
+      // A not-yet-wired connector (Google) that carries a linked record is now shown
+      // too: `available` no longer gates listing.
       {
         connectorId: "google",
         status: "linked",
@@ -321,12 +321,10 @@ describe("handleConnectCommand list", () => {
     const services = servicesText(replies[0].payload);
     // Each service is one "glyph name" line; the default emoji is the unicode check.
     expect(services).toContain("✅ Todoist");
+    expect(services).toContain("✅ Google");
     expect(services).not.toContain("(chris)"); // account label is not shown
-    // Not-linked and coming-soon services never appear in the list, even when an
-    // unavailable connector has a persisted linked record.
+    // Unlinked catalog services still never appear in the list.
     expect(services).not.toContain("Notion");
-    expect(services).not.toContain("Google");
-    expect(services).not.toContain("Coming soon");
   });
 
   it("shows the subcommand previews, a Currently Connected count, and a legend", async () => {
@@ -347,12 +345,12 @@ describe("handleConnectCommand list", () => {
     expect(embeds).toHaveLength(2);
     expect(embeds[0].title).toBe("Your Connections");
     expect(embeds[0].description).not.toContain("```"); // no markdown code block anymore
-    // Embed 1 advertises the /conn subcommands, debug-help style.
+    // Embed 1 advertises the /connections subcommands, debug-help style.
     const subNames = (embeds[0].fields ?? []).map((f) => f.name);
-    expect(subNames).toContain("`/conn add <service>`");
-    expect(subNames).toContain("`/conn remove <service>`");
-    // Only registered/handled subcommands are advertised (no `/conn info`).
-    expect(subNames).not.toContain("`/conn info <service>`");
+    expect(subNames).toContain("`/connections add <service>`");
+    expect(subNames).toContain("`/connections remove <service>`");
+    // Only registered/handled subcommands are advertised (no `/connections info`).
+    expect(subNames).not.toContain("`/connections info <service>`");
     // Embed 2 carries the count (2 of 3 shown are linked) and a full legend.
     expect(fieldNamed(replies[0].payload, "Currently Connected")).toBe("`2/3`");
     const legend = fieldNamed(replies[0].payload, "Legend") ?? "";
@@ -497,7 +495,7 @@ describe("handleConnectCommand list", () => {
     expect(embeds[0].description).toContain("not linked any accounts yet");
     // Still shows how to connect via the subcommand previews.
     const names = (embeds[0].fields ?? []).map((f) => f.name);
-    expect(names).toContain("`/conn add <service>`");
+    expect(names).toContain("`/connections add <service>`");
     // No services/legend/count when there is nothing to list.
     expect(names).not.toContain("Services");
     expect(names).not.toContain("Currently Connected");
@@ -513,17 +511,45 @@ describe("handleConnectCommand list", () => {
   });
 });
 
-describe("handleConnectCommand add", () => {
-  it("rejects an unknown service", async () => {
-    const { ctx, replies } = makeCtx("add", ["slack"]);
+describe("handleConnectCommand available", () => {
+  it("lists every catalogued service as `id` -> Label, sorted by id", async () => {
+    const { ctx, replies } = makeCtx("available");
     await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
+    const value = fieldNamed(replies[0].payload, "Available Services") ?? "";
+    // One `id` -> Label line per connector, sorted alphabetically by id.
+    expect(value).toBe(
+      "`github` \u2192 GitHub\n`google` \u2192 Google\n`notion` \u2192 Notion\n`todoist` \u2192 Todoist",
+    );
+    expect(replies[0].ephemeral).toBe(true);
   });
 
-  it("refuses a not-yet-available connector (Google)", async () => {
+  it("works without a registered channel (read-only, owner-safe)", async () => {
+    const { ctx, replies } = makeCtx("available");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
+    expect(fieldNamed(replies[0].payload, "Available Services")).toContain(
+      "`google` \u2192 Google",
+    );
+  });
+});
+
+describe("handleConnectCommand add", () => {
+  it("rejects an unknown service, listing every catalogued service", async () => {
+    const { ctx, replies } = makeCtx("add", ["slack"]);
+    await handleConnectCommand(ctx, makeDeps());
+    const description = embedOf(replies[0].payload).description ?? "";
+    expect(description).toContain("`slack` is not a valid service");
+    // All four catalogued ids are offered, sorted alphabetically.
+    expect(description).toContain("github, google, notion, todoist");
+  });
+
+  it("shows a TODO placeholder for a not-yet-wired connector (Google)", async () => {
     const { ctx, replies } = makeCtx("add", ["google"]);
     await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).description).toContain("coming soon");
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBe("Connect \u00bb Google");
+    expect(embed.description).toBe("TODO");
+    // The old coming-soon copy is gone.
+    expect(embed.description).not.toContain("coming soon");
   });
 
   it("requires registration before linking", async () => {
@@ -589,15 +615,15 @@ describe("handleConnectCommand add", () => {
     const { ctx, replies } = makeCtx("add", ["slakc", "tok_secret"], { scrubCommandMessage });
     await handleConnectCommand(ctx, makeDeps());
     expect(scrubCommandMessage).toHaveBeenCalledOnce();
-    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
+    expect(embedOf(replies[0].payload).description).toContain("is not a valid service");
   });
 
-  it("scrubs a pasted token before the unavailable-service early return", async () => {
+  it("scrubs a pasted token before the not-yet-wired TODO placeholder", async () => {
     const scrubCommandMessage = vi.fn(async () => true);
     const { ctx, replies } = makeCtx("add", ["google", "tok_secret"], { scrubCommandMessage });
     await handleConnectCommand(ctx, makeDeps());
     expect(scrubCommandMessage).toHaveBeenCalledOnce();
-    expect(embedOf(replies[0].payload).description).toContain("coming soon");
+    expect(embedOf(replies[0].payload).title).toBe("Connect \u00bb Google");
   });
 
   it("warns the user to delete manually when the scrub fails", async () => {
@@ -693,7 +719,7 @@ describe("handleConnectCommand remove", () => {
   it("rejects an unknown service on remove", async () => {
     const { ctx, replies } = makeCtx("remove", ["slack"]);
     await handleConnectCommand(ctx, makeDeps());
-    expect(embedOf(replies[0].payload).description).toContain("not a service I recognize");
+    expect(embedOf(replies[0].payload).description).toContain("`slack` is not a valid service");
   });
 
   it("reports a storage failure distinctly from an absent connection", async () => {
