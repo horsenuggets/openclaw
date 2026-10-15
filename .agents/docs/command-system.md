@@ -89,19 +89,23 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   publish a permission embed to the channel. For `/channel`, authorization is also
   re-checked AFTER the defer (the owner/admin revalidation and the stale-registration
   nonce guard, plus the unregister confirm-button click), so a role revoked in that window
-  could still produce a late denial on an already-public deferred reply; those late
-  denials are delivered as a separate EPHEMERAL follow-up (flags 64) and the public
-  placeholder is neutralized rather than edited with the denial, keeping the invariant
-  intact. `/channel status` never denies, so it always follows the channel's
-  `ephemeralCommands` preference like the conversational commands.
-  `buildPermissionDeniedEmbed` builds the Log-category embed; `denyInteractionEphemeral`
-  defers the interaction ephemerally (or skips the defer when the handler already deferred
-  ephemerally) and edits the embed into the reply. Two notice flavors feed it:
-  `buildUnauthorizedNoticeText` (channel-ownership denial, names the owner) and
-  `buildMissingPermissionText` (generic "you do not have the necessary permissions to use
-  `/<command>`" for globally gated commands). Plain-message denials reuse the same embed
-  builder, posted as a threaded reply instead of an ephemeral one. New slash commands get
-  this behavior by calling the shared helper rather than inventing their own denial.
+  could still produce a late denial on an already-public deferred reply. Those late
+  denials are marked with a `denied` flag on the reply (every `/channel` reply sets
+  `ephemeral`, so ephemerality alone cannot tell a denial from a success); only a `denied`
+  reply is rerouted. The reroute order is fixed: the public placeholder is first edited to
+  a neutral, embed-free note (which also strips any denial embed), and ONLY on a
+  successful edit is the denial posted as a separate EPHEMERAL follow-up (flags 64); a
+  failed neutralize withholds the follow-up rather than risk a public denial.
+  `/channel status` never denies, so it always follows the channel's `ephemeralCommands`
+  preference like the conversational commands. `buildPermissionDeniedEmbed` builds the
+  Log-category embed; `denyInteractionEphemeral` defers the interaction ephemerally (or
+  skips the defer when the handler already deferred ephemerally) and edits the embed into
+  the reply. Two notice flavors feed it: `buildUnauthorizedNoticeText` (channel-ownership
+  denial, names the owner) and `buildMissingPermissionText` (generic "you do not have the
+  necessary permissions to use `/<command>`" for globally gated commands). Plain-message
+  denials reuse the same embed builder, posted as a threaded reply instead of an ephemeral
+  one. New slash commands get this behavior by calling the shared helper rather than
+  inventing their own denial.
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
   `.onboarding.json`) may use them. Non-owners get the channel-ownership denial embed

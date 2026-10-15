@@ -1290,29 +1290,45 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           })
           .catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
       };
-      // Send a fresh EPHEMERAL follow-up (flags 64) on the same interaction. Used
-      // to keep a late permission denial private even after a PUBLIC defer: the
+      // Keep a LATE permission denial private even after a PUBLIC defer. The
       // preflight gate authorizes before the defer, but the handler re-checks
       // authorization after it (owner/admin revalidation, the stale-registration
-      // nonce guard), and in the sub-second defer window that re-check can flip to
-      // a denial. Editing that denial into the public placeholder would leak it, so
-      // route it to an ephemeral follow-up instead. Discord allows an ephemeral
-      // follow-up after a public defer.
-      const sendEphemeralFollowup = (payload: ChannelReplyPayload) => {
-        const url = `${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`;
+      // nonce guard), and in the sub-second defer window that re-check can flip to a
+      // denial. Editing the denial into the public placeholder would leak it.
+      //
+      // Order matters and is NOT interchangeable: Discord treats a follow-up POST
+      // after a type-5 defer as COMPLETING the original (public) response and
+      // ignores the POST's ephemeral flag unless the original response already
+      // exists as a sent message. So first EDIT the original deferred response to a
+      // neutral, embed-free, component-free note (which both materializes the
+      // original response and strips any leaked denial embed), and ONLY on a
+      // successful edit POST the ephemeral (flags 64) denial follow-up. If the
+      // neutralizing edit fails, the follow-up is withheld rather than risk a public
+      // denial. The plain-JSON follow-up cannot upload the embed's attachment:// icon;
+      // the denial text carries the message, an acceptable trade for privacy.
+      const deliverLateDenialPrivately = async (payload: ChannelReplyPayload) => {
+        // editInteractionContentReply PATCHes the original response to plain content
+        // with embeds:[] and components:[], so it both materializes the original
+        // response and strips any denial embed/buttons in one call.
+        const neutralRes = await editInteractionContentReply(
+          applicationId,
+          interactionToken,
+          "This request was handled privately.",
+        ).catch((err) => {
+          runtime.error(`[router] channel neutralize failed: ${String(err)}`);
+          return undefined;
+        });
+        if (!neutralRes || !neutralRes.ok) {
+          runtime.error(
+            `[router] channel neutralize not accepted (${neutralRes ? neutralRes.status : "no response"}); withholding denial follow-up`,
+          );
+          return;
+        }
         const body =
           typeof payload === "string"
             ? { content: payload, flags: 64 }
-            : {
-                embeds: payload.embeds,
-                ...(payload.components ? { components: payload.components } : {}),
-                flags: 64,
-              };
-        // Embeds carry attachment:// icons; the plain JSON webhook POST cannot
-        // upload them, so a late denial embed renders without its icon. That is an
-        // acceptable trade for keeping the denial private, and denial embeds degrade
-        // gracefully (the text carries the message).
-        void fetch(url, {
+            : { embeds: payload.embeds, flags: 64 };
+        await fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -1373,13 +1389,16 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
             userId,
             isDM: !d.guild_id,
             reply: (payload, opts) => {
-              // After a public defer, honor a late {ephemeral:true} reply (always a
-              // permission denial) by sending it as an ephemeral follow-up and
-              // neutralizing the public placeholder, so the denial never shows to
-              // the channel. Every other reply edits the deferred message in place.
-              if (deferredPublic && opts?.ephemeral) {
-                sendEphemeralFollowup(payload);
-                editDeferredReply("This request was handled privately.");
+              // After a PUBLIC defer, a late permission denial must not land in the
+              // public placeholder. Only `opts.denied` marks a denial: every reply
+              // sets `ephemeral: true`, so ephemerality alone would misclassify a
+              // register/unregister SUCCESS as a denial and route it (and its
+              // "handled privately" note) through the private path. So key strictly
+              // off `denied`, and neutralize-then-follow-up (ordered inside the
+              // helper). Every other reply (success, informational, or an ephemeral
+              // defer where the placeholder is already private) edits in place.
+              if (deferredPublic && opts?.denied) {
+                void deliverLateDenialPrivately(payload);
                 return;
               }
               editDeferredReply(payload);
@@ -1783,12 +1802,26 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         // A permission denial must never land in the public confirmation message.
         // The prompt is public when the channel preference is public, and a
         // non-owner admin whose admin role was revoked between opening and clicking
-        // Confirm resolves to `denied` here. Editing it into the public message
-        // would leak the denial, so deliver it as an ephemeral follow-up and
-        // neutralize the public message instead. (The follow-up is a plain JSON
-        // webhook POST and cannot upload the embed icon; the denial text still
-        // carries the message, which is an acceptable trade for keeping it private.)
-        void fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`, {
+        // Confirm resolves to `denied` here. So neutralize the public message FIRST
+        // (replace the confirmation with a non-revealing note, dropping the
+        // buttons), and ONLY on a successful edit POST the denial as an ephemeral
+        // follow-up. If the neutralizing edit fails, withhold the follow-up rather
+        // than risk a public denial. (The plain-JSON follow-up cannot upload the
+        // embed icon; the denial text carries the message, an acceptable trade.)
+        const neutralRes = await editInteractionEmbedReply(applicationId, interactionToken, {
+          ...buildUnregisterNeutralUpdate(parsed.channelId),
+          components: [],
+        }).catch((err) => {
+          runtime.error(`[router] button neutralize failed: ${String(err)}`);
+          return undefined;
+        });
+        if (!neutralRes || !neutralRes.ok) {
+          runtime.error(
+            `[router] button neutralize not accepted (${neutralRes ? neutralRes.status : "no response"}); withholding denial follow-up`,
+          );
+          return;
+        }
+        await fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ embeds: outcome.update.embeds, flags: 64 }),
@@ -1799,10 +1832,6 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
             }
           })
           .catch((err) => runtime.error(`[router] button denial followup failed: ${String(err)}`));
-        await editMessage({
-          ...buildUnregisterNeutralUpdate(parsed.channelId),
-          components: [],
-        });
         return;
       }
       // cancelled / notRegistered: a single message replacement. The interaction is

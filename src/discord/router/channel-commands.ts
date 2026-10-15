@@ -142,7 +142,17 @@ export type ChannelReplyPayload =
     };
 export type ChannelReply = (
   payload: ChannelReplyPayload,
-  opts?: { ephemeral?: boolean },
+  opts?: {
+    ephemeral?: boolean;
+    /**
+     * True only for a PERMISSION DENIAL (whitelist/admin/owner). The slash adapter
+     * uses this to keep a late denial private after a PUBLIC defer: every reply
+     * sets `ephemeral: true`, so ephemerality alone cannot distinguish a denial
+     * from a normal success/informational reply. `denied` marks the former so
+     * only it is rerouted to an ephemeral follow-up.
+     */
+    denied?: boolean;
+  },
 ) => Promise<void> | void;
 
 /** custom_id prefixes for the unregister confirmation buttons. */
@@ -529,7 +539,7 @@ export async function handleChannelCommand(
         permissionDeniedReply(
           "You are not authorized to manage OpenClaw instances. Ask an admin for access.",
         ),
-        { ephemeral: true },
+        { ephemeral: true, denied: true },
       );
       deps.log(`[channel] register denied for non-whitelisted user ${ctx.userId}`);
       return;
@@ -543,7 +553,7 @@ export async function handleChannelCommand(
       if (!admin) {
         await ctx.reply(
           permissionDeniedReply("Only admins can register a channel on behalf of another user."),
-          { ephemeral: true },
+          { ephemeral: true, denied: true },
         );
         deps.log(`[channel] register on-behalf denied for non-admin ${ctx.userId}`);
         return;
@@ -573,7 +583,7 @@ export async function handleChannelCommand(
         permissionDeniedReply(
           "Whitelisted users can only register their own DM. Ask an admin to register this channel.",
         ),
-        { ephemeral: true },
+        { ephemeral: true, denied: true },
       );
       deps.log(`[channel] register denied: non-admin ${ctx.userId} in guild channel`);
       return;
@@ -638,7 +648,10 @@ export async function handleChannelCommand(
     // The owner may always remove their own channel; otherwise admin only.
     const isOwner = status.ownerId === ctx.userId;
     if (!isOwner && !(await deps.isAdmin(ctx.userId))) {
-      await ctx.reply(unauthorizedReply(ctx.channelId, status.ownerId), { ephemeral: true });
+      await ctx.reply(unauthorizedReply(ctx.channelId, status.ownerId), {
+        ephemeral: true,
+        denied: true,
+      });
       deps.log(`[channel] unregister denied for ${ctx.userId} (not owner or admin)`);
       return;
     }

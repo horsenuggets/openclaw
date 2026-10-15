@@ -18,6 +18,7 @@ vi.mock("./channel-commands.js", async (orig) => ({
   handleChannelCommand: vi.fn(async () => {}),
 }));
 
+import type { ChannelCommandDeps } from "./channel-commands.js";
 import type { GatewayContext } from "./gateway-events.js";
 import type { RouterRuntime } from "./types.js";
 import { buildUnregisterCustomId, handleChannelCommand } from "./channel-commands.js";
@@ -459,9 +460,11 @@ it("routes a late /channel denial (after a public defer) to an ephemeral follow-
   // flip by having the stubbed handler emit an {ephemeral:true} denial reply.
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
   vi.mocked(handleChannelCommand).mockImplementationOnce(async (ctx) => {
+    // A denial sets both ephemeral and the `denied` marker; only `denied` reroutes
+    // to the private path (every reply sets ephemeral, so it cannot distinguish).
     void ctx.reply(
       { embeds: [{ description: "You are not authorized." }], attachments: [] },
-      { ephemeral: true },
+      { ephemeral: true, denied: true },
     );
   });
   // Authorized preflight (admin unregister of a channel owned by the caller) so the
@@ -491,6 +494,72 @@ it("routes a late /channel denial (after a public defer) to an ephemeral follow-
   expect((neutralize?.body as { content?: string } | undefined)?.content).toBe(
     "This request was handled privately.",
   );
+});
+
+it("edits a SUCCESS /channel reply into the public deferred reply (not the private path)", async () => {
+  // Every /channel reply sets ephemeral:true, including register/unregister SUCCESS.
+  // Only `denied` reroutes to the private path; a success (ephemeral, NOT denied)
+  // after a public defer must edit the public deferred reply in place, so the result
+  // is visible to the channel. Guards against misclassifying success as a denial.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  vi.mocked(handleChannelCommand).mockImplementationOnce(async (ctx) => {
+    void ctx.reply(
+      { embeds: [{ description: "Registered successfully." }], attachments: [] },
+      { ephemeral: true },
+    );
+  });
+  const { callbacks, requests } = await runChannelSlash("register", { isAdmin: true });
+  expect(callbacks[0]?.data?.flags).toBe(0);
+  // The success is NOT neutralized: no "handled privately" PATCH and no ephemeral
+  // (flags 64) follow-up POST. It goes through the attachment-aware embed editor
+  // (mocked), which does not hit fetch, so no @original PATCH content should appear.
+  const privatized = requests.find(
+    (r) =>
+      (r.body as { content?: string }).content === "This request was handled privately." ||
+      (r.body as { flags?: number }).flags === 64,
+  );
+  expect(privatized).toBeUndefined();
+  // The embed editor (mocked) carried the success embed.
+  const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
+  expect(edit).toHaveBeenCalled();
+});
+
+it("the real handler's register success stays public on a public channel (no misclassification)", async () => {
+  // End-to-end with the REAL handleChannelCommand (not the no-op mock): an admin
+  // register success on a public-preference channel defers public and its result is
+  // edited into the public reply, never rerouted to the private path. This exercises
+  // the real {ephemeral:true} success reply the no-op mock would otherwise hide.
+  const actual =
+    await vi.importActual<typeof import("./channel-commands.js")>("./channel-commands.js");
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  const deps: Partial<ChannelCommandDeps> = {
+    whitelistConfigured: () => true,
+    isAdmin: async () => true,
+    isWhitelisted: async () => true,
+    isSelf: () => false,
+    describeInstance: () => null,
+    registrationNonce: () => "1",
+    provisioning: {
+      register: vi.fn(async () => ({ ok: true, message: "ready" })),
+      unregister: vi.fn(async () => ({ ok: true, message: "" })),
+    } as unknown as ChannelCommandDeps["provisioning"],
+    kickOnboarding: () => {},
+    log: () => {},
+  };
+  vi.mocked(handleChannelCommand).mockImplementationOnce((ctx) =>
+    actual.handleChannelCommand(ctx, deps as ChannelCommandDeps),
+  );
+  const { callbacks, requests } = await runChannelSlash("register", { isAdmin: true });
+  expect(callbacks[0]?.data?.flags).toBe(0);
+  // No private reroute: no neutralizing PATCH and no ephemeral follow-up.
+  const privatized = requests.find(
+    (r) =>
+      (r.body as { content?: string }).content === "This request was handled privately." ||
+      (r.body as { flags?: number }).flags === 64,
+  );
+  expect(privatized).toBeUndefined();
+  const edit = editInteractionEmbedReply as ReturnType<typeof vi.fn>;
+  await vi.waitFor(() => expect(edit).toHaveBeenCalled());
 });
 
 it("keeps /secret ephemeral even when the channel preference is public", async () => {
