@@ -80,6 +80,38 @@ docker exec openclaw-prod-mirror \
   grep -n '<your new wording>' /root/deploy/docs/reference/templates/SOUL.md
 ```
 
+## Skipping Onboarding (OPENCLAW_SKIP_BOOTSTRAP)
+
+`OPENCLAW_SKIP_BOOTSTRAP` is a mirror-rig-only debug toggle. When truthy, the provisioner
+(`infrastructure/scripts/openclawctl`) seeds each new channel's workspace normally
+(`SOUL.md` and the other bootstrap files) and then removes just `BOOTSTRAP.md`, so the
+agent keeps its full persona but the router has no first-run ritual to drive. It is
+narrower than `agents.defaults.skipBootstrap`, which suppresses every workspace file and
+leaves the agent persona-less.
+
+Rules...
+
+- Default OFF (unset). Leave it unset so the onboarding path is exercised like prod; the
+  onboarding e2e only works when bootstrap runs.
+- Pass it INLINE on the launch/deploy command when you want to skip onboarding for a quick
+  functional test, e.g. `OPENCLAW_SKIP_BOOTSTRAP=1 ./scripts/prod-mirror.sh up` or
+  `... deploy`. `prod-mirror.sh` forwards it from its own shell into the box's provisioner
+  process (`start_provisioner` adds `docker exec -e OPENCLAW_SKIP_BOOTSTRAP=...` only when
+  it is set), which is what reads it at provision time (via `openclawctl` workspace
+  seeding). The provisioner must be (re)started for a change to take effect, so pass it on
+  an `up`/`deploy` run, not after the box is already up.
+- Never bake it into a committed or gitignored env file (`.env`, `.env.mirror`,
+  `.prod-mirror/*`). It is a per-run debug flag, not configuration. This is the general
+  convention for rig debug env vars » pass them inline on the launch command, do not store
+  them.
+
+With `BOOTSTRAP.md` absent, the router's `kickOnboarding` (`src/discord/router/router.ts`)
+skips the first-run welcome embed, which used to be a silent no-op that made the cause
+invisible. It now logs
+`[router] skipping onboarding for channel <id>: BOOTSTRAP.md absent (likely OPENCLAW_SKIP_BOOTSTRAP set at provision time)`,
+so if the welcome card never appears, grep the router logs for that line to confirm the
+toggle (or a seeding failure) is the reason.
+
 ## Drive the Conversation
 
 > **ALWAYS test inside a Lab Testing THREAD, never a loose guild channel.** Create the
