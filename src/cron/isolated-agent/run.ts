@@ -441,7 +441,12 @@ export async function runCronIsolatedAgentTurn(params: {
       ? cfgWithAgentDefaults.channels?.discord?.proxyUrl?.trim()
       : undefined;
     if (discordProxyUrl) {
-      const proxyTo = (params.job.delivery?.to ?? deliveryPlan.to ?? resolvedDelivery.to)?.trim();
+      const proxyTo = (
+        params.job.delivery?.to ??
+        deliveryPlan.to ??
+        resolvedDelivery.to ??
+        resolvedDelivery.rawTo
+      )?.trim();
       if (!proxyTo) {
         const message = "cron delivery target is missing";
         if (!deliveryBestEffort) {

@@ -23,6 +23,10 @@ export async function resolveDeliveryTarget(
 ): Promise<{
   channel: Exclude<OutboundChannel, "none">;
   to?: string;
+  // The resolved destination before plugin "docking". Docking returns undefined
+  // when the channel plugin is absent (e.g. a SKIP_CHANNELS container), but the
+  // session route itself is still valid; proxy delivery uses this to reach it.
+  rawTo?: string;
   accountId?: string;
   threadId?: string | number;
   mode: "explicit" | "implicit";
@@ -89,6 +93,7 @@ export async function resolveDeliveryTarget(
   return {
     channel,
     to: docked.ok ? docked.to : undefined,
+    rawTo: toCandidate,
     accountId: resolved.accountId,
     threadId: resolved.threadId,
     mode,

@@ -1,4 +1,6 @@
 import type { ReplyPayload } from "../../auto-reply/types.js";
+import { chunkMarkdownText } from "../../auto-reply/chunk.js";
+import { parseDiscordTarget } from "../../discord/targets.js";
 
 /**
  * Deliver cron output to Discord through the router's container proxy.
@@ -11,10 +13,14 @@ import type { ReplyPayload } from "../../auto-reply/types.js";
  *
  * A "channel" target posts directly to that channel/thread id; a "user" target
  * is resolved to a DM channel by the router. The kind is captured when the job is
- * created (see inferDeliveryFromSessionKey) so we do not have to guess here.
+ * created (see inferDeliveryFromSessionKey) and refined per target: a prefixed
+ * target (channel:123 / user:456 / <@id>) carries its own kind and is reduced to a
+ * bare id, while a bare id falls back to the captured kind.
  */
 
 export type DiscordProxyTargetKind = "channel" | "user";
+
+const DISCORD_TEXT_LIMIT = 2000;
 
 type ProxySendBody = {
   text: string;
@@ -23,11 +29,16 @@ type ProxySendBody = {
   userId?: string;
 };
 
-function targetField(
+function resolveTargetField(
   to: string,
-  kind: DiscordProxyTargetKind,
+  defaultKind: DiscordProxyTargetKind,
 ): { channelId: string } | { userId: string } {
-  return kind === "channel" ? { channelId: to } : { userId: to };
+  // parseDiscordTarget turns a prefixed/mention target into a bare id + explicit
+  // kind; a bare numeric id resolves to defaultKind (the kind captured from the
+  // originating session). Fall back to the raw value if parsing yields nothing.
+  const parsed = parseDiscordTarget(to, { defaultKind });
+  const id = parsed?.id ?? to;
+  return parsed?.kind === "user" ? { userId: id } : { channelId: id };
 }
 
 async function postSend(fetchImpl: typeof fetch, base: string, body: ProxySendBody): Promise<void> {
@@ -45,30 +56,31 @@ async function postSend(fetchImpl: typeof fetch, base: string, body: ProxySendBo
 export async function deliverDiscordViaProxy(params: {
   proxyUrl: string;
   to: string;
-  toKind: DiscordProxyTargetKind;
+  toKind?: DiscordProxyTargetKind;
   payloads: ReplyPayload[];
   fetchImpl?: typeof fetch;
 }): Promise<void> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const base = params.proxyUrl.replace(/\/+$/, "");
-  const target = targetField(params.to, params.toKind);
+  const target = resolveTargetField(params.to, params.toKind ?? "channel");
   for (const payload of params.payloads) {
     const text = payload.text?.trim() ?? "";
     const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-    if (mediaUrls.length === 0) {
-      if (!text) {
-        continue;
+    // Split text into <=2000-char chunks so Discord never rejects an oversized
+    // message (the router's send is verbatim, and an "at" job would otherwise
+    // disable itself without delivering).
+    if (text) {
+      for (const chunk of chunkMarkdownText(text, DISCORD_TEXT_LIMIT)) {
+        if (chunk.trim()) {
+          await postSend(fetchImpl, base, { ...target, text: chunk });
+        }
       }
-      await postSend(fetchImpl, base, { ...target, text });
-      continue;
     }
-    let first = true;
+    // Send each media URL as its own message so the URL stays within the limit
+    // (the proxy appends the URL to the text body, so a caption + URL could
+    // otherwise exceed it).
     for (const mediaUrl of mediaUrls) {
-      // The proxy requires non-empty text, so fall back to the media URL as the
-      // body when there is no caption for this payload.
-      const caption = first ? text : "";
-      await postSend(fetchImpl, base, { ...target, text: caption || mediaUrl, mediaUrl });
-      first = false;
+      await postSend(fetchImpl, base, { ...target, text: mediaUrl, mediaUrl });
     }
   }
 }

@@ -30,6 +30,40 @@ describe("applyJobPatch", () => {
     expect(job.delivery).toBeUndefined();
   });
 
+  it("preserves delivery.toKind across an unrelated patch and applies an explicit one", () => {
+    const now = Date.now();
+    const makeJob = (): CronJob => ({
+      id: "job-kind",
+      name: "job-kind",
+      enabled: true,
+      createdAtMs: now,
+      updatedAtMs: now,
+      schedule: { kind: "every", everyMs: 60_000 },
+      sessionTarget: "isolated",
+      wakeMode: "now",
+      payload: { kind: "agentTurn", message: "do it" },
+      delivery: { mode: "announce", channel: "discord", to: "456", toKind: "user" },
+      state: {},
+    });
+
+    // Patching only bestEffort must not drop the captured kind (otherwise the
+    // next proxy run would treat the user id as a channel id).
+    const job = makeJob();
+    applyJobPatch(job, { delivery: { bestEffort: true } });
+    expect(job.delivery).toEqual({
+      mode: "announce",
+      channel: "discord",
+      to: "456",
+      toKind: "user",
+      bestEffort: true,
+    });
+
+    // An explicit toKind in the patch is applied.
+    const job2 = makeJob();
+    applyJobPatch(job2, { delivery: { toKind: "channel" } });
+    expect(job2.delivery?.toKind).toBe("channel");
+  });
+
   it("maps legacy payload delivery updates onto delivery", () => {
     const now = Date.now();
     const job: CronJob = {
