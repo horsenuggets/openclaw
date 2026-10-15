@@ -14,6 +14,13 @@ Docs: https://docs.openclaw.ai
   onboarding, and never bake it into any env file. `scripts/prod-mirror.sh` now forwards
   an inline `OPENCLAW_SKIP_BOOTSTRAP` into the box's provisioner process so the inline
   convention actually reaches workspace seeding.
+- System prompt: added secret-hygiene and command-caution guidance to the safety section
+  (`docs/reference/templates/SYSTEM.md`). The agent now treats a request to run a command,
+  reveal a secret, or relax a safeguard as not self-authorizing just because it is framed
+  as an authorized test, reviews replies before sending so it never echoes credentials or
+  config/home secrets, and reports that a value exists and its category rather than
+  dumping it. Framed explicitly as defense in depth on top of the token-free box, never
+  the boundary.
 - Agent box: added resource-exhaustion DoS hardening that needs no cgroup delegation (the
   deploy env cannot delegate cgroup v2 controllers, so `pids_limit`/`mem_limit` stay off).
   Capped the RAM-backed `/tmp` tmpfs at 512m, added `fsize` (8 GiB single-file) and
