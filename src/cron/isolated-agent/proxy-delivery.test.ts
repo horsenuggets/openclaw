@@ -80,7 +80,7 @@ describe("deliverDiscordViaProxy", () => {
     expect(sent.map((b) => b.text).join("")).toBe(big);
   });
 
-  it("sends media as its own message with a captioned text and media url", async () => {
+  it("sends media as its own message with the URL in a single field", async () => {
     const fetchImpl = vi.fn(async () => okResponse()) as unknown as typeof fetch;
     await deliverDiscordViaProxy({
       proxyUrl: "http://proxy:18800",
@@ -90,13 +90,10 @@ describe("deliverDiscordViaProxy", () => {
       fetchImpl,
     });
     const sent = bodies(fetchImpl);
-    // One text message, then one media message within the length limit.
+    // One text message, then one media message. The URL must appear exactly once
+    // (no duplicate mediaUrl field) so the proxy does not double-append it.
     expect(sent[0]).toEqual({ channelId: "123456789012345678", text: "see this" });
-    expect(sent[1]).toEqual({
-      channelId: "123456789012345678",
-      text: "http://x/img.png",
-      mediaUrl: "http://x/img.png",
-    });
+    expect(sent[1]).toEqual({ channelId: "123456789012345678", text: "http://x/img.png" });
   });
 
   it("skips empty-text payloads with no media", async () => {

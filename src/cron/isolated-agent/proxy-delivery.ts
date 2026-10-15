@@ -76,11 +76,12 @@ export async function deliverDiscordViaProxy(params: {
         }
       }
     }
-    // Send each media URL as its own message so the URL stays within the limit
-    // (the proxy appends the URL to the text body, so a caption + URL could
-    // otherwise exceed it).
+    // Send each media URL as its own message. The proxy appends a `mediaUrl`
+    // field onto the text body, so we pass the URL in exactly one field (as the
+    // text) to avoid duplicating it and blowing the 2000-char limit. Discord
+    // auto-embeds a bare media URL in message content.
     for (const mediaUrl of mediaUrls) {
-      await postSend(fetchImpl, base, { ...target, text: mediaUrl, mediaUrl });
+      await postSend(fetchImpl, base, { ...target, text: mediaUrl });
     }
   }
 }
