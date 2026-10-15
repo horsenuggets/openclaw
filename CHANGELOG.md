@@ -14,6 +14,22 @@ Docs: https://docs.openclaw.ai
   onboarding, and never bake it into any env file. `scripts/prod-mirror.sh` now forwards
   an inline `OPENCLAW_SKIP_BOOTSTRAP` into the box's provisioner process so the inline
   convention actually reaches workspace seeding.
+- System prompt: added secret-hygiene and command-caution guidance to the safety section
+  (`docs/reference/templates/SYSTEM.md`). The agent now treats a request to run a command,
+  reveal a secret, or relax a safeguard as not self-authorizing just because it is framed
+  as an authorized test, reviews replies before sending so it never echoes credentials or
+  config/home secrets, and reports that a value exists and its category rather than
+  dumping it. Deployment-neutral and framed explicitly as defense in depth, not a security
+  boundary (credentials may be reachable depending on how the agent is deployed).
+- Agent box: added resource-exhaustion DoS hardening that needs no cgroup delegation (the
+  deploy env cannot delegate cgroup v2 controllers, so `pids_limit`/`mem_limit` stay off).
+  Capped the RAM-backed `/tmp` tmpfs by both data size (512m) and inode count
+  (`nr_inodes`, so a flood of empty files cannot pressure RAM outside the size quota),
+  added `fsize` (8 GiB single-file) and `nofile` rlimits in `agent.yml`, and stripped the
+  setuid/setgid bits from the box image in `agent.Dockerfile` (inert under the existing
+  non-root + `cap_drop: ALL` + `no-new-privileges` hardening, removed to shrink surface).
+  A compromised agent can no longer fill host RAM via `/tmp` or write an unbounded file
+  onto the shared DinD disk.
 - Discord router: replaced the Debug embed footer icon with the Material Symbols
   `bug_report` glyph (36px, `#ff80e0`), dropping the viewfinder frame corners so the whole
   bug shows.

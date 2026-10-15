@@ -45,17 +45,49 @@ services:
     user: "1000:1000"
     read_only: true
     tmpfs:
-      - /tmp
+      # /tmp is RAM-backed (tmpfs). Uncapped it defaults to half the host RAM, so
+      # the agent could fill it and OOM the whole DinD host (every co-tenant box +
+      # the router). size= caps the data pages and nr_inodes= caps the inode table
+      # -- BOTH are needed: size= alone bounds file *contents* but not metadata, and
+      # the default inode budget scales with host RAM, so a flood of empty files
+      # could still pressure RAM outside the size= quota. size= is NOT a total-RAM
+      # cap for the container (that needs mem_limit, below); it only bounds this
+      # mount. mode=1777 keeps the usual world-writable-sticky /tmp semantics. These
+      # are mount options, so they need no cgroup controller delegation.
+      - /tmp:size=512m,nr_inodes=262144,mode=1777
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    # Resource limits (pids_limit / mem_limit) are intentionally omitted: they
-    # require cgroup v2 controller delegation that is not reliably available in
-    # the deploy environment (the container fails to start with "cannot enter
-    # cgroupv2 ... with domain controllers -- it is in threaded mode"). The
-    # security-relevant hardening above does not depend on cgroup delegation.
-    # Reintroduce DoS limits only once the host's cgroup setup is confirmed.
+    # POSIX rlimits (RLIMIT_*). Unlike pids_limit / mem_limit these are set via
+    # setrlimit, so they work WITHOUT cgroup v2 controller delegation (the exact
+    # thing unavailable in the deploy env, see the note below). They blunt the
+    # single-file disk-fill and fd-exhaustion DoS vectors a compromised agent
+    # would otherwise have against the shared host disk.
+    ulimits:
+      # Cap any one file at 8 GiB so the agent cannot write an unbounded file to
+      # its (host-backed) /workspace|/state|/home mount and starve co-tenants.
+      # Generous enough for real build/download artifacts.
+      fsize: 8589934592
+      # Bound open file descriptors (default here is ~1M). Soft under hard so a
+      # runaway is contained without blocking legitimate tool use.
+      nofile:
+        soft: 65536
+        hard: 131072
+    # Still omitted (require cgroup v2 controller delegation, not reliably
+    # available in the deploy env -- the container fails to start with "cannot
+    # enter cgroupv2 ... with domain controllers -- it is in threaded mode"):
+    #   - pids_limit  -> the correct per-container fork-bomb guard. The rlimit
+    #     alternative (ulimits.nproc) is RLIMIT_NPROC, which the kernel accounts
+    #     PER-UID HOST-WIDE, not per container; since every box runs as uid 1000,
+    #     one value is shared across all co-tenant boxes and a too-low value makes
+    #     EVERY box fail to exec. So nproc is deliberately NOT set here -- use
+    #     pids_limit once cgroup delegation is confirmed on the host.
+    #   - mem_limit   -> per-container RAM cap (the tmpfs size= above only bounds
+    #     /tmp, not total RSS). Reintroduce alongside pids_limit.
+    # Residual (needs host support, not a compose knob): per-box DISK QUOTA. fsize
+    # caps one file but not many-small-files; a filesystem project quota or a
+    # per-box sized volume is required to fully bound disk use per channel.
     volumes:
       - ~/deploy/bin/openclaw:/bin/openclaw:ro
       - ~/deploy/bin/gog:/usr/local/bin/gog:ro

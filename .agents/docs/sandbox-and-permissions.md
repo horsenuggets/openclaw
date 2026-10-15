@@ -93,6 +93,18 @@ that mount is made writable.
 
 Skill keys are trimmed and case-insensitive throughout registry lookup and resolution.
 
+Future direction (not built) » Today a materialized connection credential lands inside the
+box (an env var, a `gh` login, a gog cred file under `/home`), so a compromised agent can
+read its own connection secrets. The intended end state mirrors the existing model proxy »
+a sibling **credential-broker** container, on its own network, holds the raw connection
+secrets and exposes only scoped, per-service API calls the agent hooks into. The agent
+then exercises a capability (make this Todoist call, send this Notion block) without ever
+holding the token, the same way it reaches the model through the router's proxy without
+holding the provider OAuth. Storing creds in the box home is acceptable only for the
+current prototype; the broker is the real fix, and prompt-level secret hygiene (the safety
+section in `docs/reference/templates/SYSTEM.md`) is defense in depth on top, never the
+boundary.
+
 The `/connections` slash-command reply is ephemeral by default, but — like `/debug` and
 `/lifecycle` — it now honors the per-channel `ephemeralCommands` preference: a channel set
 public via `/debug ephemeral off` defers its output with `flags: 0` so the result persists
@@ -107,6 +119,39 @@ ephemeral) for the same reason. So do not force the public text fallback to be e
 for privacy. Permission DENIALS, however, are always ephemeral regardless of the
 preference. See the gating in [command-system.md](command-system.md), and still fix
 genuine issues such as token leaks or mis-reported storage errors.
+
+## Resource Limits and Self-Corruption
+
+Escape is blocked (non-root, `cap_drop: ALL`, `no-new-privileges`, read-only root, no
+docker socket, no host mounts), but a compromised or buggy agent still has two kinds of
+in-box damage to think about, and the mitigations live in `agent.yml` /
+`agent.Dockerfile`.
+
+- **Self-corruption (accepted, contained).** `/workspace`, `/state`, and `/home/openclaw`
+  are writable by design, so the agent can delete or corrupt its own sessions, memory
+  index, and connection creds. This is self-inflicted and recoverable only from host-side
+  copies; it never crosses the box boundary. Its "brain" is safe » the `openclaw`/`gog`
+  binaries (`/bin/openclaw`, read-only mounts) and its config
+  (`/etc/openclaw/openclaw.json`, read-only) cannot be overwritten. `/usr/local` and
+  `/opt` are agent-owned and writable (that is the runtime-install feature), which also
+  means the agent can shadow its own tools there » contained to its box, but a
+  self-persistence vector to keep in mind.
+- **Resource-exhaustion DoS (the cross-tenant risk).** The writable mounts are bind mounts
+  from the shared DinD host disk and `/tmp` is RAM-backed, so an unbounded fork bomb,
+  memory balloon, or disk fill in ONE box can starve every co-tenant box and the router.
+  Mitigations that do **not** need cgroup delegation (which is unavailable in the deploy
+  env, so `pids_limit`/`mem_limit` stay off » see the comment in `agent.yml`):
+  > `tmpfs: /tmp:size=512m` caps the RAM-backed scratch space. `ulimits.fsize` caps any
+  > single file (blunts one-shot disk fill of the host-backed mounts); `ulimits.nofile`
+  > bounds fd exhaustion. setuid/setgid bits are stripped from the image
+  > (`agent.Dockerfile`) » inert anyway under the runtime hardening, removed to shrink
+  > surface. Residual, needing host support rather than a compose knob: a per-box **disk
+  > quota** (`fsize` bounds one file, not many-small-files) and true per-container
+  > **PID/RAM** caps (`pids_limit`/`mem_limit`) once cgroup v2 controller delegation is
+  > confirmed on the host. `ulimits.nproc` is deliberately NOT used as a fork-bomb
+  > stand-in » `RLIMIT_NPROC` is accounted per-uid host-wide, and every box runs as uid
+  > 1000, so one value is shared across all boxes and a low value makes every box fail to
+  > exec.
 
 ## Pitfalls
 

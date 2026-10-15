@@ -60,3 +60,12 @@ RUN apt-get update \
 RUN usermod -l openclaw ubuntu \
   && groupmod -n openclaw ubuntu \
   && usermod -d /home/openclaw openclaw
+
+# Strip the setuid/setgid bits from every baked binary (passwd, chsh, chfn,
+# gpasswd, newgrp, su, mount, umount, ...). The box already neutralizes them at
+# runtime (non-root uid 1000, cap_drop ALL, no-new-privileges, read-only /etc),
+# so they are inert -- but the agent never needs to escalate, so removing the
+# bits outright shrinks the attack surface and removes a whole class of
+# future-suid-exploit risk. -xdev keeps this on the image layer only; it runs
+# before any writable mount is layered on at runtime.
+RUN find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod -s {} + 2>/dev/null; true
