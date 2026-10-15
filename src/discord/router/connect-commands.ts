@@ -18,6 +18,7 @@ import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./co
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
+import { buildSubcommandFields } from "./subcommand-fields.js";
 
 export type ConnectSubcommand = "list" | "add" | "remove";
 
@@ -272,11 +273,15 @@ const LIST_DESCRIPTION =
 
 const LIST_EMPTY = "You have not linked any accounts yet. Use `/conn add <service>` to link one.";
 
-/** The subcommand previews, debug-help style (backtick usage + one-line value). */
-const SUBCOMMAND_FIELDS: DiscordEmbedField[] = [
-  { name: "`/conn add <service>`", value: "Connect a new service." },
-  { name: "`/conn remove <service>`", value: "Remove a service." },
-];
+/**
+ * The subcommand previews, debug-help style (backtick usage + one-line value).
+ * Rendered via the shared helper (same shape as `/debug help`), preserving the
+ * authored add-before-remove order.
+ */
+const SUBCOMMAND_FIELDS: DiscordEmbedField[] = buildSubcommandFields("/conn", [
+  { usage: "add <service>", description: "Connect a new service." },
+  { usage: "remove <service>", description: "Remove a service." },
+]);
 
 const COUNT_FIELD_NAME = "Currently Connected";
 const LEGEND_FIELD_NAME = "Legend";

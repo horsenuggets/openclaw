@@ -27,9 +27,9 @@ import {
   getConnFlowScenario,
 } from "./connflow-preview.js";
 import { buildEmbed } from "./embed-categories.js";
-import { MAX_FIELD_NAME_CHARS, MAX_FIELD_VALUE_CHARS } from "./embed-limits.js";
 import { buildPaginatedEmbeds } from "./embed-pagination.js";
 import { sanitizeSecretName } from "./secret-command.js";
+import { buildSubcommandFields } from "./subcommand-fields.js";
 
 /** Upper bound for a user-echoed subcommand name in a notice embed. */
 const MAX_ECHOED_NAME_CHARS = 64;
@@ -240,12 +240,12 @@ export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
 } {
   // One field per subcommand (``usage`` as the name, description as the value),
   // clamped to the per-field caps, then packed across embeds by the shared builder.
-  const fields: DiscordEmbedField[] = subcommands
-    .toSorted((a, b) => a.name.localeCompare(b.name))
-    .map((sub) => ({
-      name: clamp(`\`${sub.usage}\``, MAX_FIELD_NAME_CHARS),
-      value: clamp(sub.description, MAX_FIELD_VALUE_CHARS),
-    }));
+  // Sort alphabetically first, then let the shared helper render each field (the
+  // helper preserves input order, so the sort is the caller's job).
+  const fields = buildSubcommandFields(
+    "/debug",
+    subcommands.toSorted((a, b) => a.name.localeCompare(b.name)),
+  );
   return buildPaginatedEmbeds({
     category: "debug",
     title: HELP_TITLE,
