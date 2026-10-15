@@ -82,7 +82,7 @@ async function runDebugSlash(params: {
  * is stubbed to a no-op: the defer fires before it, so the preference-derived
  * flag is already observable.
  */
-async function runChannelSlash(): Promise<{ callbacks: Callback[] }> {
+async function runChannelSlash(subcommand: string): Promise<{ callbacks: Callback[] }> {
   const callbacks: Callback[] = [];
   vi.stubGlobal(
     "fetch",
@@ -116,7 +116,7 @@ async function runChannelSlash(): Promise<{ callbacks: Callback[] }> {
       token: "tok",
       channel: { type: 0 },
       guild_id: "987654321098765432",
-      data: { name: "channel", options: [{ name: "status" }] },
+      data: { name: "channel", options: [{ name: subcommand }] },
       user: { id: "u1" },
     } as never);
     await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
@@ -317,22 +317,35 @@ it("rolls back the ephemeral toggle when the defer ack is rejected", async () =>
   }
 });
 
-it("defers /channel ephemeral when the channel preference is private (default)", async () => {
-  // A new channel is private by default, so /channel now defers ephemeral (flags
-  // 64), honoring the preference rather than being forced ephemeral.
-  const { callbacks } = await runChannelSlash();
+it("defers /channel status ephemeral when the channel preference is private (default)", async () => {
+  // A new channel is private by default, so /channel status now defers ephemeral
+  // (flags 64), honoring the preference rather than being forced ephemeral.
+  const { callbacks } = await runChannelSlash("status");
   expect(callbacks[0]?.type).toBe(5);
   expect(callbacks[0]?.data?.flags).toBe(64);
 });
 
-it("defers /channel public when the channel preference is public", async () => {
+it("defers /channel status public when the channel preference is public", async () => {
   // `/debug ephemeral off` opts the channel out of ephemeral replies; /channel
-  // now follows that preference and defers public (flags 0), unlike before when it
-  // was always ephemeral.
+  // status now follows that preference and defers public (flags 0), unlike before
+  // when it was always ephemeral.
   expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
-  const { callbacks } = await runChannelSlash();
+  const { callbacks } = await runChannelSlash("status");
   expect(callbacks[0]?.type).toBe(5);
   expect(callbacks[0]?.data?.flags).toBe(0);
+});
+
+it("keeps /channel register and unregister ephemeral even when the preference is public", async () => {
+  // register/unregister are gated inside handleChannelCommand (after the defer), so
+  // they must stay ephemeral: Discord fixes ephemerality at defer time, and a public
+  // defer would publish a permission-denied embed to the channel, leaking a
+  // non-owner's probe. Only `status` (never denies) honors the public preference.
+  expect(setEphemeralCommands(instancesDir, CHANNEL, false)).toBe(true);
+  for (const subcommand of ["register", "unregister"]) {
+    const { callbacks } = await runChannelSlash(subcommand);
+    expect(callbacks[0]?.type).toBe(5);
+    expect(callbacks[0]?.data?.flags).toBe(64);
+  }
 });
 
 it("keeps /secret ephemeral even when the channel preference is public", async () => {

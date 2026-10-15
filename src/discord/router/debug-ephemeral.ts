@@ -26,8 +26,8 @@ export function resolveEphemeralCommand(
   if (desired === null) {
     return {
       description: current
-        ? "Ephemeral command replies are currently `enabled`. Use `/debug ephemeral off` to disable."
-        : "Ephemeral command replies are currently `disabled`. Use `/debug ephemeral on` to enable.",
+        ? "Ephemeral command replies are currently `enabled`."
+        : "Ephemeral command replies are currently `disabled`.",
       state: current ? "enabled" : "disabled",
     };
   }

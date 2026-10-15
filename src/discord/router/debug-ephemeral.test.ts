@@ -6,16 +6,14 @@ describe("resolveEphemeralCommand", () => {
     const outcome = resolveEphemeralCommand(true, null);
     expect(outcome.newValue).toBeUndefined();
     expect(outcome.state).toBe("enabled");
-    expect(outcome.description).toContain("currently `enabled`");
-    expect(outcome.description).toContain("/debug ephemeral off");
+    expect(outcome.description).toBe("Ephemeral command replies are currently `enabled`.");
   });
 
   it("renders a status for a bare query when disabled", () => {
     const outcome = resolveEphemeralCommand(false, null);
     expect(outcome.newValue).toBeUndefined();
     expect(outcome.state).toBe("disabled");
-    expect(outcome.description).toContain("currently `disabled`");
-    expect(outcome.description).toContain("/debug ephemeral on");
+    expect(outcome.description).toBe("Ephemeral command replies are currently `disabled`.");
   });
 
   it("enables and reports the new state", () => {
@@ -61,6 +59,8 @@ describe("resolveEphemeralCommand", () => {
       expect(description).not.toContain("/lifecycle");
       expect(description).not.toContain("/connections");
       expect(description).not.toContain("/channel");
+      // The status-query instructional hint is gone too (first sentence only).
+      expect(description).not.toContain("/debug ephemeral");
     }
   });
 });
