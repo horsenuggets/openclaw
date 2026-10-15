@@ -99,11 +99,13 @@ public via `/debug ephemeral off` defers its output with `flags: 0` so the resul
 for inspection during testing (see the preference carve-out in
 [command-system.md](command-system.md)). That public output is acceptable by design » it
 never contains the secret token (scrubbed from input and never echoed), only the validated
-account label and which services are connected, and the command is owner-gated so it is
-the owner self-disclosing. The text-command fallback is likewise public (Discord message
-replies cannot be ephemeral) for the same reason. So do not force the public text fallback
-to be ephemeral for privacy. Permission DENIALS, however, are always ephemeral regardless
-of the preference. See the gating in [command-system.md](command-system.md), and still fix
+account label and which services are connected, and other than the static catalog command,
+the command is owner-gated so it is the owner self-disclosing. `/connections available`
+lists only the static service catalog and is accessible without registration or an owner
+check. The text-command fallback is likewise public (Discord message replies cannot be
+ephemeral) for the same reason. So do not force the public text fallback to be ephemeral
+for privacy. Permission DENIALS, however, are always ephemeral regardless of the
+preference. See the gating in [command-system.md](command-system.md), and still fix
 genuine issues such as token leaks or mis-reported storage errors.
 
 ## Pitfalls

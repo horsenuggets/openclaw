@@ -100,13 +100,16 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   this behavior by calling the shared helper rather than inventing their own denial.
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
-  `.onboarding.json`) may use them. Non-owners get the channel-ownership denial embed
-  (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
+  `.onboarding.json`) may use them. `/connections available` is the exception: it lists
+  only the static connector catalog, so it is accessible before registration and without
+  an owner check. Non-owners of all other gated commands get the channel-ownership denial
+  embed (`replyUnauthorizedEphemeral`, the thin owner-naming wrapper over
   `denyInteractionEphemeral`). The gate runs regardless of registration state » an
   unregistered channel has no owner, so `isAuthorizedForChannel` fails closed and denies
-  rather than letting the command fall through to a "not registered yet" reply that would
+  rather than letting a command fall through to a "not registered yet" reply that would
   leak the registration state to a non-owner. A 1:1 DM is exempt (the caller is its own
-  owner), and on an unregistered DM the command still reports that it is not registered.
+  owner), and on an unregistered DM other connections commands still report that it is not
+  registered.
 - `/debug` is gated differently » It is admin-gated via `whitelist.isAdmin` (the
   `GatewayContext.isAdmin` closure), not owner-gated, because it inspects global internal
   state rather than one channel's agent. The admin check runs BEFORE the interaction is
