@@ -24,6 +24,7 @@ import {
   handleConnectCommand,
   parseConnectTextCommand,
   parseReauthCustomId,
+  parseRemoveConnectionCustomId,
 } from "./connect-commands.js";
 import { simulateConnFlow } from "./connflow-preview.js";
 import {
@@ -1572,16 +1573,19 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
     channelGuild.set(d.channel_id, d.guild_id);
   }
 
-  // The `/connections info` Reauthenticate button. No reauth flow is wired yet, so
-  // answer with an ephemeral TODO (a plain type-4 response). Handled before the
-  // unregister parse since its custom_id namespace is disjoint.
+  // The `/connections info` Reauthenticate and Remove Connection buttons. Neither
+  // flow is wired yet, so both answer with an ephemeral TODO (a plain type-4
+  // response). Handled before the unregister parse since their custom_id
+  // namespaces are disjoint.
   const reauth = customId ? parseReauthCustomId(customId) : null;
-  if (reauth && interactionId && interactionToken) {
+  const remove = customId ? parseRemoveConnectionCustomId(customId) : null;
+  if ((reauth || remove) && interactionId && interactionToken) {
+    const which = reauth ? "reauth" : "remove";
     void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: 4, data: { content: CONN_REAUTH_TODO, flags: 64 } }),
-    }).catch((err) => runtime.error(`[router] reauth button response failed: ${String(err)}`));
+    }).catch((err) => runtime.error(`[router] ${which} button response failed: ${String(err)}`));
     return;
   }
 

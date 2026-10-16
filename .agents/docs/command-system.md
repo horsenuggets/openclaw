@@ -17,12 +17,13 @@ multi-tenant router, separate from the generic `src/discord/monitor/` provider. 
   available service for, or remove external accounts (Todoist, Notion, GitHub by pasted
   token; Google is listed and selectable but its connect flow is not wired yet, so
   `/connections add google` shows a TODO placeholder) for the channel's agent. The
-  `available` subcommand lists every catalogued service; `info <service>` shows a
-  per-connection stats embed (status glyph, account, linked date, auth type derived from
-  the connector's auth flow, a placeholder last-ping, and the services it unlocks) with a
-  Reauthenticate button whose `conn:reauth:<id>` click is handled in `gateway-events.ts`
-  (currently a TODO ephemeral reply). See
-  [sandbox-and-permissions.md](sandbox-and-permissions.md).
+  `available` subcommand renders a bare embed carrying only the Available Services field
+  (no title or description); `info <service>` shows a per-connection stats embed (status
+  glyph, account, linked date, auth type derived from the connector's auth flow, a
+  placeholder last-ping, and a Skills Available list) with an action row of a
+  Reauthenticate button (`conn:reauth:<id>`) followed by a danger Remove Connection button
+  (`conn:remove:<id>`), both handled in `gateway-events.ts` (currently a TODO ephemeral
+  reply). See [sandbox-and-permissions.md](sandbox-and-permissions.md).
 - `/debug` (`debug-command.ts`, `DEBUG_COMMAND_SPEC`) - an admin-only console for
   inspecting internal state. Rather than registering each tool as its own slash command,
   the subcommand is entered as free text into a single `command` option (for example

@@ -123,14 +123,14 @@ describe("simulateConnFlow scenarios", () => {
         "Linked",
         "Auth Type",
         "Last Ping",
-        "Services Available",
+        "Skills Available",
       ]),
     );
     // Debug identity, not Connections.
     expect(out.embeds[0].color).toBe(DEBUG.color);
-    // The Reauthenticate button is forwarded through the Debug re-skin.
+    // The action-row buttons are forwarded through the Debug re-skin, in order.
     const buttons = (out.components ?? []).flatMap((row) => row.components ?? []);
-    expect(buttons.map((b) => b.label)).toContain("Reauthenticate");
+    expect(buttons.map((b) => b.label)).toEqual(["Reauthenticate", "Remove Connection"]);
   });
 });
 
