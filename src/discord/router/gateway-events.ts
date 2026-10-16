@@ -10,8 +10,10 @@ import {
   type InstanceStatus,
   buildUnregisterAckUpdate,
   buildUnregisterFlowPreview,
+  buildUnregisterNeutralUpdate,
   decideUnregisterClick,
   handleChannelCommand,
+  isAuthorizedForChannelCommand,
   parseChannelTextCommand,
   parseUnregisterCustomId,
 } from "./channel-commands.js";
@@ -1249,31 +1251,27 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
       // the daemon's command timeout plus readiness polling, well beyond Discord's
       // ~3s window, and the result is delivered by editing the deferred reply.
       //
-      // Nothing in /channel is secret (only /secret is always ephemeral), so where
-      // it can it honors the channel's `ephemeralCommands` preference like /debug,
-      // /lifecycle, and /connections. But register/unregister are gated
-      // (whitelist/admin/owner) INSIDE handleChannelCommand, AFTER this defer, and a
-      // denial must ALWAYS be ephemeral: Discord fixes a reply's ephemerality at
-      // defer time, so a public defer here would publish the permission-denied embed
+      // Nothing in /channel is secret (only /secret is always ephemeral), so every
+      // subcommand honors the channel's `ephemeralCommands` preference on SUCCESS,
+      // like /debug, /lifecycle, and /connections. But register/unregister are
+      // gated (whitelist/admin/owner), and a permission denial must ALWAYS be
+      // ephemeral: Discord fixes a reply's ephemerality at defer time, so a public
+      // defer for an unauthorized caller would publish the permission-denied embed
       // to the whole channel and leak that a non-owner probed registration,
       // violating the "every denial is ephemeral" invariant
-      // (.agents/docs/command-system.md). So only `status` (open to everyone, never
-      // denies) follows the channel preference; register/unregister (and any unknown
-      // subcommand) stay ephemeral. An owner-only fix, extracting the gate before the
-      // defer, would duplicate the register/unregister authorization logic.
-      const channelDeferEphemeral =
-        subOpt?.name === "status" ? ephemeralFlags(interactionChannelId) : 64;
-      void fetch(`${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: 5,
-          data: { flags: channelDeferEphemeral },
-        }),
-      }).catch((err) => runtime.error(`[router] channel defer failed: ${String(err)}`));
-      const editReply = (payload: ChannelReplyPayload) => {
-        // Embed replies upload their category icons (attachment://), so route
-        // them through the attachment-aware editor; strings stay plain content.
+      // (.agents/docs/command-system.md).
+      //
+      // So evaluate the SAME authorization predicate the command handler uses
+      // BEFORE this defer (a couple of role/registration lookups, well inside the
+      // ~3s window): an authorized caller defers with the channel preference so a
+      // SUCCESS can show publicly, while an unauthorized caller defers ephemerally
+      // (flags 64) so the handler's denial embed stays private. status (open to
+      // everyone, never denies) and any unknown subcommand always resolve as
+      // authorized, so they follow the preference as before.
+      // Edit the deferred reply in place. Embed replies upload their category
+      // icons (attachment://), so route them through the attachment-aware editor;
+      // strings stay plain content.
+      const editDeferredReply = (payload: ChannelReplyPayload) => {
         if (typeof payload !== "string") {
           void editInteractionEmbedReply(applicationId, interactionToken, {
             embeds: payload.embeds,
@@ -1305,17 +1303,123 @@ export function handleSlashInteraction(ctx: GatewayContext, d: SlashInteractionD
           })
           .catch((err) => runtime.error(`[router] channel followup failed: ${String(err)}`));
       };
-      void handleChannelCommand(
-        {
-          subcommand: subOpt?.name ?? null,
-          args,
-          channelId: interactionChannelId,
-          userId,
-          isDM: !d.guild_id,
-          reply: (payload) => editReply(payload),
-        },
-        channelCommandDeps,
-      );
+      // Keep a LATE permission denial private even after a PUBLIC defer. The
+      // preflight gate authorizes before the defer, but the handler re-checks
+      // authorization after it (owner/admin revalidation, the stale-registration
+      // nonce guard), and in the sub-second defer window that re-check can flip to a
+      // denial. Editing the denial into the public placeholder would leak it.
+      //
+      // Order matters and is NOT interchangeable: Discord treats a follow-up POST
+      // after a type-5 defer as COMPLETING the original (public) response and
+      // ignores the POST's ephemeral flag unless the original response already
+      // exists as a sent message. So first EDIT the original deferred response to a
+      // neutral, embed-free, component-free note (which both materializes the
+      // original response and strips any leaked denial embed), and ONLY on a
+      // successful edit POST the ephemeral (flags 64) denial follow-up. If the
+      // neutralizing edit fails, the follow-up is withheld rather than risk a public
+      // denial. The plain-JSON follow-up cannot upload the embed's attachment:// icon;
+      // the denial text carries the message, an acceptable trade for privacy.
+      const deliverLateDenialPrivately = async (payload: ChannelReplyPayload) => {
+        // editInteractionContentReply PATCHes the original response to plain content
+        // with embeds:[] and components:[], so it both materializes the original
+        // response and strips any denial embed/buttons in one call.
+        const neutralRes = await editInteractionContentReply(
+          applicationId,
+          interactionToken,
+          "This request was handled privately.",
+        ).catch((err) => {
+          runtime.error(`[router] channel neutralize failed: ${String(err)}`);
+          return undefined;
+        });
+        if (!neutralRes || !neutralRes.ok) {
+          runtime.error(
+            `[router] channel neutralize not accepted (${neutralRes ? neutralRes.status : "no response"}); withholding denial follow-up`,
+          );
+          return;
+        }
+        const body =
+          typeof payload === "string"
+            ? { content: payload, flags: 64 }
+            : { embeds: payload.embeds, flags: 64 };
+        await fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+          .then((resp) => {
+            if (!resp.ok) {
+              runtime.error(`[router] channel ephemeral followup failed (${resp.status})`);
+            }
+          })
+          .catch((err) =>
+            runtime.error(`[router] channel ephemeral followup failed: ${String(err)}`),
+          );
+      };
+      // The authorization lookup is async, so the defer (and the handler it
+      // precedes) runs inside a fire-and-forget IIFE; the enclosing dispatch
+      // handler stays synchronous like the other command branches.
+      void (async () => {
+        const channelAuthorized = await isAuthorizedForChannelCommand(
+          {
+            sub: subOpt?.name ?? null,
+            userId,
+            channelId: interactionChannelId,
+            isDM: !d.guild_id,
+            // args[0] is register's `owner` (unregister's `confirm` is irrelevant
+            // to the gate), so only a register on-behalf target is read here.
+            ownerArg: subOpt?.name === "register" ? args[0] : undefined,
+          },
+          channelCommandDeps,
+        );
+        const channelDeferEphemeral = channelAuthorized ? ephemeralFlags(interactionChannelId) : 64;
+        // True only when the preflight authorized AND the channel preference is
+        // public, i.e. the deferred reply is visible to the channel. In that state
+        // a late {ephemeral:true} reply (a denial from the handler's post-defer
+        // re-check) must NOT be edited into the public placeholder.
+        const deferredPublic = channelDeferEphemeral === 0;
+        try {
+          const deferResp = await fetch(
+            `${DISCORD_API}/interactions/${interactionId}/${interactionToken}/callback`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: 5, data: { flags: channelDeferEphemeral } }),
+            },
+          );
+          if (!deferResp.ok) {
+            runtime.error(`[router] channel defer failed (${deferResp.status})`);
+            return;
+          }
+        } catch (err) {
+          runtime.error(`[router] channel defer failed: ${String(err)}`);
+          return;
+        }
+        await handleChannelCommand(
+          {
+            subcommand: subOpt?.name ?? null,
+            args,
+            channelId: interactionChannelId,
+            userId,
+            isDM: !d.guild_id,
+            reply: (payload, opts) => {
+              // After a PUBLIC defer, a late permission denial must not land in the
+              // public placeholder. Only `opts.denied` marks a denial: every reply
+              // sets `ephemeral: true`, so ephemerality alone would misclassify a
+              // register/unregister SUCCESS as a denial and route it (and its
+              // "handled privately" note) through the private path. So key strictly
+              // off `denied`, and neutralize-then-follow-up (ordered inside the
+              // helper). Every other reply (success, informational, or an ephemeral
+              // defer where the placeholder is already private) edits in place.
+              if (deferredPublic && opts?.denied) {
+                void deliverLateDenialPrivately(payload);
+                return;
+              }
+              editDeferredReply(payload);
+            },
+          },
+          channelCommandDeps,
+        );
+      })();
     }
   }
 
@@ -1732,10 +1836,45 @@ export function handleComponentInteraction(ctx: GatewayContext, d: ComponentInte
         await editMessage(final);
         return;
       }
-      // cancelled / denied / notRegistered: a single message replacement. The
-      // interaction is already acked (type 6 above), so just edit the message (the
-      // editor uploads the embed's icon, which may differ from the one already on
-      // the message, e.g. the Log denial icon).
+      if (outcome.kind === "denied") {
+        // A permission denial must never land in the public confirmation message.
+        // The prompt is public when the channel preference is public, and a
+        // non-owner admin whose admin role was revoked between opening and clicking
+        // Confirm resolves to `denied` here. So neutralize the public message FIRST
+        // (replace the confirmation with a non-revealing note, dropping the
+        // buttons), and ONLY on a successful edit POST the denial as an ephemeral
+        // follow-up. If the neutralizing edit fails, withhold the follow-up rather
+        // than risk a public denial. (The plain-JSON follow-up cannot upload the
+        // embed icon; the denial text carries the message, an acceptable trade.)
+        const neutralRes = await editInteractionEmbedReply(applicationId, interactionToken, {
+          ...buildUnregisterNeutralUpdate(parsed.channelId),
+          components: [],
+        }).catch((err) => {
+          runtime.error(`[router] button neutralize failed: ${String(err)}`);
+          return undefined;
+        });
+        if (!neutralRes || !neutralRes.ok) {
+          runtime.error(
+            `[router] button neutralize not accepted (${neutralRes ? neutralRes.status : "no response"}); withholding denial follow-up`,
+          );
+          return;
+        }
+        await fetch(`${DISCORD_API}/webhooks/${applicationId}/${interactionToken}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ embeds: outcome.update.embeds, flags: 64 }),
+        })
+          .then((resp) => {
+            if (!resp.ok) {
+              runtime.error(`[router] button denial followup failed (${resp.status})`);
+            }
+          })
+          .catch((err) => runtime.error(`[router] button denial followup failed: ${String(err)}`));
+        return;
+      }
+      // cancelled / notRegistered: a single message replacement. The interaction is
+      // already acked (type 6 above), so just edit the message (the editor uploads
+      // the embed's icon, which may differ from the one already on the message).
       await editMessage(outcome.update);
     } finally {
       // Release the guard this handler claimed. For a confirm teardown this runs

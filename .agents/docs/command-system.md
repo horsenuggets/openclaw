@@ -91,18 +91,29 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   a reply's ephemerality at defer time and it cannot be changed afterward, any command
   that can deny must either authorize before its first interaction response or let the
   denial issue its own ephemeral defer; `/debug` (admin gate before the defer) and
-  `/channel` register/unregister (always-ephemeral defer, since their owner/admin gate
-  runs after the defer) both do this so a non-admin probe cannot publish a permission
-  embed to the channel. `/channel status` never denies, so it instead follows the
-  channel's `ephemeralCommands` preference like the conversational commands.
-  `buildPermissionDeniedEmbed` builds the Log-category embed; `denyInteractionEphemeral`
-  defers the interaction ephemerally (or skips the defer when the handler already deferred
-  ephemerally) and edits the embed into the reply. Two notice flavors feed it:
-  `buildUnauthorizedNoticeText` (channel-ownership denial, names the owner) and
-  `buildMissingPermissionText` (generic "you do not have the necessary permissions to use
-  `/<command>`" for globally gated commands). Plain-message denials reuse the same embed
-  builder, posted as a threaded reply instead of an ephemeral one. New slash commands get
-  this behavior by calling the shared helper rather than inventing their own denial.
+  `/channel` register/unregister (authorization now evaluated BEFORE the defer via
+  `isAuthorizedForChannelCommand`, so a denial forces an ephemeral defer while an
+  authorized caller defers on the preference) both do this so a non-admin probe cannot
+  publish a permission embed to the channel. For `/channel`, authorization is also
+  re-checked AFTER the defer (the owner/admin revalidation and the stale-registration
+  nonce guard, plus the unregister confirm-button click), so a role revoked in that window
+  could still produce a late denial on an already-public deferred reply. Those late
+  denials are marked with a `denied` flag on the reply (every `/channel` reply sets
+  `ephemeral`, so ephemerality alone cannot tell a denial from a success); only a `denied`
+  reply is rerouted. The reroute order is fixed: the public placeholder is first edited to
+  a neutral, embed-free note (which also strips any denial embed), and ONLY on a
+  successful edit is the denial posted as a separate EPHEMERAL follow-up (flags 64); a
+  failed neutralize withholds the follow-up rather than risk a public denial.
+  `/channel status` never denies, so it always follows the channel's `ephemeralCommands`
+  preference like the conversational commands. `buildPermissionDeniedEmbed` builds the
+  Log-category embed; `denyInteractionEphemeral` defers the interaction ephemerally (or
+  skips the defer when the handler already deferred ephemerally) and edits the embed into
+  the reply. Two notice flavors feed it: `buildUnauthorizedNoticeText` (channel-ownership
+  denial, names the owner) and `buildMissingPermissionText` (generic "you do not have the
+  necessary permissions to use `/<command>`" for globally gated commands). Plain-message
+  denials reuse the same embed builder, posted as a threaded reply instead of an ephemeral
+  one. New slash commands get this behavior by calling the shared helper rather than
+  inventing their own denial.
 - Conversing and the `/lifecycle`, `/secret`, and `/connections` commands are owner-gated
   by `isAuthorizedForChannel` (`router.ts`) » Only the registered channel owner (from
   `.onboarding.json`) may use them. `/connections available` is the exception: it lists
@@ -127,10 +138,11 @@ Both funnel through the raw Discord gateway handlers in `gateway-events.ts`...
   default on) controls whether slash-command OUTPUT is ephemeral.
   `/debug ephemeral [on|off]` reads/sets it; turning it off makes command results persist
   in-channel so they can be inspected during testing. It governs the conversational
-  command replies (`/debug`, `/lifecycle`, `/connections`, and `/channel status` output);
-  `/channel register` and `/channel unregister` stay always-ephemeral because their gate
-  runs after the defer (a public defer would leak a denial), and permission denials are
-  always ephemeral regardless.
+  command replies (`/debug`, `/lifecycle`, `/connections`, and all `/channel` subcommand
+  output, including `register` and `unregister`). Every `/channel` subcommand follows the
+  preference on SUCCESS now that authorization runs before the defer
+  (`isAuthorizedForChannelCommand`); only a permission denial is forced ephemeral
+  regardless, so it never leaks to a public channel.
 - Channel-registration gating » The router only converses in channels present in its
   `instances` map. Unregistered guild channels are silently ignored; unregistered DMs get
   a "this channel is not registered" notice.
