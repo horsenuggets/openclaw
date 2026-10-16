@@ -34,16 +34,18 @@ Work from a worktree so main stays clean. `scripts/prod-mirror.sh` computes its 
 its own location, so a `deploy` run from a worktree compiles that worktree's branch.
 
 1. Create the worktree and `cd` into it. The `post-checkout` hook auto-provisions it: it
-   copies the gitignored `.env`, `.env.mirror`, and `.prod-mirror/` from the main
-   worktree, runs `pnpm install --ignore-scripts`, and then `pnpm build` so the worktree
-   has its own `dist/`.
+   copies the gitignored `.env`, `.env.mirror`, and `.prod-mirror/` from the main worktree
+   and runs `pnpm install --ignore-scripts`. It does NOT build automatically (a build runs
+   branch-controlled tooling with those secrets present); run `pnpm build` yourself, or
+   set `OPENCLAW_WORKTREE_BUILD=1` when creating a worktree you trust to have the hook
+   build it. A build is needed before `pnpm check` (so oxlint can resolve
+   `openclaw/plugin-sdk`) and before any `deploy`.
 2. NEVER symlink `node_modules/` to the main checkout. pnpm wires each extension's
    `openclaw` package as a physical-path-relative symlink
    (`extensions/*/node_modules/openclaw -> ../../..`), so a symlinked `node_modules`
    resolves the `openclaw` package from MAIN's tree and the compiled binary silently ships
-   MAIN's code, not your branch's. Each worktree must keep its own real `node_modules`. If
-   the hook did not run (manual clone, or `OPENCLAW_SKIP_WORKTREE_BUILD=1`), run
-   `pnpm install && pnpm build` in the worktree itself.
+   MAIN's code, not your branch's. Each worktree must keep its own real `node_modules` and
+   its own `dist/` (run `pnpm install && pnpm build` in the worktree if the hook did not).
 3. If the hook did not copy them, copy the rig creds into the worktree (they live in the
    original checkout where `up` was run):
    `mkdir -p .prod-mirror && cp -p <main>/.prod-mirror/{id_rig,id_rig.pub,box.env} .prod-mirror/`

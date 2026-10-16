@@ -65,24 +65,31 @@ if [ ! -d node_modules ]; then
   fi
 fi
 
-# Build so the worktree has its own dist/. Two reasons this matters, both learned
-# the hard way:
-#   1. Type-aware oxlint resolves `openclaw/plugin-sdk` through the package exports
-#      map, which points only at the BUILT dist/plugin-sdk. Without dist/, a fresh
-#      worktree's `pnpm check` fails spuriously (PluginRuntime resolves to `any`).
-#   2. A missing dist/ tempts symlinking node_modules to the main worktree to
-#      "borrow" its build. Never do that: pnpm's extensions/*/node_modules/openclaw
-#      symlinks are physical-path-relative, so a symlinked node_modules makes the
-#      bundler resolve the openclaw package from MAIN's tree and ship main's code.
-# Trade-off: unlike the install above (which keeps --ignore-scripts so a re-added
-# worktree on an untrusted branch cannot run lifecycle scripts after we copied local
-# secrets in), building DOES execute this branch's build tooling. That is acceptable
-# for the normal case (your own branch, worktree you just created) and can be
-# skipped with OPENCLAW_SKIP_WORKTREE_BUILD=1 when adding a worktree you do not trust.
-if [ "$installed_now" = "1" ] && [ "${OPENCLAW_SKIP_WORKTREE_BUILD:-}" != "1" ] && [ ! -d dist/plugin-sdk ]; then
-  echo "post-checkout: building dist/ for the new worktree (pnpm build)..." >&2
-  CI=true pnpm build >/dev/null 2>&1 ||
-    echo "post-checkout: pnpm build failed; run 'pnpm build' before 'pnpm check'." >&2
+# A fresh worktree has no dist/. That matters because type-aware oxlint resolves
+# `openclaw/plugin-sdk` through the package exports map, which points only at the
+# BUILT dist/plugin-sdk — so `pnpm check` fails spuriously (PluginRuntime resolves
+# to `any`) until the worktree is built. It also tempts people to symlink
+# node_modules to the main worktree to "borrow" its build; never do that, because
+# pnpm's extensions/*/node_modules/openclaw symlinks are physical-path-relative, so
+# a symlinked node_modules makes the bundler resolve the openclaw package from
+# MAIN's tree and silently ship main's code.
+#
+# We do NOT build automatically: `pnpm build` runs this branch's build tooling
+# (tsdown config + scripts/*.ts), which — unlike the --ignore-scripts install
+# above — would execute branch-controlled code with the local secrets we just
+# copied in (.env, .env.mirror, .prod-mirror). On a worktree holding an untrusted
+# branch that is a code-execution risk. So building stays an explicit opt-in:
+# set OPENCLAW_WORKTREE_BUILD=1 when you trust the branch; otherwise we just print
+# the one command to run yourself.
+if [ "$installed_now" = "1" ] && [ ! -d dist/plugin-sdk ]; then
+  if [ "${OPENCLAW_WORKTREE_BUILD:-}" = "1" ]; then
+    echo "post-checkout: building dist/ for the new worktree (pnpm build)..." >&2
+    CI=true pnpm build >/dev/null 2>&1 ||
+      echo "post-checkout: pnpm build failed; run 'pnpm build' before 'pnpm check'." >&2
+  else
+    echo "post-checkout: run 'pnpm build' before 'pnpm check' (needed for oxlint to resolve" >&2
+    echo "  openclaw/plugin-sdk types). Never symlink node_modules to another worktree." >&2
+  fi
 fi
 
 # Never block worktree creation on provisioning results.
