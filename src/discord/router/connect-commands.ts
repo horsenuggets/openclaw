@@ -25,7 +25,7 @@ import { buildEmbed } from "./embed-categories.js";
 import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
 import { type SubcommandEntry, buildSubcommandHelpEmbeds } from "./subcommand-fields.js";
 
-export type ConnectSubcommand = "list" | "add" | "remove" | "available" | "info";
+export type ConnectSubcommand = "list" | "add" | "remove" | "available" | "info" | "help";
 
 /** Service choices for the slash command, built from the catalog. */
 const SERVICE_CHOICES = connectorRegistry.all().map((c) => ({ name: c.label, value: c.id }));
@@ -40,6 +40,7 @@ export const CONNECTIONS_COMMAND_SPEC = {
   // otherwise read or change the channel owner's stored credentials.
   contexts: [0, 1],
   options: [
+    { name: "help", description: "Show the list of /connections subcommands", type: 1 },
     { name: "list", description: "Show your linked accounts and their status", type: 1 },
     { name: "available", description: "List every service you can link", type: 1 },
     {
@@ -317,9 +318,7 @@ function statusGlyph(status: ConnectionStatus, emoji: ConnectionEmoji): string {
 }
 
 const LIST_TITLE = "Your Connections";
-const LIST_DESCRIPTION =
-  "Below are accounts linked to this channel's agent. You can use the following " +
-  "subcommands to manage your connections...";
+const LIST_DESCRIPTION = "Below are accounts linked to this channel's agent...";
 
 const LIST_EMPTY = "You have not linked any accounts yet.";
 
@@ -334,6 +333,7 @@ const HELP_TITLE = "Connections Subcommands";
 const SUBCOMMAND_ENTRIES: readonly SubcommandEntry[] = [
   { usage: "add <service>", description: "Connect a new service." },
   { usage: "available", description: "List out available services you can connect to." },
+  { usage: "help", description: "Displays this help message." },
   { usage: "info <service>", description: "Get info about a service." },
   { usage: "list", description: "List your currently-linked accounts." },
   { usage: "remove <service>", description: "Remove a service." },
@@ -545,10 +545,10 @@ export async function handleConnectCommand(
   ctx: ConnectCommandContext,
   deps: ConnectCommandDeps,
 ): Promise<void> {
-  // A bare `/connections` (no subcommand) shows the Connections Subcommands help,
-  // exactly parallel to a bare `/debug`. Only an explicit subcommand runs below.
+  // A bare `/connections` (no subcommand) and `/connections help` both show the
+  // Connections Subcommands help, exactly parallel to `/debug` and `/debug help`.
   const sub = ctx.subcommand?.toLowerCase() ?? null;
-  if (sub === null || sub === "") {
+  if (sub === null || sub === "" || sub === "help") {
     await ctx.reply(helpReply(), { ephemeral: true });
     return;
   }

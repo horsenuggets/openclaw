@@ -372,10 +372,7 @@ describe("handleConnectCommand list", () => {
     // Collapses to a single embed now that the subcommand previews no longer live here.
     expect(embeds).toHaveLength(1);
     expect(embeds[0].title).toBe("Your Connections");
-    expect(embeds[0].description).toBe(
-      "Below are accounts linked to this channel's agent. You can use the following " +
-        "subcommands to manage your connections...",
-    );
+    expect(embeds[0].description).toBe("Below are accounts linked to this channel's agent...");
     // The subcommand list is NO LONGER shown under /connections list.
     const names = (embeds[0].fields ?? []).map((f) => f.name);
     expect(names).not.toContain("`/connections add <service>`");
@@ -540,15 +537,25 @@ describe("handleConnectCommand list", () => {
     expect(embeds[0].description).toBe(
       "Below are all of the currently-registered subcommands under the `/connections` command...",
     );
-    // All five subcommands are listed, debug-help style.
+    // All six subcommands are listed, debug-help style (alphabetical).
     const names = (embeds[0].fields ?? []).map((f) => f.name);
     expect(names).toEqual([
       "`/connections add <service>`",
       "`/connections available`",
+      "`/connections help`",
       "`/connections info <service>`",
       "`/connections list`",
       "`/connections remove <service>`",
     ]);
+    expect(replies[0].ephemeral).toBe(true);
+  });
+
+  it("renders the Connections Subcommands help for an explicit /connections help", async () => {
+    const { ctx, replies } = makeCtx("help");
+    await handleConnectCommand(ctx, makeDeps());
+    const embed = embedsOf(replies[0].payload)[0];
+    expect(embed.title).toBe("Connections Subcommands");
+    expect((embed.fields ?? []).map((f) => f.name)).toContain("`/connections help`");
     expect(replies[0].ephemeral).toBe(true);
   });
 });
