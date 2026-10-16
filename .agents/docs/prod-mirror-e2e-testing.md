@@ -31,15 +31,23 @@ relevant values are...
 ## Setup
 
 Work from a worktree so main stays clean. `scripts/prod-mirror.sh` computes its root from
-its own location, so a `deploy --build` run from a worktree compiles that worktree's
-branch.
+its own location, so a `deploy` run from a worktree compiles that worktree's branch.
 
-1. Create the worktree and `cd` into it.
-2. Symlink `node_modules/` to the main checkout's (worktrees have none, and a build needs
-   it; a non-fork prettier can also corrupt markdown):
-   `ln -s <main>/node_modules node_modules`.
-3. Copy the rig creds into the worktree (they live in the original checkout where `up` was
-   run):
+1. Create the worktree and `cd` into it. The `post-checkout` hook auto-provisions it: it
+   copies the gitignored `.env`, `.env.mirror`, and `.prod-mirror/` from the main worktree
+   and runs `pnpm install --ignore-scripts`. It does NOT build automatically (a build runs
+   branch-controlled tooling with those secrets present); run `pnpm build` yourself, or
+   set `OPENCLAW_WORKTREE_BUILD=1` when creating a worktree you trust to have the hook
+   build it. A build is needed before `pnpm check` (so oxlint can resolve
+   `openclaw/plugin-sdk`) and before any `deploy`.
+2. NEVER symlink `node_modules/` to the main checkout. pnpm wires each extension's
+   `openclaw` package as a physical-path-relative symlink
+   (`extensions/*/node_modules/openclaw -> ../../..`), so a symlinked `node_modules`
+   resolves the `openclaw` package from MAIN's tree and the compiled binary silently ships
+   MAIN's code, not your branch's. Each worktree must keep its own real `node_modules` and
+   its own `dist/` (run `pnpm install && pnpm build` in the worktree if the hook did not).
+3. If the hook did not copy them, copy the rig creds into the worktree (they live in the
+   original checkout where `up` was run):
    `mkdir -p .prod-mirror && cp -p <main>/.prod-mirror/{id_rig,id_rig.pub,box.env} .prod-mirror/`
    then `chmod 600 .prod-mirror/id_rig .prod-mirror/box.env`.
 4. Check `box.env` has a non-empty `OPENCLAW_MOCK_USER_BOT_ID`. This is the big gotcha:
@@ -51,9 +59,17 @@ branch.
 
 ## Deploy the Branch
 
-Run `./scripts/prod-mirror.sh deploy --build` from the worktree. It recompiles the four
-linux binaries, redeploys over the box's sshd, and restarts the router and provisioner.
-Confirm the compile log shows the worktree path.
+Run `./scripts/prod-mirror.sh deploy` from the worktree. It recompiles the four linux
+binaries from the current source by default, redeploys over the box's sshd, and restarts
+the router and provisioner. Confirm the compile log shows the worktree path.
+
+Recompiling is the default on purpose: a plain `deploy` must never resurrect a stale
+`dist/` artifact on top of edited code (that previously shipped old binaries and made live
+tests run code that did not match the working tree). After a deploy, confirm the shipped
+binary actually carries your change by grepping it for a unique marker:
+`docker exec openclaw-prod-mirror sh -lc 'grep -c "<a unique string from your edit>" /root/deploy/bin/openclaw'`
+(expect a non-zero count). Markers can live in split bundle chunks, so grep the compiled
+`dist/*-linux-<arch>` binary, not just `dist/entry.js`.
 
 A deploy stops and recreates every registered `agents.channel-*` container with the new
 binary (`setup.sh` removes all containers, `boot.sh` brings each channel back up), so
@@ -63,10 +79,12 @@ workspace keeps its OLD templates (e.g. `SOUL.md`). To exercise a template or ot
 workspace-file change, register a FRESH channel (or delete that file from the channel's
 workspace so it gets re-seeded).
 
-If you only changed env (e.g. adding `OPENCLAW_MOCK_USER_BOT_ID` to `box.env`), skip
-`--build` and run `deploy` alone » It reuses the binaries and skips only compilation; it
-still runs the full `setup.sh` teardown (every container stopped and removed, then
-recreated), the same full-stack interruption as any deploy, just faster. Verify:
+If you only changed env (e.g. adding `OPENCLAW_MOCK_USER_BOT_ID` to `box.env`) and the
+`dist/*-linux-<arch>` binaries are already current, run `deploy --reuse` » It ships the
+existing binaries and skips compilation; it still runs the full `setup.sh` teardown (every
+container stopped and removed, then recreated), the same full-stack interruption as any
+deploy, just faster. Only use `--reuse` when you are sure `dist/` matches the source you
+want on the box. Verify:
 
 ```bash
 docker exec openclaw-prod-mirror docker inspect services.discord-router \
@@ -178,5 +196,12 @@ read their ids from env; see `.agents/docs/lab-server.md` for the full workflow.
   model (`~/deploy/models/ggml-base.en.bin`) are provisioned, so on Apple Silicon (no
   linux-arm64 whisper build) the container simply does not start. Voice transcription is
   absent until you stage both artifacts; the box is no longer degraded by a crash loop.
+- Do NOT `docker cp` a binary into the box's `/root/deploy/bin/` to "quickly" update it.
+  That copy is transient: any later `up`/`deploy` overwrites it, and because the agent and
+  router containers bind-mount those binaries, replacing the file creates a new inode a
+  running container will not pick up until it is RECREATED (a plain `docker restart` is
+  not enough). The supported way to update rig binaries is `deploy` (which recompiles by
+  default). If you must hand-place a binary for a one-off, recreate the affected container
+  afterward and expect the next deploy to replace it.
 - Leave the test channel in place as evidence. Do not auto-delete channels or driver
   scripts after a run.

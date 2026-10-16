@@ -6,6 +6,18 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Prod-mirror rig tooling: stop live tests from running stale code.
+  `scripts/prod-mirror.sh deploy`/`up` now recompile from the current source by default
+  (the old behavior silently reused whatever `dist/*-linux-<arch>` was on disk, shipping
+  outdated binaries); pass `--reuse` to ship the existing `dist/` as-is. The
+  `post-checkout` worktree hook now warns that you must `pnpm build` before `pnpm check`
+  (type-aware oxlint needs the built `plugin-sdk`) and builds automatically only when you
+  opt in with `OPENCLAW_WORKTREE_BUILD=1` (a build runs branch-controlled tooling with the
+  copied secrets present, so it stays off by default like the hook's `--ignore-scripts`
+  install). Documented the gotchas (never symlink a worktree's `node_modules` to the main
+  checkout — it makes the bundler resolve the `openclaw` package from main and ship main's
+  code; `docker cp` into the box is transient) in
+  `.agents/docs/prod-mirror-e2e-testing.md`.
 - Discord router: authorize container-proxy sends so one agent box cannot drive the shared
   bot into another instance's destination. Every box can reach the proxy over the agent
   bridge, and it sends with the router's bot token, so the `/discord/send` endpoint now

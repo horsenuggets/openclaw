@@ -9,8 +9,9 @@
 # channel from Discord and chat in a real channel.
 #
 # Usage:
-#   scripts/prod-mirror.sh up [--live] [--build]  # build, start box, deploy, run provisioner
-#   scripts/prod-mirror.sh deploy [--build] # re-run deploy into a running box (after code changes)
+#   scripts/prod-mirror.sh up [--live] [--reuse]  # build, start box, deploy, run provisioner
+#   scripts/prod-mirror.sh deploy [--reuse] # re-run deploy into a running box (after code changes)
+#     (deploy recompiles from source by default; pass --reuse to ship the existing dist/ as-is)
 #   scripts/prod-mirror.sh register <id>    # openclawctl add-channel <id> (solo test, no Discord)
 #   scripts/prod-mirror.sh mint             # mint a subscription token into the box (browser)
 #   scripts/prod-mirror.sh inner <args...>  # run a docker command inside the box
@@ -175,18 +176,26 @@ require_mock_user_bot_id() {
   die "box.env sets a Discord token but leaves OPENCLAW_MOCK_USER_BOT_ID blank, so the router would drop the OpenClawMockUser bot's chat as an untrusted bot and onboarding would re-fire forever. Add OPENCLAW_MOCK_USER_BOT_ID to \".env.mirror\" and re-run (a copied box.env can be stale and predate it)."
 }
 
-# $1: "build" to force a recompile, anything else to reuse existing binaries.
+# $1: "reuse" to ship the existing dist/*-linux-$ARCH binaries as-is; anything
+# else (the default) recompiles from the current source. Recompiling is the safe
+# default on purpose: a plain deploy must never silently resurrect a stale dist/
+# artifact on top of freshly-edited code, which previously shipped old binaries
+# and made live tests run code that did not match the working tree. Opt into the
+# fast reuse path with `--reuse` only when you know dist/ is current.
 run_deploy() {
-  local force_build="${1:-}"
+  local mode="${1:-build}"
   require_mock_user_bot_id
   local skip=()
-  if [ "$force_build" != "build" ] &&
-    [ -x "$ROOT_DIR/dist/openclaw-linux-$ARCH" ] &&
-    [ -x "$ROOT_DIR/dist/discord-router-linux-$ARCH" ] &&
-    [ -x "$ROOT_DIR/dist/health-monitor-linux-$ARCH" ] &&
-    [ -x "$ROOT_DIR/dist/provisioner-linux-$ARCH" ]; then
-    skip=(--skip-compile)
-    echo "Reusing existing dist/*-linux-$ARCH binaries (pass 'deploy --build' to recompile)."
+  if [ "$mode" = "reuse" ]; then
+    if [ -x "$ROOT_DIR/dist/openclaw-linux-$ARCH" ] &&
+      [ -x "$ROOT_DIR/dist/discord-router-linux-$ARCH" ] &&
+      [ -x "$ROOT_DIR/dist/health-monitor-linux-$ARCH" ] &&
+      [ -x "$ROOT_DIR/dist/provisioner-linux-$ARCH" ]; then
+      skip=(--skip-compile)
+      echo "Reusing existing dist/*-linux-$ARCH binaries (--reuse)."
+    else
+      echo "--reuse requested but dist/*-linux-$ARCH is incomplete; compiling instead." >&2
+    fi
   fi
   OPENCLAW_DEPLOY_HOST="root@localhost" \
     OPENCLAW_DEPLOY_PORT="$SSH_PORT" \
@@ -237,12 +246,14 @@ start_provisioner() {
 }
 
 cmd_up() {
-  local live="" build=""
+  local live="" mode="build"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --live) live=1 ;;
-      --build) build="build" ;;
-      *) die "unknown 'up' flag: $1 (use --live and/or --build)" ;;
+      --reuse) mode="reuse" ;;
+      # Back-compat no-op: compiling is the default now.
+      --build) mode="build" ;;
+      *) die "unknown 'up' flag: $1 (use --live and/or --reuse)" ;;
     esac
     shift
   done
@@ -285,7 +296,7 @@ cmd_up() {
     -e AUTHORIZED_KEY="$(cat "$KEY.pub")" "$IMAGE" >/dev/null
   wait_ready || { echo "box did not become ready; see: scripts/prod-mirror.sh logs" >&2; exit 1; }
 
-  run_deploy "$build"
+  run_deploy "$mode"
   start_provisioner
   echo ""
   echo "Box up. Inner containers: scripts/prod-mirror.sh ps"
@@ -293,13 +304,22 @@ cmd_up() {
 }
 
 cmd_deploy() {
-  local build=""
-  [ "${1:-}" = "--build" ] && build="build"
+  local mode="build"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --reuse) mode="reuse" ;;
+      # Back-compat no-op: compiling is now the default, so --build is redundant
+      # but still accepted so existing muscle memory / scripts keep working.
+      --build) mode="build" ;;
+      *) die "unknown 'deploy' flag: $1 (use --reuse to ship the existing dist/)" ;;
+    esac
+    shift
+  done
   require_docker
   docker inspect "$CONTAINER" >/dev/null 2>&1 || die "box not running; run 'up' first."
   # Reuse whatever the last box.env had; rebuild offline from repo if missing.
   [ -f "$BOX_ENV" ] || build_box_env "offline"
-  run_deploy "$build"
+  run_deploy "$mode"
   start_provisioner
 }
 
@@ -360,7 +380,7 @@ main() {
     sh) cmd_sh "$@" ;;
     down) cmd_down "$@" ;;
     *)
-      echo "usage: $0 {up [--live] [--build]|deploy [--build]|register <id>|mint|inner <args>|ps|logs [name]|sh|down [--clean]}" >&2
+      echo "usage: $0 {up [--live] [--reuse]|deploy [--reuse]|register <id>|mint|inner <args>|ps|logs [name]|sh|down [--clean]}" >&2
       exit 1
       ;;
   esac
