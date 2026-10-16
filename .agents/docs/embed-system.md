@@ -38,12 +38,16 @@ repeated-header fields under the 1024 cap, truncating any single over-long line 
 ellipsis.
 
 `buildSubcommandHelpEmbeds` (`subcommand-fields.ts`) is the shared "subcommand help"
-builder: given a category, title (`"<X> Subcommands"`), command name, and subcommand
-entries, it sets the title, uses `subcommandHelpDescription(command)` (the shared
-`Below are all of the currently-registered subcommands under the \`<command>\`
-command...`sentence) as the description, renders one field per entry via`buildSubcommandFields`, and packs via `buildPaginatedEmbeds`. Both `/debug`and`/connections`render their help through it so the structure never diverges.`buildDebugHelpEmbeds` (`debug-command.ts`) delegates to it (alphabetically sorted entries); a bare `/debug`(no subcommand) shows this "Debug Subcommands" help. A bare`/connections`
-(no subcommand) shows the parallel "Connections Subcommands" help (the five subcommands
-add/available/info/list/remove in authored order).
+builder: given a category, a title (the "X Subcommands" heading), a command name, and the
+subcommand entries, it sets the title, uses `subcommandHelpDescription(command)` for the
+description (the shared "Below are all of the currently-registered subcommands under the
+command..." sentence, parameterized by command name), renders one field per entry via
+`buildSubcommandFields`, and packs via `buildPaginatedEmbeds`. Both commands render their
+help through it so the structure never diverges. `buildDebugHelpEmbeds`
+(`debug-command.ts`) delegates to it with alphabetically sorted entries, and a bare
+`/debug` (no subcommand) shows this "Debug Subcommands" help. A bare `/connections` (no
+subcommand) shows the parallel "Connections Subcommands" help, listing the five
+subcommands (add, available, info, list, remove) in authored order.
 
 `listReply` (`connect-commands.ts`) now renders `/connections list` as a SINGLE embed
 carrying only the connection data: the title, description, a "Currently Connected"
