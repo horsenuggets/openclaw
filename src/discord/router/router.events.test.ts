@@ -500,7 +500,9 @@ describe("discord router channel-delete cleanup", () => {
     };
     const avail = payload.embeds?.[0].fields?.find((f) => f.name === "Available Services");
     expect(avail?.value).toContain("`google` \u2192 Google");
-    expect(payload.embeds?.[0].description).not.toContain("not authorized");
+    // `/connections available` is a bare field-only embed (no description), so there
+    // is nothing to carry an authorization-denial note.
+    expect(payload.embeds?.[0].description ?? "").not.toContain("not authorized");
   });
 
   it("subjects an owner-gated bot to the ownership denial instead of bypassing it", async () => {
