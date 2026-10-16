@@ -355,7 +355,7 @@ describe("handleConnectCommand list", () => {
     expect(services).not.toContain("Notion");
   });
 
-  it("shows the subcommand previews, a Currently Connected count, and a legend", async () => {
+  it("shows the data (count, legend, services) in one embed with NO subcommand fields", async () => {
     const seed: DisplayConnection[] = [
       { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
       {
@@ -369,18 +369,16 @@ describe("handleConnectCommand list", () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
     const embeds = embedsOf(replies[0].payload);
-    // Default layout is two embeds: a header embed and a content embed.
-    expect(embeds).toHaveLength(2);
+    // Collapses to a single embed now that the subcommand previews no longer live here.
+    expect(embeds).toHaveLength(1);
     expect(embeds[0].title).toBe("Your Connections");
-    expect(embeds[0].description).not.toContain("```"); // no markdown code block anymore
-    // Embed 1 advertises every /connections subcommand, debug-help style.
-    const subNames = (embeds[0].fields ?? []).map((f) => f.name);
-    expect(subNames).toContain("`/connections add <service>`");
-    expect(subNames).toContain("`/connections available`");
-    expect(subNames).toContain("`/connections info <service>`");
-    expect(subNames).toContain("`/connections list`");
-    expect(subNames).toContain("`/connections remove <service>`");
-    // Embed 2 carries the count (2 of 3 shown are linked) and a full legend.
+    expect(embeds[0].description).toBe("Below are accounts linked to this channel's agent...");
+    // The subcommand list is NO LONGER shown under /connections list.
+    const names = (embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).not.toContain("`/connections add <service>`");
+    expect(names).not.toContain("`/connections list`");
+    expect(names).not.toContain("`/connections remove <service>`");
+    // The single embed carries the count (2 of 3 shown are linked) and a full legend.
     expect(fieldNamed(replies[0].payload, "Currently Connected")).toBe("`2/3`");
     const legend = fieldNamed(replies[0].payload, "Legend") ?? "";
     expect(legend).toContain('"Connected!"');
@@ -452,12 +450,11 @@ describe("handleConnectCommand list", () => {
       }),
     );
     const embeds = embedsOf(replies[0].payload);
-    expect(embeds.length).toBeGreaterThan(1);
-    // Header embed first (no footer), footer on the last embed.
+    // Title on the first embed and footer on the last (now that the subcommand
+    // previews no longer force a second embed, these 60 services pack into one).
     expect(embeds[0].title).toBe("Your Connections");
-    expect(embeds[0].footer).toBeUndefined();
     expect(embeds[embeds.length - 1].footer?.text).toBe("Connections");
-    // The Services list is chunked into more than one repeated-header field.
+    // The Services list is still chunked into more than one repeated-header field.
     const serviceFields = embeds
       .flatMap((e) => e.fields ?? [])
       .filter((f) => f.name === "Services");
@@ -514,34 +511,52 @@ describe("handleConnectCommand list", () => {
     expect(legend).toContain('"Pinging..." \u2192 <:bluecheckempty:2>');
   });
 
-  it("shows a friendly note plus the subcommands in one embed when nothing is linked", async () => {
+  it("shows a friendly note in one embed with NO subcommand list when nothing is linked", async () => {
     const { ctx, replies } = makeCtx("list");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
     const embeds = embedsOf(replies[0].payload);
-    // A single embed when empty (no content embed to split to).
+    // A single embed when empty.
     expect(embeds).toHaveLength(1);
     expect(embeds[0].title).toBe("Your Connections");
-    expect(embeds[0].description).toContain("not linked any accounts yet");
-    expect(embeds[0].description).toContain("currently-registered subcommands");
-    // Shows every subcommand, debug-help style.
+    expect(embeds[0].description).toBe("You have not linked any accounts yet.");
+    // No subcommand list here anymore (it lives under a bare /connections).
     const names = (embeds[0].fields ?? []).map((f) => f.name);
-    expect(names).toContain("`/connections add <service>`");
-    expect(names).toContain("`/connections available`");
-    expect(names).toContain("`/connections info <service>`");
-    expect(names).toContain("`/connections list`");
-    expect(names).toContain("`/connections remove <service>`");
+    expect(names).not.toContain("`/connections add <service>`");
+    expect(names).not.toContain("`/connections list`");
     // No services/legend/count when there is nothing to list.
     expect(names).not.toContain("Services");
     expect(names).not.toContain("Currently Connected");
   });
 
-  it("defaults a null subcommand to list", async () => {
-    const seed: StoredConnection[] = [
-      { connectorId: "todoist", status: "linked", token: "t", linkedAt: "2026-01-01T00:00:00Z" },
-    ];
+  it("renders the Connections Subcommands help for a bare (null) /connections", async () => {
     const { ctx, replies } = makeCtx(null);
-    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, seed).store }));
-    expect(embedOf(replies[0].payload).title).toBe("Your Connections");
+    await handleConnectCommand(ctx, makeDeps({ store: makeStore(true, []).store }));
+    const embeds = embedsOf(replies[0].payload);
+    expect(embeds).toHaveLength(1);
+    expect(embeds[0].title).toBe("Connections Subcommands");
+    expect(embeds[0].description).toBe(
+      "Below are all of the currently-registered subcommands under the `/connections` command...",
+    );
+    // All six subcommands are listed, debug-help style (alphabetical).
+    const names = (embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).toEqual([
+      "`/connections add <service>`",
+      "`/connections available`",
+      "`/connections help`",
+      "`/connections info <service>`",
+      "`/connections list`",
+      "`/connections remove <service>`",
+    ]);
+    expect(replies[0].ephemeral).toBe(true);
+  });
+
+  it("renders the Connections Subcommands help for an explicit /connections help", async () => {
+    const { ctx, replies } = makeCtx("help");
+    await handleConnectCommand(ctx, makeDeps());
+    const embed = embedsOf(replies[0].payload)[0];
+    expect(embed.title).toBe("Connections Subcommands");
+    expect((embed.fields ?? []).map((f) => f.name)).toContain("`/connections help`");
+    expect(replies[0].ephemeral).toBe(true);
   });
 });
 

@@ -27,9 +27,8 @@ import {
   getConnFlowScenario,
 } from "./connflow-preview.js";
 import { buildEmbed } from "./embed-categories.js";
-import { buildPaginatedEmbeds } from "./embed-pagination.js";
 import { sanitizeSecretName } from "./secret-command.js";
-import { buildSubcommandFields } from "./subcommand-fields.js";
+import { buildSubcommandHelpEmbeds } from "./subcommand-fields.js";
 
 /** Upper bound for a user-echoed subcommand name in a notice embed. */
 const MAX_ECHOED_NAME_CHARS = 64;
@@ -37,12 +36,6 @@ const MAX_ECHOED_NAME_CHARS = 64;
 const MAX_CONTENT_CHARS = 2000;
 
 const HELP_TITLE = "Debug Subcommands";
-const HELP_DESCRIPTION =
-  "Below are all of the currently-registered subcommands under the `/debug` command...";
-const TRUNCATION_FIELD: DiscordEmbedField = {
-  name: "...",
-  value: "Some subcommands were omitted because the list exceeded Discord's message limit.",
-};
 
 /** Slash-command registration body for Discord. */
 export const DEBUG_COMMAND_SPEC = {
@@ -233,25 +226,21 @@ function debugNotice(description: string): DebugResult {
  * embeds carry only fields, and the last embed carries the footer and timestamp.
  * Every embed shares the category color, and only the footer-bearing last embed
  * references the icon, so one attachment is returned.
+ *
+ * Delegates to the shared {@link buildSubcommandHelpEmbeds}: `/debug` and
+ * `/connections` render their help through one builder so the structure never
+ * diverges. Subcommands are sorted alphabetically here first (the shared helper
+ * preserves input order, so the sort is the caller's job).
  */
 export function buildDebugHelpEmbeds(subcommands: DebugSubcommand[]): {
   embeds: DiscordEmbed[];
   attachments: string[];
 } {
-  // One field per subcommand (``usage`` as the name, description as the value),
-  // clamped to the per-field caps, then packed across embeds by the shared builder.
-  // Sort alphabetically first, then let the shared helper render each field (the
-  // helper preserves input order, so the sort is the caller's job).
-  const fields = buildSubcommandFields(
-    "/debug",
-    subcommands.toSorted((a, b) => a.name.localeCompare(b.name)),
-  );
-  return buildPaginatedEmbeds({
+  return buildSubcommandHelpEmbeds({
     category: "debug",
     title: HELP_TITLE,
-    description: HELP_DESCRIPTION,
-    groups: [fields],
-    truncationField: TRUNCATION_FIELD,
+    command: "/debug",
+    entries: subcommands.toSorted((a, b) => a.name.localeCompare(b.name)),
   });
 }
 

@@ -174,9 +174,11 @@ function reskinToDebug(
 
 /**
  * Run `tokens` (a parsed `/connections` subcommand plus its args) against the
- * scenario and return the Debug-skinned embeds. `emoji` should be the sender's
- * resolved connection glyphs so the preview matches what users see; it falls back
- * to the unicode defaults.
+ * scenario and return the Debug-skinned embeds. An empty `tokens` passes a null
+ * subcommand, so a bare `/debug connflow <n>` renders the Connections Subcommands
+ * help (re-skinned to Debug) just like a bare `/connections`. `emoji` should be the
+ * sender's resolved connection glyphs so the preview matches what users see; it
+ * falls back to the unicode defaults.
  */
 export async function simulateConnFlow(input: {
   scenario: ConnFlowScenario;
@@ -189,7 +191,10 @@ export async function simulateConnFlow(input: {
   const capturedComponents: DiscordActionRow[] = [];
   await handleConnectCommand(
     {
-      subcommand: tokens[0] ?? "list",
+      // Pass the real subcommand through (null when none was given) so a bare
+      // `/debug connflow <n>` mirrors the new bare-`/connections` behavior and
+      // renders the Connections Subcommands help, re-skinned to Debug.
+      subcommand: tokens[0] ?? null,
       args: tokens.slice(1),
       channelId: "connflow-preview-channel",
       userId: "connflow-preview-user",

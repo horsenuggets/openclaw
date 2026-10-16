@@ -14,6 +14,7 @@ import {
   tokenizeDebugCommand,
 } from "./debug-command.js";
 import { sanitizeSecretName } from "./secret-command.js";
+import { subcommandHelpDescription } from "./subcommand-fields.js";
 
 /** Discord counts this combined text against the shared 6000-char message cap. */
 function messageChars(embeds: DiscordEmbed[]): number {
@@ -368,6 +369,16 @@ describe("buildDebugHelpEmbeds", () => {
     ];
     const { embeds } = buildDebugHelpEmbeds(subs);
     expect((embeds[0].fields ?? []).map((f) => f.name)).toEqual(["`/debug alpha`", "`/debug zed`"]);
+  });
+
+  it("renders the shared help description sentence for /debug (unchanged by the extraction)", () => {
+    // buildDebugHelpEmbeds now delegates to the shared buildSubcommandHelpEmbeds; pin
+    // that the exact `/debug` sentence still renders and matches the shared helper.
+    const { embeds } = buildDebugHelpEmbeds(DEBUG_SUBCOMMANDS);
+    expect(embeds[0].description).toBe(subcommandHelpDescription("/debug"));
+    expect(embeds[0].description).toBe(
+      "Below are all of the currently-registered subcommands under the `/debug` command...",
+    );
   });
 });
 

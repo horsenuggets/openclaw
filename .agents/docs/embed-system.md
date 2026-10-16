@@ -37,19 +37,30 @@ clamped to their Discord caps, so a caller can never emit a payload Discord reje
 repeated-header fields under the 1024 cap, truncating any single over-long line with an
 ellipsis.
 
-`buildDebugHelpEmbeds` (`debug-command.ts`) calls it with one group (the subcommand
-fields). `listReply` (`connect-commands.ts`) calls it with two groups, so
-`/connections list` is two embeds by default: the first carries the title, description,
-and the `/conn` subcommand previews (debug-help field style); the second carries a
-"Currently Connected" `connected/total` count, a status "Legend" (one `"Label" -> glyph`
-line for each of the three live statuses), and the "Services" list, where each line is
-`glyph name` (the status shown by the glyph and decoded by the Legend). A long Services
-list is chunked under the 1024 cap into several repeated-header Services fields on the
-second embed, and if the shared message budget is exhausted a truncation note is appended.
-Over-long service names are truncated to 20 chars with an ellipsis. Only services in a
-live state (linked, re-auth needed, or a transient ping) appear; coming-soon connectors
-never do. When nothing is linked, a single embed shows a friendly note plus the subcommand
-previews.
+`buildSubcommandHelpEmbeds` (`subcommand-fields.ts`) is the shared "subcommand help"
+builder: given a category, a title (the "X Subcommands" heading), a command name, and the
+subcommand entries, it sets the title, uses `subcommandHelpDescription(command)` for the
+description (the shared "Below are all of the currently-registered subcommands under the
+command..." sentence, parameterized by command name), renders one field per entry via
+`buildSubcommandFields`, and packs via `buildPaginatedEmbeds`. Both commands render their
+help through it so the structure never diverges. `buildDebugHelpEmbeds`
+(`debug-command.ts`) delegates to it with alphabetically sorted entries, and a bare
+`/debug` (no subcommand) shows this "Debug Subcommands" help. A bare `/connections` (no
+subcommand) shows the parallel "Connections Subcommands" help, listing the five
+subcommands (add, available, info, list, remove) in authored order.
+
+`listReply` (`connect-commands.ts`) now renders `/connections list` as a SINGLE embed
+carrying only the connection data: the title, description, a "Currently Connected"
+`connected/total` count, a status "Legend" (one `"Label" -> glyph` line for each of the
+three live statuses), and the "Services" list, where each line is `glyph name` (the status
+shown by the glyph and decoded by the Legend). The subcommand previews no longer appear
+here (they live under a bare `/connections`), so there is no forced second embed; a long
+Services list still spills onto further embeds only if it overflows Discord's caps,
+chunked under the 1024 cap into several repeated-header Services fields, with a truncation
+note appended if the shared message budget is exhausted. Over-long service names are
+truncated to 20 chars with an ellipsis. Only services in a live state (linked, re-auth
+needed, or a transient ping) appear; coming-soon connectors never do. When nothing is
+linked, a single embed shows a friendly note with no subcommand list.
 
 ## Icon Assets
 

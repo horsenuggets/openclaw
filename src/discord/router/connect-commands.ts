@@ -23,9 +23,9 @@ import type { ConnectionStatus, DisplayConnection, StoredConnection } from "./co
 import { type Connector, type ConnectorRegistry, connectorRegistry } from "./connectors.js";
 import { buildEmbed } from "./embed-categories.js";
 import { buildPaginatedEmbeds, chunkLinesIntoFields } from "./embed-pagination.js";
-import { buildSubcommandFields } from "./subcommand-fields.js";
+import { type SubcommandEntry, buildSubcommandHelpEmbeds } from "./subcommand-fields.js";
 
-export type ConnectSubcommand = "list" | "add" | "remove" | "available" | "info";
+export type ConnectSubcommand = "list" | "add" | "remove" | "available" | "info" | "help";
 
 /** Service choices for the slash command, built from the catalog. */
 const SERVICE_CHOICES = connectorRegistry.all().map((c) => ({ name: c.label, value: c.id }));
@@ -40,6 +40,7 @@ export const CONNECTIONS_COMMAND_SPEC = {
   // otherwise read or change the channel owner's stored credentials.
   contexts: [0, 1],
   options: [
+    { name: "help", description: "Show the list of /connections subcommands", type: 1 },
     { name: "list", description: "Show your linked accounts and their status", type: 1 },
     { name: "available", description: "List every service you can link", type: 1 },
     {
@@ -317,26 +318,40 @@ function statusGlyph(status: ConnectionStatus, emoji: ConnectionEmoji): string {
 }
 
 const LIST_TITLE = "Your Connections";
-const LIST_DESCRIPTION =
-  "Below are accounts linked to this channel's agent. You can use the following " +
-  "subcommands to manage your connections...";
+const LIST_DESCRIPTION = "Below are accounts linked to this channel's agent...";
 
-const LIST_EMPTY =
-  "You have not linked any accounts yet. Below are all of the currently-registered " +
-  "subcommands under the `/connections` command...";
+const LIST_EMPTY = "You have not linked any accounts yet.";
+
+const HELP_TITLE = "Connections Subcommands";
 
 /**
- * The subcommand previews, debug-help style (backtick usage + one-line value).
- * Rendered via the shared helper (same shape as `/debug help`), in the authored
- * order that matches the `/connections` command surface.
+ * The `/connections` subcommands, debug-help style (one-line usage + description),
+ * in authored order (add, available, info, list, remove). Rendered via the shared
+ * {@link buildSubcommandHelpEmbeds} so the help embed matches `/debug` exactly. Shown
+ * under a bare `/connections` (no subcommand), NOT inside `/connections list`.
  */
-const SUBCOMMAND_FIELDS: DiscordEmbedField[] = buildSubcommandFields("/connections", [
+const SUBCOMMAND_ENTRIES: readonly SubcommandEntry[] = [
   { usage: "add <service>", description: "Connect a new service." },
   { usage: "available", description: "List out available services you can connect to." },
+  { usage: "help", description: "Displays this help message." },
   { usage: "info <service>", description: "Get info about a service." },
   { usage: "list", description: "List your currently-linked accounts." },
   { usage: "remove <service>", description: "Remove a service." },
-]);
+];
+
+/**
+ * Build the "Connections Subcommands" help embed shown for a bare `/connections`
+ * (no subcommand), parallel to `/debug` with no subcommand. Uses the same shared
+ * builder and shared description sentence as `/debug help`.
+ */
+function helpReply(): { embeds: DiscordEmbed[]; attachments: string[] } {
+  return buildSubcommandHelpEmbeds({
+    category: "connections",
+    title: HELP_TITLE,
+    command: "/connections",
+    entries: SUBCOMMAND_ENTRIES,
+  });
+}
 
 const COUNT_FIELD_NAME = "Currently Connected";
 const LEGEND_FIELD_NAME = "Legend";
@@ -362,16 +377,17 @@ function legendValue(emoji: ConnectionEmoji): string {
 }
 
 /**
- * Build the `/connections list` reply as two embeds in one message (by default):
- * the first carries the title, description, and the `/connections` subcommand
- * previews; the second carries the Currently Connected count, the status Legend, and
- * the Services list (one `glyph name` line per service, the status shown by the glyph
- * and decoded by the Legend). Both are packed by the shared buildPaginatedEmbeds,
- * so a long Services list repeats as several Services fields on the second embed,
- * and if the shared message budget is exhausted a truncation note is appended.
- * Only services that are actually linked (connected, re-auth needed, or a transient
- * ping) are listed, regardless of whether the connector's connect flow is wired.
- * When nothing is linked, a single embed shows a friendly note plus the subcommands.
+ * Build the `/connections list` reply as a SINGLE embed carrying only the connection
+ * data: the title and description, the Currently Connected count, the status Legend,
+ * and the Services list (one `glyph name` line per service, the status shown by the
+ * glyph and decoded by the Legend). The subcommand list is no longer shown here (it
+ * now lives under a bare `/connections`), so there is no forced second embed; the
+ * Services list still spills onto further embeds only if it overflows Discord's caps,
+ * packed by the shared buildPaginatedEmbeds (a truncation note is appended if the
+ * shared message budget is exhausted). Only services that are actually linked
+ * (connected, re-auth needed, or a transient ping) are listed, regardless of whether
+ * the connector's connect flow is wired. When nothing is linked, a single embed shows
+ * a friendly note with no subcommand list.
  */
 function listReply(
   registry: ConnectorRegistry,
@@ -393,14 +409,9 @@ function listReply(
         entry.connection !== null && entry.connection.status !== "not_linked",
     );
   if (linked.length === 0) {
-    // Nothing linked: a single embed with the empty note and the subcommands, so
-    // the user still sees how to connect.
-    return buildPaginatedEmbeds({
-      category: "connections",
-      title: LIST_TITLE,
-      description: LIST_EMPTY,
-      groups: [SUBCOMMAND_FIELDS],
-    });
+    // Nothing linked: a single embed with just the empty note (no subcommand list —
+    // that now lives under a bare `/connections`).
+    return connectionsReply(LIST_TITLE, LIST_EMPTY);
   }
 
   const connected = linked.filter(({ connection }) => connection.status === "linked").length;
@@ -410,7 +421,7 @@ function listReply(
       `${statusGlyph(connection.status, emoji)} ${truncateServiceName(connector.label)}`,
   );
 
-  // Second embed's fields: the count, the legend, then the Services list chunked
+  // The single embed's fields: the count, the legend, then the Services list chunked
   // under the per-field cap (each chunk keeps the "Services" header).
   const contentFields: DiscordEmbedField[] = [
     { name: COUNT_FIELD_NAME, value: `\`${connected}/${total}\`` },
@@ -422,7 +433,7 @@ function listReply(
     category: "connections",
     title: LIST_TITLE,
     description: LIST_DESCRIPTION,
-    groups: [SUBCOMMAND_FIELDS, contentFields],
+    groups: [contentFields],
     truncationField: {
       name: "\u2026",
       value: "Some services were omitted because the list exceeded Discord's message limit.",
@@ -534,7 +545,13 @@ export async function handleConnectCommand(
   ctx: ConnectCommandContext,
   deps: ConnectCommandDeps,
 ): Promise<void> {
-  const sub = (ctx.subcommand ?? "list").toLowerCase();
+  // A bare `/connections` (no subcommand) and `/connections help` both show the
+  // Connections Subcommands help, exactly parallel to `/debug` and `/debug help`.
+  const sub = ctx.subcommand?.toLowerCase() ?? null;
+  if (sub === null || sub === "" || sub === "help") {
+    await ctx.reply(helpReply(), { ephemeral: true });
+    return;
+  }
   const registrationIsCurrent = () =>
     ctx.authorizedInstanceKey === undefined ||
     deps.store.instanceKey(ctx.channelId) === ctx.authorizedInstanceKey;

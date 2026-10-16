@@ -52,14 +52,30 @@ describe("simulateConnFlow re-skinning", () => {
 });
 
 describe("simulateConnFlow scenarios", () => {
-  it("scenario 1 list shows the empty note plus the subcommands in one embed", async () => {
+  it("scenario 1 list shows only the empty note (no subcommand list) in one embed", async () => {
     const out = await run(1, ["list"]);
     expect(out.embeds).toHaveLength(1);
     expect(out.embeds[0].title).toBe("Your Connections");
     expect(out.embeds[0].description).toContain("not linked any accounts yet");
+    // The subcommand list no longer appears under `list` (it lives under a bare call).
+    const names = (out.embeds[0].fields ?? []).map((f) => f.name);
+    expect(names).not.toContain("`/connections add <service>`");
+    expect(names).not.toContain("Services");
+  });
+
+  it("a bare connflow (no subcommand) renders the Connections Subcommands help, re-skinned to Debug", async () => {
+    const out = await run(1, []);
+    expect(out.embeds).toHaveLength(1);
+    expect(out.embeds[0].title).toBe("Connections Subcommands");
+    expect(out.embeds[0].description).toBe(
+      "Below are all of the currently-registered subcommands under the `/connections` command...",
+    );
     const names = (out.embeds[0].fields ?? []).map((f) => f.name);
     expect(names).toContain("`/connections add <service>`");
-    expect(names).not.toContain("Services");
+    expect(names).toContain("`/connections list`");
+    // Re-skinned to Debug identity.
+    expect(out.embeds[0].color).toBe(DEBUG.color);
+    expect(out.embeds[0].footer?.text).toBe(DEBUG.footerText);
   });
 
   it("scenario 2 list renders mixed statuses as glyph-led service lines", async () => {
