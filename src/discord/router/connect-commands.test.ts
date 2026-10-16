@@ -10,10 +10,12 @@ import {
   type ConnectionStore,
   type PendingAuthStore,
   buildReauthCustomId,
+  buildRemoveConnectionCustomId,
   connectTextCommandHasToken,
   handleConnectCommand,
   parseConnectTextCommand,
   parseReauthCustomId,
+  parseRemoveConnectionCustomId,
 } from "./connect-commands.js";
 import { type Connector, ConnectorRegistry } from "./connectors.js";
 
@@ -90,6 +92,20 @@ describe("reauth custom_id", () => {
     expect(parseReauthCustomId("chan-unreg:1:2:3")).toBeNull();
     expect(parseReauthCustomId("conn:reauth:")).toBeNull();
     expect(parseReauthCustomId("conn:reauth")).toBeNull();
+  });
+});
+
+describe("remove-connection custom_id", () => {
+  it("round-trips a namespaced connector id", () => {
+    expect(buildRemoveConnectionCustomId("github")).toBe("conn:remove:github");
+    expect(parseRemoveConnectionCustomId("conn:remove:github")).toEqual({ connectorId: "github" });
+  });
+
+  it("returns null for unrelated or empty ids, including the reauth namespace", () => {
+    expect(parseRemoveConnectionCustomId("chan-unreg:1:2:3")).toBeNull();
+    expect(parseRemoveConnectionCustomId("conn:reauth:github")).toBeNull();
+    expect(parseRemoveConnectionCustomId("conn:remove:")).toBeNull();
+    expect(parseRemoveConnectionCustomId("conn:remove")).toBeNull();
   });
 });
 
@@ -557,6 +573,19 @@ describe("handleConnectCommand available", () => {
     expect(replies[0].ephemeral).toBe(true);
   });
 
+  it("renders only the Available Services field, with no title or description", async () => {
+    const { ctx, replies } = makeCtx("available");
+    await handleConnectCommand(ctx, makeDeps());
+    const embed = embedOf(replies[0].payload);
+    expect(embed.title).toBeUndefined();
+    expect(embed.description).toBeUndefined();
+    const fields = embed.fields ?? [];
+    expect(fields).toHaveLength(1);
+    expect(fields[0].name).toBe("Available Services");
+    // Still carries the Connections category styling (footer).
+    expect(embed.footer?.text).toBe("Connections");
+  });
+
   it("works without a registered channel (read-only, owner-safe)", async () => {
     const { ctx, replies } = makeCtx("available");
     await handleConnectCommand(ctx, makeDeps({ store: makeStore(false).store }));
@@ -619,8 +648,8 @@ describe("handleConnectCommand info", () => {
     expect(byName("Auth Type")?.value).toBe("Pasted token");
     expect(byName("Last Ping")?.value).toBe("TODO");
     expect(byName("Last Ping")?.inline).toBe(true);
-    expect(byName("Services Available")?.value).toBe("Tasks, Projects, Labels");
-    expect(byName("Services Available")?.inline).toBe(false);
+    expect(byName("Skills Available")?.value).toBe("Tasks, Projects, Labels");
+    expect(byName("Skills Available")?.inline).toBe(false);
     expect(replies[0].ephemeral).toBe(true);
   });
 
@@ -657,19 +686,26 @@ describe("handleConnectCommand info", () => {
     expect((embed.fields ?? []).find((f) => f.name === "Auth Type")?.value).toBe("OAuth");
   });
 
-  it("includes a primary Reauthenticate button with a namespaced custom_id", async () => {
+  it("includes Reauthenticate and Remove Connection buttons in order with namespaced custom_ids", async () => {
     const { ctx, replies } = makeCtx("info", ["github"]);
     await handleConnectCommand(
       ctx,
       makeDeps({ store: makeStore(true, [linkFixture("github", "linked")]).store }),
     );
     const buttons = buttonsOf(replies[0].payload);
-    expect(buttons).toHaveLength(1);
+    expect(buttons).toHaveLength(2);
+    // Reauthenticate (primary) first, Remove Connection (danger) to its right.
     expect(buttons[0]).toMatchObject({
       type: 2,
       style: 1, // primary
       label: "Reauthenticate",
       custom_id: "conn:reauth:github",
+    });
+    expect(buttons[1]).toMatchObject({
+      type: 2,
+      style: 4, // danger
+      label: "Remove Connection",
+      custom_id: "conn:remove:github",
     });
   });
 

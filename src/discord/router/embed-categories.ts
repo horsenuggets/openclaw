@@ -78,7 +78,8 @@ export function attachmentRef(filename: string): string {
 export type BuildEmbedInput = {
   category: EmbedCategoryKey;
   title?: string;
-  description: string;
+  /** Omit to build a field-only embed (e.g. `/connections available`). */
+  description?: string;
   /** Optional name/value fields (e.g. the status table). */
   fields?: DiscordEmbedField[];
   /** Override the category's default footer icon (e.g. command-result state icons). */
@@ -109,7 +110,7 @@ export function buildEmbed(input: BuildEmbedInput): BuiltEmbed {
   const attachments = [footerIcon];
   const embed: DiscordEmbed = {
     ...(input.title ? { title: input.title } : {}),
-    description: input.description,
+    ...(input.description ? { description: input.description } : {}),
     color: category.color,
     ...(input.fields ? { fields: input.fields } : {}),
     footer: { text: category.footerText, icon_url: attachmentRef(footerIcon) },

@@ -215,17 +215,22 @@ export type ConnectCommandContext = {
   scrubCommandMessage?: () => Promise<boolean>;
 };
 
-/** Build a Connections-category embed reply, optionally carrying an action row. */
+/**
+ * Build a Connections-category embed reply, optionally carrying an action row.
+ * `title` and `description` are optional so a reply can be field-only (e.g.
+ * `/connections available`); pass `undefined` rather than an empty string so no
+ * blank title/description line renders.
+ */
 function connectionsReply(
-  title: string,
-  description: string,
+  title: string | undefined,
+  description: string | undefined,
   fields?: DiscordEmbedField[],
   components?: DiscordActionRow[],
 ): { embeds: DiscordEmbed[]; attachments: string[]; components?: DiscordActionRow[] } {
   const built = buildEmbed({
     category: "connections",
-    title,
-    description,
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
     ...(fields ? { fields } : {}),
   });
   return {
@@ -238,12 +243,23 @@ function connectionsReply(
 /** custom_id prefix for the `/connections info` Reauthenticate button. */
 export const CONN_REAUTH_PREFIX = "conn:reauth";
 
-/** The text the Reauthenticate button replies with (no reauth flow is wired yet). */
+/** custom_id prefix for the `/connections info` Remove Connection button. */
+export const CONN_REMOVE_PREFIX = "conn:remove";
+
+/**
+ * The text the Reauthenticate and Remove Connection buttons reply with (neither
+ * flow is wired yet, so both answer with a plain TODO).
+ */
 export const CONN_REAUTH_TODO = "TODO";
 
 /** Build the Reauthenticate button custom_id, namespaced by connector id. */
 export function buildReauthCustomId(connectorId: string): string {
   return `${CONN_REAUTH_PREFIX}:${connectorId}`;
+}
+
+/** Build the Remove Connection button custom_id, namespaced by connector id. */
+export function buildRemoveConnectionCustomId(connectorId: string): string {
+  return `${CONN_REMOVE_PREFIX}:${connectorId}`;
 }
 
 /**
@@ -253,6 +269,20 @@ export function buildReauthCustomId(connectorId: string): string {
  */
 export function parseReauthCustomId(customId: string): { connectorId: string } | null {
   const prefix = `${CONN_REAUTH_PREFIX}:`;
+  if (!customId.startsWith(prefix)) {
+    return null;
+  }
+  const connectorId = customId.slice(prefix.length);
+  return connectorId ? { connectorId } : null;
+}
+
+/**
+ * Parse a Remove Connection button custom_id, returning the connector id or null
+ * for unrelated ids. Mirrors {@link parseReauthCustomId}: only the fixed
+ * two-segment prefix is matched so the id is taken verbatim as the remainder.
+ */
+export function parseRemoveConnectionCustomId(customId: string): { connectorId: string } | null {
+  const prefix = `${CONN_REMOVE_PREFIX}:`;
   if (!customId.startsWith(prefix)) {
     return null;
   }
@@ -430,8 +460,6 @@ function listReply(
   });
 }
 
-const AVAILABLE_TITLE = "Connections";
-const AVAILABLE_DESCRIPTION = "Every service you can link to this channel's agent.";
 const AVAILABLE_FIELD_NAME = "Available Services";
 
 /**
@@ -449,17 +477,15 @@ function availableServicesField(registry: ConnectorRegistry): DiscordEmbedField 
 }
 
 /**
- * Build the `/connections available` reply: a single Connections-category embed with
- * an "Available Services" field listing every catalogued connector. Read-only and
- * owner-safe (static catalog).
+ * Build the `/connections available` reply: a single Connections-category embed
+ * carrying ONLY the "Available Services" field (no title, no description) listing
+ * every catalogued connector. Read-only and owner-safe (static catalog).
  */
 function availableReply(registry: ConnectorRegistry): {
   embeds: DiscordEmbed[];
   attachments: string[];
 } {
-  return connectionsReply(AVAILABLE_TITLE, AVAILABLE_DESCRIPTION, [
-    availableServicesField(registry),
-  ]);
+  return connectionsReply(undefined, undefined, [availableServicesField(registry)]);
 }
 
 /**
@@ -474,7 +500,7 @@ const INFO_STATUS_SENTENCE: Record<ConnectionStatus, string> = {
   not_linked: "You are not connected.",
 };
 
-const INFO_SERVICES_FIELD_NAME = "Services Available";
+const INFO_SERVICES_FIELD_NAME = "Skills Available";
 
 /** Human label for how a connector authenticates, derived from its auth flow. */
 function authTypeLabel(connector: Connector): string {
@@ -487,7 +513,8 @@ function authTypeLabel(connector: Connector): string {
  * Build the `/connections info <service>` stats view for a LINKED connection: a
  * Connections embed titled `Your Connections » <Label>` with the per-connection
  * stats as inline fields (Status glyph, Account, Linked date, Auth Type, Last Ping)
- * plus a non-inline Services Available list, and a Primary "Reauthenticate" button.
+ * plus a non-inline Skills Available list, and an action row with a Primary
+ * "Reauthenticate" button followed by a Danger "Remove Connection" button.
  */
 function infoReply(
   connector: Connector,
@@ -506,7 +533,8 @@ function infoReply(
     { name: "Last Ping", value: "TODO", inline: true },
     { name: INFO_SERVICES_FIELD_NAME, value: connector.services.join(", "), inline: false },
   ];
-  const reauthRow: DiscordActionRow = {
+  // Reauthenticate (primary) first, then Remove Connection (danger) to its right.
+  const actionRow: DiscordActionRow = {
     type: 1,
     components: [
       {
@@ -515,6 +543,12 @@ function infoReply(
         label: "Reauthenticate",
         custom_id: buildReauthCustomId(connector.id),
       },
+      {
+        type: 2,
+        style: 4, // danger
+        label: "Remove Connection",
+        custom_id: buildRemoveConnectionCustomId(connector.id),
+      },
     ],
   };
   return connectionsReply(
@@ -522,7 +556,7 @@ function infoReply(
     `Below are some stats about your current **${connector.label}** connection. ` +
       INFO_STATUS_SENTENCE[connection.status],
     fields,
-    [reauthRow],
+    [actionRow],
   );
 }
 
