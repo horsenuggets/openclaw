@@ -11,8 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR title format
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
           echo "Checking PR title: $TITLE"
 
           # Must be exactly "Release YYYY.M.D-horse.X.Y"
@@ -76,10 +77,11 @@ jobs:
           echo "Version format is valid."
 
       - name: Verify PR title matches version
+        env:
+          ACTUAL_TITLE: ${{ github.event.pull_request.title }}
         run: |
           VERSION=$(node -p 'require("./package.json").version')
           EXPECTED_TITLE="Release $VERSION"
-          ACTUAL_TITLE="${{ github.event.pull_request.title }}"
 
           if [ "$EXPECTED_TITLE" != "$ACTUAL_TITLE" ]; then
             echo "::error::PR title '$ACTUAL_TITLE' does not match package.json version. Expected '$EXPECTED_TITLE'"
