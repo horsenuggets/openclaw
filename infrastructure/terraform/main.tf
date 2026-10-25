@@ -50,9 +50,8 @@ locals {
 
 # Repository settings — match existing config, only manage what we need
 resource "github_repository" "openclaw" {
-  name         = local.repo_name
-  homepage_url = "https://openclaw.ai"
-  visibility   = "public"
+  name       = local.repo_name
+  visibility = "public"
 
   has_issues   = false
   has_projects = true
@@ -102,7 +101,7 @@ resource "github_repository_ruleset" "main" {
 
   rules {
     pull_request {
-      required_approving_review_count = 0
+      required_approving_review_count = 1
       dismiss_stale_reviews_on_push   = true
     }
 
@@ -140,7 +139,7 @@ resource "github_repository_ruleset" "release" {
 
   rules {
     pull_request {
-      required_approving_review_count = 0
+      required_approving_review_count = 1
       dismiss_stale_reviews_on_push   = true
     }
 
@@ -182,5 +181,24 @@ resource "github_repository_ruleset" "ghpages" {
       required_approving_review_count = 0
       dismiss_stale_reviews_on_push   = true
     }
+  }
+}
+
+# The GitHub provider can't manage Copilot code review settings yet, so this calls the
+# REST endpoint directly to run automatic reviews at the Lite effort level. It re-runs
+# whenever the repo or the effort level changes. Lite reviews cost several times fewer AI
+# credits than the Balanced default.
+resource "terraform_data" "copilot_review_effort" {
+  triggers_replace = [github_repository.openclaw.full_name, "lite"]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      : "$${GITHUB_TOKEN:?GITHUB_TOKEN must be set to update Copilot code review settings}"
+      curl --fail-with-body --silent --show-error -X PATCH \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${github_repository.openclaw.full_name}/copilot/code-review/settings" \
+        -d '{"review_effort":"lite"}'
+    EOT
   }
 }
