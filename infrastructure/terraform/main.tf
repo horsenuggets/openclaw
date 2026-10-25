@@ -50,9 +50,8 @@ locals {
 
 # Repository settings — match existing config, only manage what we need
 resource "github_repository" "openclaw" {
-  name         = local.repo_name
-  homepage_url = "https://openclaw.ai"
-  visibility   = "public"
+  name       = local.repo_name
+  visibility = "public"
 
   has_issues   = false
   has_projects = true
