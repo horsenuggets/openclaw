@@ -187,7 +187,7 @@ resource "github_repository_ruleset" "ghpages" {
 # Keeps Copilot code review at the Lite effort level, which costs several times fewer AI
 # credits than the Balanced default, and corrects drift on apply.
 module "copilot_review" {
-  source        = "git::https://github.com/horsenuggets/luau-cicd.git//Terraform/Modules/CopilotReview?ref=a4ef277d84e90bc299d843ed79704c98234cd448"
-  repository    = "horsenuggets/${local.repo_name}"
+  source        = "https://github.com/horsenuggets/luau-cicd/archive/a4ef277d84e90bc299d843ed79704c98234cd448.tar.gz//luau-cicd-a4ef277d84e90bc299d843ed79704c98234cd448/Terraform/Modules/CopilotReview"
+  repository    = github_repository.openclaw.full_name
   review_effort = "lite"
 }
