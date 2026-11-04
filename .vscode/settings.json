@@ -57,6 +57,7 @@
     "editor.formatOnSave": true
   },
   "biome.enabled": false,
+  "cmake.sourceDirectory": "${workspaceFolder}/whisper",
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "npm.exclude": ["**/.builds/**"]
 }
