@@ -1,4 +1,4 @@
 {
-  "recommendations": ["oxc.oxc-vscode", "esbenp.prettier-vscode"],
+  "recommendations": ["esbenp.prettier-vscode", "oxc.oxc-vscode"],
   "unwantedRecommendations": ["biomejs.biome"]
 }
