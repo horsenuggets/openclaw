@@ -1,0 +1,63 @@
+{
+  // Individual per-language blocks (not a combined "[a][b]" selector): VSCode
+  // treats a combined language-group selector as less specific than an
+  // individual "[typescript]" selector, so a user-level per-language default
+  // formatter would otherwise win and oxc would never run. One block per
+  // language guarantees the workspace oxc setting overrides any user default.
+  "[javascript]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "biome.enabled": false,
+  "cmake.sourceDirectory": "${workspaceFolder}/whisper",
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "npm.exclude": ["**/.builds/**"]
+}
