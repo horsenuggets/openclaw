@@ -31,6 +31,7 @@
     "skills/",
     "src/agents/system-prompt-source.generated.ts",
     "src/canvas-host/a2ui/a2ui.bundle.js",
+    "submodules/",
     "Swabble/",
     "vendor/"
   ]
