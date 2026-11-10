@@ -6,6 +6,9 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Developer tooling → Use pinned tf4fmt for four-space Terraform formatting and explicit
+  VS Code saves, with matching EditorConfig rules. Exclude external submodules from local
+  lint and formatting checks. (#181)
 - Prod-mirror rig tooling: stop live tests from running stale code.
   `scripts/prod-mirror.sh deploy`/`up` now recompile from the current source by default
   (the old behavior silently reused whatever `dist/*-linux-<arch>` was on disk, shipping

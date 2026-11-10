@@ -15,6 +15,7 @@
     "node_modules/",
     "patches/",
     "pnpm-lock.yaml/",
+    "submodules/",
     "Swabble/",
     "vendor/",
   ],

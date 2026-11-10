@@ -1,193 +1,193 @@
 terraform {
-  required_version = ">= 1.5"
+    required_version = ">= 1.5"
 
-  required_providers {
-    github = {
-      source  = "integrations/github"
-      version = "~> 6.0"
+    required_providers {
+        github = {
+            source  = "integrations/github"
+            version = "~> 6.0"
+        }
     }
-  }
 }
 
 provider "github" {
-  owner = "horsenuggets"
-  # Authenticates via GITHUB_TOKEN environment variable
+    owner = "horsenuggets"
+    # Authenticates via GITHUB_TOKEN environment variable
 }
 
 locals {
-  repo_name = "openclaw"
+    repo_name = "openclaw"
 
-  # CI checks required for every PR. Cross-platform compile matrix is
-  # intentionally disabled to conserve CI minutes — only linux-arm64
-  # (cheapest runner) is built until we decide whether to keep Node SEA
-  # or migrate back to Bun.
-  required_checks = [
-    "install-check",
-    "checks (node, tsgo, pnpm tsgo)",
-    "checks (node, lint, pnpm build && pnpm lint)",
-    "checks (node, test:extensions, pnpm canvas:a2ui:bundle && pnpm test:extensions)",
-    "checks (node, test:gateway, pnpm canvas:a2ui:bundle && pnpm test:gateway)",
-    "checks (node, test:unit (1/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 1/4)",
-    "checks (node, test:unit (2/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 2/4)",
-    "checks (node, test:unit (3/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 3/4)",
-    "checks (node, test:unit (4/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 4/4)",
-    "checks (node, format, pnpm format)",
-    "checks (node, protocol, pnpm protocol:check)",
-    "Compile & smoke test (linux-arm64)",
-    "secrets",
-    "no-tabs",
-  ]
+    # CI checks required for every PR. Cross-platform compile matrix is
+    # intentionally disabled to conserve CI minutes — only linux-arm64
+    # (cheapest runner) is built until we decide whether to keep Node SEA
+    # or migrate back to Bun.
+    required_checks = [
+        "install-check",
+        "checks (node, tsgo, pnpm tsgo)",
+        "checks (node, lint, pnpm build && pnpm lint)",
+        "checks (node, test:extensions, pnpm canvas:a2ui:bundle && pnpm test:extensions)",
+        "checks (node, test:gateway, pnpm canvas:a2ui:bundle && pnpm test:gateway)",
+        "checks (node, test:unit (1/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 1/4)",
+        "checks (node, test:unit (2/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 2/4)",
+        "checks (node, test:unit (3/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 3/4)",
+        "checks (node, test:unit (4/4), pnpm canvas:a2ui:bundle && pnpm test:unit --shard 4/4)",
+        "checks (node, format, pnpm format)",
+        "checks (node, protocol, pnpm protocol:check)",
+        "Compile & smoke test (linux-arm64)",
+        "secrets",
+        "no-tabs",
+    ]
 
-  # Additional checks required only for release PRs (release-specific
-  # validators).
-  release_checks = concat(local.required_checks, [
-    "Validate PR title",
-    "Verify diff matches main",
-    "Validate version",
-    "Verify deploy target",
-  ])
+    # Additional checks required only for release PRs (release-specific
+    # validators).
+    release_checks = concat(local.required_checks, [
+        "Validate PR title",
+        "Verify diff matches main",
+        "Validate version",
+        "Verify deploy target",
+    ])
 }
 
 # Repository settings — match existing config, only manage what we need
 resource "github_repository" "openclaw" {
-  name       = local.repo_name
-  visibility = "public"
+    name       = local.repo_name
+    visibility = "public"
 
-  has_issues   = false
-  has_projects = true
-  has_wiki     = false
+    has_issues   = false
+    has_projects = true
+    has_wiki     = false
 
-  allow_squash_merge = true
-  allow_merge_commit = false
-  allow_rebase_merge = false
+    allow_squash_merge = true
+    allow_merge_commit = false
+    allow_rebase_merge = false
 
-  squash_merge_commit_title   = "PR_TITLE"
-  squash_merge_commit_message = "PR_BODY"
+    squash_merge_commit_title   = "PR_TITLE"
+    squash_merge_commit_message = "PR_BODY"
 
-  delete_branch_on_merge = true
+    delete_branch_on_merge = true
 
-  # Preserve existing pages config
-  pages {
-    build_type = "legacy"
-    source {
-      branch = "gh-pages"
-      path   = "/"
+    # Preserve existing pages config
+    pages {
+        build_type = "legacy"
+        source {
+            branch = "gh-pages"
+            path   = "/"
+        }
     }
-  }
 
-  lifecycle {
-    ignore_changes = [
-      description,
-      visibility,
-      topics,
-      has_downloads,
-    ]
-  }
+    lifecycle {
+        ignore_changes = [
+            description,
+            visibility,
+            topics,
+            has_downloads,
+        ]
+    }
 }
 
 # Branch protection for main — no direct pushes, require CI checks
 resource "github_repository_ruleset" "main" {
-  name        = "main"
-  repository  = github_repository.openclaw.name
-  target      = "branch"
-  enforcement = "active"
+    name        = "main"
+    repository  = github_repository.openclaw.name
+    target      = "branch"
+    enforcement = "active"
 
-  conditions {
-    ref_name {
-      include = ["~DEFAULT_BRANCH"]
-      exclude = []
-    }
-  }
-
-  rules {
-    pull_request {
-      required_approving_review_count = 0
-      dismiss_stale_reviews_on_push   = true
-    }
-
-    # Automatically request Copilot code review on every non-draft PR
-    copilot_code_review {
-      review_on_push             = false
-      review_draft_pull_requests = false
-    }
-
-    required_status_checks {
-      dynamic "required_check" {
-        for_each = local.required_checks
-        content {
-          context        = required_check.value
-          integration_id = 0
+    conditions {
+        ref_name {
+            include = ["~DEFAULT_BRANCH"]
+            exclude = []
         }
-      }
     }
-  }
+
+    rules {
+        pull_request {
+            required_approving_review_count = 0
+            dismiss_stale_reviews_on_push   = true
+        }
+
+        # Automatically request Copilot code review on every non-draft PR
+        copilot_code_review {
+            review_on_push             = false
+            review_draft_pull_requests = false
+        }
+
+        required_status_checks {
+            dynamic "required_check" {
+                for_each = local.required_checks
+                content {
+                    context        = required_check.value
+                    integration_id = 0
+                }
+            }
+        }
+    }
 }
 
 # Branch protection for release — same as main + version/diff/deploy checks
 resource "github_repository_ruleset" "release" {
-  name        = "release"
-  repository  = github_repository.openclaw.name
-  target      = "branch"
-  enforcement = "active"
+    name        = "release"
+    repository  = github_repository.openclaw.name
+    target      = "branch"
+    enforcement = "active"
 
-  conditions {
-    ref_name {
-      include = ["refs/heads/release"]
-      exclude = []
-    }
-  }
-
-  rules {
-    pull_request {
-      required_approving_review_count = 0
-      dismiss_stale_reviews_on_push   = true
-    }
-
-    # Automatically request Copilot code review on every non-draft PR
-    copilot_code_review {
-      review_on_push             = false
-      review_draft_pull_requests = false
-    }
-
-    required_status_checks {
-      dynamic "required_check" {
-        for_each = local.release_checks
-        content {
-          context        = required_check.value
-          integration_id = 0
+    conditions {
+        ref_name {
+            include = ["refs/heads/release"]
+            exclude = []
         }
-      }
     }
-  }
+
+    rules {
+        pull_request {
+            required_approving_review_count = 0
+            dismiss_stale_reviews_on_push   = true
+        }
+
+        # Automatically request Copilot code review on every non-draft PR
+        copilot_code_review {
+            review_on_push             = false
+            review_draft_pull_requests = false
+        }
+
+        required_status_checks {
+            dynamic "required_check" {
+                for_each = local.release_checks
+                content {
+                    context        = required_check.value
+                    integration_id = 0
+                }
+            }
+        }
+    }
 }
 
 # Branch protection for gh-pages — no force pushes, no deletions
 resource "github_repository_ruleset" "ghpages" {
-  name        = "gh-pages"
-  repository  = github_repository.openclaw.name
-  target      = "branch"
-  enforcement = "active"
+    name        = "gh-pages"
+    repository  = github_repository.openclaw.name
+    target      = "branch"
+    enforcement = "active"
 
-  conditions {
-    ref_name {
-      include = ["refs/heads/gh-pages"]
-      exclude = []
+    conditions {
+        ref_name {
+            include = ["refs/heads/gh-pages"]
+            exclude = []
+        }
     }
-  }
 
-  rules {
-    # Require PRs (prevents direct pushes including from admins)
-    pull_request {
-      required_approving_review_count = 0
-      dismiss_stale_reviews_on_push   = true
+    rules {
+        # Require PRs (prevents direct pushes including from admins)
+        pull_request {
+            required_approving_review_count = 0
+            dismiss_stale_reviews_on_push   = true
+        }
     }
-  }
 }
 
 # Each pull request gets a single Copilot review, so it runs at the deeper Balanced level.
 # The module warns on every plan if the setting drifts.
 module "copilot_review" {
-  source        = "https://github.com/horsenuggets/luau-cicd/archive/a342a72d078bca2ff7f529bff4a68a68743b313a.tar.gz//luau-cicd-a342a72d078bca2ff7f529bff4a68a68743b313a/Terraform/Modules/CopilotReview"
-  repository    = github_repository.openclaw.full_name
-  review_effort = "balanced"
+    source        = "https://github.com/horsenuggets/luau-cicd/archive/a342a72d078bca2ff7f529bff4a68a68743b313a.tar.gz//luau-cicd-a342a72d078bca2ff7f529bff4a68a68743b313a/Terraform/Modules/CopilotReview"
+    repository    = github_repository.openclaw.full_name
+    review_effort = "balanced"
 }
