@@ -6,5 +6,5 @@ end_of_line = lf
 indent_style = space
 insert_final_newline = true
 
-[*.{tf,tfvars,tftest.hcl,tfmock.hcl,tfquery.hcl}]
+[*.{hcl,tf,tfvars}]
 indent_size = 4
