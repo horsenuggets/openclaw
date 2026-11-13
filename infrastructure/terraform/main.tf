@@ -35,7 +35,7 @@ locals {
         "checks (node, protocol, pnpm protocol:check)",
         "Compile & smoke test (linux-arm64)",
         "secrets",
-        "no-tabs",
+        "no-tabs"
     ]
 
     # Additional checks required only for release PRs (release-specific
@@ -44,7 +44,7 @@ locals {
         "Validate PR title",
         "Verify diff matches main",
         "Validate version",
-        "Verify deploy target",
+        "Verify deploy target"
     ])
 }
 
@@ -80,7 +80,7 @@ resource "github_repository" "openclaw" {
             description,
             visibility,
             topics,
-            has_downloads,
+            has_downloads
         ]
     }
 }
