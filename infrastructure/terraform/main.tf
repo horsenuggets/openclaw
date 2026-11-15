@@ -1,5 +1,23 @@
+#
+# main.tf
+#
+# Manages this repository's GitHub settings, including merge options, Pages, and the
+# rulesets that protect main, release, and gh-pages. Run plans and applies from this
+# folder with GITHUB_TOKEN set, for example...
+#
+#   GITHUB_TOKEN=$(gh auth token) terraform plan
+#
+
 terraform {
     required_version = ">= 1.5"
+
+    # State lives in HCP Terraform. The organization comes from the TF_CLOUD_ORGANIZATION
+    # environment variable, and plans run locally.
+    cloud {
+        workspaces {
+            name = "openclaw"
+        }
+    }
 
     required_providers {
         github = {
@@ -10,18 +28,17 @@ terraform {
 }
 
 provider "github" {
+    # Authenticates via the GITHUB_TOKEN environment variable.
     owner = "horsenuggets"
-    # Authenticates via GITHUB_TOKEN environment variable
 }
 
 locals {
     repo_name = "openclaw"
 
-    # CI checks required for every PR. Cross-platform compile matrix is
-    # intentionally disabled to conserve CI minutes — only linux-arm64
-    # (cheapest runner) is built until we decide whether to keep Node SEA
-    # or migrate back to Bun.
-    required_checks = [
+    # CI checks required for every PR. The cross-platform compile matrix is intentionally
+    # disabled to conserve CI minutes, so only linux-arm64 (the cheapest runner) is built
+    # until we decide whether to keep Node SEA or migrate back to Bun.
+    main_checks = [
         "install-check",
         "checks (node, tsgo, pnpm tsgo)",
         "checks (node, lint, pnpm build && pnpm lint)",
@@ -38,9 +55,8 @@ locals {
         "no-tabs"
     ]
 
-    # Additional checks required only for release PRs (release-specific
-    # validators).
-    release_checks = concat(local.required_checks, [
+    # Additional checks required only for release PRs.
+    release_checks = concat(local.main_checks, [
         "Validate PR title",
         "Verify diff matches main",
         "Validate version",
@@ -48,10 +64,15 @@ locals {
     ])
 }
 
-# Repository settings — match existing config, only manage what we need
-resource "github_repository" "openclaw" {
+# Adopt the existing repository instead of trying to create it. The id must be a literal
+# string on Terraform 1.5, so keep it in sync with local.repo_name.
+import {
+    to = github_repository.repo
+    id = "openclaw"
+}
+
+resource "github_repository" "repo" {
     name = local.repo_name
-    visibility = "public"
 
     has_issues = false
     has_projects = true
@@ -66,7 +87,6 @@ resource "github_repository" "openclaw" {
 
     delete_branch_on_merge = true
 
-    # Preserve existing pages config
     pages {
         build_type = "legacy"
         source {
@@ -76,19 +96,17 @@ resource "github_repository" "openclaw" {
     }
 
     lifecycle {
-        ignore_changes = [
-            description,
-            visibility,
-            topics,
-            has_downloads
-        ]
+        # Destroying this resource would delete the repository on GitHub.
+        prevent_destroy = true
+
+        # Managed in the GitHub UI, so applies don't overwrite them.
+        ignore_changes = [allow_auto_merge, description, topics, visibility]
     }
 }
 
-# Branch protection for main — no direct pushes, require CI checks
 resource "github_repository_ruleset" "main" {
     name = "main"
-    repository = github_repository.openclaw.name
+    repository = github_repository.repo.name
     target = "branch"
     enforcement = "active"
 
@@ -100,20 +118,19 @@ resource "github_repository_ruleset" "main" {
     }
 
     rules {
+        non_fast_forward = true
+        deletion = true
+
         pull_request {
             required_approving_review_count = 0
             dismiss_stale_reviews_on_push = true
         }
 
-        # Automatically request Copilot code review on every non-draft PR
-        copilot_code_review {
-            review_on_push = false
-            review_draft_pull_requests = false
-        }
-
         required_status_checks {
+            strict_required_status_checks_policy = true
+
             dynamic "required_check" {
-                for_each = local.required_checks
+                for_each = local.main_checks
                 content {
                     context = required_check.value
                     integration_id = 0
@@ -123,10 +140,9 @@ resource "github_repository_ruleset" "main" {
     }
 }
 
-# Branch protection for release — same as main + version/diff/deploy checks
 resource "github_repository_ruleset" "release" {
     name = "release"
-    repository = github_repository.openclaw.name
+    repository = github_repository.repo.name
     target = "branch"
     enforcement = "active"
 
@@ -138,18 +154,17 @@ resource "github_repository_ruleset" "release" {
     }
 
     rules {
+        non_fast_forward = true
+        deletion = true
+
         pull_request {
             required_approving_review_count = 0
             dismiss_stale_reviews_on_push = true
         }
 
-        # Automatically request Copilot code review on every non-draft PR
-        copilot_code_review {
-            review_on_push = false
-            review_draft_pull_requests = false
-        }
-
         required_status_checks {
+            strict_required_status_checks_policy = true
+
             dynamic "required_check" {
                 for_each = local.release_checks
                 content {
@@ -161,10 +176,10 @@ resource "github_repository_ruleset" "release" {
     }
 }
 
-# Branch protection for gh-pages — no force pushes, no deletions
+# Requires a PR for gh-pages, which blocks direct pushes, including from admins.
 resource "github_repository_ruleset" "ghpages" {
     name = "gh-pages"
-    repository = github_repository.openclaw.name
+    repository = github_repository.repo.name
     target = "branch"
     enforcement = "active"
 
@@ -176,18 +191,9 @@ resource "github_repository_ruleset" "ghpages" {
     }
 
     rules {
-        # Require PRs (prevents direct pushes including from admins)
         pull_request {
             required_approving_review_count = 0
             dismiss_stale_reviews_on_push = true
         }
     }
-}
-
-# Each pull request gets a single Copilot review, so it runs at the deeper Balanced level.
-# The module warns on every plan if the setting drifts.
-module "copilot_review" {
-    source = "https://github.com/horsenuggets/luau-cicd/archive/a342a72d078bca2ff7f529bff4a68a68743b313a.tar.gz//luau-cicd-a342a72d078bca2ff7f529bff4a68a68743b313a/Terraform/Modules/CopilotReview"
-    repository = github_repository.openclaw.full_name
-    review_effort = "balanced"
 }
